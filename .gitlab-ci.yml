@@ -21,11 +21,6 @@ stages:
   - pack
   - publish
 
-workflow:
-  rules:
-    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
-    - if: $CI_PIPELINE_SOURCE == "push"
-
 static_analysis:
   stage: prebuild
   cache: {}

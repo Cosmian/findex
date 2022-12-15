@@ -12,7 +12,7 @@ jobs:
       - uses: actions/checkout@v1
       - uses: actions-rs/toolchain@v1
         with:
-          toolchain: nightly
+          toolchain: nightly-2022-10-28
           override: true
           components: rustfmt, clippy
 
@@ -39,7 +39,7 @@ jobs:
       - uses: actions/checkout@v1
       - uses: actions-rs/toolchain@v1
         with:
-          toolchain: nightly
+          toolchain: nightly-2022-10-28
           override: true
       - name: Run tests
         uses: actions-rs/cargo@v1
@@ -59,7 +59,7 @@ jobs:
       - uses: actions/checkout@v1
       - uses: actions-rs/toolchain@v1
         with:
-          toolchain: stable
+          toolchain: nightly-2022-10-28
           override: true
       - run: rustup target add ${{ matrix.target }}
       - name: Build
@@ -76,7 +76,7 @@ jobs:
       - uses: actions/checkout@v1
       - uses: actions-rs/toolchain@v1
         with:
-          toolchain: nightly
+          toolchain: nightly-2022-10-28
           override: true
 
       # Ensure intra-documentation links all resolve correctly
