@@ -23,7 +23,7 @@ use crate::{
     },
 };
 
-#[pyclass]
+#[pyclass(subclass)]
 pub struct InternalFindex {
     fetch_entry: PyObject,
     fetch_chain: PyObject,
@@ -290,24 +290,52 @@ impl
 #[pymethods]
 impl InternalFindex {
     #[new]
-    pub fn new(
+    pub fn new(py: Python) -> Self {
+        Self {
+            fetch_entry: py.None(),
+            fetch_chain: py.None(),
+            upsert_entry: py.None(),
+            upsert_chain: py.None(),
+            update_lines: py.None(),
+            list_removed_locations: py.None(),
+            progress_callback: py.None(),
+        }
+    }
+
+    /// Set the required callbacks to perform Findex Upsert
+    pub fn set_upsert_callbacks(
+        &mut self,
         fetch_entry: PyObject,
         fetch_chain: PyObject,
         upsert_entry: PyObject,
         upsert_chain: PyObject,
+    ) {
+        self.fetch_entry = fetch_entry;
+        self.fetch_chain = fetch_chain;
+        self.upsert_entry = upsert_entry;
+        self.upsert_chain = upsert_chain
+    }
+
+    /// Set the required callbacks to perform Findex Search
+    pub fn set_search_callbacks(
+        &mut self,
+        fetch_entry: PyObject,
+        fetch_chain: PyObject,
+        progress_callback: PyObject,
+    ) {
+        self.fetch_entry = fetch_entry;
+        self.fetch_chain = fetch_chain;
+        self.progress_callback = progress_callback;
+    }
+
+    /// Set the required callbacks to perform Findex Compact
+    pub fn set_compact_callbacks(
+        &mut self,
         update_lines: PyObject,
         list_removed_locations: PyObject,
-        progress_callback: PyObject,
-    ) -> Self {
-        Self {
-            fetch_entry,
-            fetch_chain,
-            upsert_entry,
-            upsert_chain,
-            update_lines,
-            list_removed_locations,
-            progress_callback,
-        }
+    ) {
+        self.update_lines = update_lines;
+        self.list_removed_locations = list_removed_locations;
     }
 
     /// Upserts the given relations between `IndexedValue` and `Keyword` into
