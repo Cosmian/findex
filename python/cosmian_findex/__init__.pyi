@@ -107,15 +107,23 @@ class MasterKey:
 class InternalFindex:
     """This is an internal class. See `cloudproof_py.findex.Findex` abstract class instead."""
 
-    def __init__(
+    def set_upsert_callbacks(
         self,
-        fetch_entry: Callable,
-        fetch_chain: Callable,
-        upsert_entry: Callable,
-        upsert_chain: Callable,
+        fetch_entry_table: Callable,
+        fetch_chain_table: Callable,
+        upsert_entry_table: Callable,
+        insert_chain_table: Callable,
+    ): ...
+    def set_search_callbacks(
+        self,
+        fetch_entry_table: Callable,
+        fetch_chain_table: Callable,
+        progress_callback: Callable,
+    ): ...
+    def set_compact_callbacks(
+        self,
         update_lines: Callable,
         list_removed_locations: Callable,
-        progress_callback: Callable,
     ): ...
     def upsert_wrapper(
         self,
