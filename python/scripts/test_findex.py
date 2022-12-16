@@ -84,7 +84,9 @@ class FindexHashmap:
     def upsert_entry(
         self, entries: Dict[bytes, Tuple[bytes, bytes]]
     ) -> Dict[bytes, bytes]:
-        """DB request to upsert entry_table elements"""
+        """DB request to upsert entry_table elements.
+        WARNING: This implementation will not work with concurrency.
+        """
         rejected_lines = {}
         for uid, (old_val, new_val) in entries.items():
             if uid in self.entry_table:
@@ -132,15 +134,15 @@ class FindexHashmap:
         # remove all entries from entry table
         self.entry_table.clear()
 
-        # insert newly encrypted entries
-        self.insert_entry(new_encrypted_entry_table_items)
-
         # remove entries from chain table
         for uid in removed_chain_table_uids:
             del self.chain_table[uid]
 
         # insert new chains
         self.insert_chain(new_encrypted_chain_table_items)
+
+        # insert newly encrypted entries
+        self.insert_entry(new_encrypted_entry_table_items)
 
 
 class TestFindex(unittest.TestCase):

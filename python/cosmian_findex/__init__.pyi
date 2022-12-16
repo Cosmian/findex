@@ -113,26 +113,26 @@ class InternalFindex:
         fetch_chain_table: Callable,
         upsert_entry_table: Callable,
         insert_chain_table: Callable,
-    ): ...
+    ) -> None: ...
     def set_search_callbacks(
         self,
         fetch_entry_table: Callable,
         fetch_chain_table: Callable,
         progress_callback: Callable,
-    ): ...
+    ) -> None: ...
     def set_compact_callbacks(
         self,
         fetch_entry_table: Callable,
         fetch_chain_table: Callable,
         update_lines: Callable,
         list_removed_locations: Callable,
-    ): ...
+    ) -> None: ...
     def upsert_wrapper(
         self,
         indexed_values_and_keywords: Dict[IndexedValue, List[str]],
         master_key: MasterKey,
         label: Label,
-    ): ...
+    ) -> None: ...
     def search_wrapper(
         self,
         keywords: List[str],
@@ -140,11 +140,11 @@ class InternalFindex:
         label: Label,
         max_result_per_keyword: int = 2**32 - 1,
         max_depth: int = 100,
-    ): ...
+    ) -> Dict[str, List[IndexedValue]]: ...
     def compact_wrapper(
         self,
         num_reindexing_before_full_set: int,
         master_key: MasterKey,
         new_master_key: MasterKey,
         new_label: Label,
-    ): ...
+    ) -> None: ...
