@@ -8,6 +8,7 @@ variables:
   KMS_PUBLIC_PATH: /tmp
   KMS_PRIVATE_PATH: /tmp
   KMS_SHARED_PATH: /tmp
+  PROJECT_NAME: ${CI_PROJECT_NAME:0:6} # get findex from findex_github
 
 services:
   - name: gitlab.cosmian.com:5000/core/kms:${KMS_VERSION}_ci
@@ -25,6 +26,7 @@ static_analysis:
   stage: prebuild
   cache: {}
   script:
+    - echo ${PROJECT_NAME}
     - cargo format
     - cargo doc --all-features
     # no feature activated
@@ -40,11 +42,11 @@ security_check:
   cache: {}
   script:
     # Check is crate is publishable
-    - rm -rf /tmp/${CI_PROJECT_NAME}
-    - cp -rf . /tmp/${CI_PROJECT_NAME}
-    - pushd /tmp/${CI_PROJECT_NAME}
+    - rm -rf /tmp/${PROJECT_NAME}
+    - cp -rf . /tmp/${PROJECT_NAME}
+    - pushd /tmp/${PROJECT_NAME}
     - cargo publish --dry-run
-    - rm -rf /tmp/${CI_PROJECT_NAME}
+    - rm -rf /tmp/${PROJECT_NAME}
     - popd
     # Check deprecated dependencies
     - cargo outdated -wR
@@ -70,7 +72,7 @@ build_x86_64_centos7:
   image: gitlab.cosmian.com:5000/core/ci-rust-glibc-2.17
   script:
     - cargo build --release --features ffi --target x86_64-unknown-linux-gnu
-    - cbindgen . -c cbindgen.toml | grep -v \#include | uniq >target/${CI_PROJECT_NAME}.h
+    - cbindgen . -c cbindgen.toml | grep -v \#include | uniq >target/${PROJECT_NAME}.h
     - cargo test --release --all-features --target x86_64-unknown-linux-gnu
   artifacts:
     paths:
@@ -85,7 +87,7 @@ test_cloudproof_java:
     - apt update && apt install -y maven
   script:
     - git clone --branch main https://github.com/Cosmian/cloudproof_java.git
-    - cp target/x86_64-unknown-linux-gnu/release/libcosmian_${CI_PROJECT_NAME}.so cloudproof_java/src/main/resources/linux-x86-64/
+    - cp target/x86_64-unknown-linux-gnu/release/libcosmian_${PROJECT_NAME}.so cloudproof_java/src/main/resources/linux-x86-64/
     - cd cloudproof_java
     - mvn package
   allow_failure: true
@@ -106,11 +108,11 @@ test_cloudproof_js:
   stage: test
   script:
     - git clone --branch main https://github.com/Cosmian/cloudproof_js.git
-    - mkdir -p cloudproof_js/src/pkg/${CI_PROJECT_NAME}
+    - mkdir -p cloudproof_js/src/pkg/${PROJECT_NAME}
     - cd cloudproof_js
     - ./download_wasm.sh
     # Replace pkg with fresh build
-    - cp -r ../pkg/web/* cloudproof_js/src/pkg/${CI_PROJECT_NAME}/
+    - cp -r ../pkg/web/* cloudproof_js/src/pkg/${PROJECT_NAME}/
     - npm install
     - npm test
   allow_failure: true
@@ -121,7 +123,7 @@ build_windows:
     - rustup target add x86_64-pc-windows-gnu
   script:
     - cargo build --release --features ffi --target x86_64-pc-windows-gnu
-    - cbindgen . -c cbindgen.toml | grep -v \#include | uniq >target/${CI_PROJECT_NAME}.h
+    - cbindgen . -c cbindgen.toml | grep -v \#include | uniq >target/${PROJECT_NAME}.h
     # python build
     - pip install -r python/requirements.txt
     - maturin build --release --features python --target x86_64-pc-windows-gnu --target-dir target_python
@@ -159,7 +161,7 @@ test_cloudproof_flutter:
   stage: test
   script:
     - git clone --branch main https://github.com/Cosmian/cloudproof_flutter.git
-    - cp target/x86_64-apple-darwin/release/libcosmian_${CI_PROJECT_NAME}.dylib cloudproof_flutter/resources/
+    - cp target/x86_64-apple-darwin/release/libcosmian_${PROJECT_NAME}.dylib cloudproof_flutter/resources/
     - cd cloudproof_flutter
     - flutter pub get
     - flutter test
@@ -196,8 +198,8 @@ test_python:
   script:
     - pip install target/wheels/*manylinux*.whl
     - pip install -r python/requirements.txt
-    - mypy python/scripts/test_${CI_PROJECT_NAME}.py
-    - python3 python/scripts/test_${CI_PROJECT_NAME}.py
+    - mypy python/scripts/test_${PROJECT_NAME}.py
+    - python3 python/scripts/test_${PROJECT_NAME}.py
 
 #
 # benches
@@ -220,11 +222,11 @@ pack_all_artifacts:
   before_script:
     - apt update && apt install -y zip
   script:
-    - zip -r ${CI_PROJECT_NAME}-${CI_COMMIT_TAG}-bin.zip pkg target jniLibs
+    - zip -r ${PROJECT_NAME}-${CI_COMMIT_TAG}-bin.zip pkg target jniLibs
   artifacts:
-    name: cosmian_${CI_PROJECT_NAME}_${CI_COMMIT_TAG}
+    name: cosmian_${PROJECT_NAME}_${CI_COMMIT_TAG}
     paths:
-      - ${CI_PROJECT_NAME}-${CI_COMMIT_TAG}-bin.zip
+      - ${PROJECT_NAME}-${CI_COMMIT_TAG}-bin.zip
     expire_in: 3 mos
 
 npm_publish:
@@ -245,12 +247,12 @@ cargo_publish:
   script:
     - echo "[registry]" > ~/.cargo/credentials
     - echo "token = \"$CRATES_IO\"" >> ~/.cargo/credentials
-    - rm -rf /tmp/${CI_PROJECT_NAME}
-    - cp -rf . /tmp/${CI_PROJECT_NAME}
-    - cd /tmp/${CI_PROJECT_NAME}
-    - rm -rf ${CI_PROJECT_NAME}-${CI_COMMIT_TAG}-bin.zip cosmian_${CI_PROJECT_NAME}_${CI_COMMIT_TAG}.zip jniLibs target
+    - rm -rf /tmp/${PROJECT_NAME}
+    - cp -rf . /tmp/${PROJECT_NAME}
+    - cd /tmp/${PROJECT_NAME}
+    - rm -rf ${PROJECT_NAME}-${CI_COMMIT_TAG}-bin.zip cosmian_${PROJECT_NAME}_${CI_COMMIT_TAG}.zip jniLibs target
     - cargo publish --token $CRATES_IO
-    - rm -rf /tmp/${CI_PROJECT_NAME}
+    - rm -rf /tmp/${PROJECT_NAME}
 
 python_publish:
   stage: publish
@@ -258,4 +260,4 @@ python_publish:
     - if: $CI_COMMIT_TAG =~ /^v\d+.\d+.\d+$/
   script:
     - pip install twine
-    - twine upload -u "${PYPI_USERNAME}" -p "${PYPI_PASSWORD}" target/wheels/${CI_PROJECT_NAME}-${CI_COMMIT_TAG:1}*.whl
+    - twine upload -u "${PYPI_USERNAME}" -p "${PYPI_PASSWORD}" target/wheels/${PROJECT_NAME}-${CI_COMMIT_TAG:1}*.whl
