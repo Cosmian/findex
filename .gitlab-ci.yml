@@ -196,8 +196,8 @@ test_python:
   script:
     - pip install target/wheels/*manylinux*.whl
     - pip install -r python/requirements.txt
-    - mypy python/scripts/test_${CI_PROJECT_NAME}.py
-    - python3 python/scripts/test_${CI_PROJECT_NAME}.py
+    - mypy python/scripts/test_findex.py
+    - python3 python/scripts/test_findex.py
 
 #
 # benches
