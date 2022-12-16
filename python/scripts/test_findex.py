@@ -159,6 +159,16 @@ class TestFindex(unittest.TestCase):
         self.findex_interface = InternalFindex()
 
     def test_upsert_search(self) -> None:
+        indexed_values_and_keywords = {
+            IndexedValue.from_location(k): v for k, v in self.db.items()
+        }
+
+        # Calling Upsert without setting the proper callbacks will raise an Exception
+        with self.assertRaises(Exception):
+            self.findex_interface.upsert_wrapper(
+                indexed_values_and_keywords, self.msk, self.label
+            )
+
         # Set upsert callbacks here
         self.findex_interface.set_upsert_callbacks(
             self.findex_backend.fetch_entry,
@@ -167,9 +177,6 @@ class TestFindex(unittest.TestCase):
             self.findex_backend.insert_chain,
         )
 
-        indexed_values_and_keywords = {
-            IndexedValue.from_location(k): v for k, v in self.db.items()
-        }
         self.findex_interface.upsert_wrapper(
             indexed_values_and_keywords, self.msk, self.label
         )
