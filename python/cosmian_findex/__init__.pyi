@@ -122,6 +122,8 @@ class InternalFindex:
     ): ...
     def set_compact_callbacks(
         self,
+        fetch_entry_table: Callable,
+        fetch_chain_table: Callable,
         update_lines: Callable,
         list_removed_locations: Callable,
     ): ...
