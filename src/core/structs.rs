@@ -76,7 +76,7 @@ impl Keyword {
 ///
 /// A value can be represented by several blocks. The first blocks representing
 /// a value are full, i.e. no padding is necessary. The first byte is set to
-/// [`LENGTH`]. The last block representing a value may not be full. It is
+/// `LENGTH`. The last block representing a value may not be full. It is
 /// padded with 0s. The first byte is used to write the size of the data stored
 /// in this block.
 ///

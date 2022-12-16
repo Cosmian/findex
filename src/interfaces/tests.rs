@@ -135,6 +135,11 @@ impl<const UID_LENGTH: usize> FindexCallbacks<UID_LENGTH> for FindexTest<UID_LEN
     ) -> Result<(), FindexErr> {
         println!("Insert {} itemps in the Chain Table", items.len());
         for (uid, value) in items.iter() {
+            if self.chain_table.contains_key(uid) {
+                return Err(FindexErr::CallBack(format!(
+                    "Conflict in Chain Table for UID: {uid:?}"
+                )));
+            }
             self.chain_table.insert(uid.clone(), value.clone());
         }
         Ok(())

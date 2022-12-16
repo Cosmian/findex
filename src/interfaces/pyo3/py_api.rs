@@ -23,12 +23,12 @@ use crate::{
     },
 };
 
-#[pyclass]
+#[pyclass(subclass)]
 pub struct InternalFindex {
     fetch_entry: PyObject,
     fetch_chain: PyObject,
     upsert_entry: PyObject,
-    upsert_chain: PyObject,
+    insert_chain: PyObject,
     update_lines: PyObject,
     list_removed_locations: PyObject,
     progress_callback: PyObject,
@@ -56,10 +56,10 @@ impl FindexCallbacks<UID_LENGTH> for InternalFindex {
             let ret = self
                 .progress_callback
                 .call1(py, (py_results,))
-                .map_err(|e| FindexErr::CallBack(e.to_string()))?;
+                .map_err(|e| FindexErr::CallBack(format!("{e} (progress_callback)")))?;
 
             ret.extract(py)
-                .map_err(|e| FindexErr::ConversionError(e.to_string()))
+                .map_err(|e| FindexErr::ConversionError(format!("{e} (progress_callback)")))
         })
     }
 
@@ -76,10 +76,10 @@ impl FindexCallbacks<UID_LENGTH> for InternalFindex {
             let results = self
                 .fetch_entry
                 .call1(py, (py_entry_uids,))
-                .map_err(|e| FindexErr::CallBack(e.to_string()))?;
+                .map_err(|e| FindexErr::CallBack(format!("{e} (fetch_entry)")))?;
             let py_result_table: HashMap<[u8; UID_LENGTH], Vec<u8>> = results
                 .extract(py)
-                .map_err(|e| FindexErr::ConversionError(e.to_string()))?;
+                .map_err(|e| FindexErr::ConversionError(format!("{e} (fetch_entry)")))?;
 
             // Convert python result (HashMap<[u8; UID_LENGTH], Vec<u8>>) to
             // EncryptedEntryTable<UID_LENGTH>
@@ -105,11 +105,11 @@ impl FindexCallbacks<UID_LENGTH> for InternalFindex {
             let result = self
                 .fetch_chain
                 .call1(py, (py_chain_uids,))
-                .map_err(|e| FindexErr::CallBack(e.to_string()))?;
+                .map_err(|e| FindexErr::CallBack(format!("{e} (fetch_chain)")))?;
 
             let py_result_table: HashMap<[u8; UID_LENGTH], Vec<u8>> = result
                 .extract(py)
-                .map_err(|e| FindexErr::ConversionError(e.to_string()))?;
+                .map_err(|e| FindexErr::ConversionError(format!("{e} (fetch_chain)")))?;
 
             // Convert python result (HashMap<[u8; UID_LENGTH], Vec<u8>>) to
             // EncryptedTable<UID_LENGTH>
@@ -137,17 +137,17 @@ impl FindexCallbacks<UID_LENGTH> for InternalFindex {
                             PyBytes::new(py, new_value),
                         ),
                     )
-                    .map_err(|e| FindexErr::ConversionError(e.to_string()))?;
+                    .map_err(|e| FindexErr::ConversionError(format!("{e} (upsert_entry)")))?;
             }
 
             let rejected_lines = self
                 .upsert_entry
                 .call1(py, (py_entry_table,))
-                .map_err(|e| FindexErr::CallBack(e.to_string()))?;
+                .map_err(|e| FindexErr::CallBack(format!("{e} (upsert_entry)")))?;
 
             let rejected_lines: HashMap<[u8; UID_LENGTH], Vec<u8>> = rejected_lines
                 .extract(py)
-                .map_err(|e| FindexErr::ConversionError(e.to_string()))?;
+                .map_err(|e| FindexErr::ConversionError(format!("{e} (upsert_entry)")))?;
 
             let rejected_lines = rejected_lines
                 .into_iter()
@@ -167,11 +167,11 @@ impl FindexCallbacks<UID_LENGTH> for InternalFindex {
             for (key, value) in items.iter() {
                 py_chain_table
                     .set_item(PyBytes::new(py, key), PyBytes::new(py, value))
-                    .map_err(|e| FindexErr::ConversionError(e.to_string()))?;
+                    .map_err(|e| FindexErr::ConversionError(format!("{e} (insert_chain)")))?;
             }
-            self.upsert_chain
+            self.insert_chain
                 .call1(py, (py_chain_table,))
-                .map_err(|e| FindexErr::CallBack(e.to_string()))?;
+                .map_err(|e| FindexErr::CallBack(format!("{e} (insert_chain)")))?;
             Ok(())
         })
     }
@@ -187,7 +187,7 @@ impl FindexCallbacks<UID_LENGTH> for InternalFindex {
             for (key, value) in new_encrypted_entry_table_items.iter() {
                 py_entry_table_items
                     .set_item(PyBytes::new(py, key), PyBytes::new(py, value))
-                    .map_err(|e| FindexErr::ConversionError(e.to_string()))?;
+                    .map_err(|e| FindexErr::ConversionError(format!("{e} (update_lines)")))?;
             }
 
             let py_removed_chain_uids: Vec<&PyBytes> = chain_table_uids_to_remove
@@ -199,7 +199,7 @@ impl FindexCallbacks<UID_LENGTH> for InternalFindex {
             for (key, value) in new_encrypted_chain_table_items.iter() {
                 py_chain_table_items
                     .set_item(PyBytes::new(py, key), PyBytes::new(py, value))
-                    .map_err(|e| FindexErr::ConversionError(e.to_string()))?;
+                    .map_err(|e| FindexErr::ConversionError(format!("{e} (update_lines)")))?;
             }
 
             self.update_lines
@@ -211,7 +211,7 @@ impl FindexCallbacks<UID_LENGTH> for InternalFindex {
                         py_chain_table_items,
                     ),
                 )
-                .map_err(|e| FindexErr::CallBack(e.to_string()))?;
+                .map_err(|e| FindexErr::CallBack(format!("{e} (update_lines)")))?;
 
             Ok(())
         })
@@ -228,11 +228,11 @@ impl FindexCallbacks<UID_LENGTH> for InternalFindex {
             let result = self
                 .list_removed_locations
                 .call1(py, (location_bytes,))
-                .map_err(|e| FindexErr::CallBack(e.to_string()))?;
+                .map_err(|e| FindexErr::CallBack(format!("{e} (list_removed_locations)")))?;
 
             let py_result: Vec<&[u8]> = result
                 .extract(py)
-                .map_err(|e| FindexErr::ConversionError(e.to_string()))?;
+                .map_err(|e| FindexErr::ConversionError(format!("{e} (list_removed_locations)")))?;
 
             Ok(py_result
                 .iter()
@@ -290,24 +290,66 @@ impl
 #[pymethods]
 impl InternalFindex {
     #[new]
-    pub fn new(
+    pub fn new(py: Python) -> PyResult<Self> {
+        let default_callback: Py<PyAny> = PyModule::from_code(
+            py,
+            "def default_callback(*args, **kwargs):
+                raise NotImplementedError()",
+            "",
+            "",
+        )?
+        .getattr("default_callback")?
+        .into();
+
+        Ok(Self {
+            fetch_entry: default_callback.clone(),
+            fetch_chain: default_callback.clone(),
+            upsert_entry: default_callback.clone(),
+            insert_chain: default_callback.clone(),
+            update_lines: default_callback.clone(),
+            list_removed_locations: default_callback.clone(),
+            progress_callback: default_callback,
+        })
+    }
+
+    /// Sets the required callbacks to implement [`FindexUpsert`].
+    pub fn set_upsert_callbacks(
+        &mut self,
         fetch_entry: PyObject,
         fetch_chain: PyObject,
         upsert_entry: PyObject,
-        upsert_chain: PyObject,
+        insert_chain: PyObject,
+    ) {
+        self.fetch_entry = fetch_entry;
+        self.fetch_chain = fetch_chain;
+        self.upsert_entry = upsert_entry;
+        self.insert_chain = insert_chain
+    }
+
+    /// Sets the required callbacks to implement [`FindexSearch`].
+    pub fn set_search_callbacks(
+        &mut self,
+        fetch_entry: PyObject,
+        fetch_chain: PyObject,
+        progress_callback: PyObject,
+    ) {
+        self.fetch_entry = fetch_entry;
+        self.fetch_chain = fetch_chain;
+        self.progress_callback = progress_callback;
+    }
+
+    /// Sets the required callbacks to implement [`FindexCompact`].
+    pub fn set_compact_callbacks(
+        &mut self,
+        fetch_entry: PyObject,
+        fetch_chain: PyObject,
         update_lines: PyObject,
         list_removed_locations: PyObject,
-        progress_callback: PyObject,
-    ) -> Self {
-        Self {
-            fetch_entry,
-            fetch_chain,
-            upsert_entry,
-            upsert_chain,
-            update_lines,
-            list_removed_locations,
-            progress_callback,
-        }
+    ) {
+        self.fetch_entry = fetch_entry;
+        self.fetch_chain = fetch_chain;
+        self.update_lines = update_lines;
+        self.list_removed_locations = list_removed_locations;
     }
 
     /// Upserts the given relations between `IndexedValue` and `Keyword` into
