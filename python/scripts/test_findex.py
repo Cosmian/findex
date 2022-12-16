@@ -101,13 +101,17 @@ class FindexHashmap:
 
     def insert_entry(self, entries: Dict[bytes, bytes]) -> None:
         """DB request to insert entry_table elements"""
-        for k in entries:
-            self.entry_table[k] = entries[k]
+        for uid in entries:
+            if uid in self.entry_table:
+                raise KeyError('Conflict in Entry Table for UID: {uid}')
+            self.entry_table[uid] = entries[uid]
 
     def insert_chain(self, entries: Dict[bytes, bytes]) -> None:
         """DB request to insert chain_table elements"""
-        for k in entries:
-            self.chain_table[k] = entries[k]
+        for uid in entries:
+            if uid in self.chain_table:
+                raise KeyError('Conflict in Chain Table for UID: {uid}')
+            self.chain_table[uid] = entries[uid]
 
     def progress_callback(self, _):
         return True
@@ -126,7 +130,7 @@ class FindexHashmap:
         new_encrypted_chain_table_items: Dict[bytes, bytes],
     ) -> None:
         # remove all entries from entry table
-        self.entry_table = {}
+        self.entry_table.clear()
 
         # insert newly encrypted entries
         self.insert_entry(new_encrypted_entry_table_items)
@@ -241,6 +245,8 @@ class TestFindex(unittest.TestCase):
             self.findex_backend.progress_callback,
         )
         self.findex_interface.set_compact_callbacks(
+            self.findex_backend.fetch_entry,
+            self.findex_backend.fetch_chain,
             self.findex_backend.update_lines,
             self.findex_backend.list_removed_locations,
         )

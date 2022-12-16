@@ -28,7 +28,7 @@ pub struct InternalFindex {
     fetch_entry: PyObject,
     fetch_chain: PyObject,
     upsert_entry: PyObject,
-    upsert_chain: PyObject,
+    insert_chain: PyObject,
     update_lines: PyObject,
     list_removed_locations: PyObject,
     progress_callback: PyObject,
@@ -169,7 +169,7 @@ impl FindexCallbacks<UID_LENGTH> for InternalFindex {
                     .set_item(PyBytes::new(py, key), PyBytes::new(py, value))
                     .map_err(|e| FindexErr::ConversionError(e.to_string()))?;
             }
-            self.upsert_chain
+            self.insert_chain
                 .call1(py, (py_chain_table,))
                 .map_err(|e| FindexErr::CallBack(e.to_string()))?;
             Ok(())
@@ -295,28 +295,28 @@ impl InternalFindex {
             fetch_entry: py.None(),
             fetch_chain: py.None(),
             upsert_entry: py.None(),
-            upsert_chain: py.None(),
+            insert_chain: py.None(),
             update_lines: py.None(),
             list_removed_locations: py.None(),
             progress_callback: py.None(),
         }
     }
 
-    /// Set the required callbacks to perform Findex Upsert
+    /// Sets the required callbacks to implement [`FindexUpsert`].
     pub fn set_upsert_callbacks(
         &mut self,
         fetch_entry: PyObject,
         fetch_chain: PyObject,
         upsert_entry: PyObject,
-        upsert_chain: PyObject,
+        insert_chain: PyObject,
     ) {
         self.fetch_entry = fetch_entry;
         self.fetch_chain = fetch_chain;
         self.upsert_entry = upsert_entry;
-        self.upsert_chain = upsert_chain
+        self.insert_chain = insert_chain
     }
 
-    /// Set the required callbacks to perform Findex Search
+    /// Sets the required callbacks to implement [`FindexSearch`].
     pub fn set_search_callbacks(
         &mut self,
         fetch_entry: PyObject,
@@ -328,12 +328,16 @@ impl InternalFindex {
         self.progress_callback = progress_callback;
     }
 
-    /// Set the required callbacks to perform Findex Compact
+    /// Sets the required callbacks to implement [`FindexCompact`].
     pub fn set_compact_callbacks(
         &mut self,
+        fetch_entry: PyObject,
+        fetch_chain: PyObject,
         update_lines: PyObject,
         list_removed_locations: PyObject,
     ) {
+        self.fetch_entry = fetch_entry;
+        self.fetch_chain = fetch_chain;
         self.update_lines = update_lines;
         self.list_removed_locations = list_removed_locations;
     }
