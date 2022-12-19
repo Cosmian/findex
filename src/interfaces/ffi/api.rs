@@ -98,7 +98,6 @@ async fn ffi_search(
     serializer.write_u64(res.len() as u64)?;
     for (keyword, indexed_values) in res {
         serializer.write_vec(&keyword)?;
-        // serializer.write_vec(&serialize_set(indexed_values)?)?;
         serializer.write(&SerializableSet(&indexed_values))?;
     }
     Ok(serializer.finalize())
