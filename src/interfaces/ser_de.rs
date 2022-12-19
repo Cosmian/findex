@@ -8,10 +8,7 @@ pub fn serialize_set<T: Serializable<Error = FindexErr>>(
     set: &HashSet<T>,
 ) -> Result<Vec<u8>, FindexErr> {
     let mut serializer = Serializer::default();
-    serializer.write_u64(set.len() as u64)?;
-    for key in set {
-        key.write(&mut serializer)?;
-    }
+    serializer.write(&SerializableSet(set))?;
     Ok(serializer.finalize())
 }
 
@@ -29,6 +26,39 @@ pub fn deserialize_set<T: Serializable<Error = FindexErr> + Eq + Hash>(
     } else {
         Err(FindexErr::ConversionError(
             "Remaining bytes after UID set deserialization!".to_string(),
+        ))
+    }
+}
+
+/// Wrap a `HashSet` of `Serializable` to make it `Serializable` itself
+///
+/// This struct cannot be used to deserialize `HashSet`s. Use `deserialize_set`
+pub struct SerializableSet<'a, T>(pub &'a HashSet<T>)
+where
+    T: Serializable<Error = FindexErr>;
+
+impl<'a, T> Serializable for SerializableSet<'a, T>
+where
+    T: Serializable<Error = FindexErr>,
+{
+    type Error = FindexErr;
+
+    fn length(&self) -> usize {
+        0
+    }
+
+    fn write(&self, ser: &mut Serializer) -> Result<usize, Self::Error> {
+        let mut len = ser.write_u64(self.0.len() as u64)?;
+        for key in self.0 {
+            len += key.write(ser)?;
+        }
+        Ok(len)
+    }
+
+    fn read(_de: &mut Deserializer) -> Result<Self, Self::Error> {
+        Err(FindexErr::Other(
+            "SerializableSet cannot be used to deserialize HashSets. Use deserialize_set"
+                .to_owned(),
         ))
     }
 }

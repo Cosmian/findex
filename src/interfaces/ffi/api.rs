@@ -28,7 +28,7 @@ use crate::{
             MAX_DEPTH,
         },
         generic_parameters::{MASTER_KEY_LENGTH, MAX_RESULTS_PER_KEYWORD},
-        ser_de::serialize_set,
+        ser_de::SerializableSet,
     },
 };
 
@@ -96,9 +96,10 @@ async fn ffi_search(
     // Serialize the results.
     let mut serializer = Serializer::new();
     serializer.write_u64(res.len() as u64)?;
-    for (keyword, indexed_values) in &res {
-        serializer.write_vec(keyword)?;
-        serializer.write_vec(&serialize_set(indexed_values)?)?;
+    for (keyword, indexed_values) in res {
+        serializer.write_vec(&keyword)?;
+        // serializer.write_vec(&serialize_set(indexed_values)?)?;
+        serializer.write(&SerializableSet(&indexed_values))?;
     }
     Ok(serializer.finalize())
 }
