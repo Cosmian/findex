@@ -68,7 +68,7 @@ impl FindexCallbacks<UID_LENGTH> for InternalFindex {
         Python::with_gil(|py| {
             let results = self
                 .fetch_all_entry_table_uids
-                .call1(py, ())
+                .call0(py)
                 .map_err(|e| FindexErr::CallBack(format!("{e} (fetch_all_entry_table_uids)")))?;
             let py_result_table: HashSet<[u8; UID_LENGTH]> = results
                 .extract(py)
@@ -366,11 +366,13 @@ impl InternalFindex {
         fetch_chain: PyObject,
         update_lines: PyObject,
         list_removed_locations: PyObject,
+        fetch_all_entry_table_uids: PyObject,
     ) {
         self.fetch_entry = fetch_entry;
         self.fetch_chain = fetch_chain;
         self.update_lines = update_lines;
         self.list_removed_locations = list_removed_locations;
+        self.fetch_all_entry_table_uids = fetch_all_entry_table_uids;
     }
 
     /// Upserts the given relations between `IndexedValue` and `Keyword` into
