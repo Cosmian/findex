@@ -126,6 +126,7 @@ class InternalFindex:
         fetch_chain_table: Callable,
         update_lines: Callable,
         list_removed_locations: Callable,
+        fetch_all_entry_table_uids: Callable,
     ) -> None: ...
     def upsert_wrapper(
         self,

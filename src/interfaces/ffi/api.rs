@@ -11,6 +11,7 @@ use std::{
 use cosmian_crypto_core::bytes_ser_de::{Serializable, Serializer};
 use futures::executor;
 
+use super::core::FetchAllEntryTableUidsCallback;
 use crate::{
     core::{
         FindexCompact, FindexSearch, FindexUpsert, IndexedValue, KeyingMaterial, Keyword, Label,
@@ -28,7 +29,7 @@ use crate::{
             MAX_DEPTH,
         },
         generic_parameters::{MASTER_KEY_LENGTH, MAX_RESULTS_PER_KEYWORD},
-        ser_de::serialize_set,
+        ser_de::SerializableSet,
     },
 };
 
@@ -80,6 +81,7 @@ async fn ffi_search(
         insert_chain: None,
         update_lines: None,
         list_removed_locations: None,
+        fetch_all_entry_table_uids: None,
     };
 
     let res = ffi_search
@@ -96,9 +98,9 @@ async fn ffi_search(
     // Serialize the results.
     let mut serializer = Serializer::new();
     serializer.write_u64(res.len() as u64)?;
-    for (keyword, indexed_values) in &res {
-        serializer.write_vec(keyword)?;
-        serializer.write_vec(&serialize_set(indexed_values)?)?;
+    for (keyword, indexed_values) in res {
+        serializer.write_vec(&keyword)?;
+        serializer.write(&SerializableSet(&indexed_values))?;
     }
     Ok(serializer.finalize())
 }
@@ -337,6 +339,7 @@ pub unsafe extern "C" fn h_upsert(
         insert_chain: Some(insert_chain),
         update_lines: None,
         list_removed_locations: None,
+        fetch_all_entry_table_uids: None,
     };
 
     ffi_unwrap!(executor::block_on(ffi_upsert.upsert(
@@ -386,6 +389,7 @@ pub unsafe extern "C" fn h_compact(
     new_master_key_len: c_int,
     label_ptr: *const u8,
     label_len: c_int,
+    fetch_all_entry_table_uids: FetchAllEntryTableUidsCallback,
     fetch_entry: FetchEntryTableCallback,
     fetch_chain: FetchChainTableCallback,
     update_lines: UpdateLinesCallback,
@@ -431,6 +435,7 @@ pub unsafe extern "C" fn h_compact(
         insert_chain: None,
         update_lines: Some(update_lines),
         list_removed_locations: Some(list_removed_locations),
+        fetch_all_entry_table_uids: Some(fetch_all_entry_table_uids),
     };
 
     ffi_unwrap!(executor::block_on(ffi_compact.compact(

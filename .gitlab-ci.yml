@@ -31,8 +31,6 @@ static_analysis:
     - cargo clippy --all-targets -- -D warnings
     # all features activated
     - cargo clippy-all
-    # Check semver
-    - cargo semver-checks check-release
 
 # Security check
 security_check:
@@ -49,6 +47,8 @@ security_check:
     # Check deprecated dependencies
     - cargo outdated -wR
     - cargo audit --deny warnings
+    # Check semver
+    - cargo semver-checks check-release
   allow_failure: true
 
 #
