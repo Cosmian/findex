@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 import unittest
 from cosmian_findex import IndexedValue, Label, MasterKey, InternalFindex
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Set, Tuple
 
 
 class TestStructures(unittest.TestCase):
@@ -63,15 +63,16 @@ class FindexHashmap:
         self.chain_table: Dict[bytes, bytes] = {}
 
     # Create callback functions
-    def fetch_entry(self, uids: Optional[List[bytes]] = None) -> Dict[bytes, bytes]:
+    def fetch_entry(self, uids: List[bytes]) -> Dict[bytes, bytes]:
         """DB request to fetch entry_table elements"""
-        if uids:
-            res = {}
-            for uid in uids:
-                if uid in self.entry_table:
-                    res[uid] = self.entry_table[uid]
-            return res
-        return self.entry_table
+        res = {}
+        for uid in uids:
+            if uid in self.entry_table:
+                res[uid] = self.entry_table[uid]
+        return res
+
+    def fetch_all_entry_table_uids(self) -> Set[bytes]:
+        return set(self.entry_table.keys())
 
     def fetch_chain(self, uids: List[bytes]) -> Dict[bytes, bytes]:
         """DB request to fetch chain_table elements"""
@@ -258,6 +259,7 @@ class TestFindex(unittest.TestCase):
             self.findex_backend.fetch_chain,
             self.findex_backend.update_lines,
             self.findex_backend.list_removed_locations,
+            self.findex_backend.fetch_all_entry_table_uids,
         )
 
         indexed_values_and_keywords = {
