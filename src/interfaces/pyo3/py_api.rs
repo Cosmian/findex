@@ -32,6 +32,7 @@ pub struct InternalFindex {
     update_lines: PyObject,
     list_removed_locations: PyObject,
     progress_callback: PyObject,
+    fetch_all_entry_table_uids: PyObject,
 }
 
 impl FindexCallbacks<UID_LENGTH> for InternalFindex {
@@ -63,16 +64,35 @@ impl FindexCallbacks<UID_LENGTH> for InternalFindex {
         })
     }
 
+    async fn fetch_all_entry_table_uids(&self) -> Result<HashSet<Uid<UID_LENGTH>>, FindexErr> {
+        Python::with_gil(|py| {
+            let results = self
+                .fetch_all_entry_table_uids
+                .call1(py, ())
+                .map_err(|e| FindexErr::CallBack(format!("{e} (fetch_all_entry_table_uids)")))?;
+            let py_result_table: HashSet<[u8; UID_LENGTH]> = results
+                .extract(py)
+                .map_err(|e| FindexErr::ConversionError(format!("{e} (fetch_entry)")))?;
+
+            // Convert python result (HashSet<[u8; UID_LENGTH]>) to
+            // HashSet<Uid<UID_LENGTH>>
+            let entry_table_items = py_result_table
+                .into_iter()
+                .map(Uid::from)
+                .collect::<HashSet<_>>();
+            Ok(entry_table_items)
+        })
+    }
+
     async fn fetch_entry_table(
         &self,
-        entry_table_uids: Option<&HashSet<Uid<UID_LENGTH>>>,
+        entry_table_uids: &HashSet<Uid<UID_LENGTH>>,
     ) -> Result<EncryptedTable<UID_LENGTH>, FindexErr> {
         Python::with_gil(|py| {
-            let py_entry_uids = entry_table_uids.map(|uids| {
-                uids.iter()
-                    .map(|uid| PyBytes::new(py, uid))
-                    .collect::<Vec<_>>()
-            });
+            let py_entry_uids = entry_table_uids
+                .iter()
+                .map(|uid| PyBytes::new(py, uid))
+                .collect::<Vec<_>>();
             let results = self
                 .fetch_entry
                 .call1(py, (py_entry_uids,))
@@ -308,7 +328,8 @@ impl InternalFindex {
             insert_chain: default_callback.clone(),
             update_lines: default_callback.clone(),
             list_removed_locations: default_callback.clone(),
-            progress_callback: default_callback,
+            progress_callback: default_callback.clone(),
+            fetch_all_entry_table_uids: default_callback,
         })
     }
 
