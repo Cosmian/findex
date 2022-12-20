@@ -33,16 +33,11 @@ impl FindexCallbacks<UID_LENGTH> for RusqliteFindex<'_> {
 
     async fn fetch_entry_table(
         &self,
-        entry_table_uids: Option<&HashSet<Uid<UID_LENGTH>>>,
+        entry_table_uids: &HashSet<Uid<UID_LENGTH>>,
     ) -> Result<EncryptedTable<UID_LENGTH>, FindexErr> {
-        if let Some(uids) = entry_table_uids {
-            let serialized_res =
-                sqlite_fetch_entry_table_items(self.connection, &serialize_set(uids)?)?;
-            EncryptedTable::try_from_bytes(&serialized_res)
-        } else {
-            // TODO (TBZ): `FindexCompact` is not implemented for `RusqliteFindex`.
-            todo!();
-        }
+        let serialized_res =
+            sqlite_fetch_entry_table_items(self.connection, &serialize_set(entry_table_uids)?)?;
+        EncryptedTable::try_from_bytes(&serialized_res)
     }
 
     async fn fetch_chain_table(
@@ -120,7 +115,7 @@ impl FindexCallbacks<UID_LENGTH> for RusqliteFindex<'_> {
         _new_encrypted_chain_table_items: EncryptedTable<UID_LENGTH>,
     ) -> Result<(), FindexErr> {
         // TODO (TBZ): `FindexCompact` is not implemented for `RusqliteFindex`.
-        todo!()
+        todo!("`FindexCompact` is not implemented for `RusqliteFindex`")
     }
 
     fn list_removed_locations(
@@ -128,7 +123,11 @@ impl FindexCallbacks<UID_LENGTH> for RusqliteFindex<'_> {
         _locations: &HashSet<crate::core::Location>,
     ) -> Result<HashSet<crate::core::Location>, FindexErr> {
         // TODO (TBZ): `FindexCompact` is not implemented for `RusqliteFindex`.
-        todo!()
+        todo!("`FindexCompact` is not implemented for `RusqliteFindex`")
+    }
+
+    async fn fetch_all_entry_table_uids(&self) -> Result<HashSet<Uid<UID_LENGTH>>, FindexErr> {
+        todo!("`FindexCompact` is not implemented for `RusqliteFindex`")
     }
 }
 
