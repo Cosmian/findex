@@ -39,12 +39,16 @@ impl FindexCallbacks<UID_LENGTH> for FindexUser {
 
     async fn fetch_entry_table(
         &self,
-        entry_table_uids: &HashSet<Uid<UID_LENGTH>>,
+        entry_table_uids: Option<&HashSet<Uid<UID_LENGTH>>>,
     ) -> Result<EncryptedTable<UID_LENGTH>, FindexErr> {
         let fetch_entry = unwrap_callback!(self, fetch_entry);
-        fetch_uids(&entry_table_uids.iter().cloned().collect(), fetch_entry)
-            .await
-            .map_err(|e| FindexErr::CallBack(format!("{e:?}")))
+        if let Some(uids) = entry_table_uids {
+            fetch_uids(&uids.iter().cloned().collect(), fetch_entry)
+                .await
+                .map_err(|e| FindexErr::CallBack(format!("{e:?}")))
+        } else {
+            Ok(EncryptedTable::default())
+        }
     }
 
     async fn fetch_chain_table(
@@ -115,18 +119,14 @@ impl FindexCallbacks<UID_LENGTH> for FindexUser {
         _new_encrypted_entry_table_items: EncryptedTable<UID_LENGTH>,
         _new_encrypted_chain_table_items: EncryptedTable<UID_LENGTH>,
     ) -> Result<(), FindexErr> {
-        todo!("update lines not implemented in WASM")
+        todo!()
     }
 
     fn list_removed_locations(
         &self,
         _locations: &HashSet<crate::core::Location>,
     ) -> Result<HashSet<crate::core::Location>, FindexErr> {
-        todo!("list removed locations not implemented in WASM")
-    }
-
-    async fn fetch_all_entry_table_uids(&self) -> Result<HashSet<Uid<UID_LENGTH>>, FindexErr> {
-        todo!("fetch all entry table uids not implemented in WASM")
+        todo!()
     }
 }
 

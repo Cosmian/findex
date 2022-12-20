@@ -11,7 +11,6 @@ use std::{
 use cosmian_crypto_core::bytes_ser_de::{Serializable, Serializer};
 use futures::executor;
 
-use super::core::FetchAllEntryTableUidsCallback;
 use crate::{
     core::{
         FindexCompact, FindexSearch, FindexUpsert, IndexedValue, KeyingMaterial, Keyword, Label,
@@ -81,7 +80,6 @@ async fn ffi_search(
         insert_chain: None,
         update_lines: None,
         list_removed_locations: None,
-        fetch_all_entry_table_uids: None,
     };
 
     let res = ffi_search
@@ -339,7 +337,6 @@ pub unsafe extern "C" fn h_upsert(
         insert_chain: Some(insert_chain),
         update_lines: None,
         list_removed_locations: None,
-        fetch_all_entry_table_uids: None,
     };
 
     ffi_unwrap!(executor::block_on(ffi_upsert.upsert(
@@ -389,7 +386,6 @@ pub unsafe extern "C" fn h_compact(
     new_master_key_len: c_int,
     label_ptr: *const u8,
     label_len: c_int,
-    fetch_all_entry_table_uids: FetchAllEntryTableUidsCallback,
     fetch_entry: FetchEntryTableCallback,
     fetch_chain: FetchChainTableCallback,
     update_lines: UpdateLinesCallback,
@@ -435,7 +431,6 @@ pub unsafe extern "C" fn h_compact(
         insert_chain: None,
         update_lines: Some(update_lines),
         list_removed_locations: Some(list_removed_locations),
-        fetch_all_entry_table_uids: Some(fetch_all_entry_table_uids),
     };
 
     ffi_unwrap!(executor::block_on(ffi_compact.compact(

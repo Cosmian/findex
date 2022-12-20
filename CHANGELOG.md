@@ -2,13 +2,6 @@
 
 All notable changes to this project will be documented in this file.
 
-## [1.0.1] - 2022-12-16
-
-### Bug Fixes
-
-- FFI: fix serialization of returned values in `fetch_entry`
-- compact: replace fetch_entry loop with call to `fetch_entry_table_uids`
-
 ## [1.0.0] - 2022-12-16
 
 ### Bug Fixes

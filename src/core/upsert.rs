@@ -82,7 +82,7 @@ pub trait FindexUpsert<
 
         // Query the Entry Table for these UIDs.
         let mut encrypted_entry_table = self
-            .fetch_entry_table(&entry_table_uid_cache.values().cloned().collect())
+            .fetch_entry_table(Some(&entry_table_uid_cache.values().cloned().collect()))
             .await?;
 
         while !new_chain_elements.is_empty() {

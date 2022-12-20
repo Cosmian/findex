@@ -15,7 +15,6 @@ pub const NUMBER_OF_ENTRY_TABLE_LINE_IN_BATCH: usize = 100;
 /// Implements Findex traits.
 pub struct FindexUser {
     pub(crate) progress: Option<ProgressCallback>,
-    pub(crate) fetch_all_entry_table_uids: Option<FetchAllEntryTableUidsCallback>,
     pub(crate) fetch_entry: Option<FetchEntryTableCallback>,
     pub(crate) fetch_chain: Option<FetchChainTableCallback>,
     pub(crate) upsert_entry: Option<UpsertEntryTableCallback>,

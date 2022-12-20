@@ -30,14 +30,6 @@ pub type ProgressCallback = extern "C" fn(
     intermediate_results_len: c_uint,
 ) -> bool;
 
-/// See [`FindexCallbacks::fetch_all_entry_table_uids()`](crate::core::FindexCallbacks::fetch_all_entry_table_uids).
-///
-/// The output should be deserialized as follows:
-///
-/// `UID_1 || UID_2 || ... || UID_n`
-pub type FetchAllEntryTableUidsCallback =
-    extern "C" fn(uids_ptr: *mut c_uchar, uids_len: *mut c_uint) -> c_int;
-
 /// See [`FindexCallbacks::fetch_entry_table()`](crate::core::FindexCallbacks::fetch_entry_table).
 ///
 /// # Serialization
@@ -46,7 +38,7 @@ pub type FetchAllEntryTableUidsCallback =
 ///
 /// `LEB128(n_uids) || UID_1 || ...`
 ///
-/// The output should be deserialized as follows:
+/// The output should be serialized as follows:
 ///
 /// `LEB128(n_entries) || UID_1 || LEB128(value_1.len()) || value_1 || ...`
 pub type FetchEntryTableCallback = extern "C" fn(

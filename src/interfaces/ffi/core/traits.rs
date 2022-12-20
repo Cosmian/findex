@@ -1,9 +1,13 @@
 use std::{
     collections::{HashMap, HashSet},
     ffi::{c_uchar, c_uint},
+    ptr::null,
 };
 
-use cosmian_crypto_core::bytes_ser_de::{Serializable, Serializer};
+use cosmian_crypto_core::{
+    bytes_ser_de::{Serializable, Serializer},
+    symmetric_crypto::Dem,
+};
 
 use crate::{
     core::{
@@ -12,12 +16,15 @@ use crate::{
     },
     error::FindexErr,
     interfaces::{
-        ffi::core::{
-            utils::{
-                fetch_callback, get_allocation_size_for_select_chain_request,
-                get_serialized_encrypted_entry_table_size_bound,
+        ffi::{
+            core::{
+                utils::{
+                    fetch_callback, get_allocation_size_for_select_chain_request,
+                    get_serialized_encrypted_entry_table_size_bound,
+                },
+                FindexUser, NUMBER_OF_ENTRY_TABLE_LINE_IN_BATCH,
             },
-            FindexUser,
+            LEB128_MAXIMUM_ENCODED_BYTES_NUMBER,
         },
         generic_parameters::{
             DemScheme, KmacKey, BLOCK_LENGTH, DEM_KEY_LENGTH, KMAC_KEY_LENGTH, KWI_LENGTH,
@@ -43,39 +50,65 @@ impl FindexCallbacks<UID_LENGTH> for FindexUser {
         Ok(progress(results.as_ptr(), results.len() as c_uint))
     }
 
-    async fn fetch_all_entry_table_uids(&self) -> Result<HashSet<Uid<UID_LENGTH>>, FindexErr> {
-        let fetch_all_entry_table_uids = unwrap_callback!(self, fetch_all_entry_table_uids);
-        let mut allocation_size = 1_000_000 * UID_LENGTH; // about 32MB
-        loop {
-            let mut output_bytes = vec![0_u8; allocation_size];
-            let output_ptr = output_bytes.as_mut_ptr().cast::<c_uchar>();
-            let mut output_len = u32::try_from(allocation_size)?;
-            let ret = fetch_all_entry_table_uids(output_ptr, &mut output_len);
-            if ret == 0 {
-                let uids_bytes = unsafe {
-                    std::slice::from_raw_parts(output_ptr as *const u8, output_len as usize)
-                };
-                return deserialize_set(uids_bytes);
-            } else {
-                allocation_size = output_len as usize;
-            }
-        }
-    }
-
     async fn fetch_entry_table(
         &self,
-        entry_table_uids: &HashSet<Uid<UID_LENGTH>>,
+        entry_table_uids: Option<&HashSet<Uid<UID_LENGTH>>>,
     ) -> Result<EncryptedTable<UID_LENGTH>, FindexErr> {
         let fetch_entry = unwrap_callback!(self, fetch_entry);
+        if let Some(entry_table_uids) = entry_table_uids {
+            let serialized_uids = serialize_set(entry_table_uids)?;
+            let res = fetch_callback(
+                &serialized_uids,
+                get_serialized_encrypted_entry_table_size_bound(entry_table_uids.len()),
+                *fetch_entry,
+            )?;
 
-        let serialized_uids = serialize_set(entry_table_uids)?;
-        let res = fetch_callback(
-            &serialized_uids,
-            get_serialized_encrypted_entry_table_size_bound(entry_table_uids.len()),
-            *fetch_entry,
-        )?;
+            EncryptedTable::try_from_bytes(&res)
+        } else {
+            let allocation_size = (LEB128_MAXIMUM_ENCODED_BYTES_NUMBER
+                + { DemScheme::ENCRYPTION_OVERHEAD }
+                + DEM_KEY_LENGTH
+                + UID_LENGTH
+                + LEB128_MAXIMUM_ENCODED_BYTES_NUMBER
+                + UID_LENGTH)
+                * NUMBER_OF_ENTRY_TABLE_LINE_IN_BATCH;
 
-        EncryptedTable::try_from_bytes(&res)
+            let mut uids_and_values = EncryptedTable::default();
+
+            loop {
+                let mut output_bytes = vec![0_u8; allocation_size];
+                let output_ptr = output_bytes.as_mut_ptr().cast::<c_uchar>();
+                let mut output_len = u32::try_from(allocation_size)?;
+
+                let return_code = fetch_entry(output_ptr, &mut output_len, null(), 0);
+
+                if output_len == 0 {
+                    break;
+                }
+
+                if return_code == 0 || return_code == 1 {
+                    let uids_and_values_bytes = unsafe {
+                        std::slice::from_raw_parts(output_ptr as *const u8, output_len as usize)
+                    };
+                    let new_uids_and_values =
+                        EncryptedTable::<UID_LENGTH>::try_from_bytes(uids_and_values_bytes)?;
+                    for new_item in new_uids_and_values.iter() {
+                        uids_and_values.insert(new_item.0.clone(), new_item.1.clone());
+                    }
+                } else {
+                    return Err(FindexErr::CallBack(format!(
+                        "Compact: fetch call failed: code={return_code:?} (output_len: \
+                         {output_len})"
+                    )));
+                }
+
+                if return_code == 0 {
+                    break;
+                }
+            }
+
+            Ok(uids_and_values)
+        }
     }
 
     async fn fetch_chain_table(

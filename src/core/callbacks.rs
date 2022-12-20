@@ -17,12 +17,11 @@ pub trait FindexCallbacks<const UID_LENGTH: usize> {
         results: &HashMap<Keyword, HashSet<IndexedValue>>,
     ) -> Result<bool, FindexErr>;
 
-    /// Fetch all the UIDs from the entry table
-    async fn fetch_all_entry_table_uids(&self) -> Result<HashSet<Uid<UID_LENGTH>>, FindexErr>;
-
-    /// Fetch the lines with the given UIDs from the Entry Table. The returned
-    /// values are encrypted since they are stored that way. The decryption
-    /// is performed by Findex.
+    /// Fetch the lines with the given UIDs from the Entry Table. If no UID is
+    /// given, fetch the entire database. The returned values are encrypted
+    /// since they are stored that way. The decryption is performed by Findex.
+    ///
+    /// *Note*: a pagination may be needed to fetch the entire table.
     ///
     /// # Error
     ///
@@ -36,7 +35,7 @@ pub trait FindexCallbacks<const UID_LENGTH: usize> {
     ///   Table
     async fn fetch_entry_table(
         &self,
-        entry_table_uids: &HashSet<Uid<UID_LENGTH>>,
+        entry_table_uids: Option<&HashSet<Uid<UID_LENGTH>>>,
     ) -> Result<EncryptedTable<UID_LENGTH>, FindexErr>;
 
     /// Fetch the lines with the given UIDs from the Chain Table. The returned

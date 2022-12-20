@@ -73,19 +73,24 @@ impl<const UID_LENGTH: usize> FindexCallbacks<UID_LENGTH> for FindexTest<UID_LEN
 
     async fn fetch_entry_table(
         &self,
-        entry_table_uids: &HashSet<Uid<UID_LENGTH>>,
+        entry_uids: Option<&HashSet<Uid<UID_LENGTH>>>,
     ) -> Result<EncryptedTable<UID_LENGTH>, FindexErr> {
-        println!(
-            "Fetch {} items from the Entry Table",
-            entry_table_uids.len()
-        );
-        let mut entry_table_items = EncryptedTable::default();
-        for keyword_hash in entry_table_uids {
-            if let Some(value) = self.entry_table.get(keyword_hash) {
-                entry_table_items.insert(keyword_hash.clone(), value.clone());
+        if let Some(entry_table_uids) = entry_uids {
+            println!(
+                "Fetch {} items from the Entry Table",
+                entry_table_uids.len()
+            );
+            let mut entry_table_items = EncryptedTable::default();
+            for keyword_hash in entry_table_uids {
+                if let Some(value) = self.entry_table.get(keyword_hash) {
+                    entry_table_items.insert(keyword_hash.clone(), value.clone());
+                }
             }
+            Ok(entry_table_items)
+        } else {
+            println!("Fetch all {} Entry Table items", self.entry_table_len());
+            Ok(self.entry_table.clone())
         }
-        Ok(entry_table_items)
     }
 
     async fn fetch_chain_table(
@@ -187,11 +192,6 @@ impl<const UID_LENGTH: usize> FindexCallbacks<UID_LENGTH> for FindexTest<UID_LEN
         _: &HashSet<Location>,
     ) -> Result<HashSet<Location>, FindexErr> {
         Ok(self.removed_locations.iter().cloned().collect())
-    }
-
-    async fn fetch_all_entry_table_uids(&self) -> Result<HashSet<Uid<UID_LENGTH>>, FindexErr> {
-        let uids: HashSet<Uid<UID_LENGTH>> = self.entry_table.keys().cloned().collect();
-        Ok(uids)
     }
 }
 
@@ -836,11 +836,10 @@ async fn test_graph_compacting() {
 
     println!(
         "Entry Table (before compacting): {:?}",
-        <FindexTest<UID_LENGTH> as FindexCallbacks<UID_LENGTH>>::fetch_all_entry_table_uids(
-            &findex
-        )
-        .await
-        .unwrap()
+        <FindexTest<UID_LENGTH> as FindexCallbacks<UID_LENGTH>>::fetch_entry_table(&findex, None)
+            .await
+            .unwrap()
+            .keys()
     );
 
     // Compact then search
