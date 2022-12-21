@@ -2,13 +2,18 @@
 
 All notable changes to this project will be documented in this file.
 
-## Unreleased
+## [2.0.0] - 2023-01-13
 
 ### Changed
 
 - Add `fetch_chains_batch_size` argument to search
 - in `search`, `fetch_chains` calls are now run in parallel for batches of `fetch_chains_batch_size` (not working for the Java/Flutter interfaces for now)
 - Improve errors
+
+### Ci
+
+- Replace .gitlab-ci.yml with github actions
+- Test inter-languages compatibility
 
 ## [1.0.1] - 2022-12-16
 
@@ -21,7 +26,6 @@ All notable changes to this project will be documented in this file.
 
 ### Bug Fixes
 
-- Apply Theophile's suggestions
 - Add return type to FindexInternal function signature
 
 ### Documentation

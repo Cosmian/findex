@@ -1,9 +1,8 @@
-# Findex &emsp; [![Build Status]][actions] [![Latest Version]][crates.io]
+# Findex
 
-[build status]: https://img.shields.io/github/workflow/status/Cosmian/findex/CI%20checks/main
-[actions]: https://github.com/Cosmian/findex/actions?query=branch%3Amain
-[latest version]: https://img.shields.io/crates/v/cosmian_findex.svg
-[crates.io]: https://crates.io/crates/cosmian_findex
+![Build status](https://github.com/Cosmian/findex/actions/workflows/ci.yml/badge.svg)
+![Build status](https://github.com/Cosmian/findex/actions/workflows/build.yml/badge.svg)
+![latest version](<https://img.shields.io/crates/v/cosmian_findex.svg>)
 
 Findex is a cryptographic protocol designed to securely make search queries on
 an untrusted cloud server. Thanks to its encrypted indexes, large databases can
@@ -15,13 +14,19 @@ Findex is part of Cosmian Cloudproof Encryption.
 
 - [Getting started](#getting-started)
 - [Building and testing](#building-and-testing)
-- [Features and Benchmarks](#features-and-benchmarks)
+- [Features and benchmarks](#features-and-benchmarks)
   - [Index tables](#index-tables)
   - [Findex callbacks](#findex-callbacks)
   - [Findex search](#findex-search)
+    - [Implementation details](#implementation-details)
   - [Findex upsert](#findex-upsert)
+    - [Implementation details](#implementation-details-1)
+    - [Two indexing strategies](#two-indexing-strategies)
   - [Findex compact](#findex-compact)
+    - [Implementation details](#implementation-details-2)
+  - [Benchmarks](#benchmarks)
 - [Documentation](#documentation)
+- [Releases](#releases)
 
 <!-- tocstop -->
 
@@ -105,26 +110,26 @@ solve the following search problem:
 Each index table contains two columns: the `uid` and `value` columns:
 
 |              | uid        | value     |
-| ------------ | ---------- | --------- |
+|--------------|------------|-----------|
 | Size (bytes) | UID_LENGTH | see below |
 
 Where `UID_LENGTH = 32`. The table values contain encrypted data:
 
-|              | AES-GCM encrypted data  | MAC | Nonce |
-| ------------ | ------------------------| --- | ----- |
-| Size (bytes) | see below               | 16  | 12    |
+|              | AES-GCM encrypted data | MAC | Nonce |
+|--------------|------------------------|-----|-------|
+| Size (bytes) | see below              | 16  | 12    |
 
 The encrypted data for the Index Entry Table is:
 
 |              | Entry Table encrypted data                    |
-| ------------ | --------------------------------------------- |
+|--------------|-----------------------------------------------|
 | Size (bytes) | KWI_LENGTH + UID_LENGTH + KEYWORD_HASH_LENGTH |
 
 where `KWI_LENGTH = 16` and `KEYWORD_HASH_LENGTH = 32`. The encrypted data for
 the Chain Table is:
 
 |              | Chain Table encrypted data  |
-| ------------ | --------------------------- |
+|--------------|-----------------------------|
 | Size (bytes) | TABLE_WIDTH \* BLOCK_LENGTH |
 
 where `TABLE_WIDTH = 5`, and `BLOCK_LENGTH = 32`.
@@ -283,7 +288,7 @@ repeated in the chain table.
 TODO: what does the `size` represent?
 
 | Avg locations | #records graphs | #records naive | ratio | size (kb) graphs | size (kb) naive | ratio |
-| ------------- | --------------- | -------------- | ----- | ---------------- | --------------- | ----- |
+|---------------|-----------------|----------------|-------|------------------|-----------------|-------|
 | 1             | 86018           | 86018          | 1.00  | 5605             | 5704            | 1.01  |
 | 2             | 105966          | 172036         | 1.62  | 6994             | 11745           | 1.68  |
 | 3             | 125914          | 258054         | 2.04  | 8344             | 17618           | 2.11  |
@@ -349,4 +354,8 @@ TODO
 
 ## Documentation
 
-Findex technical documentation can be found here: TODO
+Findex technical documentation can be found [here](https://github.com/Cosmian/findex/blob/main/documentation/Findex.pdf).
+
+## Releases
+
+All releases can be found in the public URL [package.cosmian.com](https://package.cosmian.com).

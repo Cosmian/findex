@@ -1,0 +1,23 @@
+---
+name: Cloudproof build
+
+on:
+  push:
+    tags:
+      - '*'
+  pull_request:
+
+jobs:
+  cloudproof:
+    uses: Cosmian/reusable_workflows/.github/workflows/cloudproof.yml@main
+    with:
+      project-name: findex
+      toolchain: nightly-2022-10-28
+      kms-version: 4.0.1
+      regression-filename: sqlite.db
+      branch-java: main
+      branch-js: main
+      branch-flutter: main
+      branch-python: fix/perfs_noisy_fetch_chains
+      bench-features: sqlite
+    secrets: inherit

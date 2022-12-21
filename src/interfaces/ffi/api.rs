@@ -127,7 +127,7 @@ async fn ffi_search(
 /// # Parameters
 ///
 /// - `indexed_values`          : (output) search result
-/// - `master_key`              : masterkey
+/// - `master_key`              : master key
 /// - `label`                   : additional information used to derive Entry
 ///   Table UIDs
 /// - `keywords`                : `serde` serialized list of base64 keywords
