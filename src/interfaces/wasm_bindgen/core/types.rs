@@ -2,11 +2,13 @@
 
 use std::collections::{HashMap, HashSet};
 
-use js_sys::{Array, Object, Reflect, Uint8Array};
-use wasm_bindgen::{prelude::wasm_bindgen, JsValue};
+use js_sys::{Array, JsString, Object, Reflect, Uint8Array};
+use wasm_bindgen::{prelude::wasm_bindgen, JsCast, JsValue};
 
+use super::utils::ObjectSourceForErrors;
 use crate::{
     core::{IndexedValue, Keyword},
+    error::FindexErr,
     interfaces::wasm_bindgen::core::utils::get_bytes_from_object_property,
 };
 
@@ -60,18 +62,31 @@ extern "C" {
     ///
     /// See [`FindexUpsert::upsert()`](crate::core::FindexUpsert::upsert).
     #[wasm_bindgen(typescript_type = "Array<{indexedValue: Uint8Array, keywords: Uint8Array[]}>")]
+    #[derive(Debug)]
     pub type IndexedValuesAndWords;
 }
 
 pub fn to_indexed_values_to_keywords(
     ivw: &IndexedValuesAndWords,
-) -> Result<HashMap<IndexedValue, HashSet<Keyword>>, JsValue> {
-    let mut iv_and_words: HashMap<IndexedValue, HashSet<Keyword>> = HashMap::new();
-    let array = Array::from(&JsValue::from(ivw));
+) -> Result<HashMap<IndexedValue, HashSet<Keyword>>, FindexErr> {
+    let array: &Array = ivw.dyn_ref().ok_or_else(|| {
+        FindexErr::CallBack(format!(
+            "AAA argument `newIndexedEntries` is of type {}, array expected {ivw:?}",
+            ivw.js_typeof()
+                .dyn_ref::<JsString>()
+                .map(|s| format!("{s}"))
+                .unwrap_or_else(|| format!("unknown type")),
+        ))
+    })?;
+
+    let mut iv_and_words = HashMap::new();
+    let object_source_for_errors = ObjectSourceForErrors::Argument("newIndexedEntries");
+    let mut i = 0;
     for try_obj in array.values() {
         //{indexedValue: Uint8Array, keywords: Uint8Array[]}
         let obj = try_obj?;
-        let iv_bytes = get_bytes_from_object_property(&obj, "indexedValue")?;
+        let iv_bytes =
+            get_bytes_from_object_property(&obj, "indexedValue", &object_source_for_errors, i)?;
         let iv = IndexedValue::try_from(iv_bytes.as_slice())?;
         let kw_array = { Array::from(&Reflect::get(&obj, &JsValue::from_str("keywords"))?) };
         let mut words_set: HashSet<Keyword> = HashSet::new();
@@ -81,6 +96,8 @@ pub fn to_indexed_values_to_keywords(
             words_set.insert(keyword);
         }
         iv_and_words.insert(iv, words_set);
+
+        i += 1;
     }
     Ok(iv_and_words)
 }

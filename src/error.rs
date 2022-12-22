@@ -1,34 +1,66 @@
 //! Defines error type and conversions for Findex.
 
+use std::fmt::Display;
+
 use cosmian_crypto_core::CryptoCoreError;
-use thiserror::Error;
+use js_sys::{JsString, Object};
+use wasm_bindgen::JsCast;
 #[cfg(feature = "wasm_bindgen")]
 use wasm_bindgen::JsValue;
 
-#[derive(Error, Debug)]
+#[derive(Debug)]
 pub enum FindexErr {
-    #[error("{0}")]
     CryptoError(String),
-    #[error("{0}")]
+    CryptoCoreError(CryptoCoreError),
     ConversionError(String),
-    #[error("{0}")]
     Other(String),
 
     // Findex implementation for FFI
     #[cfg(feature = "interfaces")]
-    #[error("Callback failed: {0}")]
     CallBack(String),
 
     /// Findex implementation with sqlite
     #[cfg(feature = "sqlite")]
-    #[error(transparent)]
-    RusqliteError(#[from] rusqlite::Error),
+    RusqliteError(rusqlite::Error),
     #[cfg(feature = "sqlite")]
-    #[error(transparent)]
-    IoError(#[from] std::io::Error),
+    IoError(std::io::Error),
     #[cfg(feature = "sqlite")]
-    #[error(transparent)]
-    SerdeJsonError(#[from] serde_json::Error),
+    SerdeJsonError(serde_json::Error),
+
+    #[cfg(feature = "wasm_bindgen")]
+    JsError(JsValue),
+}
+
+impl Display for FindexErr {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::CryptoError(msg) | Self::ConversionError(msg) | Self::Other(msg) => {
+                write!(f, "{msg}")
+            }
+            Self::CryptoCoreError(err) => write!(f, "{err}"),
+
+            #[cfg(feature = "sqlite")]
+            Self::RusqliteError(err) => write!(f, "{err}"),
+            #[cfg(feature = "sqlite")]
+            Self::IoError(err) => write!(f, "{err}"),
+            #[cfg(feature = "sqlite")]
+            Self::SerdeJsonError(err) => write!(f, "{err}"),
+
+            #[cfg(feature = "interfaces")]
+            Self::CallBack(msg) => write!(f, "{msg}"),
+
+            #[cfg(feature = "wasm_bindgen")]
+            Self::JsError(value) => match value.dyn_ref::<JsString>() {
+                Some(string) => write!(f, "{string}"),
+                None => match value.dyn_ref::<Object>() {
+                    // Object in Err is often an `Error` with a simple toString()
+                    Some(object) => write!(f, "{}", object.to_string()),
+                    // If it's neither a string, nor an object, print the debug JsValue.
+                    None => write!(f, "{value:?}"),
+                },
+            },
+        }
+    }
 }
 
 impl From<std::num::TryFromIntError> for FindexErr {
@@ -39,7 +71,7 @@ impl From<std::num::TryFromIntError> for FindexErr {
 
 impl From<CryptoCoreError> for FindexErr {
     fn from(e: CryptoCoreError) -> Self {
-        Self::CryptoError(e.to_string())
+        Self::CryptoCoreError(e)
     }
 }
 
@@ -60,7 +92,7 @@ impl From<FindexErr> for JsValue {
 #[cfg(feature = "wasm_bindgen")]
 impl From<JsValue> for FindexErr {
     fn from(e: JsValue) -> Self {
-        Self::Other(format!("{e:?}"))
+        Self::JsError(e)
     }
 }
 
