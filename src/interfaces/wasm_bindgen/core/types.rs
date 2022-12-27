@@ -71,7 +71,7 @@ pub fn to_indexed_values_to_keywords(
 ) -> Result<HashMap<IndexedValue, HashSet<Keyword>>, FindexErr> {
     let array: &Array = ivw.dyn_ref().ok_or_else(|| {
         FindexErr::CallBack(format!(
-            "AAA argument `newIndexedEntries` is of type {}, array expected {ivw:?}",
+            "During Findex upsert: `newIndexedEntries` should be an array, {} received.",
             ivw.js_typeof()
                 .dyn_ref::<JsString>()
                 .map(|s| format!("{s}"))
