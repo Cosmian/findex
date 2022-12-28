@@ -11,7 +11,6 @@ use std::{
 use cosmian_crypto_core::bytes_ser_de::{Serializable, Serializer};
 use futures::executor;
 
-use super::core::FetchAllEntryTableUidsCallback;
 use crate::{
     core::{
         FindexCompact, FindexSearch, FindexUpsert, IndexedValue, KeyingMaterial, Keyword, Label,
@@ -21,9 +20,9 @@ use crate::{
     interfaces::{
         ffi::{
             core::{
-                FetchChainTableCallback, FetchEntryTableCallback, FindexUser,
-                InsertChainTableCallback, ListRemovedLocationsCallback, ProgressCallback,
-                UpdateLinesCallback, UpsertEntryTableCallback,
+                FetchAllEntryTableUidsCallback, FetchChainTableCallback, FetchEntryTableCallback,
+                FindexUser, InsertChainTableCallback, ListRemovedLocationsCallback,
+                ProgressCallback, UpdateLinesCallback, UpsertEntryTableCallback,
             },
             error::{set_last_error, FfiErr},
             MAX_DEPTH,

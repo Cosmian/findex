@@ -17,7 +17,7 @@ pub trait FindexCallbacks<const UID_LENGTH: usize> {
         results: &HashMap<Keyword, HashSet<IndexedValue>>,
     ) -> Result<bool, FindexErr>;
 
-    /// Fetch all the UIDs from the entry table
+    /// Fetch all Entry Table UIDs.
     async fn fetch_all_entry_table_uids(&self) -> Result<HashSet<Uid<UID_LENGTH>>, FindexErr>;
 
     /// Fetch the lines with the given UIDs from the Entry Table. The returned
