@@ -107,6 +107,7 @@ impl FindexCallbacks<UID_LENGTH> for FindexUser {
 
     fn update_lines(
         &mut self,
+        _entry_table_uids_to_remove: HashSet<Uid<UID_LENGTH>>,
         _chain_table_uids_to_remove: HashSet<Uid<UID_LENGTH>>,
         _new_encrypted_entry_table_items: EncryptedTable<UID_LENGTH>,
         _new_encrypted_chain_table_items: EncryptedTable<UID_LENGTH>,

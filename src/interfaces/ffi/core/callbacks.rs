@@ -117,6 +117,8 @@ pub type InsertChainTableCallback =
 ///
 /// `LEB128(n_items) || UID_1 || LEB128(value_1.len()) || value_1 || ...`
 pub type UpdateLinesCallback = extern "C" fn(
+    entry_table_uids_to_remove_ptr: *const c_uchar,
+    entry_table_uids_to_remove_len: c_uint,
     chain_table_uids_to_remove_ptr: *const c_uchar,
     chain_table_uids_to_remove_len: c_uint,
     new_encrypted_entry_table_items_ptr: *const c_uchar,

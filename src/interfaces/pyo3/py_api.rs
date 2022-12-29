@@ -201,11 +201,17 @@ impl FindexCallbacks<UID_LENGTH> for InternalFindex {
 
     fn update_lines(
         &mut self,
+        entry_table_uids_to_remove: HashSet<Uid<UID_LENGTH>>,
         chain_table_uids_to_remove: HashSet<Uid<UID_LENGTH>>,
         new_encrypted_entry_table_items: EncryptedTable<UID_LENGTH>,
         new_encrypted_chain_table_items: EncryptedTable<UID_LENGTH>,
     ) -> Result<(), FindexErr> {
         Python::with_gil(|py| {
+            let py_removed_entry_uids: Vec<&PyBytes> = entry_table_uids_to_remove
+                .iter()
+                .map(|item| PyBytes::new(py, item))
+                .collect();
+
             let py_entry_table_items = PyDict::new(py);
             for (key, value) in new_encrypted_entry_table_items.iter() {
                 py_entry_table_items
@@ -229,6 +235,7 @@ impl FindexCallbacks<UID_LENGTH> for InternalFindex {
                 .call1(
                     py,
                     (
+                        py_removed_entry_uids,
                         py_removed_chain_uids,
                         py_entry_table_items,
                         py_chain_table_items,
@@ -492,6 +499,7 @@ impl InternalFindex {
             &master_key.0,
             &new_master_key.0,
             &new_label.0,
+            2,
         ))
         .map_err(PyErr::from)
     }
