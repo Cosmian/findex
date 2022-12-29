@@ -146,6 +146,7 @@ pub trait FindexCallbacks<const UID_LENGTH: usize> {
     /// - `new_chain_table_items`       : items to insert into the Chain Table
     fn update_lines(
         &mut self,
+        entry_table_uids_to_remove: HashSet<Uid<UID_LENGTH>>,
         chain_table_uids_to_remove: HashSet<Uid<UID_LENGTH>>,
         new_entry_table_items: EncryptedTable<UID_LENGTH>,
         new_chain_table_items: EncryptedTable<UID_LENGTH>,
