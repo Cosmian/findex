@@ -476,7 +476,8 @@ impl InternalFindex {
     /// - `master_key`                     : master key
     /// - `new_master_key`                 : newly generated key
     /// - `new_label`                      : newly generated label
-    /// - ˋfetch_entry_batch_sizeˋ         : number of entries to compact in one batch
+    /// - ˋfetch_entry_batch_sizeˋ         : number of entries to compact in one
+    ///   batch
     ///
     /// `num_reindexing_before_full_set`: if you compact the
     /// indexes every night this is the number of days to wait before
