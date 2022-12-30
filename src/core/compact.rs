@@ -58,6 +58,8 @@ pub trait FindexCompact<
     ///   new index
     /// - `label`                           : label used to generate the new
     ///   index
+    /// - ˋfetch_entry_batch_sizeˋ         : number of entries to compact in one
+    ///   batch
     ///
     /// **WARNING**: the compact operation *cannot* be done concurrently with
     /// upsert operations. This could result in corrupted indexes.
@@ -89,7 +91,7 @@ pub trait FindexCompact<
         // We need to fetch all the Entry Table to re-encrypt it.
         // First, fetch all UIds of the Entry table
         let all_uids = self.fetch_all_entry_table_uids().await?;
-        let all_uids_vec = Vec::from_iter(all_uids.clone());
+        let all_uids_vec = Vec::from_iter(all_uids);
 
         // Randomly select `n_lines` Entry Table lines such that an average number of
         // `num_reindexing_before_full_set` calls to `compact` are needed to compact all
@@ -107,7 +109,7 @@ pub trait FindexCompact<
             .collect::<HashSet<_>>();
 
         println!("to_reindex: {entry_table_uids_to_reindex:?}");
-
+		// Fetch and update the entry table in batch
         for i in (0..all_uids_vec.len()).step_by(fetch_entry_batch_size) {
             let slice_end = min(i + fetch_entry_batch_size, all_uids_vec.len());
             let slice_uids: HashSet<Uid<UID_LENGTH>> =
