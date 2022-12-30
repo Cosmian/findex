@@ -296,8 +296,7 @@ impl TryFrom<&[u8]> for IndexedValue {
             b'l' => Ok(Self::Location(Location::from(&value[1..]))),
             b'w' => Ok(Self::NextKeyword(Keyword::from(&value[1..]))),
             x => Err(FindexErr::ConversionError(format!(
-                "Invalid Indexed Value starting with {:?}",
-                x
+                "Invalid Indexed Value starting with {x:?}"
             ))),
         }
     }

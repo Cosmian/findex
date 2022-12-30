@@ -154,6 +154,8 @@ class TestFindex(unittest.TestCase):
         self.msk = MasterKey.random()
         self.label = Label.random()
 
+        self.compact_batch_size = 2
+
         self.db = {
             b'1': ['Martin', 'Sheperd'],
             b'2': ['Martial', 'Wilkins'],
@@ -278,7 +280,9 @@ class TestFindex(unittest.TestCase):
 
         # Removing 2nd db line
         del self.db[b'2']
-        self.findex_interface.compact_wrapper(1, self.msk, self.msk, new_label)
+        self.findex_interface.compact_wrapper(
+            1, self.msk, self.msk, new_label, self.compact_batch_size
+        )
 
         # now new_label can perform search
         res = self.findex_interface.search_wrapper(['Sheperd'], self.msk, new_label)

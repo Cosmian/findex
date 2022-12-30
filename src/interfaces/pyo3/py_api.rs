@@ -489,7 +489,7 @@ impl InternalFindex {
         master_key: &MasterKeyPy,
         new_master_key: &MasterKeyPy,
         new_label: &LabelPy,
-        fetch_entry_batch_size: u32,
+        fetch_entry_batch_size: usize,
     ) -> PyResult<()> {
         block_on(self.compact(
             num_reindexing_before_full_set,

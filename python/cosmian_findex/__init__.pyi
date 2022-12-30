@@ -148,4 +148,5 @@ class InternalFindex:
         master_key: MasterKey,
         new_master_key: MasterKey,
         new_label: Label,
+        fetch_entry_batch_size: int,
     ) -> None: ...

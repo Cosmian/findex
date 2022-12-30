@@ -58,8 +58,8 @@ pub trait FindexCompact<
     ///   new index
     /// - `label`                           : label used to generate the new
     ///   index
-    /// - ˋfetch_entry_batch_sizeˋ         : number of entries to compact in one
-    ///   batch
+    /// - `ˋfetch_entry_batch_sizeˋ`         : number of entries to compact in
+    ///   one batch
     ///
     /// **WARNING**: the compact operation *cannot* be done concurrently with
     /// upsert operations. This could result in corrupted indexes.
@@ -97,11 +97,11 @@ pub trait FindexCompact<
         // `num_reindexing_before_full_set` calls to `compact` are needed to compact all
         // the chain table.  See `documentation/Findex.pdf` and coupon problem to
         // understand this formula.
-        let entry_table_length = all_uids.len() as f64;
+        let entry_table_length = all_uids_vec.len() as f64;
         let n_lines = ((entry_table_length * (entry_table_length.log2() + 0.58))
             / f64::from(num_reindexing_before_full_set))
         .ceil() as usize;
-        let entry_table_uids_to_reindex = all_uids
+        let entry_table_uids_to_reindex = all_uids_vec
             .iter()
             .choose_multiple(&mut rng, n_lines)
             .into_iter()
