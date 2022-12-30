@@ -96,6 +96,27 @@ impl From<JsValue> for FindexErr {
     }
 }
 
+#[cfg(feature = "sqlite")]
+impl From<rusqlite::Error> for FindexErr {
+    fn from(e: rusqlite::Error) -> Self {
+        Self::RusqliteError(e)
+    }
+}
+
+#[cfg(feature = "sqlite")]
+impl From<std::io::Error> for FindexErr {
+    fn from(e: std::io::Error) -> Self {
+        Self::IoError(e)
+    }
+}
+
+#[cfg(feature = "sqlite")]
+impl From<serde_json::Error> for FindexErr {
+    fn from(e: serde_json::Error) -> Self {
+        Self::SerdeJsonError(e)
+    }
+}
+
 #[cfg(feature = "python")]
 impl From<FindexErr> for pyo3::PyErr {
     fn from(e: FindexErr) -> Self {

@@ -90,16 +90,15 @@ pub fn js_value_to_encrypted_table<const UID_LENGTH: usize>(
                 .js_typeof()
                 .dyn_ref::<JsString>()
                 .map(|s| format!("{s}"))
-                .unwrap_or_else(|| format!("unknown type")),
+                .unwrap_or_else(|| "unknown type".to_owned()),
         )));
     }
 
     let array = Array::from(encrypted_table);
     let mut encrypted_table = EncryptedTable::<UID_LENGTH>::with_capacity(array.length() as usize);
-    let mut i = 0;
     let object_source_for_errors =
         ObjectSourceForErrors::ReturnedFromCallback(callback_name_for_errors);
-    for try_obj in array.values() {
+    for (i, try_obj) in array.values().into_iter().enumerate() {
         let obj = try_obj?;
 
         if !obj.is_object() {
@@ -108,15 +107,13 @@ pub fn js_value_to_encrypted_table<const UID_LENGTH: usize>(
                 obj.js_typeof()
                     .dyn_ref::<JsString>()
                     .map(|s| format!("{s}"))
-                    .unwrap_or_else(|| format!("unknown type")),
+                    .unwrap_or_else(|| "unknown type".to_owned()),
             )));
         }
 
         let uid = get_bytes_from_object_property(&obj, "uid", &object_source_for_errors, i)?;
         let value = get_bytes_from_object_property(&obj, "value", &object_source_for_errors, i)?;
         encrypted_table.insert(Uid::try_from_bytes(&uid)?, value.clone());
-
-        i += 1;
     }
     Ok(encrypted_table)
 }
@@ -156,14 +153,14 @@ pub fn get_bytes_from_object_property(
     object_source_for_errors: &ObjectSourceForErrors,
     position_in_array_for_errors: usize,
 ) -> Result<Vec<u8>, FindexErr> {
-    let object = obj.dyn_ref::<Object>().ok_or_else(|| {
+    obj.dyn_ref::<Object>().ok_or_else(|| {
         FindexErr::CallBack(format!(
             "{object_source_for_errors}, position {position_in_array_for_errors} contains {}, \
              object expected.",
             obj.js_typeof()
                 .dyn_ref::<JsString>()
                 .map(|s| format!("{s}"))
-                .unwrap_or_else(|| format!("unknown type")),
+                .unwrap_or_else(|| "unknown type".to_owned()),
         ))
     })?;
 

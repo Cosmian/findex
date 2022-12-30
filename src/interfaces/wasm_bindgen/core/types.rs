@@ -75,14 +75,13 @@ pub fn to_indexed_values_to_keywords(
             ivw.js_typeof()
                 .dyn_ref::<JsString>()
                 .map(|s| format!("{s}"))
-                .unwrap_or_else(|| format!("unknown type")),
+                .unwrap_or_else(|| "unknown type".to_owned()),
         ))
     })?;
 
     let mut iv_and_words = HashMap::new();
     let object_source_for_errors = ObjectSourceForErrors::Argument("newIndexedEntries");
-    let mut i = 0;
-    for try_obj in array.values() {
+    for (i, try_obj) in array.values().into_iter().enumerate() {
         //{indexedValue: Uint8Array, keywords: Uint8Array[]}
         let obj = try_obj?;
         let iv_bytes =
@@ -96,8 +95,6 @@ pub fn to_indexed_values_to_keywords(
             words_set.insert(keyword);
         }
         iv_and_words.insert(iv, words_set);
-
-        i += 1;
     }
     Ok(iv_and_words)
 }
