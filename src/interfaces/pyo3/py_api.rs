@@ -482,6 +482,8 @@ impl InternalFindex {
     /// - `master_key`                     : master key
     /// - `new_master_key`                 : newly generated key
     /// - `new_label`                      : newly generated label
+    /// - ˋfetch_entry_batch_sizeˋ         : number of entries to compact in one
+    ///   batch
     ///
     /// `num_reindexing_before_full_set`: if you compact the
     /// indexes every night this is the number of days to wait before
@@ -493,13 +495,14 @@ impl InternalFindex {
         master_key: &MasterKeyPy,
         new_master_key: &MasterKeyPy,
         new_label: &LabelPy,
+        fetch_entry_batch_size: usize,
     ) -> PyResult<()> {
         block_on(self.compact(
             num_reindexing_before_full_set,
             &master_key.0,
             &new_master_key.0,
             &new_label.0,
-            2,
+            fetch_entry_batch_size,
         ))
         .map_err(PyErr::from)
     }
