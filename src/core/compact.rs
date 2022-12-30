@@ -109,7 +109,7 @@ pub trait FindexCompact<
             .collect::<HashSet<_>>();
 
         println!("to_reindex: {entry_table_uids_to_reindex:?}");
-		// Fetch and update the entry table in batch
+
         for i in (0..all_uids_vec.len()).step_by(fetch_entry_batch_size) {
             let slice_end = min(i + fetch_entry_batch_size, all_uids_vec.len());
             let slice_uids: HashSet<Uid<UID_LENGTH>> =
