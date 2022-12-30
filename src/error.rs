@@ -3,10 +3,10 @@
 use std::fmt::Display;
 
 use cosmian_crypto_core::CryptoCoreError;
-use js_sys::{JsString, Object};
-use wasm_bindgen::JsCast;
 #[cfg(feature = "wasm_bindgen")]
-use wasm_bindgen::JsValue;
+use js_sys::{JsString, Object};
+#[cfg(feature = "wasm_bindgen")]
+use wasm_bindgen::{JsCast, JsValue};
 
 #[derive(Debug)]
 pub enum FindexErr {
