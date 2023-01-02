@@ -45,10 +45,10 @@ pub trait FindexCompact<
     /// and re-encrypted using the DEM key derived from the new master key.
     ///
     /// Randomly selects index entries and recompact their associated chains.
-    /// Chains indexing no existing location are removed. Others are recomputed
-    /// from a new keying material. This removes unneeded paddings. New UIDs are
-    /// derived for the chain and values are re-encrypted using a DEM key
-    /// derived from the new keying material.
+    /// Chains indexing with no existing location are removed. Others are
+    /// recomputed from a new keying material. This removes unneeded
+    /// paddings. New UIDs are derived for the chain and values are
+    /// re-encrypted using a DEM key derived from the new keying material.
     ///
     /// - `num_reindexing_before_full_set`  : average number of calls to compact
     ///   needed to recompute all of the Chain Table.
@@ -76,7 +76,6 @@ pub trait FindexCompact<
                 "`num_reindexing_before_full_set` cannot be 0.".to_owned(),
             ));
         }
-
         let mut rng = CsRng::from_entropy();
 
         //
@@ -108,155 +107,184 @@ pub trait FindexCompact<
             .cloned()
             .collect::<HashSet<_>>();
 
-        println!("to_reindex: {entry_table_uids_to_reindex:?}");
-
         for i in (0..all_uids_vec.len()).step_by(fetch_entry_batch_size) {
             let slice_end = min(i + fetch_entry_batch_size, all_uids_vec.len());
-            let slice_uids: HashSet<Uid<UID_LENGTH>> =
+            let batch_entry_table_uids: HashSet<Uid<UID_LENGTH>> =
                 all_uids_vec[i..slice_end].iter().cloned().collect();
-            println!("batch loop: {i}, slice: {slice_uids:?}");
+            println!("batch loop: {i}, slice: {batch_entry_table_uids:?}");
 
-            let encrypted_entry_table = self.fetch_entry_table(&slice_uids).await?;
-            println!("table: {encrypted_entry_table:?}");
-
-            // The goal of this function is to build these two data sets (along with
-            // `chain_table_uids_to_remove`) and send them to the callback to update the
-            // database.
-            let mut chain_table_adds = EncryptedTable::default();
-            let mut entry_table = EntryTable::decrypt::<BLOCK_LENGTH, DEM_KEY_LENGTH, DemScheme>(
+            self.compact_subroutine(
+                batch_entry_table_uids,
+                &entry_table_uids_to_reindex,
                 &k_value,
-                &encrypted_entry_table,
-            )?;
+                &new_k_uid,
+                &new_k_value,
+                label,
+            )
+            .await?;
+        }
 
-            let batch_items_to_reindex: HashSet<Uid<UID_LENGTH>> = entry_table_uids_to_reindex
-                .intersection(&slice_uids)
-                .cloned()
-                .collect();
+        Ok(())
+    }
 
-            // Unchain the Entry Table entries to be reindexed.
-            let kwi_chain_table_uids = entry_table
-                .unchain::<BLOCK_LENGTH, KMAC_KEY_LENGTH, DEM_KEY_LENGTH, KmacKey, DemScheme>(
-                    batch_items_to_reindex.iter(),
-                    usize::MAX,
-                );
+    /// Called in batch by the main compact function.
+    ///
+    /// - `batch_entry_table_uids`      : entries part of the current batch
+    /// - `entry_table_uids_to_reindex` : selected entries for chain compaction
+    /// - `k_value`                     : K value of the current master key
+    /// - `new_k_uid`                   : K uid of the new master key
+    /// - `new_k_value`                 : K value of the new master key
+    /// - `label`                       : label used to generate the new index
+    async fn compact_subroutine(
+        &mut self,
+        batch_entry_table_uids: HashSet<Uid<UID_LENGTH>>,
+        entry_table_uids_to_reindex: &HashSet<Uid<UID_LENGTH>>,
+        k_value: &<DemScheme as Dem<DEM_KEY_LENGTH>>::Key,
+        new_k_uid: &KmacKey,
+        new_k_value: &<DemScheme as Dem<DEM_KEY_LENGTH>>::Key,
+        label: &Label,
+    ) -> Result<(), FindexErr> {
+        let mut rng = CsRng::from_entropy();
 
-            //
-            // Batch fetch chains from the Chain Table. It's better for performances and
-            // prevents the database. There is no way for the database to know which Entry
-            // Table lines are linked to the requested UIDs since the Entry Table was fetch
-            // entirely and a random portion of it is being compacted.
-            //
-            let chains_to_reindex = self.batch_fetch_chains(&kwi_chain_table_uids).await?;
+        // Fetch values of the current batch entry uids
+        let encrypted_entry_table = self.fetch_entry_table(&batch_entry_table_uids).await?;
 
-            //
-            // Remove all reindexed Chain Table items. Chains are recomputed entirely.
-            //
-            let chain_table_uids_to_remove = chains_to_reindex
-                .values()
-                .flat_map(|chain| chain.iter().map(|(k, _)| k))
-                .cloned()
-                .collect::<HashSet<_>>();
+        // The goal of this function is to build these two data sets (along with
+        // `chain_table_uids_to_remove`) and send them to the callback to update the
+        // database.
+        let mut chain_table_adds = EncryptedTable::default();
+        let mut entry_table = EntryTable::decrypt::<BLOCK_LENGTH, DEM_KEY_LENGTH, DemScheme>(
+            k_value,
+            &encrypted_entry_table,
+        )?;
 
-            // Get the values stored in the reindexed chains.
-            let mut reindexed_chain_values = HashMap::with_capacity(chains_to_reindex.len());
-            for (kwi, chain) in chains_to_reindex {
-                let mut indexed_values = HashSet::new();
-                let blocks = chain.into_iter().flat_map(|(_, v)| v).collect::<Vec<_>>();
-                for bytes in Block::unpad(&blocks)? {
-                    indexed_values.insert(IndexedValue::try_from_bytes(&bytes)?);
-                }
-                reindexed_chain_values.insert(kwi.clone(), indexed_values);
+        let batch_items_to_reindex: HashSet<Uid<UID_LENGTH>> = entry_table_uids_to_reindex
+            .intersection(&batch_entry_table_uids)
+            .cloned()
+            .collect();
+
+        // Unchain the Entry Table entries to be reindexed.
+        let kwi_chain_table_uids = entry_table
+            .unchain::<BLOCK_LENGTH, KMAC_KEY_LENGTH, DEM_KEY_LENGTH, KmacKey, DemScheme>(
+                batch_items_to_reindex.iter(),
+                usize::MAX,
+            );
+
+        //
+        // Batch fetch chains from the Chain Table. It's better for performances and
+        // prevents the database. There is no way for the database to know which Entry
+        // Table lines are linked to the requested UIDs since the Entry Table was fetch
+        // entirely and a random portion of it is being compacted.
+        //
+        let chains_to_reindex = self.batch_fetch_chains(&kwi_chain_table_uids).await?;
+
+        //
+        // Remove all reindexed Chain Table items. Chains are recomputed entirely.
+        //
+        let chain_table_uids_to_remove = chains_to_reindex
+            .values()
+            .flat_map(|chain| chain.iter().map(|(k, _)| k))
+            .cloned()
+            .collect::<HashSet<_>>();
+
+        // Get the values stored in the reindexed chains.
+        let mut reindexed_chain_values = HashMap::with_capacity(chains_to_reindex.len());
+        for (kwi, chain) in chains_to_reindex {
+            let mut indexed_values = HashSet::new();
+            let blocks = chain.into_iter().flat_map(|(_, v)| v).collect::<Vec<_>>();
+            for bytes in Block::unpad(&blocks)? {
+                indexed_values.insert(IndexedValue::try_from_bytes(&bytes)?);
             }
+            reindexed_chain_values.insert(kwi.clone(), indexed_values);
+        }
 
-            // Entry Table items indexing empty chains should be removed.
-            let mut entry_table_uids_to_drop = Vec::new();
-            //
-            // Call `list_removed_locations` for all words in one pass instead of
-            // calling for one location batch for one word to add noise and prevent
-            // the database the size of the chains for each keywords.
-            //
-            let removed_locations = self.list_removed_locations(
-                &reindexed_chain_values
-                    .values()
-                    .flat_map(|chain| chain.iter().filter_map(IndexedValue::get_location))
-                    .cloned()
-                    .collect(),
-            )?;
+        // Entry Table items indexing empty chains should be removed.
+        let mut entry_table_uids_to_drop = Vec::new();
+        //
+        // Call `list_removed_locations` for all words in one pass instead of
+        // calling for one location batch for one word to add noise and prevent
+        // the database the size of the chains for each keywords.
+        //
+        let removed_locations = self.list_removed_locations(
+            &reindexed_chain_values
+                .values()
+                .flat_map(|chain| chain.iter().filter_map(IndexedValue::get_location))
+                .cloned()
+                .collect(),
+        )?;
 
-            for entry_table_uid in batch_items_to_reindex {
-                let entry_table_value = entry_table.get(&entry_table_uid).ok_or_else(|| {
-                    FindexErr::CryptoError(format!(
-                        "No match in the Entry Table for UID: {entry_table_uid:?}"
-                    ))
+        for entry_table_uid in batch_items_to_reindex {
+            let entry_table_value = entry_table.get(&entry_table_uid).ok_or_else(|| {
+                FindexErr::CryptoError(format!(
+                    "No match in the Entry Table for UID: {entry_table_uid:?}"
+                ))
+            })?;
+
+            // Select all values indexed by this keyword.
+            let indexed_values_for_this_keyword = reindexed_chain_values
+                .get(&entry_table_value.kwi)
+                .ok_or_else(|| {
+                    FindexErr::CryptoError(format!("Unknown kwi: {:?}", &entry_table_value.kwi))
                 })?;
 
-                // Select all values indexed by this keyword.
-                let indexed_values_for_this_keyword = reindexed_chain_values
-                    .get(&entry_table_value.kwi)
-                    .ok_or_else(|| {
-                        FindexErr::CryptoError(format!("Unknown kwi: {:?}", &entry_table_value.kwi))
-                    })?;
+            // Filter out the values removed from the DB.
+            //
+            // TODO (TBZ): `NextWord`s should be managed here
+            let remaining_indexed_values_for_this_keyword = indexed_values_for_this_keyword
+                .iter()
+                .filter(|indexed_value| {
+                    !(indexed_value.is_location()
+                        && removed_locations.contains(indexed_value.get_location().unwrap()))
+                })
+                .cloned()
+                .collect::<Vec<_>>();
 
-                // Filter out the values removed from the DB.
-                //
-                // TODO (TBZ): `NextWord`s should be managed here
-                let remaining_indexed_values_for_this_keyword = indexed_values_for_this_keyword
-                    .iter()
-                    .filter(|indexed_value| {
-                        !(indexed_value.is_location()
-                            && removed_locations.contains(indexed_value.get_location().unwrap()))
-                    })
-                    .cloned()
-                    .collect::<Vec<_>>();
+            if remaining_indexed_values_for_this_keyword.is_empty() {
+                // All values indexed by this keyword have been removed.
+                entry_table_uids_to_drop.push(entry_table_uid);
+                continue;
+            }
 
-                if remaining_indexed_values_for_this_keyword.is_empty() {
-                    // All values indexed by this keyword have been removed.
-                    entry_table_uids_to_drop.push(entry_table_uid);
-                    continue;
-                }
+            // Start a new chain from scratch.
+            let mut new_entry_table_value = EntryTableValue::<UID_LENGTH, KWI_LENGTH>::new::<
+                BLOCK_LENGTH,
+                KMAC_KEY_LENGTH,
+                KmacKey,
+            >(&mut rng, entry_table_value.keyword_hash);
 
-                // Start a new chain from scratch.
-                let mut new_entry_table_value =
-                    EntryTableValue::<UID_LENGTH, KWI_LENGTH>::new::<
-                        BLOCK_LENGTH,
-                        KMAC_KEY_LENGTH,
-                        KmacKey,
-                    >(&mut rng, entry_table_value.keyword_hash);
+            // Derive the new keys.
+            let kwi_uid = new_entry_table_value
+                .kwi
+                .derive_kmac_key(CHAIN_TABLE_KEY_DERIVATION_INFO);
+            let kwi_value = new_entry_table_value
+                .kwi
+                .derive_dem_key(CHAIN_TABLE_KEY_DERIVATION_INFO);
 
-                // Derive the new keys.
-                let kwi_uid = new_entry_table_value
-                    .kwi
-                    .derive_kmac_key(CHAIN_TABLE_KEY_DERIVATION_INFO);
-                let kwi_value = new_entry_table_value
-                    .kwi
-                    .derive_dem_key(CHAIN_TABLE_KEY_DERIVATION_INFO);
-
-                // Upsert each remaining location in the Chain Table.
-                for remaining_location in remaining_indexed_values_for_this_keyword {
-                    new_entry_table_value.upsert_indexed_value::<BLOCK_LENGTH, TABLE_WIDTH, KMAC_KEY_LENGTH, DEM_KEY_LENGTH, KmacKey, DemScheme>(
+            // Upsert each remaining location in the Chain Table.
+            for remaining_location in remaining_indexed_values_for_this_keyword {
+                new_entry_table_value.upsert_indexed_value::<BLOCK_LENGTH, TABLE_WIDTH, KMAC_KEY_LENGTH, DEM_KEY_LENGTH, KmacKey, DemScheme>(
                         &remaining_location,
                         &kwi_uid,
                         &kwi_value,
                         &mut chain_table_adds,
                         &mut rng,
                     )?;
-                }
-
-                entry_table.insert(entry_table_uid.clone(), new_entry_table_value);
             }
 
-            entry_table.retain(|uid, _| !entry_table_uids_to_drop.contains(uid));
-            entry_table.refresh_uids::<KMAC_KEY_LENGTH, KmacKey>(&new_k_uid, label);
-
-            // Call the callback
-            self.update_lines(
-                slice_uids,
-                chain_table_uids_to_remove,
-                entry_table
-                    .encrypt::<BLOCK_LENGTH, DEM_KEY_LENGTH, DemScheme>(&new_k_value, &mut rng)?,
-                chain_table_adds,
-            )?;
+            entry_table.insert(entry_table_uid.clone(), new_entry_table_value);
         }
+
+        entry_table.retain(|uid, _| !entry_table_uids_to_drop.contains(uid));
+        entry_table.refresh_uids::<KMAC_KEY_LENGTH, KmacKey>(new_k_uid, label);
+
+        // Call the callback
+        self.update_lines(
+            batch_entry_table_uids,
+            chain_table_uids_to_remove,
+            entry_table
+                .encrypt::<BLOCK_LENGTH, DEM_KEY_LENGTH, DemScheme>(new_k_value, &mut rng)?,
+            chain_table_adds,
+        )?;
 
         Ok(())
     }
