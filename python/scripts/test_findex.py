@@ -128,15 +128,17 @@ class FindexHashmap:
 
     def update_lines(
         self,
-        removed_chain_table_uids: List[bytes],
+        entry_table_uids_to_remove: List[bytes],
+        chain_table_uids_to_remove: List[bytes],
         new_encrypted_entry_table_items: Dict[bytes, bytes],
         new_encrypted_chain_table_items: Dict[bytes, bytes],
     ) -> None:
-        # remove all entries from entry table
-        self.entry_table.clear()
+        # remove entries from entry table
+        for uid in entry_table_uids_to_remove:
+            del self.entry_table[uid]
 
         # remove entries from chain table
-        for uid in removed_chain_table_uids:
+        for uid in chain_table_uids_to_remove:
             del self.chain_table[uid]
 
         # insert new chains
@@ -151,6 +153,8 @@ class TestFindex(unittest.TestCase):
         # Create structures needed by Findex
         self.msk = MasterKey.random()
         self.label = Label.random()
+
+        self.compact_batch_size = 2
 
         self.db = {
             b'1': ['Martin', 'Sheperd'],
@@ -276,7 +280,9 @@ class TestFindex(unittest.TestCase):
 
         # Removing 2nd db line
         del self.db[b'2']
-        self.findex_interface.compact_wrapper(1, self.msk, self.msk, new_label)
+        self.findex_interface.compact_wrapper(
+            1, self.msk, self.msk, new_label, self.compact_batch_size
+        )
 
         # now new_label can perform search
         res = self.findex_interface.search_wrapper(['Sheperd'], self.msk, new_label)
@@ -289,8 +295,8 @@ class TestFindex(unittest.TestCase):
         res = self.findex_interface.search_wrapper(
             ['Martial', 'Wilkins'], self.msk, new_label
         )
-        assert 'Martial' not in res
-        assert 'Wilkins' not in res
+        self.assertFalse('Martial' in res)
+        self.assertFalse('Wilkins' in res)
 
 
 if __name__ == '__main__':

@@ -20,6 +20,7 @@ use crate::{
 };
 
 const MIN_KEYWORD_LENGTH: usize = 3;
+const COMPACT_BATCH_SIZE: usize = 2;
 
 #[derive(Default)]
 struct FindexTest<const UID_LENGTH: usize> {
@@ -142,6 +143,7 @@ impl<const UID_LENGTH: usize> FindexCallbacks<UID_LENGTH> for FindexTest<UID_LEN
 
     fn update_lines(
         &mut self,
+        entry_table_uids_to_remove: HashSet<Uid<UID_LENGTH>>,
         chain_table_uids_to_remove: HashSet<Uid<UID_LENGTH>>,
         new_encrypted_entry_table_items: EncryptedTable<UID_LENGTH>,
         new_encrypted_chain_table_items: EncryptedTable<UID_LENGTH>,
@@ -159,7 +161,9 @@ impl<const UID_LENGTH: usize> FindexCallbacks<UID_LENGTH> for FindexTest<UID_LEN
             new_encrypted_entry_table_items.len()
         );
 
-        self.entry_table = EncryptedTable::default();
+        for removed_entry_table_uid in entry_table_uids_to_remove {
+            self.entry_table.remove(&removed_entry_table_uid);
+        }
 
         for new_encrypted_entry_table_item in new_encrypted_entry_table_items.iter() {
             self.entry_table.insert(
@@ -506,7 +510,13 @@ async fn test_findex() -> Result<(), FindexErr> {
         new_label = Label::random(&mut rng);
         let new_master_key = KeyingMaterial::new(&mut rng);
         findex
-            .compact(i, &master_key, &new_master_key, &new_label)
+            .compact(
+                i,
+                &master_key,
+                &new_master_key,
+                &new_label,
+                COMPACT_BATCH_SIZE,
+            )
             .await?;
         master_key = new_master_key;
 
@@ -529,7 +539,13 @@ async fn test_findex() -> Result<(), FindexErr> {
     findex.remove_location(jane_doe_location_raw);
     let new_master_key = KeyingMaterial::new(&mut rng);
     findex
-        .compact(1, &master_key, &new_master_key, &new_label)
+        .compact(
+            1,
+            &master_key,
+            &new_master_key,
+            &new_label,
+            COMPACT_BATCH_SIZE,
+        )
         .await?;
     master_key = new_master_key;
 
@@ -579,7 +595,13 @@ async fn test_findex() -> Result<(), FindexErr> {
         new_label = Label::random(&mut rng);
         let new_master_key = KeyingMaterial::new(&mut rng);
         findex
-            .compact(i, &master_key, &new_master_key, &new_label)
+            .compact(
+                i,
+                &master_key,
+                &new_master_key,
+                &new_label,
+                COMPACT_BATCH_SIZE,
+            )
             .await?;
         master_key = new_master_key;
     }
@@ -615,7 +637,13 @@ async fn test_findex() -> Result<(), FindexErr> {
         new_label = Label::random(&mut rng);
         let new_master_key = KeyingMaterial::new(&mut rng);
         findex
-            .compact(i, &master_key, &new_master_key, &new_label)
+            .compact(
+                i,
+                &master_key,
+                &new_master_key,
+                &new_label,
+                COMPACT_BATCH_SIZE,
+            )
             .await?;
         master_key = new_master_key;
 
@@ -753,8 +781,7 @@ async fn test_first_names() -> Result<(), FindexErr> {
             .await?;
         if graph_results.is_empty() {
             return Err(FindexErr::Other(format!(
-                "No graph results for keyword: {}! This should not happen",
-                s
+                "No graph results for keyword: {s}! This should not happen"
             )));
         }
         total_results += graph_results.len();
@@ -848,7 +875,7 @@ async fn test_graph_compacting() {
         label = Label::random(&mut rng);
         let new_master_key = KeyingMaterial::new(&mut rng);
         findex
-            .compact(i, &master_key, &new_master_key, &label)
+            .compact(i, &master_key, &new_master_key, &label, COMPACT_BATCH_SIZE)
             .await
             .unwrap();
         master_key = new_master_key;

@@ -147,12 +147,14 @@ impl FindexCallbacks<UID_LENGTH> for FindexUser {
 
     fn update_lines(
         &mut self,
+        entry_table_uids_to_remove: HashSet<Uid<UID_LENGTH>>,
         chain_table_uids_to_remove: HashSet<Uid<UID_LENGTH>>,
         new_encrypted_entry_table_items: EncryptedTable<UID_LENGTH>,
         new_encrypted_chain_table_items: EncryptedTable<UID_LENGTH>,
     ) -> Result<(), FindexErr> {
         let update_lines = unwrap_callback!(self, update_lines);
 
+        let serialized_entry_table_uids_to_remove = serialize_set(&entry_table_uids_to_remove)?;
         let serialized_chain_table_uids_to_remove = serialize_set(&chain_table_uids_to_remove)?;
         let serialized_new_encrypted_entry_table_items =
             new_encrypted_entry_table_items.try_to_bytes()?;
@@ -160,6 +162,8 @@ impl FindexCallbacks<UID_LENGTH> for FindexUser {
             new_encrypted_chain_table_items.try_to_bytes()?;
 
         let return_code = update_lines(
+            serialized_entry_table_uids_to_remove.as_ptr(),
+            u32::try_from(serialized_entry_table_uids_to_remove.len())?,
             serialized_chain_table_uids_to_remove.as_ptr(),
             u32::try_from(serialized_chain_table_uids_to_remove.len())?,
             serialized_new_encrypted_entry_table_items.as_ptr(),

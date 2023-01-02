@@ -66,8 +66,7 @@ async fn ffi_search(
         // base64 decode the words
         let word_bytes = base64::decode(base64_keyword).map_err(|e| {
             FindexErr::ConversionError(format!(
-                "Failed decoding the base64 encoded word: {}: {}",
-                base64_keyword, e
+                "Failed decoding the base64 encoded word: {base64_keyword}: {e}"
             ))
         })?;
         keywords.insert(Keyword::from(word_bytes));
@@ -389,6 +388,7 @@ pub unsafe extern "C" fn h_compact(
     new_master_key_len: c_int,
     label_ptr: *const u8,
     label_len: c_int,
+    fetch_entry_batch_size: c_int,
     fetch_all_entry_table_uids: FetchAllEntryTableUidsCallback,
     fetch_entry: FetchEntryTableCallback,
     fetch_chain: FetchChainTableCallback,
@@ -401,6 +401,16 @@ pub unsafe extern "C" fn h_compact(
             set_last_error(FfiErr::Generic(format!(
                 "num_reindexing_before_full_set ({num_reindexing_before_full_set}) should be a \
                  positive uint. {e}"
+            )));
+            return 1;
+        }
+    };
+
+    let fetch_entry_batch_size = match fetch_entry_batch_size.try_into() {
+        Ok(usize) => usize,
+        Err(e) => {
+            set_last_error(FfiErr::Generic(format!(
+                "fetch_entry_batch_size ({fetch_entry_batch_size}) should be a positive uint. {e}"
             )));
             return 1;
         }
@@ -443,6 +453,7 @@ pub unsafe extern "C" fn h_compact(
         &master_key,
         &new_master_key,
         &label,
+        fetch_entry_batch_size
     )));
 
     0

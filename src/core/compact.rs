@@ -1,6 +1,9 @@
 //! This module defines the `FindexCompact` trait.
 
-use std::collections::{HashMap, HashSet};
+use std::{
+    cmp::min,
+    collections::{HashMap, HashSet},
+};
 
 use cosmian_crypto_core::{
     bytes_ser_de::Serializable,
@@ -42,10 +45,10 @@ pub trait FindexCompact<
     /// and re-encrypted using the DEM key derived from the new master key.
     ///
     /// Randomly selects index entries and recompact their associated chains.
-    /// Chains indexing no existing location are removed. Others are recomputed
-    /// from a new keying material. This removes unneeded paddings. New UIDs are
-    /// derived for the chain and values are re-encrypted using a DEM key
-    /// derived from the new keying material.
+    /// Chains indexing with no existing location are removed. Others are
+    /// recomputed from a new keying material. This removes unneeded
+    /// paddings. New UIDs are derived for the chain and values are
+    /// re-encrypted using a DEM key derived from the new keying material.
     ///
     /// - `num_reindexing_before_full_set`  : average number of calls to compact
     ///   needed to recompute all of the Chain Table.
@@ -55,6 +58,8 @@ pub trait FindexCompact<
     ///   new index
     /// - `label`                           : label used to generate the new
     ///   index
+    /// - `ˋfetch_entry_batch_sizeˋ`         : number of entries to compact in
+    ///   one batch
     ///
     /// **WARNING**: the compact operation *cannot* be done concurrently with
     /// upsert operations. This could result in corrupted indexes.
@@ -64,13 +69,13 @@ pub trait FindexCompact<
         master_key: &KeyingMaterial<MASTER_KEY_LENGTH>,
         new_master_key: &KeyingMaterial<MASTER_KEY_LENGTH>,
         label: &Label,
+        fetch_entry_batch_size: usize,
     ) -> Result<(), FindexErr> {
         if num_reindexing_before_full_set == 0 {
             return Err(FindexErr::CryptoError(
                 "`num_reindexing_before_full_set` cannot be 0.".to_owned(),
             ));
         }
-
         let mut rng = CsRng::from_entropy();
 
         //
@@ -85,38 +90,83 @@ pub trait FindexCompact<
         // We need to fetch all the Entry Table to re-encrypt it.
         // First, fetch all UIds of the Entry table
         let all_uids = self.fetch_all_entry_table_uids().await?;
-        let encrypted_entry_table = self.fetch_entry_table(&all_uids).await?;
+        let all_uids_vec = Vec::from_iter(all_uids);
+
+        // Randomly select `n_lines` Entry Table lines such that an average number of
+        // `num_reindexing_before_full_set` calls to `compact` are needed to compact all
+        // the chain table.  See `documentation/Findex.pdf` and coupon problem to
+        // understand this formula.
+        let entry_table_length = all_uids_vec.len() as f64;
+        let n_lines = ((entry_table_length * (entry_table_length.log2() + 0.58))
+            / f64::from(num_reindexing_before_full_set))
+        .ceil() as usize;
+        let entry_table_uids_to_reindex = all_uids_vec
+            .iter()
+            .choose_multiple(&mut rng, n_lines)
+            .into_iter()
+            .cloned()
+            .collect::<HashSet<_>>();
+
+        for i in (0..all_uids_vec.len()).step_by(fetch_entry_batch_size) {
+            let slice_end = min(i + fetch_entry_batch_size, all_uids_vec.len());
+            let batch_entry_table_uids: HashSet<Uid<UID_LENGTH>> =
+                all_uids_vec[i..slice_end].iter().cloned().collect();
+            println!("batch loop: {i}, slice: {batch_entry_table_uids:?}");
+
+            self.compact_subroutine(
+                batch_entry_table_uids,
+                &entry_table_uids_to_reindex,
+                &k_value,
+                &new_k_uid,
+                &new_k_value,
+                label,
+            )
+            .await?;
+        }
+
+        Ok(())
+    }
+
+    /// Called in batch by the main compact function.
+    ///
+    /// - `batch_entry_table_uids`      : entries part of the current batch
+    /// - `entry_table_uids_to_reindex` : selected entries for chain compaction
+    /// - `k_value`                     : K value of the current master key
+    /// - `new_k_uid`                   : K uid of the new master key
+    /// - `new_k_value`                 : K value of the new master key
+    /// - `label`                       : label used to generate the new index
+    async fn compact_subroutine(
+        &mut self,
+        batch_entry_table_uids: HashSet<Uid<UID_LENGTH>>,
+        entry_table_uids_to_reindex: &HashSet<Uid<UID_LENGTH>>,
+        k_value: &<DemScheme as Dem<DEM_KEY_LENGTH>>::Key,
+        new_k_uid: &KmacKey,
+        new_k_value: &<DemScheme as Dem<DEM_KEY_LENGTH>>::Key,
+        label: &Label,
+    ) -> Result<(), FindexErr> {
+        let mut rng = CsRng::from_entropy();
+
+        // Fetch values of the current batch entry uids
+        let encrypted_entry_table = self.fetch_entry_table(&batch_entry_table_uids).await?;
 
         // The goal of this function is to build these two data sets (along with
         // `chain_table_uids_to_remove`) and send them to the callback to update the
         // database.
         let mut chain_table_adds = EncryptedTable::default();
         let mut entry_table = EntryTable::decrypt::<BLOCK_LENGTH, DEM_KEY_LENGTH, DemScheme>(
-            &k_value,
+            k_value,
             &encrypted_entry_table,
         )?;
-        // Entry Table items indexing empty chains should be removed.
-        let mut entry_table_uids_to_drop = Vec::new();
 
-        // Randomly select `n_lines` Entry Table lines such that an average number of
-        // `num_reindexing_before_full_set` calls to `compact` are needed to compact all
-        // the chain table.  See `documentation/Findex.pdf` and coupon problem to
-        // understand this formula.
-        let entry_table_length = entry_table.len() as f64;
-        let n_lines = ((entry_table_length * (entry_table_length.log2() + 0.58))
-            / f64::from(num_reindexing_before_full_set))
-        .ceil() as usize;
-        let entry_table_items_to_reindex = entry_table
-            .keys()
-            .choose_multiple(&mut rng, n_lines)
-            .into_iter()
+        let batch_items_to_reindex: HashSet<Uid<UID_LENGTH>> = entry_table_uids_to_reindex
+            .intersection(&batch_entry_table_uids)
             .cloned()
-            .collect::<Vec<_>>();
+            .collect();
 
         // Unchain the Entry Table entries to be reindexed.
         let kwi_chain_table_uids = entry_table
             .unchain::<BLOCK_LENGTH, KMAC_KEY_LENGTH, DEM_KEY_LENGTH, KmacKey, DemScheme>(
-                entry_table_items_to_reindex.iter(),
+                batch_items_to_reindex.iter(),
                 usize::MAX,
             );
 
@@ -148,6 +198,8 @@ pub trait FindexCompact<
             reindexed_chain_values.insert(kwi.clone(), indexed_values);
         }
 
+        // Entry Table items indexing empty chains should be removed.
+        let mut entry_table_uids_to_drop = Vec::new();
         //
         // Call `list_removed_locations` for all words in one pass instead of
         // calling for one location batch for one word to add noise and prevent
@@ -161,7 +213,7 @@ pub trait FindexCompact<
                 .collect(),
         )?;
 
-        for entry_table_uid in entry_table_items_to_reindex {
+        for entry_table_uid in batch_items_to_reindex {
             let entry_table_value = entry_table.get(&entry_table_uid).ok_or_else(|| {
                 FindexErr::CryptoError(format!(
                     "No match in the Entry Table for UID: {entry_table_uid:?}"
@@ -211,25 +263,26 @@ pub trait FindexCompact<
             // Upsert each remaining location in the Chain Table.
             for remaining_location in remaining_indexed_values_for_this_keyword {
                 new_entry_table_value.upsert_indexed_value::<BLOCK_LENGTH, TABLE_WIDTH, KMAC_KEY_LENGTH, DEM_KEY_LENGTH, KmacKey, DemScheme>(
-                    &remaining_location,
-                    &kwi_uid,
-                    &kwi_value,
-                    &mut chain_table_adds,
-                    &mut rng,
-                )?;
+                        &remaining_location,
+                        &kwi_uid,
+                        &kwi_value,
+                        &mut chain_table_adds,
+                        &mut rng,
+                    )?;
             }
 
             entry_table.insert(entry_table_uid.clone(), new_entry_table_value);
         }
 
         entry_table.retain(|uid, _| !entry_table_uids_to_drop.contains(uid));
-        entry_table.refresh_uids::<KMAC_KEY_LENGTH, KmacKey>(&new_k_uid, label);
+        entry_table.refresh_uids::<KMAC_KEY_LENGTH, KmacKey>(new_k_uid, label);
 
         // Call the callback
         self.update_lines(
+            batch_entry_table_uids,
             chain_table_uids_to_remove,
             entry_table
-                .encrypt::<BLOCK_LENGTH, DEM_KEY_LENGTH, DemScheme>(&new_k_value, &mut rng)?,
+                .encrypt::<BLOCK_LENGTH, DEM_KEY_LENGTH, DemScheme>(new_k_value, &mut rng)?,
             chain_table_adds,
         )?;
 
