@@ -2,11 +2,14 @@
 
 use std::fmt::Display;
 
+use base64::DecodeError;
 use cosmian_crypto_core::CryptoCoreError;
 #[cfg(feature = "wasm_bindgen")]
 use js_sys::{JsString, Object};
 #[cfg(feature = "wasm_bindgen")]
 use wasm_bindgen::{JsCast, JsValue};
+
+use crate::interfaces::ffi::core::ErrorCode;
 
 #[derive(Debug)]
 pub enum FindexErr {
@@ -18,14 +21,20 @@ pub enum FindexErr {
     // Findex implementation for FFI
     #[cfg(feature = "interfaces")]
     CallBack(String),
+    #[cfg(feature = "interfaces")]
+    CallbackErrorCode {
+        name: &'static str,
+        code: i32,
+    },
 
     /// Findex implementation with sqlite
     #[cfg(feature = "sqlite")]
     RusqliteError(rusqlite::Error),
     #[cfg(feature = "sqlite")]
     IoError(std::io::Error),
-    #[cfg(feature = "sqlite")]
+
     SerdeJsonError(serde_json::Error),
+    DecodeError(DecodeError),
 
     #[cfg(feature = "wasm_bindgen")]
     JsError(JsValue),
@@ -43,11 +52,19 @@ impl Display for FindexErr {
             Self::RusqliteError(err) => write!(f, "{err}"),
             #[cfg(feature = "sqlite")]
             Self::IoError(err) => write!(f, "{err}"),
-            #[cfg(feature = "sqlite")]
+
             Self::SerdeJsonError(err) => write!(f, "{err}"),
+            Self::DecodeError(err) => write!(f, "{err}"),
 
             #[cfg(feature = "interfaces")]
             Self::CallBack(msg) => write!(f, "{msg}"),
+            #[cfg(feature = "interfaces")]
+            Self::CallbackErrorCode { name, code } if code == &(ErrorCode::Exception as i32) => {
+                write!(f, "callback '{name}' threw an exception")
+            }
+            Self::CallbackErrorCode { name, code } => {
+                write!(f, "callback '{name}' returned an error code: {code}")
+            }
 
             #[cfg(feature = "wasm_bindgen")]
             Self::JsError(value) => match value.dyn_ref::<JsString>() {
@@ -72,6 +89,12 @@ impl From<std::num::TryFromIntError> for FindexErr {
 impl From<CryptoCoreError> for FindexErr {
     fn from(e: CryptoCoreError) -> Self {
         Self::CryptoCoreError(e)
+    }
+}
+
+impl From<DecodeError> for FindexErr {
+    fn from(e: DecodeError) -> Self {
+        Self::DecodeError(e)
     }
 }
 
@@ -110,7 +133,6 @@ impl From<std::io::Error> for FindexErr {
     }
 }
 
-#[cfg(feature = "sqlite")]
 impl From<serde_json::Error> for FindexErr {
     fn from(e: serde_json::Error) -> Self {
         Self::SerdeJsonError(e)

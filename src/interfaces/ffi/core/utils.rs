@@ -7,7 +7,7 @@ use crate::{
     core::Keyword,
     error::FindexErr,
     interfaces::{
-        ffi::LEB128_MAXIMUM_ENCODED_BYTES_NUMBER,
+        ffi::{core::ErrorCode, LEB128_MAXIMUM_ENCODED_BYTES_NUMBER},
         generic_parameters::{DemScheme, BLOCK_LENGTH, KWI_LENGTH, TABLE_WIDTH, UID_LENGTH},
     },
 };
@@ -89,43 +89,42 @@ pub fn fetch_callback(
     uids: &[u8],
     allocation_size: usize,
     callback: FetchEntryTableCallback,
+    debug_name: &'static str,
 ) -> Result<Vec<u8>, FindexErr> {
     //
     // DB request with correct allocation size
     //
     let mut output_bytes = vec![0_u8; allocation_size];
-    let output_ptr = output_bytes.as_mut_ptr().cast::<c_uchar>();
+    let mut output_ptr = output_bytes.as_mut_ptr().cast::<c_uchar>();
     let mut output_len = u32::try_from(allocation_size)?;
 
-    let ret = callback(
+    let mut error_code = callback(
         output_ptr,
         &mut output_len,
         uids.as_ptr(),
         u32::try_from(uids.len())?,
     );
-    if ret != 0 {
-        let mut output_bytes = vec![0_u8; output_len as usize];
-        let output_ptr = output_bytes.as_mut_ptr().cast::<c_uchar>();
-        // Retry with correct size
-        let ret = callback(
+
+    println!("Callback return is {error_code}");
+    if error_code == ErrorCode::BufferTooSmall as i32 {
+        output_bytes = vec![0_u8; output_len as usize];
+        output_ptr = output_bytes.as_mut_ptr().cast::<c_uchar>();
+
+        error_code = callback(
             output_ptr,
             &mut output_len,
             uids.as_ptr(),
             u32::try_from(uids.len())?,
         );
-        if ret != 0 {
-            return Err(FindexErr::CallBack(format!(
-                "fetch call failed: code={ret:?} (output_len: {output_len})"
-            )));
-        }
-        //
-        // Recopy buffer in Vec<u8>
-        //
-        let output_entries_bytes = unsafe {
-            std::slice::from_raw_parts(output_ptr as *const u8, output_len as usize).to_vec()
-        };
-        return Ok(output_entries_bytes);
     }
+
+    if error_code != ErrorCode::Success as i32 {
+        return Err(FindexErr::CallbackErrorCode {
+            name: debug_name,
+            code: error_code,
+        });
+    }
+
     if output_len == 0 {
         return Ok(vec![]);
     }

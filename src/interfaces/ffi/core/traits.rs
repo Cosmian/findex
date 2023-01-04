@@ -73,6 +73,7 @@ impl FindexCallbacks<UID_LENGTH> for FindexUser {
             &serialized_uids,
             get_serialized_encrypted_entry_table_size_bound(entry_table_uids.len()),
             *fetch_entry,
+            "fetch entries",
         )?;
 
         EncryptedTable::try_from_bytes(&res)
@@ -88,6 +89,7 @@ impl FindexCallbacks<UID_LENGTH> for FindexUser {
             &serialized_chain_uids,
             get_allocation_size_for_select_chain_request(chain_uids.len()),
             *fetch_chain,
+            "fetch chains",
         )?;
         EncryptedTable::try_from_bytes(&res)
     }
@@ -109,17 +111,18 @@ impl FindexCallbacks<UID_LENGTH> for FindexUser {
             serialized_rejected_items.as_mut_ptr().cast::<c_uchar>();
 
         // FFI callback
-        let return_code = upsert_entry(
+        let error_code = upsert_entry(
             serialized_rejected_items_ptr,
             &mut serialized_rejected_items_len,
             serialized_upsert_data.as_ptr(),
             serialized_upsert_data.len() as u32,
         );
 
-        if return_code != 0 {
-            return Err(FindexErr::CallBack(format!(
-                "`upsert_entry` failed with code: {return_code}"
-            )));
+        if error_code != 0 {
+            return Err(FindexErr::CallbackErrorCode {
+                name: "upsert entries",
+                code: error_code,
+            });
         }
 
         // Set the correct length for the output.
@@ -159,7 +162,7 @@ impl FindexCallbacks<UID_LENGTH> for FindexUser {
         let serialized_new_encrypted_chain_table_items =
             new_encrypted_chain_table_items.try_to_bytes()?;
 
-        let return_code = update_lines(
+        let error_code = update_lines(
             serialized_chain_table_uids_to_remove.as_ptr(),
             u32::try_from(serialized_chain_table_uids_to_remove.len())?,
             serialized_new_encrypted_entry_table_items.as_ptr(),
@@ -168,10 +171,11 @@ impl FindexCallbacks<UID_LENGTH> for FindexUser {
             u32::try_from(serialized_new_encrypted_chain_table_items.len())?,
         );
 
-        if return_code != 0 {
-            return Err(FindexErr::CallBack(format!(
-                "Compact: `update_lines` failed with code: {return_code}"
-            )));
+        if error_code != 0 {
+            return Err(FindexErr::CallbackErrorCode {
+                name: "update lines",
+                code: error_code,
+            });
         }
 
         Ok(())
@@ -190,17 +194,18 @@ impl FindexCallbacks<UID_LENGTH> for FindexUser {
         let output_ptr = output_bytes.as_mut_ptr().cast::<c_uchar>();
         let mut output_len = u32::try_from(serialized_chain_table_uids_to_remove.len())?;
 
-        let return_code = list_removed_locations(
+        let error_code = list_removed_locations(
             output_ptr,
             &mut output_len,
             serialized_chain_table_uids_to_remove.as_ptr(),
             u32::try_from(serialized_chain_table_uids_to_remove.len())?,
         );
 
-        if return_code != 0 {
-            return Err(FindexErr::CallBack(format!(
-                "Compact: list_removed_locations failed (output_len: {output_len})"
-            )));
+        if error_code != 0 {
+            return Err(FindexErr::CallbackErrorCode {
+                name: "list removed locations",
+                code: error_code,
+            });
         }
 
         if output_len == 0 {

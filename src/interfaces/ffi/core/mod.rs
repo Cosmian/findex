@@ -12,6 +12,15 @@ pub use self::callbacks::*;
 /// fetched by batches of size [`NUMBER_OF_ENTRY_TABLE_LINE_IN_BATCH`].
 pub const NUMBER_OF_ENTRY_TABLE_LINE_IN_BATCH: usize = 100;
 
+#[repr(i32)]
+#[derive(Debug)]
+pub enum ErrorCode {
+    Success = 0,
+    Error = 1,
+    BufferTooSmall = 2,
+    Exception = 42,
+}
+
 /// Implements Findex traits.
 pub struct FindexUser {
     pub(crate) progress: Option<ProgressCallback>,
