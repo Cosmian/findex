@@ -58,7 +58,10 @@ async fn ffi_search(
     fetch_entry: FetchEntryTableCallback,
     fetch_chain: FetchChainTableCallback,
 ) -> Result<Vec<u8>, FindexErr> {
-    let master_key = KeyingMaterial::<MASTER_KEY_LENGTH>::try_from_bytes(master_key_bytes)?;
+    let master_key = KeyingMaterial::<MASTER_KEY_LENGTH>::try_from_bytes(master_key_bytes)
+        .map_err(|e| {
+            FindexErr::Other(format!("While parsing master key for Findex search, {e}"))
+        })?;
     let label = Label::from(label_bytes);
 
     let mut keywords = HashSet::with_capacity(base64_keywords.len());

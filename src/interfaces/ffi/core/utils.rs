@@ -105,7 +105,6 @@ pub fn fetch_callback(
         u32::try_from(uids.len())?,
     );
 
-    println!("Callback return is {error_code}");
     if error_code == ErrorCode::BufferTooSmall as i32 {
         output_bytes = vec![0_u8; output_len as usize];
         output_ptr = output_bytes.as_mut_ptr().cast::<c_uchar>();
