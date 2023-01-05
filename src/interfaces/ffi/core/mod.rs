@@ -14,11 +14,21 @@ pub const NUMBER_OF_ENTRY_TABLE_LINE_IN_BATCH: usize = 100;
 
 #[repr(i32)]
 #[derive(Debug)]
+/// Callbacks return error codes, right now only 0 and 1 are specified.
+/// Other error codes will be forwarded to the client as a response of
+/// the main call error code so that the client can report some custom
+/// callbacks errors (for example the Flutter lib is using 42 to report
+/// an expection during a callback, save this exception and re-report this
+/// exception at the end of the main call if the response is 42).
 pub enum ErrorCode {
     Success = 0,
-    Error = 1,
-    BufferTooSmall = 2,
-    Exception = 42,
+
+    /// :BreakingChange
+    /// We use 1 here because we used to always retry in case of non-zero error
+    /// code. We may want to change this in future major release (reserve 1
+    /// for error and specify another error code for asking for a bigger
+    /// buffer.)
+    BufferTooSmall = 1,
 }
 
 /// Implements Findex traits.

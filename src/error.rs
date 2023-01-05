@@ -9,8 +9,6 @@ use js_sys::{JsString, Object};
 #[cfg(feature = "wasm_bindgen")]
 use wasm_bindgen::{JsCast, JsValue};
 
-use crate::interfaces::ffi::core::ErrorCode;
-
 #[derive(Debug)]
 pub enum FindexErr {
     CryptoError(String),
@@ -59,9 +57,6 @@ impl Display for FindexErr {
             #[cfg(feature = "interfaces")]
             Self::CallBack(msg) => write!(f, "{msg}"),
             #[cfg(feature = "interfaces")]
-            Self::CallbackErrorCode { name, code } if code == &(ErrorCode::Exception as i32) => {
-                write!(f, "callback '{name}' threw an exception")
-            }
             Self::CallbackErrorCode { name, code } => {
                 write!(f, "callback '{name}' returned an error code: {code}")
             }
