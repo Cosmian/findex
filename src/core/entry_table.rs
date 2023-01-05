@@ -14,6 +14,7 @@ use cosmian_crypto_core::{
     bytes_ser_de::{Deserializer, Serializer},
     reexport::rand_core::CryptoRngCore,
     symmetric_crypto::{Dem, SymKey},
+    CryptoCoreError,
 };
 use zeroize::Zeroize;
 
@@ -335,14 +336,24 @@ impl<const UID_LENGTH: usize, const KWI_LENGTH: usize> EntryTable<UID_LENGTH, KW
     ) -> Result<Self, FindexErr> {
         let mut entry_table = Self::with_capacity(encrypted_entry_table.len());
         for (k, v) in encrypted_entry_table.iter() {
-            entry_table.insert(
-                k.clone(),
-                EntryTableValue::<UID_LENGTH, KWI_LENGTH>::decrypt::<
-                    BLOCK_LENGTH,
-                    DEM_KEY_LENGTH,
-                    DemScheme,
-                >(k_value, v)?,
-            );
+            let decrypted_value = EntryTableValue::<UID_LENGTH, KWI_LENGTH>::decrypt::<
+                BLOCK_LENGTH,
+                DEM_KEY_LENGTH,
+                DemScheme,
+            >(k_value, v)
+            .map_err(|e| match e {
+                FindexErr::CryptoCoreError(CryptoCoreError::DecryptionError) => {
+                    FindexErr::CallBack(format!(
+                        "fail to decrypt one of the `value` returned by the fetch entries \
+                         callback (uid as hex was {}, value as hex was {})",
+                        hex::encode(&k),
+                        hex::encode(v),
+                    ))
+                }
+                e => e, // I think this case should never happen but still keeping it.
+            })?;
+
+            entry_table.insert(k.clone(), decrypted_value);
         }
         Ok(entry_table)
     }
