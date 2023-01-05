@@ -287,9 +287,11 @@ pub unsafe extern "C" fn h_upsert(
     // Parse master Key
     ffi_not_null!(master_key_ptr, "Master Key pointer should not be null");
     let master_key_bytes = slice::from_raw_parts(master_key_ptr, master_key_len as usize);
-    let master_key = ffi_unwrap!(KeyingMaterial::<MASTER_KEY_LENGTH>::try_from_bytes(
-        master_key_bytes
-    ));
+    let master_key = ffi_unwrap!(
+        KeyingMaterial::<MASTER_KEY_LENGTH>::try_from_bytes(master_key_bytes).map_err(|e| {
+            FindexErr::Other(format!("While parsing master key for Findex upsert, {e}"))
+        })
+    );
 
     ffi_not_null!(label_ptr, "Label pointer should not be null");
 

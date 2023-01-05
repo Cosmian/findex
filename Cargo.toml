@@ -22,16 +22,7 @@ path = "src/lib.rs"
 [features]
 ffi = ["interfaces", "futures", "interfaces", "serde", "serde_json"]
 sqlite = ["rusqlite", "faker_rand", "interfaces", "serde", "serde_json"]
-wasm_bindgen = [
-  "interfaces",
-  "js-sys",
-  "wasm-bindgen",
-  "wasm-bindgen-test",
-  "futures",
-  "web-sys",
-  "wasm-bindgen-futures",
-  "interfaces",
-]
+wasm_bindgen = ["interfaces", "js-sys", "wasm-bindgen", "wasm-bindgen-test", "futures", "web-sys", "wasm-bindgen-futures", "interfaces"]
 interfaces = []
 python = ["interfaces", "pyo3", "futures"]
 
@@ -41,6 +32,7 @@ base64 = "0.13"
 cosmian_crypto_core = { path = "../crypto_core" }
 faker_rand = { version = "0.1", optional = true }
 futures = { version = "0.3", optional = true }
+hex = "0.4.3"
 js-sys = { version = "0.3", optional = true }
 leb128 = "0.2"
 pyo3 = { version = "0.17", features = ["extension-module", "abi3", "abi3-py37", "generate-import-lib"], optional = true }

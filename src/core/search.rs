@@ -6,6 +6,7 @@ use async_recursion::async_recursion;
 use cosmian_crypto_core::{
     bytes_ser_de::Serializable,
     symmetric_crypto::{Dem, SymKey},
+    CryptoCoreError,
 };
 
 use super::{callbacks::FindexCallbacks, structs::Block};
@@ -246,14 +247,24 @@ pub trait FindexSearch<
                 // Use a vector not to shuffle the chain. This is important because indexed
                 // values can be divided in blocks that span several lines in the chain.
                 for (uid, value) in encrypted_item {
-                    chain.push((
-                        uid,
-                        ChainTableValue::<BLOCK_LENGTH>::decrypt::<
-                            TABLE_WIDTH,
-                            DEM_KEY_LENGTH,
-                            DemScheme,
-                        >(&kwi_value, &value)?,
-                    ));
+                    let decrypted_value = ChainTableValue::<BLOCK_LENGTH>::decrypt::<
+                        TABLE_WIDTH,
+                        DEM_KEY_LENGTH,
+                        DemScheme,
+                    >(&kwi_value, &value)
+                    .map_err(|e| match e {
+                        FindexErr::CryptoCoreError(CryptoCoreError::DecryptionError) => {
+                            FindexErr::CallBack(format!(
+                                "fail to decrypt one of the `value` returned by the fetch chains \
+                                 callback (uid as hex was {}, value as hex was {})",
+                                hex::encode(&uid),
+                                hex::encode(value),
+                            ))
+                        }
+                        e => e, // I think this case should never happen but still keeping it.
+                    })?;
+
+                    chain.push((uid, decrypted_value));
                 }
             }
             chains.insert(kwi.clone(), chain);
