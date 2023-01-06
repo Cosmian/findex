@@ -6,7 +6,6 @@ use async_recursion::async_recursion;
 use cosmian_crypto_core::{
     bytes_ser_de::Serializable,
     symmetric_crypto::{Dem, SymKey},
-    CryptoCoreError,
 };
 
 use super::{callbacks::FindexCallbacks, structs::Block};
@@ -252,16 +251,17 @@ pub trait FindexSearch<
                         DEM_KEY_LENGTH,
                         DemScheme,
                     >(&kwi_value, &value)
-                    .map_err(|e| match e {
-                        FindexErr::CryptoCoreError(CryptoCoreError::DecryptionError) => {
-                            FindexErr::CallBack(format!(
-                                "fail to decrypt one of the `value` returned by the fetch chains \
-                                 callback (uid as hex was {}, value as hex was {})",
-                                hex::encode(&uid),
-                                hex::encode(value),
-                            ))
-                        }
-                        e => e, // I think this case should never happen but still keeping it.
+                    .map_err(|_| {
+                        FindexErr::CallBack(format!(
+                            "fail to decrypt one of the `value` returned by the fetch chains \
+                             callback (uid as hex was '{}', value {})",
+                            hex::encode(&uid),
+                            if value.is_empty() {
+                                "was empty".to_owned()
+                            } else {
+                                format!("as hex was '{}'", hex::encode(value))
+                            },
+                        ))
                     })?;
 
                     chain.push((uid, decrypted_value));

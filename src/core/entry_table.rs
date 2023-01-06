@@ -14,7 +14,6 @@ use cosmian_crypto_core::{
     bytes_ser_de::{Deserializer, Serializer},
     reexport::rand_core::CryptoRngCore,
     symmetric_crypto::{Dem, SymKey},
-    CryptoCoreError,
 };
 use zeroize::Zeroize;
 
@@ -341,16 +340,17 @@ impl<const UID_LENGTH: usize, const KWI_LENGTH: usize> EntryTable<UID_LENGTH, KW
                 DEM_KEY_LENGTH,
                 DemScheme,
             >(k_value, v)
-            .map_err(|e| match e {
-                FindexErr::CryptoCoreError(CryptoCoreError::DecryptionError) => {
-                    FindexErr::CallBack(format!(
-                        "fail to decrypt one of the `value` returned by the fetch entries \
-                         callback (uid as hex was {}, value as hex was {})",
-                        hex::encode(&k),
-                        hex::encode(v),
-                    ))
-                }
-                e => e, // I think this case should never happen but still keeping it.
+            .map_err(|_| {
+                FindexErr::CallBack(format!(
+                    "fail to decrypt one of the `value` returned by the fetch entries callback \
+                     (uid as hex was '{}', value {})",
+                    hex::encode(&k),
+                    if v.is_empty() {
+                        "was empty".to_owned()
+                    } else {
+                        format!("as hex was '{}'", hex::encode(v))
+                    },
+                ))
             })?;
 
             entry_table.insert(k.clone(), decrypted_value);

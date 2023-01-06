@@ -20,8 +20,8 @@ name = "cosmian_findex"
 path = "src/lib.rs"
 
 [features]
-ffi = ["interfaces", "futures", "interfaces", "serde", "serde_json"]
-sqlite = ["rusqlite", "faker_rand", "interfaces", "serde", "serde_json"]
+ffi = ["interfaces", "futures", "interfaces"]
+sqlite = ["rusqlite", "faker_rand", "interfaces"]
 wasm_bindgen = ["interfaces", "js-sys", "wasm-bindgen", "wasm-bindgen-test", "futures", "web-sys", "wasm-bindgen-futures", "interfaces"]
 interfaces = []
 python = ["interfaces", "pyo3", "futures"]
@@ -38,8 +38,8 @@ leb128 = "0.2"
 pyo3 = { version = "0.17", features = ["extension-module", "abi3", "abi3-py37", "generate-import-lib"], optional = true }
 rand = "0.8"
 rusqlite = { version = "0.28", features = ["bundled"], optional = true }
-serde = { version = "1.0", features = ["derive"], optional = true }
-serde_json = { version = "1.0", optional = true }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = { version = "1.0" }
 sha3 = "0.10"
 thiserror = "1"
 tiny-keccak = { version = "2.0.2", features = ["kmac"] }
