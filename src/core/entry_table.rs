@@ -344,7 +344,7 @@ impl<const UID_LENGTH: usize, const KWI_LENGTH: usize> EntryTable<UID_LENGTH, KW
                 FindexErr::CallBack(format!(
                     "fail to decrypt one of the `value` returned by the fetch entries callback \
                      (uid as hex was '{}', value {})",
-                    hex::encode(&k),
+                    hex::encode(k),
                     if v.is_empty() {
                         "was empty".to_owned()
                     } else {
