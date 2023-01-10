@@ -359,6 +359,7 @@ async fn test_findex() -> Result<(), FindexErr> {
             usize::MAX,
             0,
             0,
+            0,
         )
         .await?;
     check_search_result(&robert_search, &robert_keyword, &robert_doe_location);
@@ -370,6 +371,7 @@ async fn test_findex() -> Result<(), FindexErr> {
             &master_key,
             &Label::random(&mut rng),
             usize::MAX,
+            0,
             0,
             0,
         )
@@ -385,6 +387,7 @@ async fn test_findex() -> Result<(), FindexErr> {
             usize::MAX,
             0,
             0,
+            0,
         )
         .await?;
     check_search_result(&doe_search, &doe_keyword, &robert_doe_location);
@@ -397,6 +400,7 @@ async fn test_findex() -> Result<(), FindexErr> {
             &master_key,
             &label,
             usize::MAX,
+            0,
             0,
             0,
         )
@@ -416,6 +420,7 @@ async fn test_findex() -> Result<(), FindexErr> {
             &label,
             usize::MAX,
             usize::MAX,
+            0,
             0,
         )
         .await?;
@@ -447,6 +452,7 @@ async fn test_findex() -> Result<(), FindexErr> {
             usize::MAX,
             0,
             0,
+            0,
         )
         .await?;
     check_search_result(&jane_search, &jane_keyword, &jane_doe_location);
@@ -458,6 +464,7 @@ async fn test_findex() -> Result<(), FindexErr> {
             &master_key,
             &label,
             usize::MAX,
+            0,
             0,
             0,
         )
@@ -473,6 +480,7 @@ async fn test_findex() -> Result<(), FindexErr> {
             usize::MAX,
             0,
             0,
+            0,
         )
         .await?;
     check_search_result(&doe_search, &doe_keyword, &jane_doe_location);
@@ -486,6 +494,7 @@ async fn test_findex() -> Result<(), FindexErr> {
             &master_key,
             &label,
             usize::MAX,
+            0,
             0,
             0,
         )
@@ -519,6 +528,7 @@ async fn test_findex() -> Result<(), FindexErr> {
                 usize::MAX,
                 0,
                 0,
+                0,
             )
             .await?;
         check_search_result(&doe_search, &doe_keyword, &robert_doe_location);
@@ -542,6 +552,7 @@ async fn test_findex() -> Result<(), FindexErr> {
             usize::MAX,
             0,
             0,
+            0,
         )
         .await?;
     // Jane is not indexed anymore.
@@ -556,6 +567,7 @@ async fn test_findex() -> Result<(), FindexErr> {
             usize::MAX,
             0,
             0,
+            0,
         )
         .await?;
     check_search_result(&doe_search, &doe_keyword, &robert_doe_location);
@@ -568,6 +580,7 @@ async fn test_findex() -> Result<(), FindexErr> {
             &master_key,
             &label,
             usize::MAX,
+            0,
             0,
             0,
         )
@@ -593,6 +606,7 @@ async fn test_findex() -> Result<(), FindexErr> {
             usize::MAX,
             0,
             0,
+            0,
         )
         .await?;
     check_search_result(&doe_search, &doe_keyword, &robert_doe_location);
@@ -605,6 +619,7 @@ async fn test_findex() -> Result<(), FindexErr> {
             &master_key,
             &label,
             usize::MAX,
+            0,
             0,
             0,
         )
@@ -626,6 +641,7 @@ async fn test_findex() -> Result<(), FindexErr> {
                 &master_key,
                 &new_label,
                 usize::MAX,
+                0,
                 0,
                 0,
             )
@@ -749,7 +765,7 @@ async fn test_first_names() -> Result<(), FindexErr> {
     for s in searches {
         let keywords = HashSet::from_iter(vec![Keyword::from(s.as_str())]);
         let graph_results = graph_findex
-            .search(&keywords, &master_key, &label, usize::MAX, usize::MAX, 0)
+            .search(&keywords, &master_key, &label, usize::MAX, usize::MAX, 0, 0)
             .await?;
         if graph_results.is_empty() {
             return Err(FindexErr::Other(format!(
@@ -760,7 +776,7 @@ async fn test_first_names() -> Result<(), FindexErr> {
         total_results += graph_results.len();
         // naive search
         let naive_results = naive_findex
-            .search(&keywords, &master_key, &label, usize::MAX, usize::MAX, 0)
+            .search(&keywords, &master_key, &label, usize::MAX, usize::MAX, 0, 0)
             .await?;
         assert_eq!(
             graph_results.len(),
@@ -825,6 +841,7 @@ async fn test_graph_compacting() {
             usize::MAX,
             usize::MAX,
             0,
+            0,
         )
         .await
         .unwrap();
@@ -864,6 +881,7 @@ async fn test_graph_compacting() {
                 &label,
                 usize::MAX,
                 usize::MAX,
+                0,
                 0,
             )
             .await

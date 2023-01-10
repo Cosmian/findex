@@ -15,6 +15,7 @@ use super::core::FetchAllEntryTableUidsCallback;
 use crate::{
     core::{
         FindexCompact, FindexSearch, FindexUpsert, IndexedValue, KeyingMaterial, Keyword, Label,
+        SECURE_FETCH_CHAINS_BATCH_SIZE,
     },
     error::FindexErr,
     ffi_bail, ffi_not_null, ffi_unwrap,
@@ -54,6 +55,7 @@ async fn ffi_search(
     label_bytes: &[u8],
     max_results_per_keyword: usize,
     max_depth: usize,
+    fetch_chains_batch_size: usize,
     progress: ProgressCallback,
     fetch_entry: FetchEntryTableCallback,
     fetch_chain: FetchChainTableCallback,
@@ -94,6 +96,7 @@ async fn ffi_search(
             &label,
             max_results_per_keyword,
             max_depth,
+            fetch_chains_batch_size,
             0,
         )
         .await?;
@@ -147,6 +150,7 @@ pub unsafe extern "C" fn h_search(
     keywords_ptr: *const c_char,
     max_results_per_keyword: c_int,
     max_depth: c_int,
+    fetch_chains_batch_size: c_int,
     progress_callback: ProgressCallback,
     fetch_entry: FetchEntryTableCallback,
     fetch_chain: FetchChainTableCallback,
@@ -177,6 +181,15 @@ pub unsafe extern "C" fn h_search(
     } else {
         ffi_unwrap!(
             usize::try_from(max_depth),
+            "loop_iteration_limit must be a positive int"
+        )
+    };
+
+    let fetch_chains_batch_size = if fetch_chains_batch_size < 0 {
+        SECURE_FETCH_CHAINS_BATCH_SIZE
+    } else {
+        ffi_unwrap!(
+            usize::try_from(fetch_chains_batch_size),
             "loop_iteration_limit must be a positive int"
         )
     };
@@ -216,6 +229,7 @@ pub unsafe extern "C" fn h_search(
         label_bytes,
         max_results_per_keyword,
         max_depth,
+        fetch_chains_batch_size,
         progress_callback,
         fetch_entry,
         fetch_chain,

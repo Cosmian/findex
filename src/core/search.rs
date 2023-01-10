@@ -52,6 +52,7 @@ pub trait FindexSearch<
         master_key: &KeyingMaterial<MASTER_KEY_LENGTH>,
         label: &Label,
         max_results_per_keyword: usize,
+        fetch_chains_batch_size: usize,
     ) -> Result<HashMap<Keyword, HashSet<IndexedValue>>, FindexErr> {
         if keywords.is_empty() {
             return Ok(HashMap::new());
@@ -114,7 +115,9 @@ pub trait FindexSearch<
         // Query the Chain Table for these UIDs to recover the associated
         // chain values.
         //
-        let chains = self.noisy_fetch_chains(&kwi_chain_table_uids).await?;
+        let chains = self
+            .noisy_fetch_chains(&kwi_chain_table_uids, fetch_chains_batch_size)
+            .await?;
 
         // Convert the block of the given chains into indexed values.
         let mut res = HashMap::<Keyword, HashSet<IndexedValue>>::new();
@@ -146,6 +149,7 @@ pub trait FindexSearch<
     /// - `max_depth`               : maximum recursion level allowed
     /// - `current_depth`           : current depth reached by the recursion
     #[async_recursion(?Send)]
+    #[allow(clippy::too_many_arguments)]
     async fn search(
         &mut self,
         keywords: &HashSet<Keyword>,
@@ -153,11 +157,18 @@ pub trait FindexSearch<
         label: &Label,
         max_results_per_keyword: usize,
         max_depth: usize,
+        fetch_chains_batch_size: usize,
         current_depth: usize,
     ) -> Result<HashMap<Keyword, HashSet<IndexedValue>>, FindexErr> {
         // Get indexed values associated to the given keywords
         let res = self
-            .non_recursive_search(keywords, master_key, label, max_results_per_keyword)
+            .non_recursive_search(
+                keywords,
+                master_key,
+                label,
+                max_results_per_keyword,
+                fetch_chains_batch_size,
+            )
             .await?;
         // Stop here if there is no result
         if res.is_empty() {
@@ -204,6 +215,7 @@ pub trait FindexSearch<
                     label,
                     max_results_per_keyword,
                     max_depth,
+                    fetch_chains_batch_size,
                     current_depth + 1,
                 )
                 .await?
@@ -231,6 +243,7 @@ pub trait FindexSearch<
     async fn noisy_fetch_chains(
         &self,
         kwi_chain_table_uids: &KwiChainUids<UID_LENGTH, KWI_LENGTH>,
+        batch_size: usize,
     ) -> Result<
         HashMap<KeyingMaterial<KWI_LENGTH>, Vec<(Uid<UID_LENGTH>, ChainTableValue<BLOCK_LENGTH>)>>,
         FindexErr,
@@ -241,9 +254,9 @@ pub trait FindexSearch<
             let mut chain = Vec::with_capacity(chain_table_uids.len());
 
             // Fetch all chain table values one by one to increase noise.
-            let chain_table_uids_hashset: Vec<_> = chain_table_uids
-                .iter()
-                .map(|uid| HashSet::from([uid.clone()]))
+            let chain_table_uids_hashset: Vec<HashSet<_>> = chain_table_uids
+                .windows(batch_size)
+                .map(|uids| uids.iter().cloned().collect())
                 .collect();
 
             let mut futures = Vec::with_capacity(chain_table_uids_hashset.len());
