@@ -42,7 +42,8 @@ pub async fn webassembly_search(
     fetch_entry: Fetch,
     fetch_chain: Fetch,
 ) -> Result<SearchResults, JsValue> {
-    let master_key = KeyingMaterial::<MASTER_KEY_LENGTH>::try_from_bytes(&master_key.to_vec())?;
+    let master_key = KeyingMaterial::<MASTER_KEY_LENGTH>::try_from_bytes(&master_key.to_vec())
+        .map_err(|e| JsValue::from(format!("While parsing master key for Findex search, {e}")))?;
     let label = Label::from(label_bytes.to_vec());
 
     let keywords: HashSet<_> = Array::from(&JsValue::from(keywords))
@@ -73,7 +74,8 @@ pub async fn webassembly_search(
             max_depth,
             0,
         )
-        .await?;
+        .await
+        .map_err(|e| JsValue::from(format!("During Findex search: {e}")))?;
 
     search_results_to_js(&results)
 }
@@ -97,7 +99,8 @@ pub async fn webassembly_upsert(
     upsert_entry: Upsert,
     insert_chain: Insert,
 ) -> Result<(), JsValue> {
-    let master_key = KeyingMaterial::<MASTER_KEY_LENGTH>::try_from_bytes(&master_key.to_vec())?;
+    let master_key = KeyingMaterial::<MASTER_KEY_LENGTH>::try_from_bytes(&master_key.to_vec())
+        .map_err(|e| JsValue::from(format!("While parsing master key for Findex upsert, {e}")))?;
     let label = Label::from(label_bytes.to_vec());
     let indexed_values_to_keywords = to_indexed_values_to_keywords(&indexed_values_to_keywords)?;
 
@@ -111,9 +114,5 @@ pub async fn webassembly_upsert(
     wasm_upsert
         .upsert(indexed_values_to_keywords, &master_key, &label)
         .await
-        .map_err(|e| {
-            JsValue::from_str(&format!(
-                "Failed upserting through common search trait: {e}"
-            ))
-        })
+        .map_err(|e| JsValue::from(format!("During Findex upsert: {e}")))
 }
