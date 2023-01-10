@@ -5,6 +5,7 @@ use std::{
 
 use cosmian_crypto_core::bytes_ser_de::{Serializable, Serializer};
 
+use super::ErrorCode;
 use crate::{
     core::{
         EncryptedTable, FindexCallbacks, FindexCompact, FindexSearch, FindexUpsert, IndexedValue,
@@ -118,7 +119,7 @@ impl FindexCallbacks<UID_LENGTH> for FindexUser {
             serialized_upsert_data.len() as u32,
         );
 
-        if error_code != 0 {
+        if error_code != ErrorCode::Success as i32 {
             return Err(FindexErr::CallbackErrorCode {
                 name: "upsert entries",
                 code: error_code,
@@ -171,7 +172,7 @@ impl FindexCallbacks<UID_LENGTH> for FindexUser {
             u32::try_from(serialized_new_encrypted_chain_table_items.len())?,
         );
 
-        if error_code != 0 {
+        if error_code != ErrorCode::Success as i32 {
             return Err(FindexErr::CallbackErrorCode {
                 name: "update lines",
                 code: error_code,
@@ -201,7 +202,7 @@ impl FindexCallbacks<UID_LENGTH> for FindexUser {
             u32::try_from(serialized_chain_table_uids_to_remove.len())?,
         );
 
-        if error_code != 0 {
+        if error_code != ErrorCode::Success as i32 {
             return Err(FindexErr::CallbackErrorCode {
                 name: "list removed locations",
                 code: error_code,
