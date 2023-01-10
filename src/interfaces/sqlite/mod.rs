@@ -89,7 +89,7 @@ pub async fn search(
 
     let label = Label::from(include_bytes!("../../../datasets/label").to_vec());
     let results = rusqlite_search
-        .search(&bulk_words, &master_key, &label, 10000, usize::MAX, 0)
+        .search(&bulk_words, &master_key, &label, 10000, usize::MAX, 0, 0)
         .await?;
     let mut db_uids = Vec::with_capacity(results.len());
     for (_, indexed_values) in results {

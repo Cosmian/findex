@@ -8,7 +8,9 @@ use wasm_bindgen::prelude::*;
 
 use super::core::search_results_to_js;
 use crate::{
-    core::{FindexSearch, FindexUpsert, KeyingMaterial, Keyword, Label},
+    core::{
+        FindexSearch, FindexUpsert, KeyingMaterial, Keyword, Label, SECURE_FETCH_CHAINS_BATCH_SIZE,
+    },
     interfaces::{
         generic_parameters::{MASTER_KEY_LENGTH, MAX_RESULTS_PER_KEYWORD},
         wasm_bindgen::core::{
@@ -36,8 +38,9 @@ pub async fn webassembly_search(
     master_key: Uint8Array,
     label_bytes: Uint8Array,
     keywords: ArrayOfKeywords,
-    max_results_per_keyword: usize,
-    max_depth: usize,
+    max_results_per_keyword: i64,
+    max_depth: i64,
+    fetch_chains_batch_size: i64,
     progress: Progress,
     fetch_entry: Fetch,
     fetch_chain: Fetch,
@@ -51,10 +54,20 @@ pub async fn webassembly_search(
         .map(|word| Keyword::from(Uint8Array::new(&word).to_vec()))
         .collect::<HashSet<_>>();
 
-    let max_results_per_keyword = if max_results_per_keyword == 0 {
+    let max_results_per_keyword = if max_results_per_keyword <= 0 {
         MAX_RESULTS_PER_KEYWORD
     } else {
         max_results_per_keyword
+            .try_into()
+            .unwrap_or(MAX_RESULTS_PER_KEYWORD)
+    };
+
+    let fetch_chains_batch_size = if fetch_chains_batch_size <= 0 {
+        SECURE_FETCH_CHAINS_BATCH_SIZE
+    } else {
+        fetch_chains_batch_size
+            .try_into()
+            .unwrap_or(SECURE_FETCH_CHAINS_BATCH_SIZE)
     };
 
     let mut wasm_search = FindexUser {
@@ -71,7 +84,8 @@ pub async fn webassembly_search(
             &master_key,
             &label,
             max_results_per_keyword,
-            max_depth,
+            max_depth.try_into().unwrap_or(usize::MAX),
+            fetch_chains_batch_size,
             0,
         )
         .await
