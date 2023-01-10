@@ -255,7 +255,7 @@ pub trait FindexSearch<
 
             // Fetch all chain table values one by one to increase noise.
             let chain_table_uids_hashset: Vec<HashSet<_>> = chain_table_uids
-                .windows(batch_size)
+                .chunks(batch_size)
                 .map(|uids| uids.iter().cloned().collect())
                 .collect();
 
