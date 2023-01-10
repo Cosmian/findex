@@ -29,7 +29,7 @@ python = ["interfaces", "pyo3", "futures"]
 [dependencies]
 async-recursion = "1.0.0"
 base64 = "0.13"
-cosmian_crypto_core = { path = "../crypto_core" }
+cosmian_crypto_core = "6.0"
 faker_rand = { version = "0.1", optional = true }
 futures = { version = "0.3", optional = true }
 hex = "0.4.3"
