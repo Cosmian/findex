@@ -7,6 +7,7 @@ use cosmian_crypto_core::{
     bytes_ser_de::Serializable,
     symmetric_crypto::{Dem, SymKey},
 };
+use futures::future::join_all;
 
 use super::{callbacks::FindexCallbacks, structs::Block};
 use crate::{
@@ -238,14 +239,24 @@ pub trait FindexSearch<
         for (kwi, chain_table_uids) in kwi_chain_table_uids.iter() {
             let kwi_value: DemScheme::Key = kwi.derive_dem_key(CHAIN_TABLE_KEY_DERIVATION_INFO);
             let mut chain = Vec::with_capacity(chain_table_uids.len());
-            for uid in chain_table_uids {
-                // Fetch all chain table values one by one to increase noise.
-                let encrypted_item = self
-                    .fetch_chain_table(&HashSet::from([uid.clone()]))
-                    .await?;
+
+            // Fetch all chain table values one by one to increase noise.
+            let chain_table_uids_hashset: Vec<_> = chain_table_uids
+                .iter()
+                .map(|uid| HashSet::from([uid.clone()]))
+                .collect();
+
+            let mut futures = Vec::with_capacity(chain_table_uids_hashset.len());
+            for uid in &chain_table_uids_hashset {
+                futures.push(self.fetch_chain_table(uid));
+            }
+
+            let encrypted_items = join_all(futures).await;
+
+            for encrypted_item in encrypted_items {
                 // Use a vector not to shuffle the chain. This is important because indexed
                 // values can be divided in blocks that span several lines in the chain.
-                for (uid, value) in encrypted_item {
+                for (uid, value) in encrypted_item? {
                     let decrypted_value = ChainTableValue::<BLOCK_LENGTH>::decrypt::<
                         TABLE_WIDTH,
                         DEM_KEY_LENGTH,
