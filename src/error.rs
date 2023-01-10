@@ -17,7 +17,6 @@ pub enum FindexErr {
     Other(String),
 
     // Findex implementation for FFI
-    #[cfg(feature = "interfaces")]
     CallBack(String),
     #[cfg(feature = "interfaces")]
     CallbackErrorCode {
@@ -54,7 +53,6 @@ impl Display for FindexErr {
             Self::SerdeJsonError(err) => write!(f, "{err}"),
             Self::DecodeError(err) => write!(f, "{err}"),
 
-            #[cfg(feature = "interfaces")]
             Self::CallBack(msg) => write!(f, "{msg}"),
             #[cfg(feature = "interfaces")]
             Self::CallbackErrorCode { name, code } => {
