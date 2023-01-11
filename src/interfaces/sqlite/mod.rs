@@ -3,6 +3,7 @@
 
 use std::{
     collections::{HashMap, HashSet},
+    path::PathBuf,
     usize,
 };
 
@@ -13,7 +14,7 @@ use crate::{
     error::FindexErr,
     interfaces::{
         generic_parameters::MASTER_KEY_LENGTH,
-        sqlite::{database::SqliteDatabase, findex::RusqliteFindex, utils::get_db},
+        sqlite::{database::SqliteDatabase, findex::RusqliteFindex},
     },
 };
 
@@ -25,12 +26,11 @@ mod utils;
 
 pub use utils::delete_db;
 
-pub async fn upsert(sqlite_path: &str, dataset_path: &str) -> Result<(), FindexErr> {
+pub async fn upsert(sqlite_db_path: &PathBuf, dataset_path: &str) -> Result<(), FindexErr> {
     //
     // Prepare database
     //
-    let sqlite_db_path = get_db(sqlite_path);
-    let mut connection = Connection::open(&sqlite_db_path)?;
+    let mut connection = Connection::open(sqlite_db_path)?;
     SqliteDatabase::new(&connection, dataset_path)?;
 
     //
@@ -75,12 +75,11 @@ pub async fn upsert(sqlite_path: &str, dataset_path: &str) -> Result<(), FindexE
 }
 
 pub async fn search(
-    sqlite_path: &str,
+    sqlite_path: &PathBuf,
     bulk_words: HashSet<Keyword>,
     check: bool,
 ) -> Result<(), FindexErr> {
-    let sqlite_db_path = get_db(sqlite_path);
-    let mut connection = Connection::open(&sqlite_db_path)?;
+    let mut connection = Connection::open(sqlite_path)?;
     let mut rusqlite_search = RusqliteFindex {
         connection: &mut connection,
     };

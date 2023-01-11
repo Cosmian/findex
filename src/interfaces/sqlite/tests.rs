@@ -1,4 +1,7 @@
-use std::collections::HashSet;
+use std::{
+    collections::HashSet,
+    path::{Path, PathBuf},
+};
 
 use super::{database::User, search, upsert, utils::delete_db};
 use crate::{core::Keyword, error::FindexErr};
@@ -22,41 +25,69 @@ async fn test_findex_sqlite_no_regression() -> Result<(), FindexErr> {
     //
     // Prepare database and create Findex structs
     //
-    delete_db("sqlite.db")?;
-    upsert("sqlite.db", "./datasets/data.json").await?;
+    let db = PathBuf::from("./datasets/sqlite.db");
+
     //
     // Search
     //
     search(
-        "sqlite.db",
+        &db,
         HashSet::from_iter([Keyword::from("France".as_bytes())]),
         true,
     )
     .await?;
 
     // Empty research (just in case)
-    search("sqlite.db", HashSet::new(), false).await?;
+    search(&db, HashSet::new(), false).await?;
 
-    delete_db("sqlite.db")?;
+    Ok(())
+}
+
+#[actix_rt::test]
+async fn test_findex_sqlite_generate() -> Result<(), FindexErr> {
+    //
+    // Prepare database and create Findex structs
+    //
+    let file_path = Path::new("./target/sqlite.db");
+    if file_path.exists() {
+        std::fs::remove_file(file_path).map_err(FindexErr::IoError)?;
+    }
+    let db = PathBuf::from(file_path);
+
+    //
+    // Create new database
+    //
+    upsert(&db, "./datasets/data.json").await?;
+
+    //
+    // Search - simple check
+    //
+    search(
+        &db,
+        HashSet::from_iter([Keyword::from("France".as_bytes())]),
+        true,
+    )
+    .await?;
+
     Ok(())
 }
 
 #[actix_rt::test]
 async fn test_different_scenarios() -> Result<(), FindexErr> {
     delete_db("sqlite2.db")?;
-    for _ in 0..1 {
+    let db = std::env::temp_dir().join("sqlite2.db");
+    for _ in 0..5 {
         //
         // Generate a new dataset and index it
         //
         generate_new_dataset(100, "french_dataset.json");
-        upsert("sqlite2.db", "./french_dataset.json").await?;
-        upsert("sqlite2.db", "./french_dataset.json").await?;
+        upsert(&db, "./french_dataset.json").await?;
 
         //
         // Search
         //
         search(
-            "sqlite2.db",
+            &db,
             HashSet::<Keyword>::from_iter([Keyword::from("France".as_bytes())]),
             false,
         )

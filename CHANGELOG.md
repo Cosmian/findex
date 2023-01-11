@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.0.2] - 2023-01-12
+
+### Ci
+
+- Replace .gitlab-ci.yml with github actions
+- Test inter-languages compatibility
+
 ## [1.0.1] - 2022-12-16
 
 ### Bug Fixes
@@ -13,7 +20,6 @@ All notable changes to this project will be documented in this file.
 
 ### Bug Fixes
 
-- Apply Theophile's suggestions
 - Add return type to FindexInternal function signature
 
 ### Documentation
