@@ -190,7 +190,7 @@ pub unsafe extern "C" fn h_search(
     } else {
         ffi_unwrap!(
             usize::try_from(fetch_chains_batch_size),
-            "loop_iteration_limit must be a positive int"
+            "fetch_chains_batch_size must be a positive int"
         )
     };
 
