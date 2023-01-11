@@ -185,7 +185,7 @@ pub unsafe extern "C" fn h_search(
         )
     };
 
-    let fetch_chains_batch_size = if fetch_chains_batch_size < 0 {
+    let fetch_chains_batch_size = if fetch_chains_batch_size <= 0 {
         SECURE_FETCH_CHAINS_BATCH_SIZE
     } else {
         ffi_unwrap!(
