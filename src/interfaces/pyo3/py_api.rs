@@ -427,6 +427,7 @@ impl InternalFindex {
         label: &LabelPy,
         max_result_per_keyword: usize,
         max_depth: usize,
+        fetch_chains_batch_size: usize,
     ) -> PyResult<HashMap<String, Vec<IndexedValuePy>>> {
         let keywords_set: HashSet<Keyword> = keywords
             .iter()
@@ -439,6 +440,7 @@ impl InternalFindex {
             &label.0,
             max_result_per_keyword,
             max_depth,
+            fetch_chains_batch_size,
             0,
         ))?;
 
