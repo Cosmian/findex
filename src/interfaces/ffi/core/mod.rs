@@ -23,7 +23,7 @@ pub const NUMBER_OF_ENTRY_TABLE_LINE_IN_BATCH: usize = 100;
 pub enum ErrorCode {
     Success = 0,
 
-    /// :BreakingChange
+    /// https://github.com/Cosmian/findex/issues/14
     /// We use 1 here because we used to always retry in case of non-zero error
     /// code. We may want to change this in future major release (reserve 1
     /// for error and specify another error code for asking for a bigger
