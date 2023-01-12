@@ -30,7 +30,9 @@ pub enum FindexErr {
     #[cfg(feature = "sqlite")]
     IoError(std::io::Error),
 
+    #[cfg(any(feature = "sqlite", feature = "ffi"))]
     SerdeJsonError(serde_json::Error),
+
     DecodeError(DecodeError),
 
     #[cfg(feature = "wasm_bindgen")]
@@ -50,6 +52,7 @@ impl Display for FindexErr {
             #[cfg(feature = "sqlite")]
             Self::IoError(err) => write!(f, "{err}"),
 
+            #[cfg(any(feature = "sqlite", feature = "ffi"))]
             Self::SerdeJsonError(err) => write!(f, "{err}"),
             Self::DecodeError(err) => write!(f, "{err}"),
 
@@ -126,6 +129,7 @@ impl From<std::io::Error> for FindexErr {
     }
 }
 
+#[cfg(any(feature = "sqlite", feature = "ffi"))]
 impl From<serde_json::Error> for FindexErr {
     fn from(e: serde_json::Error) -> Self {
         Self::SerdeJsonError(e)
