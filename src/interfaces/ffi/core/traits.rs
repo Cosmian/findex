@@ -5,7 +5,6 @@ use std::{
 
 use cosmian_crypto_core::bytes_ser_de::{Serializable, Serializer};
 
-use super::ErrorCode;
 use crate::{
     core::{
         EncryptedTable, FindexCallbacks, FindexCompact, FindexSearch, FindexUpsert, IndexedValue,
@@ -18,7 +17,7 @@ use crate::{
                 fetch_callback, get_allocation_size_for_select_chain_request,
                 get_serialized_encrypted_entry_table_size_bound,
             },
-            FindexUser,
+            ErrorCode, FindexUser,
         },
         generic_parameters::{
             DemScheme, KmacKey, BLOCK_LENGTH, DEM_KEY_LENGTH, KMAC_KEY_LENGTH, KWI_LENGTH,

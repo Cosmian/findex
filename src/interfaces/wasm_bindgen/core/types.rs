@@ -1,6 +1,9 @@
 //! This module defines the signature of the Findex WASM callbacks.
 
-use std::collections::{HashMap, HashSet};
+use std::{
+    collections::{HashMap, HashSet},
+    fmt::{Display, Formatter},
+};
 
 use js_sys::{Array, JsString, Object, Reflect, Uint8Array};
 use wasm_bindgen::{prelude::wasm_bindgen, JsCast, JsValue};
@@ -8,7 +11,7 @@ use wasm_bindgen::{prelude::wasm_bindgen, JsCast, JsValue};
 use crate::{
     core::{IndexedValue, Keyword},
     error::FindexErr,
-    interfaces::wasm_bindgen::core::utils::{ObjectSourceForErrors, get_bytes_from_object_property},
+    interfaces::wasm_bindgen::core::utils::get_bytes_from_object_property,
 };
 
 #[wasm_bindgen]
@@ -136,4 +139,18 @@ pub fn search_results_to_js(
         array.set(i as u32, obj.into());
     }
     Ok(SearchResults::from(JsValue::from(array)))
+}
+
+pub enum ObjectSourceForErrors {
+    ReturnedFromCallback(&'static str),
+    Argument(&'static str),
+}
+
+impl Display for ObjectSourceForErrors {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::ReturnedFromCallback(name) => write!(f, "inside array returned by {name}"),
+            Self::Argument(name) => write!(f, "inside {name}"),
+        }
+    }
 }

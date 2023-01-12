@@ -1,7 +1,4 @@
-use std::{
-    collections::HashSet,
-    fmt::{Display, Formatter},
-};
+use std::collections::HashSet;
 
 use cosmian_crypto_core::bytes_ser_de::Serializable;
 use js_sys::{Array, JsString, Object, Reflect, Uint8Array};
@@ -12,7 +9,7 @@ pub use wasm_bindgen::JsValue;
 use crate::{
     core::{EncryptedTable, Uid},
     error::FindexErr,
-    interfaces::wasm_bindgen::core::types::Fetch,
+    interfaces::wasm_bindgen::core::{types::ObjectSourceForErrors, Fetch},
 };
 
 /// Call the WASM callback.
@@ -143,20 +140,6 @@ pub fn encrypted_table_to_js_value<const UID_LENGTH: usize>(
         res.set(index as u32, obj.into());
     }
     Ok(res)
-}
-
-pub enum ObjectSourceForErrors {
-    ReturnedFromCallback(&'static str),
-    Argument(&'static str),
-}
-
-impl Display for ObjectSourceForErrors {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::ReturnedFromCallback(name) => write!(f, "inside array returned by {name}"),
-            Self::Argument(name) => write!(f, "inside {name}"),
-        }
-    }
 }
 
 #[inline]
