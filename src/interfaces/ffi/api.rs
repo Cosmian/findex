@@ -3,7 +3,7 @@
 use std::{
     collections::{HashMap, HashSet},
     convert::TryFrom,
-    ffi::CStr,
+    ffi::{c_uint, CStr},
     num::NonZeroUsize,
     os::raw::{c_char, c_int},
     slice,
@@ -152,7 +152,7 @@ pub unsafe extern "C" fn h_search(
     keywords_ptr: *const c_char,
     max_results_per_keyword: c_int,
     max_depth: c_int,
-    fetch_chains_batch_size: c_int,
+    fetch_chains_batch_size: c_uint,
     progress_callback: ProgressCallback,
     fetch_entry: FetchEntryTableCallback,
     fetch_chain: FetchChainTableCallback,
