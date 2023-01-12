@@ -224,9 +224,9 @@ dependencies = [
 
 [[package]]
 name = "cosmian_crypto_core"
-version = "5.0.0"
+version = "6.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0e5490966c09f4f783327dc7b5dea4c4a7d164fcdfb5fc4a277f3677473017ca"
+checksum = "cb3870f96f633457af333480c0d9ba61576d82a050dcb55b95a885d717ab9d23"
 dependencies = [
  "aes-gcm",
  "curve25519-dalek",
@@ -251,6 +251,7 @@ dependencies = [
  "criterion",
  "faker_rand",
  "futures",
+ "hex",
  "js-sys",
  "leb128",
  "pyo3",

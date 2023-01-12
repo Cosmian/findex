@@ -29,7 +29,7 @@ impl FindexCallbacks<UID_LENGTH> for FindexUser {
     ) -> Result<bool, FindexErr> {
         let progress = unwrap_callback!(self, progress);
         let results = search_results_to_js(results)?;
-        let output = callback!(progress, results)?;
+        let output = callback!(progress, results);
         output.as_bool().ok_or_else(|| {
             FindexErr::CallBack(format!(
                 "Progress callback does not return a boolean value: {output:?}"
@@ -42,9 +42,12 @@ impl FindexCallbacks<UID_LENGTH> for FindexUser {
         entry_table_uids: &HashSet<Uid<UID_LENGTH>>,
     ) -> Result<EncryptedTable<UID_LENGTH>, FindexErr> {
         let fetch_entry = unwrap_callback!(self, fetch_entry);
-        fetch_uids(&entry_table_uids.iter().cloned().collect(), fetch_entry)
-            .await
-            .map_err(|e| FindexErr::CallBack(format!("{e:?}")))
+        fetch_uids(
+            &entry_table_uids.iter().cloned().collect(),
+            fetch_entry,
+            "fetchEntries",
+        )
+        .await
     }
 
     async fn fetch_chain_table(
@@ -52,9 +55,7 @@ impl FindexCallbacks<UID_LENGTH> for FindexUser {
         chain_table_uids: &HashSet<Uid<UID_LENGTH>>,
     ) -> Result<EncryptedTable<UID_LENGTH>, FindexErr> {
         let fetch_chain = unwrap_callback!(self, fetch_chain);
-        fetch_uids(chain_table_uids, fetch_chain)
-            .await
-            .map_err(|e| FindexErr::CallBack(format!("{e:?}")))
+        fetch_uids(chain_table_uids, fetch_chain, "fetchChains").await
     }
 
     async fn upsert_entry_table(
@@ -85,13 +86,8 @@ impl FindexCallbacks<UID_LENGTH> for FindexUser {
             inputs.set(index as u32, obj.into());
         }
 
-        let result = callback!(upsert_entry, inputs)?;
-
-        js_value_to_encrypted_table(&result).map_err(|e| {
-            FindexErr::CallBack(format!(
-                "Failed to convert JsValue to EncryptedTable: {e:?}"
-            ))
-        })
+        let result = callback!(upsert_entry, inputs);
+        js_value_to_encrypted_table(&result, "upsertEntries")
     }
 
     async fn insert_chain_table(
@@ -105,7 +101,7 @@ impl FindexCallbacks<UID_LENGTH> for FindexUser {
             ))
         })?;
 
-        callback!(insert_chain, input)?;
+        callback!(insert_chain, input);
         Ok(())
     }
 

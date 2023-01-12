@@ -22,11 +22,18 @@ jobs:
         with:
           command: fmt
           args: -- --check --color always
+
       - name: Static analysis
         uses: actions-rs/cargo@v1
         with:
           command: clippy
           args: -- -D warnings
+
+      - name: Static analysis with all features
+        uses: actions-rs/cargo@v1
+        with:
+          command: clippy
+          args: --all-targets --all-features -- -D warnings
 
   test:
     name: Test on ${{ matrix.os }}

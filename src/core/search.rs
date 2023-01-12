@@ -246,14 +246,25 @@ pub trait FindexSearch<
                 // Use a vector not to shuffle the chain. This is important because indexed
                 // values can be divided in blocks that span several lines in the chain.
                 for (uid, value) in encrypted_item {
-                    chain.push((
-                        uid,
-                        ChainTableValue::<BLOCK_LENGTH>::decrypt::<
-                            TABLE_WIDTH,
-                            DEM_KEY_LENGTH,
-                            DemScheme,
-                        >(&kwi_value, &value)?,
-                    ));
+                    let decrypted_value = ChainTableValue::<BLOCK_LENGTH>::decrypt::<
+                        TABLE_WIDTH,
+                        DEM_KEY_LENGTH,
+                        DemScheme,
+                    >(&kwi_value, &value)
+                    .map_err(|_| {
+                        FindexErr::CallBack(format!(
+                            "fail to decrypt one of the `value` returned by the fetch chains \
+                             callback (uid as hex was '{}', value {})",
+                            hex::encode(&uid),
+                            if value.is_empty() {
+                                "was empty".to_owned()
+                            } else {
+                                format!("as hex was '{}'", hex::encode(value))
+                            },
+                        ))
+                    })?;
+
+                    chain.push((uid, decrypted_value));
                 }
             }
             chains.insert(kwi.clone(), chain);

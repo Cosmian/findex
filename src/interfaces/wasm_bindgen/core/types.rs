@@ -1,12 +1,16 @@
 //! This module defines the signature of the Findex WASM callbacks.
 
-use std::collections::{HashMap, HashSet};
+use std::{
+    collections::{HashMap, HashSet},
+    fmt::{Display, Formatter},
+};
 
-use js_sys::{Array, Object, Reflect, Uint8Array};
-use wasm_bindgen::{prelude::wasm_bindgen, JsValue};
+use js_sys::{Array, JsString, Object, Reflect, Uint8Array};
+use wasm_bindgen::{prelude::wasm_bindgen, JsCast, JsValue};
 
 use crate::{
     core::{IndexedValue, Keyword},
+    error::FindexErr,
     interfaces::wasm_bindgen::core::utils::get_bytes_from_object_property,
 };
 
@@ -60,18 +64,30 @@ extern "C" {
     ///
     /// See [`FindexUpsert::upsert()`](crate::core::FindexUpsert::upsert).
     #[wasm_bindgen(typescript_type = "Array<{indexedValue: Uint8Array, keywords: Uint8Array[]}>")]
+    #[derive(Debug)]
     pub type IndexedValuesAndWords;
 }
 
 pub fn to_indexed_values_to_keywords(
     ivw: &IndexedValuesAndWords,
-) -> Result<HashMap<IndexedValue, HashSet<Keyword>>, JsValue> {
-    let mut iv_and_words: HashMap<IndexedValue, HashSet<Keyword>> = HashMap::new();
-    let array = Array::from(&JsValue::from(ivw));
-    for try_obj in array.values() {
+) -> Result<HashMap<IndexedValue, HashSet<Keyword>>, FindexErr> {
+    let array: &Array = ivw.dyn_ref().ok_or_else(|| {
+        FindexErr::CallBack(format!(
+            "During Findex upsert: `newIndexedEntries` should be an array, {} received.",
+            ivw.js_typeof()
+                .dyn_ref::<JsString>()
+                .map(|s| format!("{s}"))
+                .unwrap_or_else(|| "unknown type".to_owned()),
+        ))
+    })?;
+
+    let mut iv_and_words = HashMap::new();
+    let object_source_for_errors = ObjectSourceForErrors::Argument("newIndexedEntries");
+    for (i, try_obj) in array.values().into_iter().enumerate() {
         //{indexedValue: Uint8Array, keywords: Uint8Array[]}
         let obj = try_obj?;
-        let iv_bytes = get_bytes_from_object_property(&obj, "indexedValue")?;
+        let iv_bytes =
+            get_bytes_from_object_property(&obj, "indexedValue", &object_source_for_errors, i)?;
         let iv = IndexedValue::try_from(iv_bytes.as_slice())?;
         let kw_array = { Array::from(&Reflect::get(&obj, &JsValue::from_str("keywords"))?) };
         let mut words_set: HashSet<Keyword> = HashSet::new();
@@ -123,4 +139,18 @@ pub fn search_results_to_js(
         array.set(i as u32, obj.into());
     }
     Ok(SearchResults::from(JsValue::from(array)))
+}
+
+pub enum ObjectSourceForErrors {
+    ReturnedFromCallback(&'static str),
+    Argument(&'static str),
+}
+
+impl Display for ObjectSourceForErrors {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::ReturnedFromCallback(name) => write!(f, "inside array returned by {name}"),
+            Self::Argument(name) => write!(f, "inside {name}"),
+        }
+    }
 }
