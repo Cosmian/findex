@@ -14,8 +14,6 @@
 const ENTRY_TABLE_KEY_DERIVATION_INFO: &[u8] = b"Entry Table key derivation info.";
 const CHAIN_TABLE_KEY_DERIVATION_INFO: &[u8] = b"Chain Table key derivation info.";
 
-pub const SECURE_FETCH_CHAINS_BATCH_SIZE: usize = 1;
-
 // Macros should be defined first in order to be available for other modules
 #[macro_use]
 mod macros;

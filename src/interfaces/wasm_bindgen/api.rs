@@ -8,11 +8,11 @@ use wasm_bindgen::prelude::*;
 
 use super::core::search_results_to_js;
 use crate::{
-    core::{
-        FindexSearch, FindexUpsert, KeyingMaterial, Keyword, Label, SECURE_FETCH_CHAINS_BATCH_SIZE,
-    },
+    core::{FindexSearch, FindexUpsert, KeyingMaterial, Keyword, Label},
     interfaces::{
-        generic_parameters::{MASTER_KEY_LENGTH, MAX_RESULTS_PER_KEYWORD},
+        generic_parameters::{
+            MASTER_KEY_LENGTH, MAX_RESULTS_PER_KEYWORD, SECURE_FETCH_CHAINS_BATCH_SIZE,
+        },
         wasm_bindgen::core::{
             to_indexed_values_to_keywords, ArrayOfKeywords, Fetch, FindexUser,
             IndexedValuesAndWords, Insert, Progress, SearchResults, Upsert,

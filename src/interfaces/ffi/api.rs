@@ -15,7 +15,6 @@ use super::core::FetchAllEntryTableUidsCallback;
 use crate::{
     core::{
         FindexCompact, FindexSearch, FindexUpsert, IndexedValue, KeyingMaterial, Keyword, Label,
-        SECURE_FETCH_CHAINS_BATCH_SIZE,
     },
     error::FindexErr,
     ffi_bail, ffi_not_null, ffi_unwrap,
@@ -29,7 +28,9 @@ use crate::{
             error::{set_last_error, FfiErr},
             MAX_DEPTH,
         },
-        generic_parameters::{MASTER_KEY_LENGTH, MAX_RESULTS_PER_KEYWORD},
+        generic_parameters::{
+            MASTER_KEY_LENGTH, MAX_RESULTS_PER_KEYWORD, SECURE_FETCH_CHAINS_BATCH_SIZE,
+        },
         ser_de::SerializableSet,
     },
 };

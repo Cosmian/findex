@@ -32,3 +32,5 @@ pub type DemScheme = Aes256GcmCrypto;
 /// Default number of results returned per keyword.
 #[cfg(any(feature = "wasm_bindgen", feature = "ffi"))]
 pub const MAX_RESULTS_PER_KEYWORD: usize = 65536; // around 2048 `indexed_values`
+
+pub const SECURE_FETCH_CHAINS_BATCH_SIZE: usize = 1;
