@@ -15,7 +15,7 @@ use crate::{
     error::FindexErr,
     interfaces::generic_parameters::{
         DemScheme, KmacKey, BLOCK_LENGTH, DEM_KEY_LENGTH, KMAC_KEY_LENGTH, KWI_LENGTH,
-        MASTER_KEY_LENGTH, TABLE_WIDTH, UID_LENGTH,
+        MASTER_KEY_LENGTH, SECURE_FETCH_CHAINS_BATCH_SIZE, TABLE_WIDTH, UID_LENGTH,
     },
 };
 
@@ -358,7 +358,7 @@ async fn test_findex() -> Result<(), FindexErr> {
             &label,
             usize::MAX,
             0,
-            0,
+            SECURE_FETCH_CHAINS_BATCH_SIZE,
             0,
         )
         .await?;
@@ -372,7 +372,7 @@ async fn test_findex() -> Result<(), FindexErr> {
             &Label::random(&mut rng),
             usize::MAX,
             0,
-            0,
+            SECURE_FETCH_CHAINS_BATCH_SIZE,
             0,
         )
         .await?;
@@ -386,7 +386,7 @@ async fn test_findex() -> Result<(), FindexErr> {
             &label,
             usize::MAX,
             0,
-            0,
+            SECURE_FETCH_CHAINS_BATCH_SIZE,
             0,
         )
         .await?;
@@ -401,7 +401,7 @@ async fn test_findex() -> Result<(), FindexErr> {
             &label,
             usize::MAX,
             0,
-            0,
+            SECURE_FETCH_CHAINS_BATCH_SIZE,
             0,
         )
         .await?;
@@ -420,7 +420,7 @@ async fn test_findex() -> Result<(), FindexErr> {
             &label,
             usize::MAX,
             usize::MAX,
-            0,
+            SECURE_FETCH_CHAINS_BATCH_SIZE,
             0,
         )
         .await?;
@@ -451,7 +451,7 @@ async fn test_findex() -> Result<(), FindexErr> {
             &label,
             usize::MAX,
             0,
-            0,
+            SECURE_FETCH_CHAINS_BATCH_SIZE,
             0,
         )
         .await?;
@@ -465,7 +465,7 @@ async fn test_findex() -> Result<(), FindexErr> {
             &label,
             usize::MAX,
             0,
-            0,
+            SECURE_FETCH_CHAINS_BATCH_SIZE,
             0,
         )
         .await?;
@@ -479,7 +479,7 @@ async fn test_findex() -> Result<(), FindexErr> {
             &label,
             usize::MAX,
             0,
-            0,
+            SECURE_FETCH_CHAINS_BATCH_SIZE,
             0,
         )
         .await?;
@@ -495,7 +495,7 @@ async fn test_findex() -> Result<(), FindexErr> {
             &label,
             usize::MAX,
             0,
-            0,
+            SECURE_FETCH_CHAINS_BATCH_SIZE,
             0,
         )
         .await?;
@@ -527,7 +527,7 @@ async fn test_findex() -> Result<(), FindexErr> {
                 &new_label,
                 usize::MAX,
                 0,
-                0,
+                SECURE_FETCH_CHAINS_BATCH_SIZE,
                 0,
             )
             .await?;
@@ -551,7 +551,7 @@ async fn test_findex() -> Result<(), FindexErr> {
             &new_label,
             usize::MAX,
             0,
-            0,
+            SECURE_FETCH_CHAINS_BATCH_SIZE,
             0,
         )
         .await?;
@@ -566,7 +566,7 @@ async fn test_findex() -> Result<(), FindexErr> {
             &new_label,
             usize::MAX,
             0,
-            0,
+            SECURE_FETCH_CHAINS_BATCH_SIZE,
             0,
         )
         .await?;
@@ -581,7 +581,7 @@ async fn test_findex() -> Result<(), FindexErr> {
             &label,
             usize::MAX,
             0,
-            0,
+            SECURE_FETCH_CHAINS_BATCH_SIZE,
             0,
         )
         .await?;
@@ -605,7 +605,7 @@ async fn test_findex() -> Result<(), FindexErr> {
             &new_label,
             usize::MAX,
             0,
-            0,
+            SECURE_FETCH_CHAINS_BATCH_SIZE,
             0,
         )
         .await?;
@@ -620,7 +620,7 @@ async fn test_findex() -> Result<(), FindexErr> {
             &label,
             usize::MAX,
             0,
-            0,
+            SECURE_FETCH_CHAINS_BATCH_SIZE,
             0,
         )
         .await?;
@@ -642,7 +642,7 @@ async fn test_findex() -> Result<(), FindexErr> {
                 &new_label,
                 usize::MAX,
                 0,
-                0,
+                SECURE_FETCH_CHAINS_BATCH_SIZE,
                 0,
             )
             .await?;
@@ -765,7 +765,15 @@ async fn test_first_names() -> Result<(), FindexErr> {
     for s in searches {
         let keywords = HashSet::from_iter(vec![Keyword::from(s.as_str())]);
         let graph_results = graph_findex
-            .search(&keywords, &master_key, &label, usize::MAX, usize::MAX, 0, 0)
+            .search(
+                &keywords,
+                &master_key,
+                &label,
+                usize::MAX,
+                usize::MAX,
+                SECURE_FETCH_CHAINS_BATCH_SIZE,
+                0,
+            )
             .await?;
         if graph_results.is_empty() {
             return Err(FindexErr::Other(format!(
@@ -776,7 +784,15 @@ async fn test_first_names() -> Result<(), FindexErr> {
         total_results += graph_results.len();
         // naive search
         let naive_results = naive_findex
-            .search(&keywords, &master_key, &label, usize::MAX, usize::MAX, 0, 0)
+            .search(
+                &keywords,
+                &master_key,
+                &label,
+                usize::MAX,
+                usize::MAX,
+                SECURE_FETCH_CHAINS_BATCH_SIZE,
+                0,
+            )
             .await?;
         assert_eq!(
             graph_results.len(),
@@ -840,7 +856,7 @@ async fn test_graph_compacting() {
             &label,
             usize::MAX,
             usize::MAX,
-            0,
+            SECURE_FETCH_CHAINS_BATCH_SIZE,
             0,
         )
         .await
@@ -881,7 +897,7 @@ async fn test_graph_compacting() {
                 &label,
                 usize::MAX,
                 usize::MAX,
-                0,
+                SECURE_FETCH_CHAINS_BATCH_SIZE,
                 0,
             )
             .await
