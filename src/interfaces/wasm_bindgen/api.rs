@@ -1,6 +1,6 @@
 //! Defines the Findex WASM API.
 
-use std::collections::HashSet;
+use std::{collections::HashSet, num::NonZeroUsize};
 
 use cosmian_crypto_core::bytes_ser_de::Serializable;
 use js_sys::{Array, Uint8Array};
@@ -62,13 +62,10 @@ pub async fn webassembly_search(
             .unwrap_or(MAX_RESULTS_PER_KEYWORD)
     };
 
-    let fetch_chains_batch_size = if fetch_chains_batch_size <= 0 {
-        SECURE_FETCH_CHAINS_BATCH_SIZE
-    } else {
-        fetch_chains_batch_size
-            .try_into()
-            .unwrap_or(SECURE_FETCH_CHAINS_BATCH_SIZE)
-    };
+    let fetch_chains_batch_size = usize::try_from(fetch_chains_batch_size)
+        .ok()
+        .and_then(NonZeroUsize::new)
+        .unwrap_or(SECURE_FETCH_CHAINS_BATCH_SIZE);
 
     let mut wasm_search = FindexUser {
         progress: Some(progress),

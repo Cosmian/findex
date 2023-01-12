@@ -25,6 +25,8 @@ mod utils;
 
 pub use utils::delete_db;
 
+use super::generic_parameters::SECURE_FETCH_CHAINS_BATCH_SIZE;
+
 pub async fn upsert(sqlite_path: &str, dataset_path: &str) -> Result<(), FindexErr> {
     //
     // Prepare database
@@ -89,7 +91,15 @@ pub async fn search(
 
     let label = Label::from(include_bytes!("../../../datasets/label").to_vec());
     let results = rusqlite_search
-        .search(&bulk_words, &master_key, &label, 10000, usize::MAX, 0, 0)
+        .search(
+            &bulk_words,
+            &master_key,
+            &label,
+            10000,
+            usize::MAX,
+            SECURE_FETCH_CHAINS_BATCH_SIZE,
+            0,
+        )
         .await?;
     let mut db_uids = Vec::with_capacity(results.len());
     for (_, indexed_values) in results {

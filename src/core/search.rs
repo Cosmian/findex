@@ -1,6 +1,9 @@
 //! This modules defines the `FindexSearch` trait.
 
-use std::collections::{HashMap, HashSet};
+use std::{
+    collections::{HashMap, HashSet},
+    num::NonZeroUsize,
+};
 
 use async_recursion::async_recursion;
 use cosmian_crypto_core::{
@@ -52,7 +55,7 @@ pub trait FindexSearch<
         master_key: &KeyingMaterial<MASTER_KEY_LENGTH>,
         label: &Label,
         max_results_per_keyword: usize,
-        fetch_chains_batch_size: usize,
+        fetch_chains_batch_size: NonZeroUsize,
     ) -> Result<HashMap<Keyword, HashSet<IndexedValue>>, FindexErr> {
         if keywords.is_empty() {
             return Ok(HashMap::new());
@@ -157,7 +160,7 @@ pub trait FindexSearch<
         label: &Label,
         max_results_per_keyword: usize,
         max_depth: usize,
-        fetch_chains_batch_size: usize,
+        fetch_chains_batch_size: NonZeroUsize,
         current_depth: usize,
     ) -> Result<HashMap<Keyword, HashSet<IndexedValue>>, FindexErr> {
         // Get indexed values associated to the given keywords
@@ -243,7 +246,7 @@ pub trait FindexSearch<
     async fn noisy_fetch_chains(
         &self,
         kwi_chain_table_uids: &KwiChainUids<UID_LENGTH, KWI_LENGTH>,
-        batch_size: usize,
+        batch_size: NonZeroUsize,
     ) -> Result<
         HashMap<KeyingMaterial<KWI_LENGTH>, Vec<(Uid<UID_LENGTH>, ChainTableValue<BLOCK_LENGTH>)>>,
         FindexErr,
@@ -255,7 +258,7 @@ pub trait FindexSearch<
 
             // Fetch all chain table values by batch of `batch_size` to increase noise.
             let chain_table_uids_hashset: Vec<_> = chain_table_uids
-                .chunks(batch_size)
+                .chunks(batch_size.into())
                 .map(|uids| uids.iter().cloned().collect())
                 .collect();
 

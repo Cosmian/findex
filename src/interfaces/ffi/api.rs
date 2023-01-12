@@ -4,6 +4,7 @@ use std::{
     collections::{HashMap, HashSet},
     convert::TryFrom,
     ffi::CStr,
+    num::NonZeroUsize,
     os::raw::{c_char, c_int},
     slice,
 };
@@ -56,7 +57,7 @@ async fn ffi_search(
     label_bytes: &[u8],
     max_results_per_keyword: usize,
     max_depth: usize,
-    fetch_chains_batch_size: usize,
+    fetch_chains_batch_size: NonZeroUsize,
     progress: ProgressCallback,
     fetch_entry: FetchEntryTableCallback,
     fetch_chain: FetchChainTableCallback,
@@ -186,15 +187,6 @@ pub unsafe extern "C" fn h_search(
         )
     };
 
-    let fetch_chains_batch_size = if fetch_chains_batch_size <= 0 {
-        SECURE_FETCH_CHAINS_BATCH_SIZE
-    } else {
-        ffi_unwrap!(
-            usize::try_from(fetch_chains_batch_size),
-            "fetch_chains_batch_size must be a positive int"
-        )
-    };
-
     //
     // key k deserialization
     ffi_not_null!(master_key_ptr, "The Key k pointer should not be null");
@@ -223,6 +215,11 @@ pub unsafe extern "C" fn h_search(
         serde_json::from_str(&keywords),
         "failed deserializing the base64 `Keyword`s"
     );
+
+    let fetch_chains_batch_size = usize::try_from(fetch_chains_batch_size)
+        .ok()
+        .and_then(NonZeroUsize::new)
+        .unwrap_or(SECURE_FETCH_CHAINS_BATCH_SIZE);
 
     let serialized_uids = ffi_unwrap!(executor::block_on(ffi_search(
         &base64_keywords,
