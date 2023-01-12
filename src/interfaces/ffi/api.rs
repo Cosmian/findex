@@ -73,8 +73,7 @@ async fn ffi_search(
         // base64 decode the words
         let word_bytes = base64::decode(base64_keyword).map_err(|e| {
             FindexErr::ConversionError(format!(
-                "Failed decoding the base64 encoded word: {}: {}",
-                base64_keyword, e
+                "Failed decoding the base64 encoded word: {base64_keyword}: {e}"
             ))
         })?;
         keywords.insert(Keyword::from(word_bytes));

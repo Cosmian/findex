@@ -423,6 +423,7 @@ impl InternalFindex {
     // use `u32::MAX` for `max_result_per_keyword`
     #[args(max_result_per_keyword = "4294967295")]
     #[args(max_depth = "100")]
+    #[args(fetch_chains_batch_size = "0")]
     pub fn search_wrapper(
         &mut self,
         keywords: Vec<&str>,

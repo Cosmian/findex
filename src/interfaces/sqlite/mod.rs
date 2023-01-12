@@ -44,7 +44,6 @@ pub async fn upsert(sqlite_path: &str, dataset_path: &str) -> Result<(), FindexE
     let mut locations_and_words = HashMap::new();
     for (idx, user) in users.iter().enumerate() {
         let db_uid = (0..16)
-            .into_iter()
             .map(|_e| format!("{:02x}", idx + 1))
             .collect::<String>();
         let mut words = HashSet::new();
