@@ -36,7 +36,10 @@ macro_rules! callback {
 macro_rules! unwrap_callback {
     ($findex:ident, $callback:ident) => {
         $findex.$callback.as_ref().ok_or_else(|| {
-            FindexErr::CryptoError("No attribute `$callback` is defined for `self`".to_string())
+            FindexErr::CryptoError(format!(
+                "No attribute `{}` is defined for `self`",
+                stringify!($callback)
+            ))
         })?
     };
 }
