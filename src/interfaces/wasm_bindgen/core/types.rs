@@ -5,11 +5,10 @@ use std::collections::{HashMap, HashSet};
 use js_sys::{Array, JsString, Object, Reflect, Uint8Array};
 use wasm_bindgen::{prelude::wasm_bindgen, JsCast, JsValue};
 
-use super::utils::ObjectSourceForErrors;
 use crate::{
     core::{IndexedValue, Keyword},
     error::FindexErr,
-    interfaces::wasm_bindgen::core::utils::get_bytes_from_object_property,
+    interfaces::wasm_bindgen::core::utils::{ObjectSourceForErrors, get_bytes_from_object_property},
 };
 
 #[wasm_bindgen]
