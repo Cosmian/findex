@@ -253,8 +253,8 @@ pub trait FindexSearch<
             let kwi_value: DemScheme::Key = kwi.derive_dem_key(CHAIN_TABLE_KEY_DERIVATION_INFO);
             let mut chain = Vec::with_capacity(chain_table_uids.len());
 
-            // Fetch all chain table values one by one to increase noise.
-            let chain_table_uids_hashset: Vec<HashSet<_>> = chain_table_uids
+            // Fetch all chain table values by batch of `batch_size` to increase noise.
+            let chain_table_uids_hashset: Vec<_> = chain_table_uids
                 .chunks(batch_size)
                 .map(|uids| uids.iter().cloned().collect())
                 .collect();
