@@ -9,7 +9,7 @@ fn bench_upsert_search(c: &mut Criterion) {
     // Generate new dataset
     //
 
-    use std::collections::HashSet;
+    use std::{collections::HashSet, path::PathBuf};
 
     use cosmian_findex::core::Keyword;
 
@@ -25,7 +25,7 @@ fn bench_upsert_search(c: &mut Criterion) {
             //
             // Prepare database and create Findex structs
             //
-            upsert("sqlite_bench.db", "./datasets/data.json")
+            upsert(&PathBuf::from("sqlite_bench.db"), "./datasets/data.json")
                 .await
                 .expect("upsert failed");
         });
@@ -33,7 +33,7 @@ fn bench_upsert_search(c: &mut Criterion) {
     group.bench_function("Searching 1 word (30 results)", |b| {
         b.to_async(FuturesExecutor).iter(|| async {
             let bulk_words = HashSet::from_iter([Keyword::from("France")]);
-            search("sqlite_bench.db", bulk_words, false)
+            search(&PathBuf::from("sqlite_bench.db"), bulk_words, false)
                 .await
                 .expect("search failed");
         });
@@ -45,7 +45,7 @@ fn bench_upsert_search(c: &mut Criterion) {
                 Keyword::from("Spain"),
                 Keyword::from("Germany"),
             ]);
-            search("sqlite_bench.db", bulk_words, false)
+            search(&PathBuf::from("sqlite_bench.db"), bulk_words, false)
                 .await
                 .expect("search failed");
         });
