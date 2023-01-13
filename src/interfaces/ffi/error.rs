@@ -11,7 +11,7 @@ use thiserror::Error;
 pub enum FfiErr {
     #[error("Invalid NULL pointer passed for: {0}")]
     NullPointer(String),
-    #[error("FFI error: {0}")]
+    #[error("{0}")]
     Generic(String),
 }
 
@@ -48,7 +48,10 @@ macro_rules! ffi_unwrap {
                 $crate::interfaces::ffi::error::set_last_error(
                     $crate::interfaces::ffi::error::FfiErr::Generic(format!("{}: {}", $msg, e)),
                 );
-                return 1_i32;
+                return match $crate::error::FindexErr::from(e) {
+                    $crate::error::FindexErr::CallbackErrorCode { code, .. } => code,
+                    _ => 1_i32,
+                };
             }
         }
     };
@@ -59,7 +62,10 @@ macro_rules! ffi_unwrap {
                 $crate::interfaces::ffi::error::set_last_error(
                     $crate::interfaces::ffi::error::FfiErr::Generic(format!("{}", e)),
                 );
-                return 1_i32;
+                return match $crate::error::FindexErr::from(e) {
+                    $crate::error::FindexErr::CallbackErrorCode { code, .. } => code,
+                    _ => 1_i32,
+                };
             }
         }
     };

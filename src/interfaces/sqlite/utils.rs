@@ -1,4 +1,4 @@
-use std::{collections::HashMap, path::PathBuf};
+use std::collections::HashMap;
 
 use cosmian_crypto_core::bytes_ser_de::Serializable;
 use rusqlite::{Connection, Statement};
@@ -17,7 +17,6 @@ pub struct IndexEntry {
 
 pub fn prepare_questions(questions_number: usize) -> String {
     (0..questions_number)
-        .into_iter()
         .map(|_| "?")
         .collect::<Vec<_>>()
         .join(",")
@@ -60,11 +59,6 @@ pub fn sqlite_fetch_entry_table_items(
         );
     }
     EncryptedTable::<UID_LENGTH>::from(entry_table_items).try_to_bytes()
-}
-
-pub fn get_db(sqlite_path: &str) -> PathBuf {
-    let dir = std::env::temp_dir();
-    dir.join(sqlite_path)
 }
 
 pub fn delete_db(sqlite_path: &str) -> Result<(), FindexErr> {

@@ -3,6 +3,7 @@
 
 use std::{
     collections::{HashMap, HashSet},
+    path::PathBuf,
     usize,
 };
 
@@ -13,7 +14,7 @@ use crate::{
     error::FindexErr,
     interfaces::{
         generic_parameters::MASTER_KEY_LENGTH,
-        sqlite::{database::SqliteDatabase, findex::RusqliteFindex, utils::get_db},
+        sqlite::{database::SqliteDatabase, findex::RusqliteFindex},
     },
 };
 
@@ -25,12 +26,13 @@ mod utils;
 
 pub use utils::delete_db;
 
-pub async fn upsert(sqlite_path: &str, dataset_path: &str) -> Result<(), FindexErr> {
+use super::generic_parameters::SECURE_FETCH_CHAINS_BATCH_SIZE;
+
+pub async fn upsert(sqlite_db_path: &PathBuf, dataset_path: &str) -> Result<(), FindexErr> {
     //
     // Prepare database
     //
-    let sqlite_db_path = get_db(sqlite_path);
-    let mut connection = Connection::open(&sqlite_db_path)?;
+    let mut connection = Connection::open(sqlite_db_path)?;
     SqliteDatabase::new(&connection, dataset_path)?;
 
     //
@@ -42,7 +44,6 @@ pub async fn upsert(sqlite_path: &str, dataset_path: &str) -> Result<(), FindexE
     let mut locations_and_words = HashMap::new();
     for (idx, user) in users.iter().enumerate() {
         let db_uid = (0..16)
-            .into_iter()
             .map(|_e| format!("{:02x}", idx + 1))
             .collect::<String>();
         let mut words = HashSet::new();
@@ -75,12 +76,11 @@ pub async fn upsert(sqlite_path: &str, dataset_path: &str) -> Result<(), FindexE
 }
 
 pub async fn search(
-    sqlite_path: &str,
+    sqlite_path: &PathBuf,
     bulk_words: HashSet<Keyword>,
     check: bool,
 ) -> Result<(), FindexErr> {
-    let sqlite_db_path = get_db(sqlite_path);
-    let mut connection = Connection::open(&sqlite_db_path)?;
+    let mut connection = Connection::open(sqlite_path)?;
     let mut rusqlite_search = RusqliteFindex {
         connection: &mut connection,
     };
@@ -89,7 +89,15 @@ pub async fn search(
 
     let label = Label::from(include_bytes!("../../../datasets/label").to_vec());
     let results = rusqlite_search
-        .search(&bulk_words, &master_key, &label, 10000, usize::MAX, 0)
+        .search(
+            &bulk_words,
+            &master_key,
+            &label,
+            10000,
+            usize::MAX,
+            SECURE_FETCH_CHAINS_BATCH_SIZE,
+            0,
+        )
         .await?;
     let mut db_uids = Vec::with_capacity(results.len());
     for (_, indexed_values) in results {

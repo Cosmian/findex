@@ -3,7 +3,8 @@
 use std::{
     collections::{HashMap, HashSet},
     convert::TryFrom,
-    ffi::CStr,
+    ffi::{c_uint, CStr},
+    num::NonZeroUsize,
     os::raw::{c_char, c_int},
     slice,
 };
@@ -28,7 +29,9 @@ use crate::{
             error::{set_last_error, FfiErr},
             MAX_DEPTH,
         },
-        generic_parameters::{MASTER_KEY_LENGTH, MAX_RESULTS_PER_KEYWORD},
+        generic_parameters::{
+            MASTER_KEY_LENGTH, MAX_RESULTS_PER_KEYWORD, SECURE_FETCH_CHAINS_BATCH_SIZE,
+        },
         ser_de::SerializableSet,
     },
 };
@@ -54,11 +57,15 @@ async fn ffi_search(
     label_bytes: &[u8],
     max_results_per_keyword: usize,
     max_depth: usize,
+    fetch_chains_batch_size: NonZeroUsize,
     progress: ProgressCallback,
     fetch_entry: FetchEntryTableCallback,
     fetch_chain: FetchChainTableCallback,
 ) -> Result<Vec<u8>, FindexErr> {
-    let master_key = KeyingMaterial::<MASTER_KEY_LENGTH>::try_from_bytes(master_key_bytes)?;
+    let master_key = KeyingMaterial::<MASTER_KEY_LENGTH>::try_from_bytes(master_key_bytes)
+        .map_err(|e| {
+            FindexErr::Other(format!("While parsing master key for Findex search, {e}"))
+        })?;
     let label = Label::from(label_bytes);
 
     let mut keywords = HashSet::with_capacity(base64_keywords.len());
@@ -66,8 +73,7 @@ async fn ffi_search(
         // base64 decode the words
         let word_bytes = base64::decode(base64_keyword).map_err(|e| {
             FindexErr::ConversionError(format!(
-                "Failed decoding the base64 encoded word: {}: {}",
-                base64_keyword, e
+                "Failed decoding the base64 encoded word: {base64_keyword}: {e}"
             ))
         })?;
         keywords.insert(Keyword::from(word_bytes));
@@ -91,6 +97,7 @@ async fn ffi_search(
             &label,
             max_results_per_keyword,
             max_depth,
+            fetch_chains_batch_size,
             0,
         )
         .await?;
@@ -120,7 +127,7 @@ async fn ffi_search(
 /// # Parameters
 ///
 /// - `indexed_values`          : (output) search result
-/// - `master_key`              : masterkey
+/// - `master_key`              : master key
 /// - `label`                   : additional information used to derive Entry
 ///   Table UIDs
 /// - `keywords`                : `serde` serialized list of base64 keywords
@@ -144,6 +151,7 @@ pub unsafe extern "C" fn h_search(
     keywords_ptr: *const c_char,
     max_results_per_keyword: c_int,
     max_depth: c_int,
+    fetch_chains_batch_size: c_uint,
     progress_callback: ProgressCallback,
     fetch_entry: FetchEntryTableCallback,
     fetch_chain: FetchChainTableCallback,
@@ -207,12 +215,18 @@ pub unsafe extern "C" fn h_search(
         "failed deserializing the base64 `Keyword`s"
     );
 
+    let fetch_chains_batch_size = usize::try_from(fetch_chains_batch_size)
+        .ok()
+        .and_then(NonZeroUsize::new)
+        .unwrap_or(SECURE_FETCH_CHAINS_BATCH_SIZE);
+
     let serialized_uids = ffi_unwrap!(executor::block_on(ffi_search(
         &base64_keywords,
         master_key_bytes,
         label_bytes,
         max_results_per_keyword,
         max_depth,
+        fetch_chains_batch_size,
         progress_callback,
         fetch_entry,
         fetch_chain,
@@ -284,9 +298,11 @@ pub unsafe extern "C" fn h_upsert(
     // Parse master Key
     ffi_not_null!(master_key_ptr, "Master Key pointer should not be null");
     let master_key_bytes = slice::from_raw_parts(master_key_ptr, master_key_len as usize);
-    let master_key = ffi_unwrap!(KeyingMaterial::<MASTER_KEY_LENGTH>::try_from_bytes(
-        master_key_bytes
-    ));
+    let master_key = ffi_unwrap!(
+        KeyingMaterial::<MASTER_KEY_LENGTH>::try_from_bytes(master_key_bytes).map_err(|e| {
+            FindexErr::Other(format!("while parsing master key for Findex upsert, {e}"))
+        })
+    );
 
     ffi_not_null!(label_ptr, "Label pointer should not be null");
 

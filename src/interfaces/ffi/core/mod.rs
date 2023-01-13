@@ -12,6 +12,25 @@ pub use self::callbacks::*;
 /// fetched by batches of size [`NUMBER_OF_ENTRY_TABLE_LINE_IN_BATCH`].
 pub const NUMBER_OF_ENTRY_TABLE_LINE_IN_BATCH: usize = 100;
 
+#[repr(i32)]
+#[derive(Debug)]
+/// Callbacks return error codes, right now only 0 and 1 are specified.
+/// Other error codes will be forwarded to the client as a response to
+/// the main call error code so that the client can report some custom
+/// callbacks errors (for example the Flutter lib is using 42 to report
+/// an expection during a callback, save this exception and re-report this
+/// exception at the end of the main call if the response is 42).
+pub enum ErrorCode {
+    Success = 0,
+
+    /// https://github.com/Cosmian/findex/issues/14
+    /// We use 1 here because we used to always retry in case of non-zero error
+    /// code. We may want to change this in future major release (reserve 1
+    /// for error and specify another error code for asking for a bigger
+    /// buffer).
+    BufferTooSmall = 1,
+}
+
 /// Implements Findex traits.
 pub struct FindexUser {
     pub(crate) progress: Option<ProgressCallback>,
