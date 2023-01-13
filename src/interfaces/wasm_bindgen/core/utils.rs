@@ -89,8 +89,7 @@ pub fn js_value_to_encrypted_table<const UID_LENGTH: usize>(
             encrypted_table
                 .js_typeof()
                 .dyn_ref::<JsString>()
-                .map(|s| format!("{s}"))
-                .unwrap_or_else(|| "unknown type".to_owned()),
+                .map_or_else(|| "unknown type".to_owned(), |s| format!("{s}")),
         )));
     }
 
@@ -106,8 +105,7 @@ pub fn js_value_to_encrypted_table<const UID_LENGTH: usize>(
                 "{object_source_for_errors}, position {i} contains {}, object expected.",
                 obj.js_typeof()
                     .dyn_ref::<JsString>()
-                    .map(|s| format!("{s}"))
-                    .unwrap_or_else(|| "unknown type".to_owned()),
+                    .map_or_else(|| "unknown type".to_owned(), |s| format!("{s}")),
             )));
         }
 
@@ -155,8 +153,7 @@ pub fn get_bytes_from_object_property(
              object expected.",
             obj.js_typeof()
                 .dyn_ref::<JsString>()
-                .map(|s| format!("{s}"))
-                .unwrap_or_else(|| "unknown type".to_owned()),
+                .map_or_else(|| "unknown type".to_owned(), |s| format!("{s}")),
         ))
     })?;
 

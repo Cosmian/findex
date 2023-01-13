@@ -17,7 +17,6 @@ pub struct IndexEntry {
 
 pub fn prepare_questions(questions_number: usize) -> String {
     (0..questions_number)
-        .into_iter()
         .map(|_| "?")
         .collect::<Vec<_>>()
         .join(",")

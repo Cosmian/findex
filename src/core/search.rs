@@ -1,12 +1,16 @@
 //! This modules defines the `FindexSearch` trait.
 
-use std::collections::{HashMap, HashSet};
+use std::{
+    collections::{HashMap, HashSet},
+    num::NonZeroUsize,
+};
 
 use async_recursion::async_recursion;
 use cosmian_crypto_core::{
     bytes_ser_de::Serializable,
     symmetric_crypto::{Dem, SymKey},
 };
+use futures::future::join_all;
 
 use super::{callbacks::FindexCallbacks, structs::Block};
 use crate::{
@@ -51,6 +55,7 @@ pub trait FindexSearch<
         master_key: &KeyingMaterial<MASTER_KEY_LENGTH>,
         label: &Label,
         max_results_per_keyword: usize,
+        fetch_chains_batch_size: NonZeroUsize,
     ) -> Result<HashMap<Keyword, HashSet<IndexedValue>>, FindexErr> {
         if keywords.is_empty() {
             return Ok(HashMap::new());
@@ -113,7 +118,9 @@ pub trait FindexSearch<
         // Query the Chain Table for these UIDs to recover the associated
         // chain values.
         //
-        let chains = self.noisy_fetch_chains(&kwi_chain_table_uids).await?;
+        let chains = self
+            .noisy_fetch_chains(&kwi_chain_table_uids, fetch_chains_batch_size)
+            .await?;
 
         // Convert the block of the given chains into indexed values.
         let mut res = HashMap::<Keyword, HashSet<IndexedValue>>::new();
@@ -145,6 +152,7 @@ pub trait FindexSearch<
     /// - `max_depth`               : maximum recursion level allowed
     /// - `current_depth`           : current depth reached by the recursion
     #[async_recursion(?Send)]
+    #[allow(clippy::too_many_arguments)]
     async fn search(
         &mut self,
         keywords: &HashSet<Keyword>,
@@ -152,11 +160,18 @@ pub trait FindexSearch<
         label: &Label,
         max_results_per_keyword: usize,
         max_depth: usize,
+        fetch_chains_batch_size: NonZeroUsize,
         current_depth: usize,
     ) -> Result<HashMap<Keyword, HashSet<IndexedValue>>, FindexErr> {
         // Get indexed values associated to the given keywords
         let res = self
-            .non_recursive_search(keywords, master_key, label, max_results_per_keyword)
+            .non_recursive_search(
+                keywords,
+                master_key,
+                label,
+                max_results_per_keyword,
+                fetch_chains_batch_size,
+            )
             .await?;
         // Stop here if there is no result
         if res.is_empty() {
@@ -203,6 +218,7 @@ pub trait FindexSearch<
                     label,
                     max_results_per_keyword,
                     max_depth,
+                    fetch_chains_batch_size,
                     current_depth + 1,
                 )
                 .await?
@@ -230,6 +246,7 @@ pub trait FindexSearch<
     async fn noisy_fetch_chains(
         &self,
         kwi_chain_table_uids: &KwiChainUids<UID_LENGTH, KWI_LENGTH>,
+        batch_size: NonZeroUsize,
     ) -> Result<
         HashMap<KeyingMaterial<KWI_LENGTH>, Vec<(Uid<UID_LENGTH>, ChainTableValue<BLOCK_LENGTH>)>>,
         FindexErr,
@@ -238,14 +255,24 @@ pub trait FindexSearch<
         for (kwi, chain_table_uids) in kwi_chain_table_uids.iter() {
             let kwi_value: DemScheme::Key = kwi.derive_dem_key(CHAIN_TABLE_KEY_DERIVATION_INFO);
             let mut chain = Vec::with_capacity(chain_table_uids.len());
-            for uid in chain_table_uids {
-                // Fetch all chain table values one by one to increase noise.
-                let encrypted_item = self
-                    .fetch_chain_table(&HashSet::from([uid.clone()]))
-                    .await?;
+
+            // Fetch all chain table values by batch of `batch_size` to increase noise.
+            let chain_table_uids_hashset: Vec<_> = chain_table_uids
+                .chunks(batch_size.into())
+                .map(|uids| uids.iter().cloned().collect())
+                .collect();
+
+            let mut futures = Vec::with_capacity(chain_table_uids_hashset.len());
+            for uid in &chain_table_uids_hashset {
+                futures.push(self.fetch_chain_table(uid));
+            }
+
+            let encrypted_items = join_all(futures).await;
+
+            for encrypted_item in encrypted_items {
                 // Use a vector not to shuffle the chain. This is important because indexed
                 // values can be divided in blocks that span several lines in the chain.
-                for (uid, value) in encrypted_item {
+                for (uid, value) in encrypted_item? {
                     let decrypted_value = ChainTableValue::<BLOCK_LENGTH>::decrypt::<
                         TABLE_WIDTH,
                         DEM_KEY_LENGTH,

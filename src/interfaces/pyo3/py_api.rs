@@ -1,4 +1,7 @@
-use std::collections::{HashMap, HashSet};
+use std::{
+    collections::{HashMap, HashSet},
+    num::NonZeroUsize,
+};
 
 use futures::executor::block_on;
 use pyo3::{
@@ -15,7 +18,7 @@ use crate::{
     interfaces::{
         generic_parameters::{
             DemScheme, KmacKey, BLOCK_LENGTH, DEM_KEY_LENGTH, KMAC_KEY_LENGTH, KWI_LENGTH,
-            MASTER_KEY_LENGTH, TABLE_WIDTH, UID_LENGTH,
+            MASTER_KEY_LENGTH, SECURE_FETCH_CHAINS_BATCH_SIZE, TABLE_WIDTH, UID_LENGTH,
         },
         pyo3::py_structs::{
             IndexedValue as IndexedValuePy, Label as LabelPy, MasterKey as MasterKeyPy,
@@ -420,6 +423,7 @@ impl InternalFindex {
     // use `u32::MAX` for `max_result_per_keyword`
     #[args(max_result_per_keyword = "4294967295")]
     #[args(max_depth = "100")]
+    #[args(fetch_chains_batch_size = "0")]
     pub fn search_wrapper(
         &mut self,
         keywords: Vec<&str>,
@@ -427,6 +431,7 @@ impl InternalFindex {
         label: &LabelPy,
         max_result_per_keyword: usize,
         max_depth: usize,
+        fetch_chains_batch_size: usize,
     ) -> PyResult<HashMap<String, Vec<IndexedValuePy>>> {
         let keywords_set: HashSet<Keyword> = keywords
             .iter()
@@ -439,6 +444,7 @@ impl InternalFindex {
             &label.0,
             max_result_per_keyword,
             max_depth,
+            NonZeroUsize::new(fetch_chains_batch_size).unwrap_or(SECURE_FETCH_CHAINS_BATCH_SIZE),
             0,
         ))?;
 

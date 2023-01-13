@@ -76,8 +76,7 @@ pub fn to_indexed_values_to_keywords(
             "During Findex upsert: `newIndexedEntries` should be an array, {} received.",
             ivw.js_typeof()
                 .dyn_ref::<JsString>()
-                .map(|s| format!("{s}"))
-                .unwrap_or_else(|| "unknown type".to_owned()),
+                .map_or_else(|| "unknown type".to_owned(), |s| format!("{s}")),
         ))
     })?;
 

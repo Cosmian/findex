@@ -141,6 +141,7 @@ class InternalFindex:
         label: Label,
         max_result_per_keyword: int = 2**32 - 1,
         max_depth: int = 100,
+        fetch_chains_batch_size: int = 0,
     ) -> Dict[str, List[IndexedValue]]: ...
     def compact_wrapper(
         self,

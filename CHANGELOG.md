@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## Unreleased
+
+### Changed
+
+- Add `fetch_chains_batch_size` argument to search
+- in `search`, `fetch_chains` calls are now run in parallel for batches of `fetch_chains_batch_size` (not working for the Java/Flutter interfaces for now)
+- Improve errors
+
 ## [1.0.1] - 2022-12-16
 
 ### Bug Fixes

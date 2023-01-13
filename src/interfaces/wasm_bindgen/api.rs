@@ -1,6 +1,6 @@
 //! Defines the Findex WASM API.
 
-use std::collections::HashSet;
+use std::{collections::HashSet, num::NonZeroUsize};
 
 use cosmian_crypto_core::bytes_ser_de::Serializable;
 use js_sys::{Array, Uint8Array};
@@ -10,7 +10,9 @@ use super::core::search_results_to_js;
 use crate::{
     core::{FindexSearch, FindexUpsert, KeyingMaterial, Keyword, Label},
     interfaces::{
-        generic_parameters::{MASTER_KEY_LENGTH, MAX_RESULTS_PER_KEYWORD},
+        generic_parameters::{
+            MASTER_KEY_LENGTH, MAX_RESULTS_PER_KEYWORD, SECURE_FETCH_CHAINS_BATCH_SIZE,
+        },
         wasm_bindgen::core::{
             to_indexed_values_to_keywords, ArrayOfKeywords, Fetch, FindexUser,
             IndexedValuesAndWords, Insert, Progress, SearchResults, Upsert,
@@ -36,8 +38,9 @@ pub async fn webassembly_search(
     master_key: Uint8Array,
     label_bytes: Uint8Array,
     keywords: ArrayOfKeywords,
-    max_results_per_keyword: usize,
-    max_depth: usize,
+    max_results_per_keyword: i32,
+    max_depth: i32,
+    fetch_chains_batch_size: i32,
     progress: Progress,
     fetch_entry: Fetch,
     fetch_chain: Fetch,
@@ -51,11 +54,18 @@ pub async fn webassembly_search(
         .map(|word| Keyword::from(Uint8Array::new(&word).to_vec()))
         .collect::<HashSet<_>>();
 
-    let max_results_per_keyword = if max_results_per_keyword == 0 {
+    let max_results_per_keyword = if max_results_per_keyword <= 0 {
         MAX_RESULTS_PER_KEYWORD
     } else {
         max_results_per_keyword
+            .try_into()
+            .unwrap_or(MAX_RESULTS_PER_KEYWORD)
     };
+
+    let fetch_chains_batch_size = usize::try_from(fetch_chains_batch_size)
+        .ok()
+        .and_then(NonZeroUsize::new)
+        .unwrap_or(SECURE_FETCH_CHAINS_BATCH_SIZE);
 
     let mut wasm_search = FindexUser {
         progress: Some(progress),
@@ -71,7 +81,8 @@ pub async fn webassembly_search(
             &master_key,
             &label,
             max_results_per_keyword,
-            max_depth,
+            max_depth.try_into().unwrap_or(usize::MAX),
+            fetch_chains_batch_size,
             0,
         )
         .await
