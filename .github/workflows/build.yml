@@ -18,6 +18,6 @@ jobs:
       branch-java: main
       branch-js: main
       branch-flutter: main
-      branch-python: fix/perfs_noisy_fetch_chains
+      branch-python: main
       bench-features: sqlite
     secrets: inherit
