@@ -47,7 +47,10 @@ impl FindexCallbacks<UID_LENGTH> for InternalFindex {
             .iter()
             .map(|(keyword, indexed_values)| {
                 (
-                    format!("{keyword:?}"),
+                    match keyword.clone().try_into_string() {
+                        Ok(s) => s,
+                        Err(_) => format!("{keyword:?}"),
+                    },
                     indexed_values
                         .iter()
                         .map(|value| IndexedValuePy(value.clone()))
@@ -351,15 +354,9 @@ impl InternalFindex {
     }
 
     /// Sets the required callbacks to implement [`FindexSearch`].
-    pub fn set_search_callbacks(
-        &mut self,
-        fetch_entry: PyObject,
-        fetch_chain: PyObject,
-        progress_callback: PyObject,
-    ) {
+    pub fn set_search_callbacks(&mut self, fetch_entry: PyObject, fetch_chain: PyObject) {
         self.fetch_entry = fetch_entry;
         self.fetch_chain = fetch_chain;
-        self.progress_callback = progress_callback;
     }
 
     /// Sets the required callbacks to implement [`FindexCompact`].
@@ -424,6 +421,8 @@ impl InternalFindex {
     #[args(max_result_per_keyword = "4294967295")]
     #[args(max_depth = "100")]
     #[args(fetch_chains_batch_size = "0")]
+    #[args(progress_callback = "None")]
+    #[allow(clippy::too_many_arguments)]
     pub fn search_wrapper(
         &mut self,
         keywords: Vec<&str>,
@@ -432,7 +431,24 @@ impl InternalFindex {
         max_result_per_keyword: usize,
         max_depth: usize,
         fetch_chains_batch_size: usize,
+        progress_callback: Option<PyObject>,
+        py: Python,
     ) -> PyResult<HashMap<String, Vec<IndexedValuePy>>> {
+        match progress_callback {
+            Some(callback) => self.progress_callback = callback,
+            None => {
+                self.progress_callback = PyModule::from_code(
+                    py,
+                    "def default_progress_callback(*args, **kwargs):
+                    return True",
+                    "",
+                    "",
+                )?
+                .getattr("default_progress_callback")?
+                .into()
+            }
+        }
+
         let keywords_set: HashSet<Keyword> = keywords
             .iter()
             .map(|keyword| Keyword::from(*keyword))

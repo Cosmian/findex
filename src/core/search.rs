@@ -173,6 +173,10 @@ pub trait FindexSearch<
                 fetch_chains_batch_size,
             )
             .await?;
+
+        // Send current results (Location and NextKeyword) to the callback.
+        let continue_recursion = self.progress(&res).await?;
+
         // Stop here if there is no result
         if res.is_empty() {
             return Ok(res);
@@ -190,26 +194,18 @@ pub trait FindexSearch<
                         results_entry.insert(value);
                     }
                     IndexedValue::NextKeyword(next_keyword) => {
-                        if current_depth == max_depth {
-                            // `NextKeyword`s are returned if recursion couldn't reach the leaves.
-                            results_entry.insert(IndexedValue::NextKeyword(next_keyword));
-                        } else {
-                            keyword_map.insert(next_keyword, keyword.clone());
-                        }
+                        keyword_map.insert(next_keyword, keyword.clone());
                     }
                 };
             }
         }
 
-        if keyword_map.is_empty() {
-            // All branches have been explored.
+        if keyword_map.is_empty() || current_depth == max_depth {
+            // All branches have been explored or max depth is reached
             return Ok(results);
         }
 
-        // Send current results to the callback.
-        let is_to_continue = self.progress(&results).await?;
-
-        if is_to_continue {
+        if continue_recursion {
             // Add results from the next recursion.
             for (keyword, indexed_values) in self
                 .search(

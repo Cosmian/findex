@@ -405,11 +405,6 @@ async fn test_findex() -> Result<(), FindexErr> {
             0,
         )
         .await?;
-    check_search_result(
-        &rob_search,
-        &rob_keyword,
-        &IndexedValue::NextKeyword(robert_keyword.clone()),
-    );
     check_search_result(&rob_search, &rob_keyword, &rob_location);
 
     // search rob with graph search
@@ -499,11 +494,6 @@ async fn test_findex() -> Result<(), FindexErr> {
             0,
         )
         .await?;
-    check_search_result(
-        &rob_search,
-        &rob_keyword,
-        &IndexedValue::NextKeyword(robert_keyword.clone()),
-    );
     check_search_result(&rob_search, &rob_keyword, &rob_location);
 
     let mut new_label = Label::random(&mut rng);
@@ -777,8 +767,7 @@ async fn test_first_names() -> Result<(), FindexErr> {
             .await?;
         if graph_results.is_empty() {
             return Err(FindexErr::Other(format!(
-                "No graph results for keyword: {}! This should not happen",
-                s
+                "No graph results for keyword: {s}! This should not happen"
             )));
         }
         total_results += graph_results.len();

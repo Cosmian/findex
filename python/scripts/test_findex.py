@@ -57,7 +57,7 @@ class TestStructures(unittest.TestCase):
 class FindexHashmap:
     """Implement Findex callbacks using hashmaps"""
 
-    def __init__(self, db):
+    def __init__(self, db: Dict[bytes, List[str]]):
         self.db = db
         self.entry_table: Dict[bytes, bytes] = {}
         self.chain_table: Dict[bytes, bytes] = {}
@@ -190,7 +190,6 @@ class TestFindex(unittest.TestCase):
         self.findex_interface.set_search_callbacks(
             self.findex_backend.fetch_entry,
             self.findex_backend.fetch_chain,
-            self.findex_backend.progress_callback,
         )
 
         res = self.findex_interface.search_wrapper(['Martial'], self.msk, self.label)
@@ -214,7 +213,6 @@ class TestFindex(unittest.TestCase):
         self.findex_interface.set_search_callbacks(
             self.findex_backend.fetch_entry,
             self.findex_backend.fetch_chain,
-            self.findex_backend.progress_callback,
         )
 
         indexed_values_and_keywords = {
@@ -252,7 +250,6 @@ class TestFindex(unittest.TestCase):
         self.findex_interface.set_search_callbacks(
             self.findex_backend.fetch_entry,
             self.findex_backend.fetch_chain,
-            self.findex_backend.progress_callback,
         )
         self.findex_interface.set_compact_callbacks(
             self.findex_backend.fetch_entry,
