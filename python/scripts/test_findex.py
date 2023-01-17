@@ -273,7 +273,7 @@ class TestFindex(unittest.TestCase):
         # Removing 2nd db line
         del self.db[b'2']
         self.findex_interface.compact_wrapper(
-            1, self.msk, self.msk, new_label, self.compact_batch_size
+            1, self.msk, self.msk, new_label, self.compact_batch_size, False
         )
 
         # now new_label can perform search

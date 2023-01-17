@@ -21,6 +21,7 @@ use crate::{
 
 const MIN_KEYWORD_LENGTH: usize = 3;
 const COMPACT_BATCH_SIZE: usize = 2;
+const ONLINE_COMPACTING: bool = false;
 
 #[derive(Default)]
 struct FindexTest<const UID_LENGTH: usize> {
@@ -528,6 +529,7 @@ async fn test_findex() -> Result<(), FindexErr> {
                 &new_master_key,
                 &new_label,
                 COMPACT_BATCH_SIZE,
+                ONLINE_COMPACTING,
             )
             .await?;
         master_key = new_master_key;
@@ -558,6 +560,7 @@ async fn test_findex() -> Result<(), FindexErr> {
             &new_master_key,
             &new_label,
             COMPACT_BATCH_SIZE,
+            ONLINE_COMPACTING,
         )
         .await?;
     master_key = new_master_key;
@@ -617,6 +620,7 @@ async fn test_findex() -> Result<(), FindexErr> {
                 &new_master_key,
                 &new_label,
                 COMPACT_BATCH_SIZE,
+                ONLINE_COMPACTING,
             )
             .await?;
         master_key = new_master_key;
@@ -661,6 +665,7 @@ async fn test_findex() -> Result<(), FindexErr> {
                 &new_master_key,
                 &new_label,
                 COMPACT_BATCH_SIZE,
+                ONLINE_COMPACTING,
             )
             .await?;
         master_key = new_master_key;
@@ -911,7 +916,14 @@ async fn test_graph_compacting() {
         label = Label::random(&mut rng);
         let new_master_key = KeyingMaterial::new(&mut rng);
         findex
-            .compact(i, &master_key, &new_master_key, &label, COMPACT_BATCH_SIZE)
+            .compact(
+                i,
+                &master_key,
+                &new_master_key,
+                &label,
+                COMPACT_BATCH_SIZE,
+                ONLINE_COMPACTING,
+            )
             .await
             .unwrap();
         master_key = new_master_key;

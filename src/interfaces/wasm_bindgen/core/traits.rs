@@ -109,32 +109,32 @@ impl FindexCallbacks<UID_LENGTH> for FindexUser {
         &mut self,
         _items: &EncryptedTable<UID_LENGTH>,
     ) -> Result<(), FindexErr> {
-        todo!("insert entry table not implemented in WASM")
+        todo!("`FindexCompact` is not implemented in WASM")
     }
 
     async fn remove_entry_table(
         &mut self,
         _entry_table_uids: &HashSet<Uid<UID_LENGTH>>,
     ) -> Result<(), FindexErr> {
-        todo!("remove entry table not implemented in WASM")
+        todo!("`FindexCompact` is not implemented in WASM")
     }
 
     async fn remove_chain_table(
         &mut self,
         _chain_table_uids: &HashSet<Uid<UID_LENGTH>>,
     ) -> Result<(), FindexErr> {
-        todo!("remove chain table not implemented in WASM")
+        todo!("`FindexCompact` is not implemented in WASM")
     }
 
     fn list_removed_locations(
         &self,
         _locations: &HashSet<crate::core::Location>,
     ) -> Result<HashSet<crate::core::Location>, FindexErr> {
-        todo!("list removed locations not implemented in WASM")
+        todo!("`FindexCompact` is not implemented in WASM")
     }
 
     async fn fetch_all_entry_table_uids(&self) -> Result<HashSet<Uid<UID_LENGTH>>, FindexErr> {
-        todo!("fetch all entry table uids not implemented in WASM")
+        todo!("`FindexCompact` is not implemented in WASM")
     }
 }
 

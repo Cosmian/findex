@@ -497,8 +497,12 @@ impl InternalFindex {
     /// - `master_key`                     : master key
     /// - `new_master_key`                 : newly generated key
     /// - `new_label`                      : newly generated label
-    /// - ˋfetch_entry_batch_sizeˋ         : number of entries to compact in one
-    ///   batch
+    /// - ˋfetch_entry_batch_sizeˋ          : number of entries to compact in
+    ///   one batch
+    /// - `online_compacting`               : Use `online_compacting` to allow
+    ///   search operations during compacting. The entry table will double in
+    ///   size during this step. upsert operations remain unavailable while
+    ///   compacting.
     ///
     /// `num_reindexing_before_full_set`: if you compact the
     /// indexes every night this is the number of days to wait before
@@ -511,6 +515,7 @@ impl InternalFindex {
         new_master_key: &MasterKeyPy,
         new_label: &LabelPy,
         fetch_entry_batch_size: usize,
+        online_compacting: bool,
     ) -> PyResult<()> {
         block_on(self.compact(
             num_reindexing_before_full_set,
@@ -518,6 +523,7 @@ impl InternalFindex {
             &new_master_key.0,
             &new_label.0,
             fetch_entry_batch_size,
+            online_compacting,
         ))
         .map_err(PyErr::from)
     }

@@ -392,6 +392,11 @@ pub unsafe extern "C" fn h_upsert(
 /// - `new_master_key`                  : new Findex master key
 /// - `label`                           : additional information used to derive
 ///   Entry Table UIDs
+/// - `fetch_entry_batch_size`          : number of entries to compact in one
+///   batch
+/// - `online_compacting`               : Use `online_compacting` to allow
+///   search operations during compacting. The entry table will double in size
+///   during this step. upsert operations remain unavailable while
 /// - `fetch_entry`                     : callback used to fetch the Entry Table
 /// - `fetch_chain`                     : callback used to fetch the Chain Table
 /// - `update_lines`                    : callback used to update lines in both
@@ -411,6 +416,7 @@ pub unsafe extern "C" fn h_compact(
     label_ptr: *const u8,
     label_len: c_int,
     fetch_entry_batch_size: c_int,
+    online_compacting: c_int,
     fetch_all_entry_table_uids: FetchAllEntryTableUidsCallback,
     fetch_entry: FetchEntryTableCallback,
     fetch_chain: FetchChainTableCallback,
@@ -480,7 +486,8 @@ pub unsafe extern "C" fn h_compact(
         &master_key,
         &new_master_key,
         &label,
-        fetch_entry_batch_size
+        fetch_entry_batch_size,
+        online_compacting == 1
     )));
 
     0

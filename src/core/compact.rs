@@ -60,9 +60,17 @@ pub trait FindexCompact<
     ///   index
     /// - `ˋfetch_entry_batch_sizeˋ`         : number of entries to compact in
     ///   one batch
+    /// - `online_compacting`               : Use `online_compacting` to allow
+    ///   search operations during compacting. The entry table will double in
+    ///   size during this step. upsert operations remain unavailable while
+    ///   compacting.
     ///
     /// **WARNING**: the compact operation *cannot* be done concurrently with
     /// upsert operations. This could result in corrupted indexes.
+    /// **WARNING**: the label given to the compact operation should be
+    /// different from the one used to derive UIDs of the old Entry Table.
+    /// **WARNING**: sharing the new label to other users is the responsibility
+    /// of the user performing the compact.
     async fn compact(
         &mut self,
         num_reindexing_before_full_set: u32,
@@ -70,6 +78,7 @@ pub trait FindexCompact<
         new_master_key: &KeyingMaterial<MASTER_KEY_LENGTH>,
         label: &Label,
         fetch_entry_batch_size: usize,
+        online_compacting: bool,
     ) -> Result<(), FindexErr> {
         if num_reindexing_before_full_set == 0 {
             return Err(FindexErr::CryptoError(
@@ -111,7 +120,6 @@ pub trait FindexCompact<
             let slice_end = min(i + fetch_entry_batch_size, all_uids_vec.len());
             let batch_entry_table_uids: HashSet<Uid<UID_LENGTH>> =
                 all_uids_vec[i..slice_end].iter().cloned().collect();
-            println!("batch loop: {i}, slice: {batch_entry_table_uids:?}");
 
             self.compact_subroutine(
                 batch_entry_table_uids,
@@ -120,6 +128,7 @@ pub trait FindexCompact<
                 &new_k_uid,
                 &new_k_value,
                 label,
+                online_compacting,
             )
             .await?;
         }
@@ -135,6 +144,7 @@ pub trait FindexCompact<
     /// - `new_k_uid`                   : K uid of the new master key
     /// - `new_k_value`                 : K value of the new master key
     /// - `label`                       : label used to generate the new index
+    #[allow(clippy::too_many_arguments)]
     async fn compact_subroutine(
         &mut self,
         batch_entry_table_uids: HashSet<Uid<UID_LENGTH>>,
@@ -143,6 +153,7 @@ pub trait FindexCompact<
         new_k_uid: &KmacKey,
         new_k_value: &<DemScheme as Dem<DEM_KEY_LENGTH>>::Key,
         label: &Label,
+        online_compacting: bool,
     ) -> Result<(), FindexErr> {
         let mut rng = CsRng::from_entropy();
 
@@ -277,15 +288,26 @@ pub trait FindexCompact<
         entry_table.retain(|uid, _| !entry_table_uids_to_drop.contains(uid));
         entry_table.refresh_uids::<KMAC_KEY_LENGTH, KmacKey>(new_k_uid, label);
 
-        // Call the callback
-        self.update_lines(
-            batch_entry_table_uids,
-            chain_table_uids_to_remove,
-            entry_table
-                .encrypt::<BLOCK_LENGTH, DEM_KEY_LENGTH, DemScheme>(new_k_value, &mut rng)?,
-            chain_table_adds,
-        )
-        .await?;
+        // Update values in the tables
+        if online_compacting {
+            self.online_compact_tables(
+                batch_entry_table_uids,
+                chain_table_uids_to_remove,
+                entry_table
+                    .encrypt::<BLOCK_LENGTH, DEM_KEY_LENGTH, DemScheme>(new_k_value, &mut rng)?,
+                chain_table_adds,
+            )
+            .await?;
+        } else {
+            self.offline_compact_tables(
+                batch_entry_table_uids,
+                chain_table_uids_to_remove,
+                entry_table
+                    .encrypt::<BLOCK_LENGTH, DEM_KEY_LENGTH, DemScheme>(new_k_value, &mut rng)?,
+                chain_table_adds,
+            )
+            .await?;
+        }
 
         Ok(())
     }
@@ -342,52 +364,21 @@ pub trait FindexCompact<
 
     /// Updates the indexes with the given data.
     ///
-    /// **WARNING**: concurrent upsert operation should not be performed.
+    /// Offline implementation: keeps the Entry Table small but prevents using
+    /// the index during the entire operation.
     ///
-    /// # Description
-    ///
-    /// - removes all the Entry Table;
-    /// - adds `new_encrypted_entry_table_items` to the Entry Table;
-    /// - removes `chain_table_uids_to_remove` from the Chain Table;
-    /// - adds `new_encrypted_chain_table_items` to the Chain Table.
-    ///
-    /// The order of these operations is not important but has some
-    /// implications.
-    ///
-    /// ## Option 1
-    ///
-    /// Keeps the Entry Table small but prevents using the index during the
-    /// entire operation.
-    ///
-    /// 1. removes all the Entry Table;
+    /// 1. removes all lines in Entry Table of the current batch;
     /// 2. removes `chain_table_uids_to_remove` from the Chain Table;
     /// 3. inserts `new_chain_table_items` into the Chain Table;
     /// 4. inserts `new_entry_table_items` into the Entry Table.
     ///
-    /// ## Option 2
-    ///
-    /// Increases the size of the Entry Table during the update up to two times
-    /// its original size (when not enough locations have been removed to allow
-    /// removing an entire chain) but allows users to continue searching the
-    /// index.
-    ///
-    /// **WARNING**: the label given to the compact operation should be
-    /// different from the one used to derive UIDs of the old Entry Table.
-    ///
-    /// 1. saves all Entry Table UIDs;
-    /// 2. inserts `new_chain_table_items` into the Chain Table;
-    /// 3. inserts `new_entry_table_items` into the Entry Table;
-    /// 4. publishes the new label;
-    /// 5. removes the lines which UID has been saved in (1) from the Entry
-    /// Table;
-    /// 6. removes `chain_table_uids_to_remove` from the Chain Table.
-    ///
     /// # Parameters
     ///
+    /// - `entry_table_uids_to_remove`  : UIDs to remove from the Entry Table
     /// - `chain_table_uids_to_remove`  : UIDs to remove from the Chain Table
-    /// - `new_entry_table_items`       : new Entry Table
+    /// - `new_entry_table_items`       : items to insert into the Entry Table
     /// - `new_chain_table_items`       : items to insert into the Chain Table
-    async fn update_lines(
+    async fn offline_compact_tables(
         &mut self,
         entry_table_uids_to_remove: HashSet<Uid<UID_LENGTH>>,
         chain_table_uids_to_remove: HashSet<Uid<UID_LENGTH>>,
@@ -399,6 +390,43 @@ pub trait FindexCompact<
 
         self.insert_chain_table(&new_chain_table_items).await?;
         self.insert_entry_table(&new_entry_table_items).await?;
+
+        Ok(())
+    }
+
+    /// Updates the indexes with the given data.
+    ///
+    /// Online implementation: increases the size of the Entry Table during the
+    /// update up to two times its original size (when not enough locations
+    /// have been removed to allow removing an entire chain) but allows
+    /// users to continue searching the index.
+    ///
+    /// 1. inserts `new_chain_table_items` into the Chain Table;
+    /// 2. inserts `new_entry_table_items` into the Entry Table;
+    /// -- from now on, the new label must have been sent to the other users --
+    /// 3. removes the Entry Table lines which have been processed in the
+    /// current batch (`entry_table_uids_to_remove`);
+    /// 4. removes `chain_table_uids_to_remove` from the Chain Table.
+    ///
+    /// # Parameters
+    ///
+    /// - `entry_table_uids_to_remove`  : UIDs to remove from the Entry Table
+    /// - `chain_table_uids_to_remove`  : UIDs to remove from the Chain Table
+    /// - `new_entry_table_items`       : items to insert into the Entry Table
+    /// - `new_chain_table_items`       : items to insert into the Chain Table
+    async fn online_compact_tables(
+        &mut self,
+        entry_table_uids_to_remove: HashSet<Uid<UID_LENGTH>>,
+        chain_table_uids_to_remove: HashSet<Uid<UID_LENGTH>>,
+        new_entry_table_items: EncryptedTable<UID_LENGTH>,
+        new_chain_table_items: EncryptedTable<UID_LENGTH>,
+    ) -> Result<(), FindexErr> {
+        self.insert_chain_table(&new_chain_table_items).await?;
+        self.insert_entry_table(&new_entry_table_items).await?;
+
+        // TODO: remove outside of batch
+        self.remove_entry_table(&entry_table_uids_to_remove).await?;
+        self.remove_chain_table(&chain_table_uids_to_remove).await?;
 
         Ok(())
     }
