@@ -108,14 +108,24 @@ impl FindexCallbacks<UID_LENGTH> for RusqliteFindex<'_> {
         Ok(())
     }
 
-    fn update_lines(
+    async fn insert_entry_table(
         &mut self,
-        _entry_table_uids_to_remove: HashSet<Uid<UID_LENGTH>>,
-        _chain_table_uids_to_remove: HashSet<Uid<UID_LENGTH>>,
-        _new_encrypted_entry_table_items: EncryptedTable<UID_LENGTH>,
-        _new_encrypted_chain_table_items: EncryptedTable<UID_LENGTH>,
+        _items: &EncryptedTable<UID_LENGTH>,
     ) -> Result<(), FindexErr> {
-        // TODO (TBZ): `FindexCompact` is not implemented for `RusqliteFindex`.
+        todo!("`FindexCompact` is not implemented for `RusqliteFindex`")
+    }
+
+    async fn remove_entry_table(
+        &mut self,
+        _entry_table_uids: &HashSet<Uid<UID_LENGTH>>,
+    ) -> Result<(), FindexErr> {
+        todo!("`FindexCompact` is not implemented for `RusqliteFindex`")
+    }
+
+    async fn remove_chain_table(
+        &mut self,
+        _entry_chain_uids: &HashSet<Uid<UID_LENGTH>>,
+    ) -> Result<(), FindexErr> {
         todo!("`FindexCompact` is not implemented for `RusqliteFindex`")
     }
 

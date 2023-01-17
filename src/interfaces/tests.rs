@@ -129,7 +129,7 @@ impl<const UID_LENGTH: usize> FindexCallbacks<UID_LENGTH> for FindexTest<UID_LEN
         &mut self,
         items: &EncryptedTable<UID_LENGTH>,
     ) -> Result<(), FindexErr> {
-        println!("Insert {} itemps in the Chain Table", items.len());
+        println!("Insert {} items in the Chain Table", items.len());
         for (uid, value) in items.iter() {
             if self.chain_table.contains_key(uid) {
                 return Err(FindexErr::CallBack(format!(
@@ -141,46 +141,49 @@ impl<const UID_LENGTH: usize> FindexCallbacks<UID_LENGTH> for FindexTest<UID_LEN
         Ok(())
     }
 
-    fn update_lines(
+    async fn insert_entry_table(
         &mut self,
-        entry_table_uids_to_remove: HashSet<Uid<UID_LENGTH>>,
-        chain_table_uids_to_remove: HashSet<Uid<UID_LENGTH>>,
-        new_encrypted_entry_table_items: EncryptedTable<UID_LENGTH>,
-        new_encrypted_chain_table_items: EncryptedTable<UID_LENGTH>,
+        items: &EncryptedTable<UID_LENGTH>,
+    ) -> Result<(), FindexErr> {
+        println!("Insert {} items in the Entry Table", items.len());
+        for (uid, value) in items.iter() {
+            if self.entry_table.contains_key(uid) {
+                return Err(FindexErr::CallBack(format!(
+                    "Conflict in Entry Table for UID: {uid:?}"
+                )));
+            }
+            self.entry_table.insert(uid.clone(), value.clone());
+        }
+        Ok(())
+    }
+
+    async fn remove_entry_table(
+        &mut self,
+        entry_table_uids: &HashSet<Uid<UID_LENGTH>>,
     ) -> Result<(), FindexErr> {
         println!(
-            "Remove {} items from the Chain Table",
-            chain_table_uids_to_remove.len()
+            "Remove {} items from the Entry Table",
+            entry_table_uids.len()
         );
+
+        for removed_entry_table_uid in entry_table_uids {
+            self.entry_table.remove(removed_entry_table_uid);
+        }
+
+        Ok(())
+    }
+
+    async fn remove_chain_table(
+        &mut self,
+        chain_table_uids: &HashSet<Uid<UID_LENGTH>>,
+    ) -> Result<(), FindexErr> {
         println!(
-            "Insert {} items to the Chain Table",
-            new_encrypted_chain_table_items.len()
-        );
-        println!(
-            "Insert {} items to the Entry Table",
-            new_encrypted_entry_table_items.len()
+            "Remove {} items from the Entry Table",
+            chain_table_uids.len()
         );
 
-        for removed_entry_table_uid in entry_table_uids_to_remove {
-            self.entry_table.remove(&removed_entry_table_uid);
-        }
-
-        for new_encrypted_entry_table_item in new_encrypted_entry_table_items.iter() {
-            self.entry_table.insert(
-                new_encrypted_entry_table_item.0.clone(),
-                new_encrypted_entry_table_item.1.clone(),
-            );
-        }
-
-        for new_encrypted_chain_table_item in new_encrypted_chain_table_items.iter() {
-            self.chain_table.insert(
-                new_encrypted_chain_table_item.0.clone(),
-                new_encrypted_chain_table_item.1.clone(),
-            );
-        }
-
-        for removed_chain_table_uid in chain_table_uids_to_remove {
-            self.chain_table.remove(&removed_chain_table_uid);
+        for removed_chain_table_uid in chain_table_uids {
+            self.chain_table.remove(removed_chain_table_uid);
         }
 
         Ok(())

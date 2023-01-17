@@ -95,6 +95,16 @@ pub type UpsertEntryTableCallback = extern "C" fn(
     entries_len: c_uint,
 ) -> c_int;
 
+/// See [`FindexCallbacks::insert_entry_table()`](crate::core::FindexCallbacks::insert_entry_table).
+///
+/// # Serialization
+///
+/// The input is serialized as follows:
+///
+/// `LEB128(n_lines) || UID_1 || LEB128(value_1.len() || value_1 || ...`
+pub type InsertEntryTableCallback =
+    extern "C" fn(entries_ptr: *const c_uchar, entries_len: c_uint) -> c_int;
+
 /// See [`FindexCallbacks::insert_chain_table()`](crate::core::FindexCallbacks::insert_chain_table).
 ///
 /// # Serialization
@@ -105,27 +115,25 @@ pub type UpsertEntryTableCallback = extern "C" fn(
 pub type InsertChainTableCallback =
     extern "C" fn(chains_ptr: *const c_uchar, chains_len: c_uint) -> c_int;
 
-/// See [`FindexCallbacks::update_lines()`](crate::core::FindexCallbacks::update_lines).
+/// See [`FindexCallbacks::remove_entry_table()`](crate::core::FindexCallbacks::remove_entry_table).
 ///
 /// # Serialization
 ///
-/// The removed Chain Table UIDs are serialized as follows:
+/// The input is serialized as follows:
 ///
 /// `LEB128(n_uids) || UID_1 || ...`
+pub type RemoveEntryTableCallback =
+    extern "C" fn(entries_ptr: *const c_uchar, entries_len: c_uint) -> c_int;
+
+/// See [`FindexCallbacks::remove_chain_table()`](crate::core::FindexCallbacks::remove_chain_table).
 ///
-/// The new table items are serialized as follows:
+/// # Serialization
 ///
-/// `LEB128(n_items) || UID_1 || LEB128(value_1.len()) || value_1 || ...`
-pub type UpdateLinesCallback = extern "C" fn(
-    entry_table_uids_to_remove_ptr: *const c_uchar,
-    entry_table_uids_to_remove_len: c_uint,
-    chain_table_uids_to_remove_ptr: *const c_uchar,
-    chain_table_uids_to_remove_len: c_uint,
-    new_encrypted_entry_table_items_ptr: *const c_uchar,
-    new_encrypted_entry_table_items_len: c_uint,
-    new_encrypted_chain_table_items_ptr: *const c_uchar,
-    new_encrypted_chain_table_items_len: c_uint,
-) -> c_int;
+/// The input is serialized as follows:
+///
+/// `LEB128(n_uids) || UID_1 || ...`
+pub type RemoveChainTableCallback =
+    extern "C" fn(chains_ptr: *const c_uchar, chains_len: c_uint) -> c_int;
 
 /// See
 /// [`FindexCallbacks::list_removed_locations()`](crate::core::FindexCallbacks::list_removed_locations).

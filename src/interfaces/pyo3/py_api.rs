@@ -31,8 +31,10 @@ pub struct InternalFindex {
     fetch_entry: PyObject,
     fetch_chain: PyObject,
     upsert_entry: PyObject,
+    insert_entry: PyObject,
     insert_chain: PyObject,
-    update_lines: PyObject,
+    remove_entry: PyObject,
+    remove_chain: PyObject,
     list_removed_locations: PyObject,
     progress_callback: PyObject,
     fetch_all_entry_table_uids: PyObject,
@@ -199,54 +201,6 @@ impl FindexCallbacks<UID_LENGTH> for InternalFindex {
         })
     }
 
-    fn update_lines(
-        &mut self,
-        entry_table_uids_to_remove: HashSet<Uid<UID_LENGTH>>,
-        chain_table_uids_to_remove: HashSet<Uid<UID_LENGTH>>,
-        new_encrypted_entry_table_items: EncryptedTable<UID_LENGTH>,
-        new_encrypted_chain_table_items: EncryptedTable<UID_LENGTH>,
-    ) -> Result<(), FindexErr> {
-        Python::with_gil(|py| {
-            let py_removed_entry_uids: Vec<&PyBytes> = entry_table_uids_to_remove
-                .iter()
-                .map(|item| PyBytes::new(py, item))
-                .collect();
-
-            let py_entry_table_items = PyDict::new(py);
-            for (key, value) in new_encrypted_entry_table_items.iter() {
-                py_entry_table_items
-                    .set_item(PyBytes::new(py, key), PyBytes::new(py, value))
-                    .map_err(|e| FindexErr::ConversionError(format!("{e} (update_lines)")))?;
-            }
-
-            let py_removed_chain_uids: Vec<&PyBytes> = chain_table_uids_to_remove
-                .iter()
-                .map(|item| PyBytes::new(py, item))
-                .collect();
-
-            let py_chain_table_items = PyDict::new(py);
-            for (key, value) in new_encrypted_chain_table_items.iter() {
-                py_chain_table_items
-                    .set_item(PyBytes::new(py, key), PyBytes::new(py, value))
-                    .map_err(|e| FindexErr::ConversionError(format!("{e} (update_lines)")))?;
-            }
-
-            self.update_lines
-                .call1(
-                    py,
-                    (
-                        py_removed_entry_uids,
-                        py_removed_chain_uids,
-                        py_entry_table_items,
-                        py_chain_table_items,
-                    ),
-                )
-                .map_err(|e| FindexErr::CallBack(format!("{e} (update_lines)")))?;
-
-            Ok(())
-        })
-    }
-
     fn list_removed_locations(
         &self,
         locations: &HashSet<Location>,
@@ -268,6 +222,58 @@ impl FindexCallbacks<UID_LENGTH> for InternalFindex {
                 .iter()
                 .map(|bytes| Location::from(*bytes))
                 .collect())
+        })
+    }
+
+    async fn insert_entry_table(
+        &mut self,
+        items: &EncryptedTable<UID_LENGTH>,
+    ) -> Result<(), FindexErr> {
+        Python::with_gil(|py| {
+            let py_entry_table_items = PyDict::new(py);
+            for (key, value) in items.iter() {
+                py_entry_table_items
+                    .set_item(PyBytes::new(py, key), PyBytes::new(py, value))
+                    .map_err(|e| FindexErr::ConversionError(format!("{e} (insert_entry)")))?;
+            }
+
+            self.insert_entry
+                .call1(py, (py_entry_table_items,))
+                .map_err(|e| FindexErr::CallBack(format!("{e} (insert_entry)")))?;
+
+            Ok(())
+        })
+    }
+
+    async fn remove_entry_table(
+        &mut self,
+        items: &HashSet<Uid<UID_LENGTH>>,
+    ) -> Result<(), FindexErr> {
+        Python::with_gil(|py| {
+            let py_removed_entry_uids: Vec<&PyBytes> =
+                items.iter().map(|item| PyBytes::new(py, item)).collect();
+
+            self.remove_entry
+                .call1(py, (py_removed_entry_uids,))
+                .map_err(|e| FindexErr::CallBack(format!("{e} (remove_entry)")))?;
+
+            Ok(())
+        })
+    }
+
+    async fn remove_chain_table(
+        &mut self,
+        items: &HashSet<Uid<UID_LENGTH>>,
+    ) -> Result<(), FindexErr> {
+        Python::with_gil(|py| {
+            let py_removed_chain_uids: Vec<&PyBytes> =
+                items.iter().map(|item| PyBytes::new(py, item)).collect();
+
+            self.remove_chain
+                .call1(py, (py_removed_chain_uids,))
+                .map_err(|e| FindexErr::CallBack(format!("{e} (remove_chain)")))?;
+
+            Ok(())
         })
     }
 }
@@ -335,8 +341,10 @@ impl InternalFindex {
             fetch_entry: default_callback.clone(),
             fetch_chain: default_callback.clone(),
             upsert_entry: default_callback.clone(),
+            insert_entry: default_callback.clone(),
             insert_chain: default_callback.clone(),
-            update_lines: default_callback.clone(),
+            remove_entry: default_callback.clone(),
+            remove_chain: default_callback.clone(),
             list_removed_locations: default_callback.clone(),
             progress_callback: default_callback.clone(),
             fetch_all_entry_table_uids: default_callback,
@@ -370,17 +378,24 @@ impl InternalFindex {
     }
 
     /// Sets the required callbacks to implement [`FindexCompact`].
+    #[allow(clippy::too_many_arguments)]
     pub fn set_compact_callbacks(
         &mut self,
         fetch_entry: PyObject,
         fetch_chain: PyObject,
-        update_lines: PyObject,
+        insert_entry: PyObject,
+        insert_chain: PyObject,
+        remove_entry: PyObject,
+        remove_chain: PyObject,
         list_removed_locations: PyObject,
         fetch_all_entry_table_uids: PyObject,
     ) {
         self.fetch_entry = fetch_entry;
         self.fetch_chain = fetch_chain;
-        self.update_lines = update_lines;
+        self.insert_entry = insert_entry;
+        self.insert_chain = insert_chain;
+        self.remove_entry = remove_entry;
+        self.remove_chain = remove_chain;
         self.list_removed_locations = list_removed_locations;
         self.fetch_all_entry_table_uids = fetch_all_entry_table_uids;
     }

@@ -284,7 +284,8 @@ pub trait FindexCompact<
             entry_table
                 .encrypt::<BLOCK_LENGTH, DEM_KEY_LENGTH, DemScheme>(new_k_value, &mut rng)?,
             chain_table_adds,
-        )?;
+        )
+        .await?;
 
         Ok(())
     }
@@ -337,5 +338,68 @@ pub trait FindexCompact<
         }
 
         Ok(chains)
+    }
+
+    /// Updates the indexes with the given data.
+    ///
+    /// **WARNING**: concurrent upsert operation should not be performed.
+    ///
+    /// # Description
+    ///
+    /// - removes all the Entry Table;
+    /// - adds `new_encrypted_entry_table_items` to the Entry Table;
+    /// - removes `chain_table_uids_to_remove` from the Chain Table;
+    /// - adds `new_encrypted_chain_table_items` to the Chain Table.
+    ///
+    /// The order of these operations is not important but has some
+    /// implications.
+    ///
+    /// ## Option 1
+    ///
+    /// Keeps the Entry Table small but prevents using the index during the
+    /// entire operation.
+    ///
+    /// 1. removes all the Entry Table;
+    /// 2. removes `chain_table_uids_to_remove` from the Chain Table;
+    /// 3. inserts `new_chain_table_items` into the Chain Table;
+    /// 4. inserts `new_entry_table_items` into the Entry Table.
+    ///
+    /// ## Option 2
+    ///
+    /// Increases the size of the Entry Table during the update up to two times
+    /// its original size (when not enough locations have been removed to allow
+    /// removing an entire chain) but allows users to continue searching the
+    /// index.
+    ///
+    /// **WARNING**: the label given to the compact operation should be
+    /// different from the one used to derive UIDs of the old Entry Table.
+    ///
+    /// 1. saves all Entry Table UIDs;
+    /// 2. inserts `new_chain_table_items` into the Chain Table;
+    /// 3. inserts `new_entry_table_items` into the Entry Table;
+    /// 4. publishes the new label;
+    /// 5. removes the lines which UID has been saved in (1) from the Entry
+    /// Table;
+    /// 6. removes `chain_table_uids_to_remove` from the Chain Table.
+    ///
+    /// # Parameters
+    ///
+    /// - `chain_table_uids_to_remove`  : UIDs to remove from the Chain Table
+    /// - `new_entry_table_items`       : new Entry Table
+    /// - `new_chain_table_items`       : items to insert into the Chain Table
+    async fn update_lines(
+        &mut self,
+        entry_table_uids_to_remove: HashSet<Uid<UID_LENGTH>>,
+        chain_table_uids_to_remove: HashSet<Uid<UID_LENGTH>>,
+        new_entry_table_items: EncryptedTable<UID_LENGTH>,
+        new_chain_table_items: EncryptedTable<UID_LENGTH>,
+    ) -> Result<(), FindexErr> {
+        self.remove_entry_table(&entry_table_uids_to_remove).await?;
+        self.remove_chain_table(&chain_table_uids_to_remove).await?;
+
+        self.insert_chain_table(&new_chain_table_items).await?;
+        self.insert_entry_table(&new_entry_table_items).await?;
+
+        Ok(())
     }
 }

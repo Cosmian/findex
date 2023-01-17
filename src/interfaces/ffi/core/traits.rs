@@ -148,39 +148,47 @@ impl FindexCallbacks<UID_LENGTH> for FindexUser {
         Ok(())
     }
 
-    fn update_lines(
+    async fn insert_entry_table(
         &mut self,
-        entry_table_uids_to_remove: HashSet<Uid<UID_LENGTH>>,
-        chain_table_uids_to_remove: HashSet<Uid<UID_LENGTH>>,
-        new_encrypted_entry_table_items: EncryptedTable<UID_LENGTH>,
-        new_encrypted_chain_table_items: EncryptedTable<UID_LENGTH>,
+        items: &EncryptedTable<UID_LENGTH>,
     ) -> Result<(), FindexErr> {
-        let update_lines = unwrap_callback!(self, update_lines);
+        let insert_entry = unwrap_callback!(self, insert_entry);
 
-        let serialized_entry_table_uids_to_remove = serialize_set(&entry_table_uids_to_remove)?;
-        let serialized_chain_table_uids_to_remove = serialize_set(&chain_table_uids_to_remove)?;
-        let serialized_new_encrypted_entry_table_items =
-            new_encrypted_entry_table_items.try_to_bytes()?;
-        let serialized_new_encrypted_chain_table_items =
-            new_encrypted_chain_table_items.try_to_bytes()?;
+        // Callback input
+        let serialized_items = items.try_to_bytes()?;
 
-        let error_code = update_lines(
-            serialized_entry_table_uids_to_remove.as_ptr(),
-            u32::try_from(serialized_entry_table_uids_to_remove.len())?,
-            serialized_chain_table_uids_to_remove.as_ptr(),
-            u32::try_from(serialized_chain_table_uids_to_remove.len())?,
-            serialized_new_encrypted_entry_table_items.as_ptr(),
-            u32::try_from(serialized_new_encrypted_entry_table_items.len())?,
-            serialized_new_encrypted_chain_table_items.as_ptr(),
-            u32::try_from(serialized_new_encrypted_chain_table_items.len())?,
-        );
+        // FFI callback
+        insert_entry(serialized_items.as_ptr(), serialized_items.len() as u32);
 
-        if error_code != ErrorCode::Success as i32 {
-            return Err(FindexErr::CallbackErrorCode {
-                name: "update lines",
-                code: error_code,
-            });
-        }
+        Ok(())
+    }
+
+    async fn remove_entry_table(
+        &mut self,
+        entry_table_uids: &HashSet<Uid<UID_LENGTH>>,
+    ) -> Result<(), FindexErr> {
+        let remove_entry = unwrap_callback!(self, remove_entry);
+
+        // Callback input
+        let serialized_uids = serialize_set(entry_table_uids)?;
+
+        // FFI callback
+        remove_entry(serialized_uids.as_ptr(), serialized_uids.len() as u32);
+
+        Ok(())
+    }
+
+    async fn remove_chain_table(
+        &mut self,
+        entry_table_uids: &HashSet<Uid<UID_LENGTH>>,
+    ) -> Result<(), FindexErr> {
+        let remove_chain = unwrap_callback!(self, remove_chain);
+
+        // Callback input
+        let serialized_uids = serialize_set(entry_table_uids)?;
+
+        // FFI callback
+        remove_chain(serialized_uids.as_ptr(), serialized_uids.len() as u32);
 
         Ok(())
     }

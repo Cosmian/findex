@@ -116,6 +116,16 @@ class FindexHashmap:
                 raise KeyError('Conflict in Chain Table for UID: {uid}')
             self.chain_table[uid] = entries[uid]
 
+    def remove_entry(self, entry_uids: List[bytes]) -> None:
+        """Remove entries from Entry Table."""
+        for uid in entry_uids:
+            del self.entry_table[uid]
+
+    def remove_chain(self, chain_uids: List[bytes]) -> None:
+        """Remove entries from Chain Table."""
+        for uid in chain_uids:
+            del self.chain_table[uid]
+
     def progress_callback(self, _):
         return True
 
@@ -125,27 +135,6 @@ class FindexHashmap:
             if not uid in self.db:
                 res.append(uid)
         return res
-
-    def update_lines(
-        self,
-        entry_table_uids_to_remove: List[bytes],
-        chain_table_uids_to_remove: List[bytes],
-        new_encrypted_entry_table_items: Dict[bytes, bytes],
-        new_encrypted_chain_table_items: Dict[bytes, bytes],
-    ) -> None:
-        # remove entries from entry table
-        for uid in entry_table_uids_to_remove:
-            del self.entry_table[uid]
-
-        # remove entries from chain table
-        for uid in chain_table_uids_to_remove:
-            del self.chain_table[uid]
-
-        # insert new chains
-        self.insert_chain(new_encrypted_chain_table_items)
-
-        # insert newly encrypted entries
-        self.insert_entry(new_encrypted_entry_table_items)
 
 
 class TestFindex(unittest.TestCase):
@@ -261,7 +250,10 @@ class TestFindex(unittest.TestCase):
         self.findex_interface.set_compact_callbacks(
             self.findex_backend.fetch_entry,
             self.findex_backend.fetch_chain,
-            self.findex_backend.update_lines,
+            self.findex_backend.insert_entry,
+            self.findex_backend.insert_chain,
+            self.findex_backend.remove_entry,
+            self.findex_backend.remove_chain,
             self.findex_backend.list_removed_locations,
             self.findex_backend.fetch_all_entry_table_uids,
         )

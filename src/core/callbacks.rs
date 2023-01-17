@@ -81,6 +81,21 @@ pub trait FindexCallbacks<const UID_LENGTH: usize> {
         items: &UpsertData<UID_LENGTH>,
     ) -> Result<EncryptedTable<UID_LENGTH>, FindexErr>;
 
+    /// Inserts the given lines into the Entry Table.
+    ///
+    /// # Error
+    ///
+    /// This should return an error if a line with the same UID as one of the
+    /// lines given already exists as this means that the index is corrupted.
+    ///
+    /// # Parameters
+    ///
+    /// - `items`   : items to be inserted
+    async fn insert_entry_table(
+        &mut self,
+        items: &EncryptedTable<UID_LENGTH>,
+    ) -> Result<(), FindexErr>;
+
     /// Inserts the given lines into the Chain Table.
     ///
     /// # Error
@@ -96,60 +111,32 @@ pub trait FindexCallbacks<const UID_LENGTH: usize> {
         items: &EncryptedTable<UID_LENGTH>,
     ) -> Result<(), FindexErr>;
 
-    /// Updates the indexes with the given data.
+    /// Removes entries from the Entry Table.
     ///
-    /// **WARNING**: concurrent upsert operation should not be performed.
+    /// # Error
     ///
-    /// # Description
-    ///
-    /// - removes all the Entry Table;
-    /// - adds `new_encrypted_entry_table_items` to the Entry Table;
-    /// - removes `chain_table_uids_to_remove` from the Chain Table;
-    /// - adds `new_encrypted_chain_table_items` to the Chain Table.
-    ///
-    /// The order of these operations is not important but has some
-    /// implications.
-    ///
-    /// ## Option 1
-    ///
-    /// Keeps the Entry Table small but prevents using the index during the
-    /// entire operation.
-    ///
-    /// 1. removes all the Entry Table;
-    /// 2. removes `chain_table_uids_to_remove` from the Chain Table;
-    /// 3. inserts `new_chain_table_items` into the Chain Table;
-    /// 4. inserts `new_entry_table_items` into the Entry Table.
-    ///
-    /// ## Option 2
-    ///
-    /// Increases the size of the Entry Table during the update up to two times
-    /// its original size (when not enough locations have been removed to allow
-    /// removing an entire chain) but allows users to continue searching the
-    /// index.
-    ///
-    /// **WARNING**: the label given to the compact operation should be
-    /// different from the one used to derive UIDs of the old Entry Table.
-    ///
-    /// 1. saves all Entry Table UIDs;
-    /// 2. inserts `new_chain_table_items` into the Chain Table;
-    /// 3. inserts `new_entry_table_items` into the Entry Table;
-    /// // TODO (TBZ): the new label is not an input
-    /// 4. publishes the new label;
-    /// 5. removes the lines which UID has been saved in (1) from the Entry
-    /// Table;
-    /// 6. removes `chain_table_uids_to_remove` from the Chain Table.
+    /// This should return an error if the line to removed is not found.
     ///
     /// # Parameters
     ///
-    /// - `chain_table_uids_to_remove`  : UIDs to remove from the Chain Table
-    /// - `new_entry_table_items`       : new Entry Table
-    /// - `new_chain_table_items`       : items to insert into the Chain Table
-    fn update_lines(
+    /// - `items`   : items to be removed
+    async fn remove_entry_table(
         &mut self,
-        entry_table_uids_to_remove: HashSet<Uid<UID_LENGTH>>,
-        chain_table_uids_to_remove: HashSet<Uid<UID_LENGTH>>,
-        new_entry_table_items: EncryptedTable<UID_LENGTH>,
-        new_chain_table_items: EncryptedTable<UID_LENGTH>,
+        items: &HashSet<Uid<UID_LENGTH>>,
+    ) -> Result<(), FindexErr>;
+
+    /// Removes entries from the Chain Table.
+    ///
+    /// # Error
+    ///
+    /// This should return an error if the line to removed is not found.
+    ///
+    /// # Parameters
+    ///
+    /// - `items`   : items to be removed
+    async fn remove_chain_table(
+        &mut self,
+        items: &HashSet<Uid<UID_LENGTH>>,
     ) -> Result<(), FindexErr>;
 
     /// Returns all locations among the ones given that do not exist anymore.

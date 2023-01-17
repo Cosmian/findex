@@ -105,14 +105,25 @@ impl FindexCallbacks<UID_LENGTH> for FindexUser {
         Ok(())
     }
 
-    fn update_lines(
+    async fn insert_entry_table(
         &mut self,
-        _entry_table_uids_to_remove: HashSet<Uid<UID_LENGTH>>,
-        _chain_table_uids_to_remove: HashSet<Uid<UID_LENGTH>>,
-        _new_encrypted_entry_table_items: EncryptedTable<UID_LENGTH>,
-        _new_encrypted_chain_table_items: EncryptedTable<UID_LENGTH>,
+        _items: &EncryptedTable<UID_LENGTH>,
     ) -> Result<(), FindexErr> {
-        todo!("update lines not implemented in WASM")
+        todo!("insert entry table not implemented in WASM")
+    }
+
+    async fn remove_entry_table(
+        &mut self,
+        _entry_table_uids: &HashSet<Uid<UID_LENGTH>>,
+    ) -> Result<(), FindexErr> {
+        todo!("remove entry table not implemented in WASM")
+    }
+
+    async fn remove_chain_table(
+        &mut self,
+        _chain_table_uids: &HashSet<Uid<UID_LENGTH>>,
+    ) -> Result<(), FindexErr> {
+        todo!("remove chain table not implemented in WASM")
     }
 
     fn list_removed_locations(

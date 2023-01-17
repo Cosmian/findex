@@ -124,7 +124,10 @@ class InternalFindex:
         self,
         fetch_entry_table: Callable,
         fetch_chain_table: Callable,
-        update_lines: Callable,
+        insert_entry: Callable,
+        insert_chain: Callable,
+        remove_entry: Callable,
+        remove_chain: Callable,
         list_removed_locations: Callable,
         fetch_all_entry_table_uids: Callable,
     ) -> None: ...

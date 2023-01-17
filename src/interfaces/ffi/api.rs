@@ -23,8 +23,9 @@ use crate::{
         ffi::{
             core::{
                 FetchChainTableCallback, FetchEntryTableCallback, FindexUser,
-                InsertChainTableCallback, ListRemovedLocationsCallback, ProgressCallback,
-                UpdateLinesCallback, UpsertEntryTableCallback,
+                InsertChainTableCallback, InsertEntryTableCallback, ListRemovedLocationsCallback,
+                ProgressCallback, RemoveChainTableCallback, RemoveEntryTableCallback,
+                UpsertEntryTableCallback,
             },
             error::{set_last_error, FfiErr},
             MAX_DEPTH,
@@ -84,8 +85,10 @@ async fn ffi_search(
         fetch_entry: Some(fetch_entry),
         fetch_chain: Some(fetch_chain),
         upsert_entry: None,
+        insert_entry: None,
         insert_chain: None,
-        update_lines: None,
+        remove_entry: None,
+        remove_chain: None,
         list_removed_locations: None,
         fetch_all_entry_table_uids: None,
     };
@@ -352,8 +355,10 @@ pub unsafe extern "C" fn h_upsert(
         fetch_entry: Some(fetch_entry),
         fetch_chain: None,
         upsert_entry: Some(upsert_entry),
+        insert_entry: None,
         insert_chain: Some(insert_chain),
-        update_lines: None,
+        remove_entry: None,
+        remove_chain: None,
         list_removed_locations: None,
         fetch_all_entry_table_uids: None,
     };
@@ -409,7 +414,10 @@ pub unsafe extern "C" fn h_compact(
     fetch_all_entry_table_uids: FetchAllEntryTableUidsCallback,
     fetch_entry: FetchEntryTableCallback,
     fetch_chain: FetchChainTableCallback,
-    update_lines: UpdateLinesCallback,
+    insert_entry: InsertEntryTableCallback,
+    insert_chain: InsertChainTableCallback,
+    remove_entry: RemoveEntryTableCallback,
+    remove_chain: RemoveChainTableCallback,
     list_removed_locations: ListRemovedLocationsCallback,
 ) -> c_int {
     let num_reindexing_before_full_set = match num_reindexing_before_full_set.try_into() {
@@ -459,8 +467,10 @@ pub unsafe extern "C" fn h_compact(
         fetch_entry: Some(fetch_entry),
         fetch_chain: Some(fetch_chain),
         upsert_entry: None,
-        insert_chain: None,
-        update_lines: Some(update_lines),
+        insert_entry: Some(insert_entry),
+        insert_chain: Some(insert_chain),
+        remove_entry: Some(remove_entry),
+        remove_chain: Some(remove_chain),
         list_removed_locations: Some(list_removed_locations),
         fetch_all_entry_table_uids: Some(fetch_all_entry_table_uids),
     };
