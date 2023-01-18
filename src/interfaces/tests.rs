@@ -21,7 +21,7 @@ use crate::{
 
 const MIN_KEYWORD_LENGTH: usize = 3;
 const COMPACT_BATCH_SIZE: usize = 2;
-const ONLINE_COMPACTING: bool = false;
+const ONLINE_COMPACTING: bool = true;
 
 #[derive(Default)]
 struct FindexTest<const UID_LENGTH: usize> {

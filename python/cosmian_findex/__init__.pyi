@@ -110,7 +110,6 @@ class InternalFindex:
     def set_upsert_callbacks(
         self,
         fetch_entry_table: Callable,
-        fetch_chain_table: Callable,
         upsert_entry_table: Callable,
         insert_chain_table: Callable,
     ) -> None: ...

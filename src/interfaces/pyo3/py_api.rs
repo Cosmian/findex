@@ -355,12 +355,10 @@ impl InternalFindex {
     pub fn set_upsert_callbacks(
         &mut self,
         fetch_entry: PyObject,
-        fetch_chain: PyObject,
         upsert_entry: PyObject,
         insert_chain: PyObject,
     ) {
         self.fetch_entry = fetch_entry;
-        self.fetch_chain = fetch_chain;
         self.upsert_entry = upsert_entry;
         self.insert_chain = insert_chain
     }

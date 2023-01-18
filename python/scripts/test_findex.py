@@ -143,8 +143,6 @@ class TestFindex(unittest.TestCase):
         self.msk = MasterKey.random()
         self.label = Label.random()
 
-        self.compact_batch_size = 2
-
         self.db = {
             b'1': ['Martin', 'Sheperd'],
             b'2': ['Martial', 'Wilkins'],
@@ -168,7 +166,6 @@ class TestFindex(unittest.TestCase):
         # Set upsert callbacks here
         self.findex_interface.set_upsert_callbacks(
             self.findex_backend.fetch_entry,
-            self.findex_backend.fetch_chain,
             self.findex_backend.upsert_entry,
             self.findex_backend.insert_chain,
         )
@@ -200,7 +197,6 @@ class TestFindex(unittest.TestCase):
     def test_graph_upsert_search(self) -> None:
         self.findex_interface.set_upsert_callbacks(
             self.findex_backend.fetch_entry,
-            self.findex_backend.fetch_chain,
             self.findex_backend.upsert_entry,
             self.findex_backend.insert_chain,
         )
@@ -234,11 +230,10 @@ class TestFindex(unittest.TestCase):
         # 2 names starting with Mar
         self.assertEqual(len(res['Mar']), 2)
 
-    def test_compact(self) -> None:
+    def compact_check(self, compact_batch_size: int, online_compacting: bool) -> None:
         # Use upsert, search and compact callbacks
         self.findex_interface.set_upsert_callbacks(
             self.findex_backend.fetch_entry,
-            self.findex_backend.fetch_chain,
             self.findex_backend.upsert_entry,
             self.findex_backend.insert_chain,
         )
@@ -270,10 +265,29 @@ class TestFindex(unittest.TestCase):
         # new_label cannot search before compacting
         self.assertEqual(len(res), 0)
 
+        # tables size should remain the same after compacting
+        self.findex_interface.compact_wrapper(
+            1,
+            self.msk,
+            self.msk,
+            new_label,
+            compact_batch_size,
+            online_compacting,
+        )
+
+        self.assertEqual(len(self.findex_backend.entry_table), 5)
+        self.assertEqual(len(self.findex_backend.chain_table), 5)
+
         # Removing 2nd db line
+        new_label = Label.random()
         del self.db[b'2']
         self.findex_interface.compact_wrapper(
-            1, self.msk, self.msk, new_label, self.compact_batch_size, False
+            1,
+            self.msk,
+            self.msk,
+            new_label,
+            compact_batch_size,
+            online_compacting,
         )
 
         # now new_label can perform search
@@ -289,6 +303,13 @@ class TestFindex(unittest.TestCase):
         )
         self.assertFalse('Martial' in res)
         self.assertFalse('Wilkins' in res)
+
+    def test_compact(self) -> None:
+        for batch_size in range(1, 7):
+            self.setUp()
+            self.compact_check(batch_size, False)
+            self.setUp()
+            self.compact_check(batch_size, True)
 
 
 if __name__ == '__main__':
