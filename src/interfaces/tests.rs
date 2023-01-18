@@ -26,6 +26,7 @@ struct FindexTest<const UID_LENGTH: usize> {
     entry_table: EncryptedTable<UID_LENGTH>,
     chain_table: EncryptedTable<UID_LENGTH>,
     removed_locations: HashSet<Location>,
+    check_progress_callback_next_keyword: bool,
 }
 
 impl<const UID_LENGTH: usize> FindexTest<UID_LENGTH> {
@@ -65,9 +66,16 @@ impl<const UID_LENGTH: usize> FindexTest<UID_LENGTH> {
 impl<const UID_LENGTH: usize> FindexCallbacks<UID_LENGTH> for FindexTest<UID_LENGTH> {
     async fn progress(
         &self,
-        _results: &HashMap<Keyword, HashSet<IndexedValue>>,
+        results: &HashMap<Keyword, HashSet<IndexedValue>>,
     ) -> Result<bool, FindexErr> {
-        // Ignore intermediate results and do not stop recursion.
+        if self.check_progress_callback_next_keyword {
+            check_search_result(
+                results,
+                &Keyword::from("rob"),
+                &IndexedValue::NextKeyword(Keyword::from("robert")),
+            );
+        }
+        // do not stop recursion.
         Ok(true)
     }
 
@@ -394,6 +402,7 @@ async fn test_findex() -> Result<(), FindexErr> {
     check_search_result(&doe_search, &doe_keyword, &john_doe_location);
 
     // search rob without graph search
+    findex.check_progress_callback_next_keyword = true;
     let rob_search = findex
         .search(
             &HashSet::from_iter(vec![rob_keyword.clone()]),
@@ -405,6 +414,7 @@ async fn test_findex() -> Result<(), FindexErr> {
             0,
         )
         .await?;
+    findex.check_progress_callback_next_keyword = false;
     check_search_result(&rob_search, &rob_keyword, &rob_location);
 
     // search rob with graph search
@@ -483,6 +493,7 @@ async fn test_findex() -> Result<(), FindexErr> {
     check_search_result(&doe_search, &doe_keyword, &john_doe_location);
 
     // search rob (no change)
+    findex.check_progress_callback_next_keyword = true;
     let rob_search = findex
         .search(
             &HashSet::from_iter(vec![rob_keyword.clone()]),
@@ -494,6 +505,7 @@ async fn test_findex() -> Result<(), FindexErr> {
             0,
         )
         .await?;
+    findex.check_progress_callback_next_keyword = false;
     check_search_result(&rob_search, &rob_keyword, &rob_location);
 
     let mut new_label = Label::random(&mut rng);

@@ -343,12 +343,10 @@ impl InternalFindex {
     pub fn set_upsert_callbacks(
         &mut self,
         fetch_entry: PyObject,
-        fetch_chain: PyObject,
         upsert_entry: PyObject,
         insert_chain: PyObject,
     ) {
         self.fetch_entry = fetch_entry;
-        self.fetch_chain = fetch_chain;
         self.upsert_entry = upsert_entry;
         self.insert_chain = insert_chain
     }
@@ -464,18 +462,22 @@ impl InternalFindex {
             0,
         ))?;
 
-        results
-            .into_iter()
-            .map(
-                |(keyword, indexed_values)| -> Result<(String, Vec<IndexedValuePy>), FindexErr> {
-                    Ok((
-                        keyword.try_into_string()?,
-                        indexed_values.into_iter().map(IndexedValuePy).collect(),
-                    ))
-                },
-            )
-            .collect::<Result<_, _>>()
-            .map_err(PyErr::from)
+        Ok(results
+            .iter()
+            .map(|(keyword, indexed_values)| {
+                (
+                    // Convert keyword to string or base64
+                    match keyword.clone().try_into_string() {
+                        Ok(s) => s,
+                        Err(_) => format!("{keyword:?}"),
+                    },
+                    indexed_values
+                        .iter()
+                        .map(|value| IndexedValuePy(value.clone()))
+                        .collect::<Vec<_>>(),
+                )
+            })
+            .collect::<HashMap<_, _>>())
     }
 
     /// Replace all the previous Index Entry Table UIDs and

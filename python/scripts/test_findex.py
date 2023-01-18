@@ -116,9 +116,6 @@ class FindexHashmap:
                 raise KeyError('Conflict in Chain Table for UID: {uid}')
             self.chain_table[uid] = entries[uid]
 
-    def progress_callback(self, _):
-        return True
-
     def list_removed_locations(self, uids: List[bytes]) -> List[bytes]:
         res = []
         for uid in uids:
@@ -175,7 +172,6 @@ class TestFindex(unittest.TestCase):
         # Set upsert callbacks here
         self.findex_interface.set_upsert_callbacks(
             self.findex_backend.fetch_entry,
-            self.findex_backend.fetch_chain,
             self.findex_backend.upsert_entry,
             self.findex_backend.insert_chain,
         )
@@ -206,7 +202,6 @@ class TestFindex(unittest.TestCase):
     def test_graph_upsert_search(self) -> None:
         self.findex_interface.set_upsert_callbacks(
             self.findex_backend.fetch_entry,
-            self.findex_backend.fetch_chain,
             self.findex_backend.upsert_entry,
             self.findex_backend.insert_chain,
         )
@@ -239,11 +234,34 @@ class TestFindex(unittest.TestCase):
         # 2 names starting with Mar
         self.assertEqual(len(res['Mar']), 2)
 
+        # Test progress callback
+        def false_progress_callback(res: Dict[str, List[IndexedValue]]):
+            self.assertEqual(len(res['Mar']), 1)
+            return False
+
+        res = self.findex_interface.search_wrapper(
+            ['Mar'], self.msk, self.label, progress_callback=false_progress_callback
+        )
+        self.assertEqual(len(res['Mar']), 0)
+
+        def early_stop_progress_callback(res: Dict[str, List[IndexedValue]]):
+            if 'Martin' in res:
+                return False
+            return True
+
+        res = self.findex_interface.search_wrapper(
+            ['Mar'],
+            self.msk,
+            self.label,
+            progress_callback=early_stop_progress_callback,
+        )
+        # Only one location found after early stopping
+        self.assertEqual(len(res['Mar']), 1)
+
     def test_compact(self) -> None:
         # Use upsert, search and compact callbacks
         self.findex_interface.set_upsert_callbacks(
             self.findex_backend.fetch_entry,
-            self.findex_backend.fetch_chain,
             self.findex_backend.upsert_entry,
             self.findex_backend.insert_chain,
         )
