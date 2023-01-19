@@ -175,7 +175,7 @@ pub trait FindexSearch<
             .await?;
 
         // Send current results (Location and NextKeyword) to the callback.
-        let continue_recursion = self.progress(&res).await?;
+        let progress_callback_flag = self.progress(&res).await?;
 
         // Stop here if there is no result
         if res.is_empty() {
@@ -200,10 +200,10 @@ pub trait FindexSearch<
             }
         }
 
-        if keyword_map.is_empty() || current_depth == max_depth {
-            // All branches have been explored or max depth is reached
-            return Ok(results);
-        }
+        // Stop recursion if progress_callback returned false or all branches have been
+        // explored or max depth is reached
+        let continue_recursion =
+            progress_callback_flag && !(keyword_map.is_empty() || current_depth == max_depth);
 
         if continue_recursion {
             // Add results from the next recursion.

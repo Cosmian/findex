@@ -191,7 +191,7 @@ class TestFindex(unittest.TestCase):
         res = self.findex_interface.search_wrapper(['Martial'], self.msk, self.label)
         self.assertEqual(len(res), 1)
         self.assertEqual(len(res['Martial']), 1)
-        self.assertEqual(res['Martial'][0].get_location(), b'2')
+        self.assertEqual(res['Martial'][0], b'2')
 
         res = self.findex_interface.search_wrapper(
             ['Sheperd', 'Wilkins'], self.msk, self.label
@@ -242,6 +242,7 @@ class TestFindex(unittest.TestCase):
         res = self.findex_interface.search_wrapper(
             ['Mar'], self.msk, self.label, progress_callback=false_progress_callback
         )
+        # no locations returned since the progress_callback stopped the recursion
         self.assertEqual(len(res['Mar']), 0)
 
         def early_stop_progress_callback(res: Dict[str, List[IndexedValue]]):
@@ -255,11 +256,11 @@ class TestFindex(unittest.TestCase):
             self.label,
             progress_callback=early_stop_progress_callback,
         )
-        # Only one location found after early stopping
+        # only one location found after early stopping
         self.assertEqual(len(res['Mar']), 1)
 
     def test_compact(self) -> None:
-        # Use upsert, search and compact callbacks
+        # use upsert, search and compact callbacks
         self.findex_interface.set_upsert_callbacks(
             self.findex_backend.fetch_entry,
             self.findex_backend.upsert_entry,
@@ -289,7 +290,7 @@ class TestFindex(unittest.TestCase):
         # new_label cannot search before compacting
         self.assertEqual(len(res), 0)
 
-        # Removing 2nd db line
+        # removing 2nd db line
         del self.db[b'2']
         self.findex_interface.compact_wrapper(1, self.msk, self.msk, new_label)
 

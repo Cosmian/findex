@@ -141,7 +141,7 @@ class InternalFindex:
         max_depth: int = 100,
         fetch_chains_batch_size: int = 0,
         progress_callback: Optional[Callable] = None,
-    ) -> Dict[str, List[IndexedValue]]: ...
+    ) -> Dict[str, List[bytes]]: ...
     def compact_wrapper(
         self,
         num_reindexing_before_full_set: int,

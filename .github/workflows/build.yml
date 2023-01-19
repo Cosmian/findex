@@ -18,6 +18,6 @@ jobs:
       branch-java: main
       branch-js: main
       branch-flutter: main
-      branch-python: main
+      branch-python: feature/update-progress_callback
       bench-features: sqlite
     secrets: inherit

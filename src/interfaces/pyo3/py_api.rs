@@ -413,6 +413,9 @@ impl InternalFindex {
     /// - `max_results_per_keyword` : maximum number of results to fetch per
     ///   keyword
     /// - `max_depth`               : maximum recursion level allowed
+    /// - `fetch_chains_batch_size` : batch size during fetch chain
+    /// - `progress_callback`       : optional callback to process intermediate
+    ///   search results.
     ///
     /// Returns: List[IndexedValue]
     // use `u32::MAX` for `max_result_per_keyword`
@@ -431,7 +434,7 @@ impl InternalFindex {
         fetch_chains_batch_size: usize,
         progress_callback: Option<PyObject>,
         py: Python,
-    ) -> PyResult<HashMap<String, Vec<IndexedValuePy>>> {
+    ) -> PyResult<HashMap<String, Vec<PyObject>>> {
         match progress_callback {
             Some(callback) => self.progress_callback = callback,
             None => {
@@ -471,9 +474,15 @@ impl InternalFindex {
                         Ok(s) => s,
                         Err(_) => format!("{keyword:?}"),
                     },
+                    // Indexed values should only be Locations
                     indexed_values
                         .iter()
-                        .map(|value| IndexedValuePy(value.clone()))
+                        .map(|value| {
+                            value
+                                .get_location()
+                                .map(|location| PyBytes::new(py, location))
+                                .into_py(py)
+                        })
                         .collect::<Vec<_>>(),
                 )
             })
