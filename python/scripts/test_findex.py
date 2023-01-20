@@ -57,7 +57,7 @@ class TestStructures(unittest.TestCase):
 class FindexHashmap:
     """Implement Findex callbacks using hashmaps"""
 
-    def __init__(self, db):
+    def __init__(self, db: Dict[bytes, List[str]]):
         self.db = db
         self.entry_table: Dict[bytes, bytes] = {}
         self.chain_table: Dict[bytes, bytes] = {}
