@@ -17,7 +17,7 @@ use crate::{
     core::{
         chain_table::{ChainTableValue, KwiChainUids},
         entry_table::EntryTable,
-        structs::{IndexedValue, Keyword, Label, Uid},
+        structs::{IndexedValue, Keyword, Label, Location, Uid},
         KeyingMaterial, CHAIN_TABLE_KEY_DERIVATION_INFO, ENTRY_TABLE_KEY_DERIVATION_INFO,
     },
     error::FindexErr,
@@ -162,7 +162,7 @@ pub trait FindexSearch<
         max_depth: usize,
         fetch_chains_batch_size: NonZeroUsize,
         current_depth: usize,
-    ) -> Result<HashMap<Keyword, HashSet<IndexedValue>>, FindexErr> {
+    ) -> Result<HashMap<Keyword, HashSet<Location>>, FindexErr> {
         // Get indexed values associated to the given keywords
         let res = self
             .non_recursive_search(
@@ -175,23 +175,17 @@ pub trait FindexSearch<
             .await?;
 
         // Send current results (Location and NextKeyword) to the callback.
-        let progress_callback_flag = self.progress(&res).await?;
-
-        // Stop here if there is no result
-        if res.is_empty() {
-            return Ok(res);
-        }
+        let continue_recursion = self.progress(&res).await?;
 
         // Sort indexed values into keywords and locations.
         let mut keyword_map = HashMap::new();
         let mut results = HashMap::new();
         for (keyword, indexed_values) in res {
-            let results_entry: &mut HashSet<IndexedValue> =
-                results.entry(keyword.clone()).or_default();
+            let results_entry: &mut HashSet<Location> = results.entry(keyword.clone()).or_default();
             for value in indexed_values {
                 match value {
                     IndexedValue::Location(_) => {
-                        results_entry.insert(value);
+                        results_entry.insert(value.try_into().unwrap());
                     }
                     IndexedValue::NextKeyword(next_keyword) => {
                         keyword_map.insert(next_keyword, keyword.clone());
@@ -200,12 +194,9 @@ pub trait FindexSearch<
             }
         }
 
-        // Stop recursion if progress_callback returned false or all branches have been
-        // explored or max depth is reached
-        let continue_recursion =
-            progress_callback_flag && !(keyword_map.is_empty() || current_depth == max_depth);
-
-        if continue_recursion {
+        // Stop recursion if `progress_callback` returned false or all branches have
+        // been explored or max depth is reached
+        if continue_recursion && !(keyword_map.is_empty() || current_depth == max_depth) {
             // Add results from the next recursion.
             for (keyword, indexed_values) in self
                 .search(

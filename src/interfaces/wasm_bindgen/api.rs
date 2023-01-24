@@ -6,7 +6,6 @@ use cosmian_crypto_core::bytes_ser_de::Serializable;
 use js_sys::{Array, Uint8Array};
 use wasm_bindgen::prelude::*;
 
-use super::core::search_results_to_js;
 use crate::{
     core::{FindexSearch, FindexUpsert, KeyingMaterial, Keyword, Label},
     interfaces::{
@@ -75,7 +74,7 @@ pub async fn webassembly_search(
         insert_chain: None,
     };
 
-    let results = wasm_search
+    let _results = wasm_search
         .search(
             &keywords,
             &master_key,
@@ -88,7 +87,8 @@ pub async fn webassembly_search(
         .await
         .map_err(|e| JsValue::from(format!("During Findex search: {e}")))?;
 
-    search_results_to_js(&results)
+    //search_results_to_js(&results)
+    todo!()
 }
 
 /// See [`FindexUpsert::upsert()`](crate::core::FindexUpsert::upsert).

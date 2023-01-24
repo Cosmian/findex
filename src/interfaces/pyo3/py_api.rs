@@ -34,6 +34,7 @@ pub struct InternalFindex {
     insert_chain: PyObject,
     update_lines: PyObject,
     list_removed_locations: PyObject,
+    default_progress_callback: PyObject,
     progress_callback: PyObject,
     fetch_all_entry_table_uids: PyObject,
 }
@@ -327,6 +328,17 @@ impl InternalFindex {
         .getattr("default_callback")?
         .into();
 
+        // `progress_callback` will continue recursion by default
+        let default_progress_callback: Py<PyAny> = PyModule::from_code(
+            py,
+            "def default_progress_callback(*args, **kwargs):
+            return True",
+            "",
+            "",
+        )?
+        .getattr("default_progress_callback")?
+        .into();
+
         Ok(Self {
             fetch_entry: default_callback.clone(),
             fetch_chain: default_callback.clone(),
@@ -334,7 +346,8 @@ impl InternalFindex {
             insert_chain: default_callback.clone(),
             update_lines: default_callback.clone(),
             list_removed_locations: default_callback.clone(),
-            progress_callback: default_callback.clone(),
+            default_progress_callback: default_progress_callback.clone(),
+            progress_callback: default_progress_callback,
             fetch_all_entry_table_uids: default_callback,
         })
     }
@@ -435,20 +448,10 @@ impl InternalFindex {
         progress_callback: Option<PyObject>,
         py: Python,
     ) -> PyResult<HashMap<String, Vec<PyObject>>> {
-        match progress_callback {
-            Some(callback) => self.progress_callback = callback,
-            None => {
-                self.progress_callback = PyModule::from_code(
-                    py,
-                    "def default_progress_callback(*args, **kwargs):
-                    return True",
-                    "",
-                    "",
-                )?
-                .getattr("default_progress_callback")?
-                .into()
-            }
-        }
+        self.progress_callback = match progress_callback {
+            Some(callback) => callback,
+            None => self.default_progress_callback.clone(),
+        };
 
         let keywords_set: HashSet<Keyword> = keywords
             .iter()
@@ -474,15 +477,10 @@ impl InternalFindex {
                         Ok(s) => s,
                         Err(_) => format!("{keyword:?}"),
                     },
-                    // Indexed values should only be Locations
+                    // Convert Locations to bytes
                     indexed_values
                         .iter()
-                        .map(|value| {
-                            value
-                                .get_location()
-                                .map(|location| PyBytes::new(py, location))
-                                .into_py(py)
-                        })
+                        .map(|location| PyBytes::new(py, location).into_py(py))
                         .collect::<Vec<_>>(),
                 )
             })
