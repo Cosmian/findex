@@ -13,8 +13,8 @@ use crate::{
             MASTER_KEY_LENGTH, MAX_RESULTS_PER_KEYWORD, SECURE_FETCH_CHAINS_BATCH_SIZE,
         },
         wasm_bindgen::core::{
-            to_indexed_values_to_keywords, ArrayOfKeywords, Fetch, FindexUser,
-            IndexedValuesAndWords, Insert, Progress, SearchResults, Upsert,
+            search_results_to_js, to_indexed_values_to_keywords, ArrayOfKeywords, Fetch,
+            FindexUser, IndexedValuesAndWords, Insert, Progress, SearchResults, Upsert,
         },
     },
 };
@@ -74,7 +74,7 @@ pub async fn webassembly_search(
         insert_chain: None,
     };
 
-    let _results = wasm_search
+    let results = wasm_search
         .search(
             &keywords,
             &master_key,
@@ -87,8 +87,7 @@ pub async fn webassembly_search(
         .await
         .map_err(|e| JsValue::from(format!("During Findex search: {e}")))?;
 
-    //search_results_to_js(&results)
-    todo!()
+    search_results_to_js(&results)
 }
 
 /// See [`FindexUpsert::upsert()`](crate::core::FindexUpsert::upsert).

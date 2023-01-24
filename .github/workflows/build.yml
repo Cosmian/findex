@@ -15,9 +15,9 @@ jobs:
       toolchain: nightly-2022-10-28
       kms-version: 4.0.1
       regression-filename: sqlite.db
-      branch-java: main
-      branch-js: main
-      branch-flutter: main
+      branch-java: feature/update-progress_callback
+      branch-js: feature/update-progress_callback
+      branch-flutter: feature/update-progress_callback
       branch-python: feature/update-progress_callback
       bench-features: sqlite
     secrets: inherit

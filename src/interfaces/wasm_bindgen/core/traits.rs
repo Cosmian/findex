@@ -3,7 +3,7 @@ use std::collections::{HashMap, HashSet};
 use js_sys::{Array, Object};
 
 use super::{
-    search_results_to_js,
+    progress_results_to_js,
     utils::{
         encrypted_table_to_js_value, fetch_uids, js_value_to_encrypted_table,
         set_bytes_in_object_property,
@@ -28,7 +28,7 @@ impl FindexCallbacks<UID_LENGTH> for FindexUser {
         results: &HashMap<Keyword, HashSet<IndexedValue>>,
     ) -> Result<bool, FindexErr> {
         let progress = unwrap_callback!(self, progress);
-        let results = search_results_to_js(results)?;
+        let results = progress_results_to_js(results)?;
         let output = callback!(progress, results);
         output.as_bool().ok_or_else(|| {
             FindexErr::CallBack(format!(
