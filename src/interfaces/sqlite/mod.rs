@@ -100,8 +100,8 @@ pub async fn search(
         )
         .await?;
     let mut db_uids = Vec::with_capacity(results.len());
-    for (_, indexed_values) in results {
-        for location in indexed_values {
+    for (_, locations) in results {
+        for location in locations {
             let db_uid = String::from_utf8(location.into())
                 .map_err(|e| FindexErr::ConversionError(format!("Invalid location: {e}")))?;
             db_uids.push(db_uid);
