@@ -105,9 +105,9 @@ async fn ffi_search(
     // Serialize the results.
     let mut serializer = Serializer::new();
     serializer.write_u64(res.len() as u64)?;
-    for (keyword, indexed_values) in res {
+    for (keyword, locations) in res {
         serializer.write_vec(&keyword)?;
-        serializer.write(&SerializableSet(&indexed_values))?;
+        serializer.write(&SerializableSet(&locations))?;
     }
     Ok(serializer.finalize())
 }
@@ -142,8 +142,8 @@ async fn ffi_search(
 ///
 /// Cannot be safe since using FFI.
 pub unsafe extern "C" fn h_search(
-    indexed_values_ptr: *mut c_char,
-    indexed_values_len: *mut c_int,
+    search_results_ptr: *mut c_char,
+    search_results_len: *mut c_int,
     master_key_ptr: *const c_char,
     master_key_len: c_int,
     label_ptr: *const u8,
@@ -160,12 +160,12 @@ pub unsafe extern "C" fn h_search(
     // Check arguments
     //
     ffi_not_null!(
-        indexed_values_ptr,
-        "The IndexedValues pointer should point to pre-allocated memory"
+        search_results_ptr,
+        "The Locations pointer should point to pre-allocated memory"
     );
 
-    if *indexed_values_len <= 0 {
-        ffi_bail!("The IndexedValues length must be strictly positive");
+    if *search_results_len <= 0 {
+        ffi_bail!("The Locations length must be strictly positive");
     }
 
     let max_results_per_keyword = if max_results_per_keyword <= 0 {
@@ -234,9 +234,9 @@ pub unsafe extern "C" fn h_search(
 
     //
     // Prepare output
-    let allocated = *indexed_values_len;
+    let allocated = *search_results_len;
     let len = serialized_uids.len();
-    *indexed_values_len = len as c_int;
+    *search_results_len = len as c_int;
     if (allocated as usize) < len {
         ffi_bail!(
             "The pre-allocated IndexedValues buffer is too small; need {} bytes, allocated {}",
@@ -244,7 +244,7 @@ pub unsafe extern "C" fn h_search(
             allocated
         );
     }
-    std::slice::from_raw_parts_mut(indexed_values_ptr.cast::<u8>(), len)
+    std::slice::from_raw_parts_mut(search_results_ptr.cast::<u8>(), len)
         .copy_from_slice(&serialized_uids);
     0
 }
