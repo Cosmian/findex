@@ -34,6 +34,7 @@ pub struct InternalFindex {
     insert_chain: PyObject,
     update_lines: PyObject,
     list_removed_locations: PyObject,
+    default_progress_callback: PyObject,
     progress_callback: PyObject,
     fetch_all_entry_table_uids: PyObject,
 }
@@ -47,7 +48,10 @@ impl FindexCallbacks<UID_LENGTH> for InternalFindex {
             .iter()
             .map(|(keyword, indexed_values)| {
                 (
-                    format!("{keyword:?}"),
+                    match keyword.clone().try_into_string() {
+                        Ok(s) => s,
+                        Err(_) => format!("{keyword:?}"),
+                    },
                     indexed_values
                         .iter()
                         .map(|value| IndexedValuePy(value.clone()))
@@ -324,6 +328,17 @@ impl InternalFindex {
         .getattr("default_callback")?
         .into();
 
+        // `progress_callback` will continue recursion by default
+        let default_progress_callback: Py<PyAny> = PyModule::from_code(
+            py,
+            "def default_progress_callback(*args, **kwargs):
+            return True",
+            "",
+            "",
+        )?
+        .getattr("default_progress_callback")?
+        .into();
+
         Ok(Self {
             fetch_entry: default_callback.clone(),
             fetch_chain: default_callback.clone(),
@@ -331,7 +346,8 @@ impl InternalFindex {
             insert_chain: default_callback.clone(),
             update_lines: default_callback.clone(),
             list_removed_locations: default_callback.clone(),
-            progress_callback: default_callback.clone(),
+            default_progress_callback: default_progress_callback.clone(),
+            progress_callback: default_progress_callback,
             fetch_all_entry_table_uids: default_callback,
         })
     }
@@ -340,26 +356,18 @@ impl InternalFindex {
     pub fn set_upsert_callbacks(
         &mut self,
         fetch_entry: PyObject,
-        fetch_chain: PyObject,
         upsert_entry: PyObject,
         insert_chain: PyObject,
     ) {
         self.fetch_entry = fetch_entry;
-        self.fetch_chain = fetch_chain;
         self.upsert_entry = upsert_entry;
         self.insert_chain = insert_chain
     }
 
     /// Sets the required callbacks to implement [`FindexSearch`].
-    pub fn set_search_callbacks(
-        &mut self,
-        fetch_entry: PyObject,
-        fetch_chain: PyObject,
-        progress_callback: PyObject,
-    ) {
+    pub fn set_search_callbacks(&mut self, fetch_entry: PyObject, fetch_chain: PyObject) {
         self.fetch_entry = fetch_entry;
         self.fetch_chain = fetch_chain;
-        self.progress_callback = progress_callback;
     }
 
     /// Sets the required callbacks to implement [`FindexCompact`].
@@ -418,12 +426,17 @@ impl InternalFindex {
     /// - `max_results_per_keyword` : maximum number of results to fetch per
     ///   keyword
     /// - `max_depth`               : maximum recursion level allowed
+    /// - `fetch_chains_batch_size` : batch size during fetch chain
+    /// - `progress_callback`       : optional callback to process intermediate
+    ///   search results.
     ///
     /// Returns: List[IndexedValue]
     // use `u32::MAX` for `max_result_per_keyword`
     #[args(max_result_per_keyword = "4294967295")]
     #[args(max_depth = "100")]
     #[args(fetch_chains_batch_size = "0")]
+    #[args(progress_callback = "None")]
+    #[allow(clippy::too_many_arguments)]
     pub fn search_wrapper(
         &mut self,
         keywords: Vec<&str>,
@@ -432,7 +445,14 @@ impl InternalFindex {
         max_result_per_keyword: usize,
         max_depth: usize,
         fetch_chains_batch_size: usize,
-    ) -> PyResult<HashMap<String, Vec<IndexedValuePy>>> {
+        progress_callback: Option<PyObject>,
+        py: Python,
+    ) -> PyResult<HashMap<String, Vec<PyObject>>> {
+        self.progress_callback = match progress_callback {
+            Some(callback) => callback,
+            None => self.default_progress_callback.clone(),
+        };
+
         let keywords_set: HashSet<Keyword> = keywords
             .iter()
             .map(|keyword| Keyword::from(*keyword))
@@ -448,18 +468,23 @@ impl InternalFindex {
             0,
         ))?;
 
-        results
-            .into_iter()
-            .map(
-                |(keyword, indexed_values)| -> Result<(String, Vec<IndexedValuePy>), FindexErr> {
-                    Ok((
-                        keyword.try_into_string()?,
-                        indexed_values.into_iter().map(IndexedValuePy).collect(),
-                    ))
-                },
-            )
-            .collect::<Result<_, _>>()
-            .map_err(PyErr::from)
+        Ok(results
+            .iter()
+            .map(|(keyword, indexed_values)| {
+                (
+                    // Convert keyword to string or base64
+                    match keyword.clone().try_into_string() {
+                        Ok(s) => s,
+                        Err(_) => format!("{keyword:?}"),
+                    },
+                    // Convert Locations to bytes
+                    indexed_values
+                        .iter()
+                        .map(|location| PyBytes::new(py, location).into_py(py))
+                        .collect::<Vec<_>>(),
+                )
+            })
+            .collect::<HashMap<_, _>>())
     }
 
     /// Replace all the previous Index Entry Table UIDs and

@@ -316,6 +316,19 @@ impl From<Keyword> for IndexedValue {
     }
 }
 
+impl TryFrom<IndexedValue> for Location {
+    type Error = FindexErr;
+
+    fn try_from(value: IndexedValue) -> Result<Self, Self::Error> {
+        match value {
+            IndexedValue::Location(location) => Ok(location),
+            IndexedValue::NextKeyword(_) => Err(Self::Error::ConversionError(
+                "`IndexedValue` is not a `Location`".to_string(),
+            )),
+        }
+    }
+}
+
 impl Serializable for IndexedValue {
     type Error = FindexErr;
 

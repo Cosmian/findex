@@ -26,6 +26,7 @@ struct FindexTest<const UID_LENGTH: usize> {
     entry_table: EncryptedTable<UID_LENGTH>,
     chain_table: EncryptedTable<UID_LENGTH>,
     removed_locations: HashSet<Location>,
+    check_progress_callback_next_keyword: bool,
 }
 
 impl<const UID_LENGTH: usize> FindexTest<UID_LENGTH> {
@@ -65,9 +66,21 @@ impl<const UID_LENGTH: usize> FindexTest<UID_LENGTH> {
 impl<const UID_LENGTH: usize> FindexCallbacks<UID_LENGTH> for FindexTest<UID_LENGTH> {
     async fn progress(
         &self,
-        _results: &HashMap<Keyword, HashSet<IndexedValue>>,
+        results: &HashMap<Keyword, HashSet<IndexedValue>>,
     ) -> Result<bool, FindexErr> {
-        // Ignore intermediate results and do not stop recursion.
+        if self.check_progress_callback_next_keyword {
+            let keyword = &Keyword::from("rob");
+            let results = results
+                .get(keyword)
+                .ok_or_else(|| {
+                    FindexErr::Other(format!(
+                        "Cannot find keyword {keyword:?} in search results {results:?}"
+                    ))
+                })
+                .unwrap();
+            assert!(results.contains(&IndexedValue::NextKeyword(Keyword::from("robert"))));
+        }
+        // do not stop recursion.
         Ok(true)
     }
 
@@ -293,9 +306,9 @@ fn add_keyword_graph(
 /// Check the given keyword has a match in the given search results, and that
 /// this match is equal to the given `indexed_value`.
 fn check_search_result(
-    search_results: &HashMap<Keyword, HashSet<IndexedValue>>,
+    search_results: &HashMap<Keyword, HashSet<Location>>,
     keyword: &Keyword,
-    indexed_value: &IndexedValue,
+    location: &Location,
 ) {
     let results = search_results
         .get(keyword)
@@ -305,7 +318,7 @@ fn check_search_result(
             ))
         })
         .unwrap();
-    assert!(results.contains(indexed_value));
+    assert!(results.contains(location));
 }
 
 #[actix_rt::test]
@@ -319,22 +332,25 @@ async fn test_findex() -> Result<(), FindexErr> {
     let mut indexed_value_to_keywords = HashMap::new();
 
     // direct location robert doe
-    let robert_doe_location = IndexedValue::Location(Location::from("robert doe DB location"));
+    let robert_doe_location = Location::from("robert doe DB location");
     indexed_value_to_keywords.insert(
-        robert_doe_location.clone(),
+        IndexedValue::Location(robert_doe_location.clone()),
         hashset_keywords(&["robert", "doe"]),
     );
 
     // direct location john doe
-    let john_doe_location = IndexedValue::Location(Location::from("john doe DB location"));
+    let john_doe_location = Location::from("john doe DB location");
     indexed_value_to_keywords.insert(
-        john_doe_location.clone(),
+        IndexedValue::Location(john_doe_location.clone()),
         hashset_keywords(&["john", "doe"]),
     );
 
     // direct location for rob...
-    let rob_location = IndexedValue::Location(Location::from("rob DB location"));
-    indexed_value_to_keywords.insert(rob_location.clone(), hashset_keywords(&["rob"]));
+    let rob_location = Location::from("rob DB location");
+    indexed_value_to_keywords.insert(
+        IndexedValue::Location(rob_location.clone()),
+        hashset_keywords(&["rob"]),
+    );
     // ... and indirection to robert
     indexed_value_to_keywords.insert(
         IndexedValue::NextKeyword(Keyword::from("robert")),
@@ -394,6 +410,7 @@ async fn test_findex() -> Result<(), FindexErr> {
     check_search_result(&doe_search, &doe_keyword, &john_doe_location);
 
     // search rob without graph search
+    findex.check_progress_callback_next_keyword = true;
     let rob_search = findex
         .search(
             &HashSet::from_iter(vec![rob_keyword.clone()]),
@@ -405,11 +422,7 @@ async fn test_findex() -> Result<(), FindexErr> {
             0,
         )
         .await?;
-    check_search_result(
-        &rob_search,
-        &rob_keyword,
-        &IndexedValue::NextKeyword(robert_keyword.clone()),
-    );
+    findex.check_progress_callback_next_keyword = false;
     check_search_result(&rob_search, &rob_keyword, &rob_location);
 
     // search rob with graph search
@@ -432,10 +445,9 @@ async fn test_findex() -> Result<(), FindexErr> {
     //
 
     let mut indexed_value_to_keywords = HashMap::new();
-    let jane_doe_location_raw = Location::from("jane doe DB location");
-    let jane_doe_location = IndexedValue::Location(jane_doe_location_raw.clone());
+    let jane_doe_location = Location::from("jane doe DB location");
     indexed_value_to_keywords.insert(
-        jane_doe_location.clone(),
+        IndexedValue::Location(jane_doe_location.clone()),
         hashset_keywords(&["jane", "doe"]),
     );
     findex
@@ -488,6 +500,7 @@ async fn test_findex() -> Result<(), FindexErr> {
     check_search_result(&doe_search, &doe_keyword, &john_doe_location);
 
     // search rob (no change)
+    findex.check_progress_callback_next_keyword = true;
     let rob_search = findex
         .search(
             &HashSet::from_iter(vec![rob_keyword.clone()]),
@@ -499,11 +512,7 @@ async fn test_findex() -> Result<(), FindexErr> {
             0,
         )
         .await?;
-    check_search_result(
-        &rob_search,
-        &rob_keyword,
-        &IndexedValue::NextKeyword(robert_keyword.clone()),
-    );
+    findex.check_progress_callback_next_keyword = false;
     check_search_result(&rob_search, &rob_keyword, &rob_location);
 
     let mut new_label = Label::random(&mut rng);
@@ -536,7 +545,7 @@ async fn test_findex() -> Result<(), FindexErr> {
         check_search_result(&doe_search, &doe_keyword, &jane_doe_location);
     }
 
-    findex.remove_location(jane_doe_location_raw);
+    findex.remove_location(jane_doe_location);
     let new_master_key = KeyingMaterial::new(&mut rng);
     findex
         .compact(1, &master_key, &new_master_key, &new_label)
@@ -777,8 +786,7 @@ async fn test_first_names() -> Result<(), FindexErr> {
             .await?;
         if graph_results.is_empty() {
             return Err(FindexErr::Other(format!(
-                "No graph results for keyword: {}! This should not happen",
-                s
+                "No graph results for keyword: {s}! This should not happen"
             )));
         }
         total_results += graph_results.len();
@@ -816,16 +824,16 @@ async fn test_graph_compacting() {
     let mut indexed_value_to_keywords = HashMap::new();
 
     // location robert doe
-    let robert_doe_location = IndexedValue::Location(Location::from("robert doe DB location"));
+    let robert_doe_location = Location::from("robert doe DB location");
     indexed_value_to_keywords.insert(
-        robert_doe_location.clone(),
+        IndexedValue::Location(robert_doe_location.clone()),
         hashset_keywords(&["robert", "doe"]),
     );
 
     // location john doe
-    let john_doe_location = IndexedValue::Location(Location::from("john doe DB location"));
+    let john_doe_location = Location::from("john doe DB location");
     indexed_value_to_keywords.insert(
-        john_doe_location.clone(),
+        IndexedValue::Location(john_doe_location.clone()),
         hashset_keywords(&["john", "doe"]),
     );
 

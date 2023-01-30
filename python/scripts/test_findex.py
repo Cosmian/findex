@@ -57,7 +57,7 @@ class TestStructures(unittest.TestCase):
 class FindexHashmap:
     """Implement Findex callbacks using hashmaps"""
 
-    def __init__(self, db):
+    def __init__(self, db: Dict[bytes, List[str]]):
         self.db = db
         self.entry_table: Dict[bytes, bytes] = {}
         self.chain_table: Dict[bytes, bytes] = {}
@@ -116,9 +116,6 @@ class FindexHashmap:
                 raise KeyError('Conflict in Chain Table for UID: {uid}')
             self.chain_table[uid] = entries[uid]
 
-    def progress_callback(self, _):
-        return True
-
     def list_removed_locations(self, uids: List[bytes]) -> List[bytes]:
         res = []
         for uid in uids:
@@ -175,7 +172,6 @@ class TestFindex(unittest.TestCase):
         # Set upsert callbacks here
         self.findex_interface.set_upsert_callbacks(
             self.findex_backend.fetch_entry,
-            self.findex_backend.fetch_chain,
             self.findex_backend.upsert_entry,
             self.findex_backend.insert_chain,
         )
@@ -190,13 +186,12 @@ class TestFindex(unittest.TestCase):
         self.findex_interface.set_search_callbacks(
             self.findex_backend.fetch_entry,
             self.findex_backend.fetch_chain,
-            self.findex_backend.progress_callback,
         )
 
         res = self.findex_interface.search_wrapper(['Martial'], self.msk, self.label)
         self.assertEqual(len(res), 1)
         self.assertEqual(len(res['Martial']), 1)
-        self.assertEqual(res['Martial'][0].get_location(), b'2')
+        self.assertEqual(res['Martial'][0], b'2')
 
         res = self.findex_interface.search_wrapper(
             ['Sheperd', 'Wilkins'], self.msk, self.label
@@ -207,14 +202,12 @@ class TestFindex(unittest.TestCase):
     def test_graph_upsert_search(self) -> None:
         self.findex_interface.set_upsert_callbacks(
             self.findex_backend.fetch_entry,
-            self.findex_backend.fetch_chain,
             self.findex_backend.upsert_entry,
             self.findex_backend.insert_chain,
         )
         self.findex_interface.set_search_callbacks(
             self.findex_backend.fetch_entry,
             self.findex_backend.fetch_chain,
-            self.findex_backend.progress_callback,
         )
 
         indexed_values_and_keywords = {
@@ -241,18 +234,41 @@ class TestFindex(unittest.TestCase):
         # 2 names starting with Mar
         self.assertEqual(len(res['Mar']), 2)
 
+        # Test progress callback
+        def false_progress_callback(res: Dict[str, List[IndexedValue]]):
+            self.assertEqual(len(res['Mar']), 1)
+            return False
+
+        res = self.findex_interface.search_wrapper(
+            ['Mar'], self.msk, self.label, progress_callback=false_progress_callback
+        )
+        # no locations returned since the progress_callback stopped the recursion
+        self.assertEqual(len(res['Mar']), 0)
+
+        def early_stop_progress_callback(res: Dict[str, List[IndexedValue]]):
+            if 'Martin' in res:
+                return False
+            return True
+
+        res = self.findex_interface.search_wrapper(
+            ['Mar'],
+            self.msk,
+            self.label,
+            progress_callback=early_stop_progress_callback,
+        )
+        # only one location found after early stopping
+        self.assertEqual(len(res['Mar']), 1)
+
     def test_compact(self) -> None:
-        # Use upsert, search and compact callbacks
+        # use upsert, search and compact callbacks
         self.findex_interface.set_upsert_callbacks(
             self.findex_backend.fetch_entry,
-            self.findex_backend.fetch_chain,
             self.findex_backend.upsert_entry,
             self.findex_backend.insert_chain,
         )
         self.findex_interface.set_search_callbacks(
             self.findex_backend.fetch_entry,
             self.findex_backend.fetch_chain,
-            self.findex_backend.progress_callback,
         )
         self.findex_interface.set_compact_callbacks(
             self.findex_backend.fetch_entry,
@@ -274,7 +290,7 @@ class TestFindex(unittest.TestCase):
         # new_label cannot search before compacting
         self.assertEqual(len(res), 0)
 
-        # Removing 2nd db line
+        # removing 2nd db line
         del self.db[b'2']
         self.findex_interface.compact_wrapper(1, self.msk, self.msk, new_label)
 
