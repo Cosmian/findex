@@ -13,7 +13,7 @@ jobs:
     with:
       project-name: findex
       toolchain: nightly-2022-10-28
-      kms-version: 4.0.1
+      kms-version: 4.2.0
       regression-filename: sqlite.db
       branch-java: develop
       branch-js: develop
