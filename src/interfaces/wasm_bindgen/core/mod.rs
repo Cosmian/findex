@@ -3,9 +3,11 @@
 
 #[macro_use]
 mod utils;
+mod cloud;
 mod traits;
 mod types;
 
+pub use cloud::*;
 pub use types::*;
 
 /// Implements [`FindexSearch`](crate::core::FindexSearch) and

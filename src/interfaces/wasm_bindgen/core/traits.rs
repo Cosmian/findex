@@ -2,13 +2,15 @@ use std::collections::{HashMap, HashSet};
 
 use js_sys::{Array, Object};
 
+
+
+
 use super::{
     progress_results_to_js,
     utils::{
         encrypted_table_to_js_value, fetch_uids, js_value_to_encrypted_table,
         set_bytes_in_object_property,
-    },
-    FindexUser,
+    }, FindexUser,
 };
 use crate::{
     core::{
@@ -16,9 +18,11 @@ use crate::{
         UpsertData,
     },
     error::FindexErr,
-    interfaces::generic_parameters::{
-        DemScheme, KmacKey, BLOCK_LENGTH, DEM_KEY_LENGTH, KMAC_KEY_LENGTH, KWI_LENGTH,
-        MASTER_KEY_LENGTH, TABLE_WIDTH, UID_LENGTH,
+    interfaces::{
+        generic_parameters::{
+            DemScheme, KmacKey, BLOCK_LENGTH, DEM_KEY_LENGTH, KMAC_KEY_LENGTH, KWI_LENGTH,
+            MASTER_KEY_LENGTH, TABLE_WIDTH, UID_LENGTH,
+        },
     },
 };
 

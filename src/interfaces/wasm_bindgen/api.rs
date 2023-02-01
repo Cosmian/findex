@@ -6,6 +6,7 @@ use cosmian_crypto_core::bytes_ser_de::Serializable;
 use js_sys::{Array, Uint8Array};
 use wasm_bindgen::prelude::*;
 
+use super::core::FindexCloud;
 use crate::{
     core::{FindexSearch, FindexUpsert, KeyingMaterial, Keyword, Label},
     interfaces::{
@@ -122,4 +123,32 @@ pub async fn webassembly_upsert(
         .upsert(indexed_values_to_keywords, &master_key, &label)
         .await
         .map_err(|e| JsValue::from(format!("During Findex upsert: {e}")))
+}
+
+/// See [`FindexUpsert::upsert()`](crate::core::FindexUpsert::upsert).
+///
+/// # Parameters
+///
+/// - `token`                       : findex cloud token
+/// - `label_bytes`                 : public label used for hashing
+/// - `indexed_value_to_keywords`   : map of `IndexedValue`s to `Keyword` bytes
+#[wasm_bindgen]
+pub async fn webassembly_upsert_cloud(
+    token: String,
+    label_bytes: Uint8Array,
+    indexed_values_to_keywords: IndexedValuesAndWords,
+) -> Result<(), JsValue> {
+    let mut findex_cloud = FindexCloud::new(token, None)?;
+
+    let master_key = KeyingMaterial::<MASTER_KEY_LENGTH>::try_from_bytes(
+        findex_cloud.token.findex_master_key.as_ref(),
+    )
+    .map_err(|e| JsValue::from(format!("While parsing master key for Findex upsert, {e}")))?;
+    let label = Label::from(label_bytes.to_vec());
+    let indexed_values_to_keywords = to_indexed_values_to_keywords(&indexed_values_to_keywords)?;
+
+    findex_cloud
+        .upsert(indexed_values_to_keywords, &master_key, &label)
+        .await
+        .map_err(|e| JsValue::from(format!("During Findex Cloud upsert: {e}")))
 }
