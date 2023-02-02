@@ -110,7 +110,6 @@ class InternalFindex:
     def set_upsert_callbacks(
         self,
         fetch_entry_table: Callable,
-        fetch_chain_table: Callable,
         upsert_entry_table: Callable,
         insert_chain_table: Callable,
     ) -> None: ...
@@ -118,7 +117,6 @@ class InternalFindex:
         self,
         fetch_entry_table: Callable,
         fetch_chain_table: Callable,
-        progress_callback: Callable,
     ) -> None: ...
     def set_compact_callbacks(
         self,
@@ -142,7 +140,8 @@ class InternalFindex:
         max_result_per_keyword: int = 2**32 - 1,
         max_depth: int = 100,
         fetch_chains_batch_size: int = 0,
-    ) -> Dict[str, List[IndexedValue]]: ...
+        progress_callback: Optional[Callable] = None,
+    ) -> Dict[str, List[bytes]]: ...
     def compact_wrapper(
         self,
         num_reindexing_before_full_set: int,

@@ -6,7 +6,6 @@ use cosmian_crypto_core::bytes_ser_de::Serializable;
 use js_sys::{Array, Uint8Array};
 use wasm_bindgen::prelude::*;
 
-use super::core::search_results_to_js;
 use crate::{
     core::{FindexSearch, FindexUpsert, KeyingMaterial, Keyword, Label},
     interfaces::{
@@ -14,8 +13,8 @@ use crate::{
             MASTER_KEY_LENGTH, MAX_RESULTS_PER_KEYWORD, SECURE_FETCH_CHAINS_BATCH_SIZE,
         },
         wasm_bindgen::core::{
-            to_indexed_values_to_keywords, ArrayOfKeywords, Fetch, FindexUser,
-            IndexedValuesAndWords, Insert, Progress, SearchResults, Upsert,
+            search_results_to_js, to_indexed_values_to_keywords, ArrayOfKeywords, Fetch,
+            FindexUser, IndexedValuesAndWords, Insert, Progress, SearchResults, Upsert,
         },
     },
 };

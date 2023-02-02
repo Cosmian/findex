@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.0.1] - 2023-02-02
+
+### Features
+
+- Change `progress_callback` to return `NextKeyword` and `search` to return only `Location`
+
+### Testing
+
+- Add `progress_callback` tests
+
 ## [2.0.0] - 2023-01-13
 
 ### Changed

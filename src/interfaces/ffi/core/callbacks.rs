@@ -28,7 +28,7 @@ use std::ffi::{c_int, c_uchar, c_uint};
 pub type ProgressCallback = extern "C" fn(
     intermediate_results_ptr: *const c_uchar,
     intermediate_results_len: c_uint,
-) -> bool;
+) -> c_int;
 
 /// See [`FindexCallbacks::fetch_all_entry_table_uids()`](crate::core::FindexCallbacks::fetch_all_entry_table_uids).
 ///

@@ -40,7 +40,7 @@ impl FindexCallbacks<UID_LENGTH> for FindexUser {
             serializer.write_vec(&serialize_set(indexed_values)?)?;
         }
         let results = serializer.finalize();
-        Ok(progress(results.as_ptr(), results.len() as c_uint))
+        Ok(progress(results.as_ptr(), results.len() as c_uint) != 0)
     }
 
     async fn fetch_all_entry_table_uids(&self) -> Result<HashSet<Uid<UID_LENGTH>>, FindexErr> {

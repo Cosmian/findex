@@ -9,7 +9,7 @@ use js_sys::{Array, JsString, Object, Reflect, Uint8Array};
 use wasm_bindgen::{prelude::wasm_bindgen, JsCast, JsValue};
 
 use crate::{
-    core::{IndexedValue, Keyword},
+    core::{IndexedValue, Keyword, Location},
     error::FindexErr,
     interfaces::wasm_bindgen::core::utils::get_bytes_from_object_property,
 };
@@ -119,6 +119,37 @@ extern "C" {
 }
 
 pub fn search_results_to_js(
+    results: &HashMap<Keyword, HashSet<Location>>,
+) -> Result<SearchResults, JsValue> {
+    let array = Array::new_with_length(results.len() as u32);
+    for (i, (keyword, indexed_values)) in results.iter().enumerate() {
+        let obj = Object::new();
+        Reflect::set(
+            &obj,
+            &JsValue::from_str("keyword"),
+            &Uint8Array::from(keyword.to_vec().as_slice()),
+        )?;
+        let sub_array = Array::new_with_length((indexed_values.len()) as u32);
+        for (j, value) in indexed_values.iter().enumerate() {
+            let js_array = Uint8Array::from(value.to_vec().as_slice());
+            sub_array.set(j as u32, js_array.into());
+        }
+        Reflect::set(&obj, &JsValue::from_str("results"), &sub_array)?;
+        array.set(i as u32, obj.into());
+    }
+    Ok(SearchResults::from(JsValue::from(array)))
+}
+
+#[wasm_bindgen]
+extern "C" {
+    /// Findex progress callback result type.
+    ///
+    /// See [crate::core::FindexCallbacks::progress].
+    #[wasm_bindgen(typescript_type = "Array<{ keyword: Uint8Array, results: Array<Uint8Array> }>")]
+    pub type ProgressResults;
+}
+
+pub fn progress_results_to_js(
     results: &HashMap<Keyword, HashSet<IndexedValue>>,
 ) -> Result<SearchResults, JsValue> {
     let array = Array::new_with_length(results.len() as u32);
