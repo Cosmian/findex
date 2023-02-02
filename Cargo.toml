@@ -22,7 +22,7 @@ path = "src/lib.rs"
 [features]
 ffi = ["interfaces", "interfaces", "serde", "serde_json", "cosmian_ffi"]
 sqlite = ["rusqlite", "faker_rand", "interfaces", "serde", "serde_json"]
-wasm_bindgen = ["interfaces", "js-sys", "wasm-bindgen", "wasm-bindgen-test", "web-sys", "wasm-bindgen-futures", "interfaces"]
+wasm_bindgen = ["interfaces", "js-sys", "wasm-bindgen", "wasm-bindgen-test", "web-sys", "wasm-bindgen-futures", "serde"]
 interfaces = []
 python = ["interfaces", "pyo3"]
 

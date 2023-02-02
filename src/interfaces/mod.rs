@@ -2,8 +2,8 @@
 
 pub mod generic_parameters;
 
-#[cfg(any(feature = "sqlite", feature = "ffi"))]
-pub(crate) mod ser_de;
+#[cfg(feature = "serde")]
+pub mod ser_de;
 
 #[cfg(feature = "ffi")]
 pub mod ffi;

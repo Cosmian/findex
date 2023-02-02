@@ -48,7 +48,13 @@ enum Callback {
 impl FindexCloud {
     pub fn new(token: String, url: Option<String>) -> Result<Self, FindexErr> {
         let (index_id, tail) = token.split_at(5);
-        let mut bytes = tail.bytes();
+        let mut bytes = base64::decode(tail)
+            .map_err(|_| {
+                FindexErr::Other(format!(
+                    "token {token} is not a valid base64 encoded string"
+                ))
+            })?
+            .into_iter();
 
         let findex_master_key = bytes.next_chunk::<16>().map_err(|_| {
             FindexErr::Other("the token is too short, cannot read the Findex master key".to_owned())
@@ -130,8 +136,8 @@ impl FindexCloud {
         let signature = hex::encode(output);
 
         let url = format!(
-            "{}/index/{}/{endpoint}",
-            self.url.as_deref().unwrap_or("http://localhost:8000"),
+            "{}/indexes/{}/{endpoint}",
+            self.url.as_deref().unwrap_or("http://127.0.0.1:8080"),
             self.token.index_id,
         );
 
