@@ -5,6 +5,9 @@ pub mod generic_parameters;
 #[cfg(feature = "serde")]
 pub mod ser_de;
 
+#[cfg(feature = "cloud")]
+pub mod cloud;
+
 #[cfg(feature = "ffi")]
 pub mod ffi;
 

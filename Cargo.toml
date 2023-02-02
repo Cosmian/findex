@@ -22,8 +22,9 @@ path = "src/lib.rs"
 [features]
 ffi = ["interfaces", "interfaces", "serde", "serde_json", "cosmian_ffi"]
 sqlite = ["rusqlite", "faker_rand", "interfaces", "serde", "serde_json"]
-wasm_bindgen = ["interfaces", "js-sys", "wasm-bindgen", "wasm-bindgen-test", "web-sys", "wasm-bindgen-futures", "serde"]
+wasm_bindgen = ["interfaces", "js-sys", "wasm-bindgen", "wasm-bindgen-test", "web-sys", "wasm-bindgen-futures", "cloud"]
 interfaces = []
+cloud = ["interfaces", "serde"]
 python = ["interfaces", "pyo3"]
 
 [dependencies]
@@ -38,6 +39,7 @@ js-sys = { version = "0.3", optional = true }
 leb128 = "0.2"
 pyo3 = { version = "0.17", features = ["extension-module", "abi3", "abi3-py37", "generate-import-lib"], optional = true }
 rand = "0.8"
+reqwest = "0.11.14"
 rusqlite = { version = "0.28", features = ["bundled"], optional = true }
 serde = { version = "1.0", features = ["derive"], optional = true }
 serde_json = { version = "1.0", optional = true }

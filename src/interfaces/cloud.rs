@@ -1,11 +1,7 @@
 use std::collections::{HashMap, HashSet};
 
 use cosmian_crypto_core::bytes_ser_de::Serializable;
-use js_sys::Uint8Array;
 use tiny_keccak::{Hasher, Kmac};
-use wasm_bindgen::{JsCast, JsValue};
-use wasm_bindgen_futures::JsFuture;
-use web_sys::{Request, RequestInit, RequestMode, Response};
 
 use crate::{
     core::{
@@ -106,11 +102,6 @@ impl FindexCloud {
     }
 
     async fn post(&self, callback: Callback, bytes: &[u8]) -> Result<Vec<u8>, FindexErr> {
-        let mut opts = RequestInit::new();
-        opts.method("POST");
-        opts.mode(RequestMode::Cors);
-        opts.body(Some(&JsValue::from(unsafe { Uint8Array::view(bytes) })));
-
         let endpoint = match callback {
             Callback::FetchEntries => "fetch_entries",
             Callback::FetchChains => "fetch_chains",
@@ -141,23 +132,20 @@ impl FindexCloud {
             self.token.index_id,
         );
 
-        let request = Request::new_with_str_and_init(&url, &opts)?;
+        let client = reqwest::Client::new();
+        let res = client
+            .post(url)
+            .header("X-Findex-Cloud-Signature", &signature)
+            .body(bytes.to_vec())
+            .send()
+            .await
+            .map_err(|err| FindexErr::Other(format!("err {err}")))?;
 
-        request
-            .headers()
-            .set("X-Findex-Cloud-Signature", &signature)?;
-
-        let window = web_sys::window().unwrap();
-        let resp_value = JsFuture::from(window.fetch_with_request(&request)).await?;
-
-        // `resp_value` is a `Response` object.
-        assert!(resp_value.is_instance_of::<Response>());
-        let resp: Response = resp_value.dyn_into().unwrap();
-
-        let buffer = JsFuture::from(resp.array_buffer()?).await?;
-        let array = Uint8Array::new(&buffer);
-
-        Ok(array.to_vec())
+        Ok(res
+            .bytes()
+            .await
+            .map_err(|err| FindexErr::Other(format!("err2 {err}")))?
+            .to_vec())
     }
 }
 

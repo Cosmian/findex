@@ -6,10 +6,10 @@ use cosmian_crypto_core::bytes_ser_de::Serializable;
 use js_sys::{Array, Uint8Array};
 use wasm_bindgen::prelude::*;
 
-use super::core::FindexCloud;
 use crate::{
     core::{FindexSearch, FindexUpsert, KeyingMaterial, Keyword, Label},
     interfaces::{
+        cloud::FindexCloud,
         generic_parameters::{
             MASTER_KEY_LENGTH, MAX_RESULTS_PER_KEYWORD, SECURE_FETCH_CHAINS_BATCH_SIZE,
         },
