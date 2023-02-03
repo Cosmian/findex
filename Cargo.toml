@@ -22,15 +22,7 @@ path = "src/lib.rs"
 [features]
 ffi = ["interfaces", "interfaces", "serde", "serde_json"]
 sqlite = ["rusqlite", "faker_rand", "interfaces", "serde", "serde_json"]
-wasm_bindgen = [
-  "interfaces",
-  "js-sys",
-  "wasm-bindgen",
-  "wasm-bindgen-test",
-  "web-sys",
-  "wasm-bindgen-futures",
-  "interfaces",
-]
+wasm_bindgen = ["interfaces", "js-sys", "wasm-bindgen", "wasm-bindgen-test", "web-sys", "wasm-bindgen-futures", "interfaces"]
 interfaces = []
 python = ["interfaces", "pyo3"]
 
@@ -38,6 +30,7 @@ python = ["interfaces", "pyo3"]
 async-recursion = "1.0.0"
 base64 = "0.13"
 cosmian_crypto_core = "6.0"
+cosmian_ffi = "1.0.0"
 faker_rand = { version = "0.1", optional = true }
 futures = { version = "0.3" }
 hex = "0.4"
