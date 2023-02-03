@@ -9,8 +9,9 @@ use std::{
 };
 
 use cosmian_crypto_core::bytes_ser_de::{Serializable, Serializer};
-pub use cosmian_ffi::error::h_get_error as get_last_error;
-use cosmian_ffi::{ffi_read_bytes, ffi_read_string, ffi_unwrap, ffi_write_bytes};
+use cosmian_ffi::{
+    error::h_get_error, ffi_read_bytes, ffi_read_string, ffi_unwrap, ffi_write_bytes,
+};
 use futures::executor;
 
 use super::core::FetchAllEntryTableUidsCallback;
@@ -34,6 +35,19 @@ use crate::{
         ser_de::SerializableSet,
     },
 };
+
+/// Re-export the `cosmian_ffi` `h_get_error` function to clients with the old
+/// `get_last_error` name The `h_get_error` is available inside the final lib
+/// (but tools like ffigen seems to not parse it…) Maybe we can find a solution
+/// by changing the function name inside the clients.
+///
+/// # Safety
+///
+/// It's unsafe.
+#[no_mangle]
+pub unsafe extern "C" fn get_last_error(error_ptr: *mut c_char, error_len: *mut c_int) -> c_int {
+    h_get_error(error_ptr, error_len)
+}
 
 #[no_mangle]
 /// Recursively searches Findex graphs for values indexed by the given keywords.
