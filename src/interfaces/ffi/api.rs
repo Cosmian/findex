@@ -10,7 +10,8 @@ use std::{
 
 use cosmian_crypto_core::bytes_ser_de::{Serializable, Serializer};
 use cosmian_ffi::{
-    error::h_get_error, ffi_read_bytes, ffi_read_string, ffi_unwrap, ffi_write_bytes,
+    error::{h_get_error, set_last_error, FfiError},
+    ffi_read_bytes, ffi_read_string, ffi_unwrap, ffi_write_bytes,
 };
 use futures::executor;
 
@@ -147,7 +148,9 @@ pub unsafe extern "C" fn h_search(
         fetch_all_entry_table_uids: None,
     };
 
-    let results = ffi_unwrap!(executor::block_on(findex.search(
+    // We want to forward error code returned by callbacks to the parent caller to
+    // do error management client side.
+    let results = match executor::block_on(findex.search(
         &keywords,
         &master_key,
         &label,
@@ -155,7 +158,16 @@ pub unsafe extern "C" fn h_search(
         max_depth,
         fetch_chains_batch_size,
         0,
-    )));
+    )) {
+        Ok(results) => results,
+        Err(err) => {
+            set_last_error(FfiError::Generic(format!("{err}")));
+            return match err {
+                FindexErr::CallbackErrorCode { code, .. } => code,
+                _ => 1,
+            };
+        }
+    };
 
     // Serialize the results.
     // We should be able to use the output buffer as the Serializer sink to avoid to
@@ -273,13 +285,18 @@ pub unsafe extern "C" fn h_upsert(
         fetch_all_entry_table_uids: None,
     };
 
-    ffi_unwrap!(executor::block_on(findex.upsert(
-        indexed_values_and_keywords,
-        &master_key,
-        &label,
-    )));
-
-    0
+    // We want to forward error code returned by callbacks to the parent caller to
+    // do error management client side.
+    match executor::block_on(findex.upsert(indexed_values_and_keywords, &master_key, &label)) {
+        Ok(_) => 0,
+        Err(err) => {
+            set_last_error(FfiError::Generic(format!("{err}")));
+            match err {
+                FindexErr::CallbackErrorCode { code, .. } => code,
+                _ => 1,
+            }
+        }
+    }
 }
 
 #[no_mangle]
