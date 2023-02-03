@@ -98,6 +98,7 @@ pub unsafe extern "C" fn h_search(
 
     // Why keywords are JSON array of base64 strings? We should change this to send
     // raw bytes with leb128 prefix or something like that.
+    // <https://github.com/Cosmian/findex/issues/19>
 
     let keywords_as_json_string = ffi_read_string!("keywords", keywords_ptr);
     let keywords_as_base64_vec: Vec<String> = ffi_unwrap!(
@@ -145,6 +146,7 @@ pub unsafe extern "C" fn h_search(
     // We should be able to use the output buffer as the Serializer sink to avoid to
     // copy the buffer (right now the crypto_core serializer doesn't provide à
     // constructor from an existing slice)
+    // <https://github.com/Cosmian/findex/issues/20>
     let mut serializer = Serializer::new();
     ffi_unwrap!(serializer.write_u64(results.len() as u64));
     for (keyword, locations) in results {
@@ -227,6 +229,7 @@ pub unsafe extern "C" fn h_upsert(
     // list of base64 encoded keywords. Why that? We should use simple
     // serialization to pass the data and not depend on JSON+base64 to improve
     // perfs.
+    // <https://github.com/Cosmian/findex/issues/19>
     let indexed_values_and_keywords_as_base64_hashmap: HashMap<String, Vec<String>> = ffi_unwrap!(
         serde_json::from_str(&indexed_values_and_keywords_as_json_string)
     );
