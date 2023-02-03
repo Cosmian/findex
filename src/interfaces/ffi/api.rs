@@ -9,6 +9,7 @@ use std::{
 };
 
 use cosmian_crypto_core::bytes_ser_de::{Serializable, Serializer};
+pub use cosmian_ffi::error::h_get_error as get_last_error;
 use cosmian_ffi::{ffi_read_bytes, ffi_read_string, ffi_unwrap, ffi_write_bytes};
 use futures::executor;
 
