@@ -5,8 +5,8 @@ use tiny_keccak::{Hasher, Kmac};
 
 use crate::{
     core::{
-        EncryptedTable, FindexCallbacks, FindexSearch, FindexUpsert, IndexedValue, Keyword, Uid,
-        UpsertData,
+        EncryptedTable, FindexCallbacks, FindexSearch, FindexUpsert, IndexedValue, KeyingMaterial,
+        Keyword, Uid, UpsertData,
     },
     error::FindexErr,
     interfaces::{
@@ -26,7 +26,7 @@ pub(crate) struct FindexCloud {
 pub struct Token {
     index_id: String,
 
-    pub(crate) findex_master_key: [u8; 16],
+    pub(crate) findex_master_key: KeyingMaterial<MASTER_KEY_LENGTH>,
 
     fetch_entries_key: Option<[u8; 16]>,
     fetch_chains_key: Option<[u8; 16]>,
@@ -52,9 +52,12 @@ impl FindexCloud {
             })?
             .into_iter();
 
-        let findex_master_key = bytes.next_chunk::<16>().map_err(|_| {
-            FindexErr::Other("the token is too short, cannot read the Findex master key".to_owned())
-        })?;
+        let findex_master_key =
+            KeyingMaterial::try_from_bytes(&bytes.next_chunk::<16>().map_err(|_| {
+                FindexErr::Other(
+                    "the token is too short, cannot read the Findex master key".to_owned(),
+                )
+            })?)?;
 
         let mut token = Token {
             index_id: index_id.to_owned(),
