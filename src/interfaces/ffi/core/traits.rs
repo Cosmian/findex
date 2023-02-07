@@ -23,7 +23,7 @@ use crate::{
             DemScheme, KmacKey, BLOCK_LENGTH, DEM_KEY_LENGTH, KMAC_KEY_LENGTH, KWI_LENGTH,
             MASTER_KEY_LENGTH, TABLE_WIDTH, UID_LENGTH,
         },
-        ser_de::{deserialize_set, serialize_set},
+        ser_de::{deserialize_set, serialize_set, SerializableSet},
     },
 };
 
@@ -37,7 +37,7 @@ impl FindexCallbacks<UID_LENGTH> for FindexUser {
         serializer.write_u64(results.len() as u64)?;
         for (keyword, indexed_values) in results {
             serializer.write_vec(keyword)?;
-            serializer.write_vec(&serialize_set(indexed_values)?)?;
+            serializer.write(&SerializableSet(indexed_values))?;
         }
         let results = serializer.finalize();
         Ok(progress(results.as_ptr(), results.len() as c_uint) != 0)
