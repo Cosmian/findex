@@ -2,7 +2,6 @@
 
 pub mod api;
 pub mod core;
-mod error;
 
 /// Maximum number of bytes used by a LEB128 encoding.
 const LEB128_MAXIMUM_ENCODED_BYTES_NUMBER: usize = 8;

@@ -241,6 +241,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "cosmian_ffi"
+version = "1.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fcf69aaf06b91023e2ec458f3a9370e63b45bc4f4abfef2cbb384c2d6505308e"
+dependencies = [
+ "thiserror",
+]
+
+[[package]]
 name = "cosmian_findex"
 version = "2.0.1"
 dependencies = [
@@ -248,6 +257,7 @@ dependencies = [
  "async-recursion",
  "base64",
  "cosmian_crypto_core",
+ "cosmian_ffi",
  "criterion",
  "faker_rand",
  "futures",
