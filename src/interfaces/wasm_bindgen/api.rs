@@ -160,13 +160,10 @@ pub async fn webassembly_search_cloud(
         .map(|word| Keyword::from(Uint8Array::new(&word).to_vec()))
         .collect::<HashSet<_>>();
 
-    let max_results_per_keyword = if max_results_per_keyword <= 0 {
-        MAX_RESULTS_PER_KEYWORD
-    } else {
-        max_results_per_keyword
-            .try_into()
-            .unwrap_or(MAX_RESULTS_PER_KEYWORD)
-    };
+    let max_results_per_keyword = usize::try_from(max_results_per_keyword)
+        .ok()
+        .and_then(NonZeroUsize::new)
+        .unwrap_or(MAX_RESULTS_PER_KEYWORD);
 
     let fetch_chains_batch_size = usize::try_from(fetch_chains_batch_size)
         .ok()
@@ -178,7 +175,7 @@ pub async fn webassembly_search_cloud(
             &keywords,
             &master_key,
             &label,
-            max_results_per_keyword,
+            max_results_per_keyword.into(),
             max_depth.try_into().unwrap_or(usize::MAX),
             fetch_chains_batch_size,
             0,

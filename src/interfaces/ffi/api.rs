@@ -438,118 +438,89 @@ pub unsafe extern "C" fn h_search_cloud(
     max_depth: c_int,
     fetch_chains_batch_size: c_uint,
 ) -> c_int {
-    //
-    // Check arguments
-    //
-    ffi_not_null!(token_ptr, "Token should not be null");
-    let token = match CStr::from_ptr(token_ptr).to_str() {
-        Ok(msg) => msg.to_owned(),
-        Err(e) => {
-            set_last_error(FfiErr::Generic(format!(
-                "Upsert: invalid IndexedValues and keywords: {e}"
-            )));
-            return 1;
-        }
-    };
+    let token = ffi_read_string!("keywords", token_ptr);
 
-    ffi_not_null!(
-        search_results_ptr,
-        "The Locations pointer should point to pre-allocated memory"
+    let label_bytes = ffi_read_bytes!("label", label_ptr, label_len);
+    let label = Label::from(label_bytes);
+
+    let max_results_per_keyword = usize::try_from(max_results_per_keyword)
+        .ok()
+        .and_then(NonZeroUsize::new)
+        .unwrap_or(MAX_RESULTS_PER_KEYWORD);
+
+    let max_depth = usize::try_from(max_depth).unwrap_or(MAX_DEPTH);
+
+    // Why keywords are JSON array of base64 strings? We should change this to send
+    // raw bytes with leb128 prefix or something like that.
+    // <https://github.com/Cosmian/findex/issues/19>
+
+    let keywords_as_json_string = ffi_read_string!("keywords", keywords_ptr);
+    let keywords_as_base64_vec: Vec<String> = ffi_unwrap!(
+        serde_json::from_str(&keywords_as_json_string),
+        "failed deserializing the keywords from JSON"
     );
-
-    if *search_results_len <= 0 {
-        ffi_bail!("The Locations length must be strictly positive");
+    let mut keywords = HashSet::with_capacity(keywords_as_base64_vec.len());
+    for keyword_as_base64 in keywords_as_base64_vec {
+        // base64 decode the words
+        let word_bytes = ffi_unwrap!(base64::decode(&keyword_as_base64).map_err(|e| {
+            FindexErr::ConversionError(format!(
+                "Failed decoding the base64 encoded word: {keyword_as_base64}: {e}"
+            ))
+        }));
+        keywords.insert(Keyword::from(word_bytes));
     }
-
-    let max_results_per_keyword = if max_results_per_keyword <= 0 {
-        MAX_RESULTS_PER_KEYWORD
-    } else {
-        ffi_unwrap!(
-            usize::try_from(max_results_per_keyword),
-            "loop_iteration_limit must be a positive int"
-        )
-    };
-
-    let max_depth = if max_depth < 0 {
-        MAX_DEPTH
-    } else {
-        ffi_unwrap!(
-            usize::try_from(max_depth),
-            "loop_iteration_limit must be a positive int"
-        )
-    };
-
-    //
-    // Label deserialization
-    ffi_not_null!(label_ptr, "The Label pointer should not be null");
-    let label_bytes = std::slice::from_raw_parts(label_ptr, label_len as usize);
-
-    //
-    // Parse keywords
-    //
-    ffi_not_null!(keywords_ptr, "Keywords pointer should not be null");
-    let keywords = match CStr::from_ptr(keywords_ptr).to_str() {
-        Ok(msg) => msg.to_owned(),
-        Err(e) => {
-            set_last_error(FfiErr::Generic(format!(
-                "convert keywords buffer to String failed: {e}"
-            )));
-            return 1;
-        }
-    };
-    let base64_keywords: Vec<String> = ffi_unwrap!(
-        serde_json::from_str(&keywords),
-        "failed deserializing the base64 `Keyword`s"
-    );
 
     let fetch_chains_batch_size = usize::try_from(fetch_chains_batch_size)
         .ok()
         .and_then(NonZeroUsize::new)
         .unwrap_or(SECURE_FETCH_CHAINS_BATCH_SIZE);
 
-    let mut keywords = HashSet::with_capacity(base64_keywords.len());
-    for base64_keyword in base64_keywords {
-        // base64 decode the words
-        let word_bytes = base64::decode(base64_keyword).map_err(|e| {
-            FindexErr::ConversionError(format!(
-                "Failed decoding the base64 encoded word: {base64_keyword}: {e}"
-            ))
-        })?;
-        keywords.insert(Keyword::from(word_bytes));
-    }
-
-    let findex_cloud = FindexCloud::new(token, None)?;
-    let findex_master_key = findex_cloud.token.findex_master_key.clone();
+    let mut findex = ffi_unwrap!(FindexCloud::new(token, None));
+    let master_key = findex.token.findex_master_key.clone();
 
     let rt = tokio::runtime::Runtime::new().unwrap();
-    ffi_unwrap!(rt.block_on(findex_cloud.search(&keywords, &findex_master_key, &label,)));
 
-    let serialized_uids = ffi_unwrap!(executor::block_on(ffi_search(
-        &base64_keywords,
-        master_key_bytes,
-        label_bytes,
-        max_results_per_keyword,
+    // We want to forward error code returned by callbacks to the parent caller to
+    // do error management client side.
+    let results = match rt.block_on(findex.search(
+        &keywords,
+        &master_key,
+        &label,
+        max_results_per_keyword.into(),
         max_depth,
         fetch_chains_batch_size,
-        progress_callback,
-        fetch_entry,
-        fetch_chain,
-    )));
+        0,
+    )) {
+        Ok(results) => results,
+        Err(err) => {
+            set_last_error(FfiError::Generic(format!("{err}")));
+            return match err {
+                FindexErr::CallbackErrorCode { code, .. } => code,
+                _ => 1,
+            };
+        }
+    };
 
-    //
-    // Prepare output
-    let allocated = *search_results_len;
-    let len = serialized_uids.len();
-    *search_results_len = len as c_int;
-    if (allocated as usize) < len {
-        ffi_bail!(
-            "The pre-allocated IndexedValues buffer is too small; need {} bytes, allocated {}",
-            len,
-            allocated
-        );
+    // Serialize the results.
+    // We should be able to use the output buffer as the Serializer sink to avoid to
+    // copy the buffer (right now the crypto_core serializer doesn't provide à
+    // constructor from an existing slice)
+    // <https://github.com/Cosmian/findex/issues/20>
+    let mut serializer = Serializer::new();
+    ffi_unwrap!(serializer.write_u64(results.len() as u64));
+    for (keyword, locations) in results {
+        ffi_unwrap!(serializer.write_vec(&keyword));
+        ffi_unwrap!(serializer.write(&SerializableSet(&locations)));
     }
-    std::slice::from_raw_parts_mut(search_results_ptr.cast::<u8>(), len)
-        .copy_from_slice(&serialized_uids);
+    let serialized_uids = serializer.finalize();
+
+    ffi_write_bytes!(
+        "search results",
+        &serialized_uids,
+        search_results_ptr,
+        search_results_len
+    );
+
     0
 }
 
@@ -591,69 +562,53 @@ pub unsafe extern "C" fn h_upsert_cloud(
     label_len: c_int,
     indexed_values_and_keywords_ptr: *const c_char,
 ) -> c_int {
-    ffi_not_null!(token_ptr, "Token should not be null");
-    let token = match CStr::from_ptr(token_ptr).to_str() {
-        Ok(msg) => msg.to_owned(),
-        Err(e) => {
-            set_last_error(FfiErr::Generic(format!(
-                "Upsert: invalid IndexedValues and keywords: {e}"
-            )));
-            return 1;
-        }
-    };
+    let token = ffi_read_string!("keywords", token_ptr);
 
-    ffi_not_null!(label_ptr, "Label pointer should not be null");
-
-    let label_bytes = slice::from_raw_parts(label_ptr, label_len as usize);
+    let label_bytes = ffi_read_bytes!("label", label_ptr, label_len);
     let label = Label::from(label_bytes);
 
-    //
-    // Parse IndexedValues and corresponding keywords
-    ffi_not_null!(
-        indexed_values_and_keywords_ptr,
-        "IndexedValues and corresponding keywords pointer should not be null"
+    let indexed_values_and_keywords_as_json_string = ffi_read_string!(
+        "indexed values and keywords",
+        indexed_values_and_keywords_ptr
     );
 
-    let parsed_indexed_values_and_keywords =
-        match CStr::from_ptr(indexed_values_and_keywords_ptr).to_str() {
-            Ok(msg) => msg.to_owned(),
-            Err(e) => {
-                set_last_error(FfiErr::Generic(format!(
-                    "Upsert: invalid IndexedValues and keywords: {e}"
-                )));
-                return 1;
-            }
-        };
-    // a map of base64 encoded `IndexedValue` to a list of base64 encoded keyWords
-    let parsed_indexed_values_and_keywords = ffi_unwrap!(serde_json::from_str::<
-        HashMap<String, Vec<String>>,
-    >(&parsed_indexed_values_and_keywords));
-    // the decoded map
+    // Indexed values and keywords are a map of base64 encoded `IndexedValue` to a
+    // list of base64 encoded keywords. Why that? We should use simple
+    // serialization to pass the data and not depend on JSON+base64 to improve
+    // perfs.
+    // <https://github.com/Cosmian/findex/issues/19>
+    let indexed_values_and_keywords_as_base64_hashmap: HashMap<String, Vec<String>> = ffi_unwrap!(
+        serde_json::from_str(&indexed_values_and_keywords_as_json_string)
+    );
+
     let mut indexed_values_and_keywords =
-        HashMap::with_capacity(parsed_indexed_values_and_keywords.len());
-    for (key, value) in parsed_indexed_values_and_keywords {
-        let iv_bytes = ffi_unwrap!(base64::decode(key));
-        let indexed_value = ffi_unwrap!(IndexedValue::try_from(iv_bytes.as_slice()));
-        let mut keywords = HashSet::with_capacity(value.len());
-        for keyword in value {
+        HashMap::with_capacity(indexed_values_and_keywords_as_base64_hashmap.len());
+    for (indexed_value, keywords_vec) in indexed_values_and_keywords_as_base64_hashmap {
+        let indexed_value_bytes = ffi_unwrap!(base64::decode(indexed_value));
+        let indexed_value = ffi_unwrap!(IndexedValue::try_from(indexed_value_bytes.as_slice()));
+        let mut keywords = HashSet::with_capacity(keywords_vec.len());
+        for keyword in keywords_vec {
             let keyword_bytes = ffi_unwrap!(base64::decode(keyword));
             keywords.insert(Keyword::from(keyword_bytes));
         }
         indexed_values_and_keywords.insert(indexed_value, keywords);
     }
 
-    //
-    // Finally write indexes in database
-    //
-    let mut findex_cloud = ffi_unwrap!(FindexCloud::new(token, None));
-    let findex_master_key = findex_cloud.token.findex_master_key.clone();
+    let mut findex = ffi_unwrap!(FindexCloud::new(token, None));
+    let master_key = findex.token.findex_master_key.clone();
 
     let rt = tokio::runtime::Runtime::new().unwrap();
-    ffi_unwrap!(rt.block_on(findex_cloud.upsert(
-        indexed_values_and_keywords,
-        &findex_master_key,
-        &label,
-    )));
 
-    0
+    // We want to forward error code returned by callbacks to the parent caller to
+    // do error management client side.
+    match rt.block_on(findex.upsert(indexed_values_and_keywords, &master_key, &label)) {
+        Ok(_) => 0,
+        Err(err) => {
+            set_last_error(FfiError::Generic(format!("{err}")));
+            match err {
+                FindexErr::CallbackErrorCode { code, .. } => code,
+                _ => 1,
+            }
+        }
+    }
 }
