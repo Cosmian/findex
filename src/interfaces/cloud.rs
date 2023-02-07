@@ -70,30 +70,20 @@ impl FindexCloud {
         };
 
         while let Some(prefix) = bytes.next() {
+            let key = Some(bytes.next_chunk::<16>().map_err(|_| {
+                FindexErr::Other(format!(
+                    "the token is too short, expecting 16 bytes after the prefix {prefix}"
+                ))
+            })?);
+
             if prefix == 0 {
-                token.fetch_entries_key = Some(bytes.next_chunk::<16>().map_err(|_| {
-                    FindexErr::Other(format!(
-                        "the token is too short, expecting 16 bytes after the prefix {prefix}"
-                    ))
-                })?);
+                token.fetch_entries_key = key;
             } else if prefix == 1 {
-                token.fetch_chains_key = Some(bytes.next_chunk::<16>().map_err(|_| {
-                    FindexErr::Other(format!(
-                        "the token is too short, expecting 16 bytes after the prefix {prefix}"
-                    ))
-                })?);
+                token.fetch_chains_key = key;
             } else if prefix == 2 {
-                token.upsert_entries_key = Some(bytes.next_chunk::<16>().map_err(|_| {
-                    FindexErr::Other(format!(
-                        "the token is too short, expecting 16 bytes after the prefix {prefix}"
-                    ))
-                })?);
+                token.upsert_entries_key = key;
             } else if prefix == 3 {
-                token.insert_chains_key = Some(bytes.next_chunk::<16>().map_err(|_| {
-                    FindexErr::Other(format!(
-                        "the token is too short, expecting 16 bytes after the prefix {prefix}"
-                    ))
-                })?);
+                token.insert_chains_key = key;
             } else {
                 return Err(FindexErr::Other(format!(
                     "the token contains a unknown prefix {prefix}"
