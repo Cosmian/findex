@@ -417,6 +417,7 @@ pub unsafe extern "C" fn h_upsert_cloud(
 /// # Safety
 ///
 /// Cannot be safe since using FFI.
+#[allow(clippy::too_many_arguments)]
 unsafe fn ffi_search<
     T: FindexSearch<
         UID_LENGTH,
@@ -481,7 +482,7 @@ unsafe fn ffi_search<
     let rt = ffi_unwrap!(tokio::runtime::Runtime::new());
     let results = match rt.block_on(findex.search(
         &keywords,
-        &master_key,
+        master_key,
         &label,
         max_results_per_keyword.into(),
         max_depth,
@@ -580,7 +581,7 @@ unsafe extern "C" fn ffi_upsert<
 
     // We want to forward error code returned by callbacks to the parent caller to
     // do error management client side.
-    match rt.block_on(findex.upsert(indexed_values_and_keywords, &master_key, &label)) {
+    match rt.block_on(findex.upsert(indexed_values_and_keywords, master_key, &label)) {
         Ok(_) => 0,
         Err(err) => {
             set_last_error(FfiError::Generic(format!("{err}")));
