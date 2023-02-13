@@ -8,8 +8,9 @@ use wasm_bindgen::prelude::*;
 
 use crate::{
     core::{FindexSearch, FindexUpsert, KeyingMaterial, Keyword, Label},
+    error::FindexErr,
     interfaces::{
-        cloud::FindexCloud,
+        cloud::{FindexCloud, Token},
         generic_parameters::{
             MASTER_KEY_LENGTH, MAX_RESULTS_PER_KEYWORD, SECURE_FETCH_CHAINS_BATCH_SIZE,
         },
@@ -146,8 +147,9 @@ pub async fn webassembly_search_cloud(
     max_results_per_keyword: i32,
     max_depth: i32,
     fetch_chains_batch_size: i32,
+    base_url: Option<String>,
 ) -> Result<SearchResults, JsValue> {
-    let mut findex_cloud = FindexCloud::new(token, None)?;
+    let mut findex_cloud = FindexCloud::new(token, base_url)?;
     let master_key = KeyingMaterial::<MASTER_KEY_LENGTH>::try_from_bytes(
         findex_cloud.token.findex_master_key.as_ref(),
     )
@@ -212,4 +214,46 @@ pub async fn webassembly_upsert_cloud(
         .upsert(indexed_values_to_keywords, &master_key, &label)
         .await
         .map_err(|e| JsValue::from(format!("During Findex Cloud upsert: {e}")))
+}
+
+/// Generate a new Findex Cloud token with reduced permissions
+#[wasm_bindgen]
+pub fn webassembly_derive_new_token(
+    token: String,
+    search: bool,
+    index: bool,
+) -> Result<String, JsValue> {
+    let mut token = Token::from_str(&token)?;
+
+    token.reduce_permissions(search, index)?;
+
+    Ok(token.to_string())
+}
+
+/// Generate a new Findex Cloud token with reduced permissions
+#[wasm_bindgen]
+pub fn webassembly_generate_new_token(
+    index_id: String,
+    fetch_entries_key: Uint8Array,
+    fetch_chains_key: Uint8Array,
+    upsert_entries_key: Uint8Array,
+    insert_chains_key: Uint8Array,
+) -> Result<String, JsValue> {
+    let token = Token::random_findex_master_key(
+        index_id,
+        fetch_entries_key.to_vec().try_into().map_err(|_| {
+            FindexErr::Other(format!("fetch_entries_key is of wrong size (16 expected)"))
+        })?,
+        fetch_chains_key.to_vec().try_into().map_err(|_| {
+            FindexErr::Other(format!("fetch_chains_key is of wrong size (16 expected)"))
+        })?,
+        upsert_entries_key.to_vec().try_into().map_err(|_| {
+            FindexErr::Other(format!("upsert_entries_key is of wrong size (16 expected)"))
+        })?,
+        insert_chains_key.to_vec().try_into().map_err(|_| {
+            FindexErr::Other(format!("insert_chains_key is of wrong size (16 expected)"))
+        })?,
+    )?;
+
+    Ok(token.to_string())
 }

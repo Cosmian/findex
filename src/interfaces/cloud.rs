@@ -1,6 +1,7 @@
 use std::collections::{HashMap, HashSet};
 
-use cosmian_crypto_core::bytes_ser_de::Serializable;
+use cosmian_crypto_core::{bytes_ser_de::Serializable, CsRng};
+use rand::SeedableRng;
 use tiny_keccak::{Hasher, Kmac};
 
 use crate::{
@@ -20,10 +21,10 @@ use crate::{
 
 pub(crate) struct FindexCloud {
     pub(crate) token: Token,
-    pub(crate) url: Option<String>,
+    pub(crate) base_url: Option<String>,
 }
 
-pub struct Token {
+pub(crate) struct Token {
     index_id: String,
 
     pub(crate) findex_master_key: KeyingMaterial<MASTER_KEY_LENGTH>,
@@ -34,15 +35,28 @@ pub struct Token {
     insert_chains_key: Option<[u8; 16]>,
 }
 
-enum Callback {
-    FetchEntries,
-    FetchChains,
-    UpsertEntries,
-    InsertChains,
-}
+impl Token {
+    pub fn random_findex_master_key(
+        index_id: String,
+        fetch_entries_key: [u8; 16],
+        fetch_chains_key: [u8; 16],
+        upsert_entries_key: [u8; 16],
+        insert_chains_key: [u8; 16],
+    ) -> Result<Self, FindexErr> {
+        let mut rng = CsRng::from_entropy();
+        let findex_master_key = KeyingMaterial::<MASTER_KEY_LENGTH>::new(&mut rng);
 
-impl FindexCloud {
-    pub fn new(token: String, url: Option<String>) -> Result<Self, FindexErr> {
+        Ok(Token {
+            index_id,
+            findex_master_key,
+            fetch_entries_key: Some(fetch_entries_key),
+            fetch_chains_key: Some(fetch_chains_key),
+            upsert_entries_key: Some(upsert_entries_key),
+            insert_chains_key: Some(insert_chains_key),
+        })
+    }
+
+    pub fn from_str(token: &str) -> Result<Self, FindexErr> {
         let (index_id, tail) = token.split_at(5);
         let mut bytes = base64::decode(tail)
             .map_err(|_| {
@@ -91,7 +105,72 @@ impl FindexCloud {
             }
         }
 
-        Ok(FindexCloud { token, url })
+        Ok(token)
+    }
+
+    pub fn reduce_permissions(&mut self, search: bool, index: bool) -> Result<(), FindexErr> {
+        self.fetch_entries_key = reduce_option(self.fetch_entries_key, search || index)?;
+        self.fetch_chains_key = reduce_option(self.fetch_chains_key, search)?;
+        self.upsert_entries_key = reduce_option(self.upsert_entries_key, index)?;
+        self.insert_chains_key = reduce_option(self.insert_chains_key, index)?;
+
+        Ok(())
+    }
+
+    pub fn to_string(&self) -> String {
+        let mut keys = self.findex_master_key.to_vec();
+
+        if let Some(fetch_entries_key) = self.fetch_entries_key {
+            keys.push(0);
+            keys.extend(&fetch_entries_key);
+        }
+
+        if let Some(fetch_chains_key) = self.fetch_chains_key {
+            keys.push(1);
+            keys.extend(&fetch_chains_key);
+        }
+
+        if let Some(upsert_entries_key) = self.upsert_entries_key {
+            keys.push(2);
+            keys.extend(&upsert_entries_key);
+        }
+
+        if let Some(insert_chains_key) = self.insert_chains_key {
+            keys.push(3);
+            keys.extend(&insert_chains_key);
+        }
+
+        format!("{}{}", self.index_id, base64::encode(keys))
+    }
+}
+
+fn reduce_option(permission: Option<[u8; 16]>, keep: bool) -> Result<Option<[u8; 16]>, FindexErr> {
+    if let Some(permission) = permission {
+        if keep {
+            Ok(Some(permission))
+        } else {
+            Err(FindexErr::Other(format!(
+                "The token provided doesn't have the permission"
+            )))
+        }
+    } else {
+        Ok(None)
+    }
+}
+
+enum Callback {
+    FetchEntries,
+    FetchChains,
+    UpsertEntries,
+    InsertChains,
+}
+
+impl FindexCloud {
+    pub fn new(token: String, base_url: Option<String>) -> Result<Self, FindexErr> {
+        Ok(FindexCloud {
+            token: Token::from_str(&token)?,
+            base_url,
+        })
     }
 
     async fn post(&self, callback: Callback, bytes: &[u8]) -> Result<Vec<u8>, FindexErr> {
@@ -121,7 +200,9 @@ impl FindexCloud {
 
         let url = format!(
             "{}/indexes/{}/{endpoint}",
-            self.url.as_deref().unwrap_or("http://127.0.0.1:8080"),
+            self.base_url
+                .as_deref()
+                .unwrap_or("https://findex.cosmian.com"),
             self.token.index_id,
         );
 
