@@ -22,7 +22,7 @@ path = "src/lib.rs"
 [features]
 ffi = ["interfaces", "serde", "serde_json", "cloud", "cosmian_ffi", "tokio"]
 sqlite = ["rusqlite", "faker_rand", "interfaces", "serde", "serde_json"]
-wasm_bindgen = ["interfaces", "js-sys", "wasm-bindgen", "wasm-bindgen-test", "web-sys", "wasm-bindgen-futures", "cloud"]
+wasm_bindgen = ["interfaces", "js-sys", "wasm-bindgen", "wasm-bindgen-futures", "cloud"]
 interfaces = []
 cloud = ["interfaces", "serde"]
 python = ["interfaces", "pyo3"]
@@ -49,14 +49,6 @@ tiny-keccak = { version = "2.0.2", features = ["kmac"] }
 tokio = { version = "1.25.0", features = ["rt-multi-thread"], optional = true }
 wasm-bindgen = { version = "0.2", features = ["serde-serialize"], optional = true }
 wasm-bindgen-futures = { version = "0.4", optional = true }
-wasm-bindgen-test = { version = "0.3", optional = true }
-web-sys = { version = "0.3", features = [
-  'Document',
-  'Element',
-  'HtmlElement',
-  'Node',
-  'Window',
-], optional = true }
 zeroize = "1.5"
 
 [dev-dependencies]
