@@ -1,6 +1,6 @@
 //! Defines the Findex WASM API.
 
-use std::{collections::HashSet, num::NonZeroUsize};
+use std::{collections::HashSet, num::NonZeroUsize, str::FromStr};
 
 use cosmian_crypto_core::bytes_ser_de::Serializable;
 use js_sys::{Array, Uint8Array};
@@ -242,16 +242,28 @@ pub fn webassembly_generate_new_token(
     let token = Token::random_findex_master_key(
         index_id,
         fetch_entries_key.to_vec().try_into().map_err(|_| {
-            FindexErr::Other(format!("fetch_entries_key is of wrong size (16 expected)"))
+            FindexErr::Other(format!(
+                "fetch_entries_key is of wrong size ({} received, 16 expected)",
+                fetch_entries_key.length()
+            ))
         })?,
         fetch_chains_key.to_vec().try_into().map_err(|_| {
-            FindexErr::Other(format!("fetch_chains_key is of wrong size (16 expected)"))
+            FindexErr::Other(format!(
+                "fetch_chains_key is of wrong size ({} received, 16 expected)",
+                fetch_chains_key.length()
+            ))
         })?,
         upsert_entries_key.to_vec().try_into().map_err(|_| {
-            FindexErr::Other(format!("upsert_entries_key is of wrong size (16 expected)"))
+            FindexErr::Other(format!(
+                "upsert_entries_key is of wrong size ({} received, 16 expected)",
+                upsert_entries_key.length()
+            ))
         })?,
         insert_chains_key.to_vec().try_into().map_err(|_| {
-            FindexErr::Other(format!("insert_chains_key is of wrong size (16 expected)"))
+            FindexErr::Other(format!(
+                "insert_chains_key is of wrong size ({} received, 16 expected)",
+                insert_chains_key.length()
+            ))
         })?,
     )?;
 

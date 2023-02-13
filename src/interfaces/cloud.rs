@@ -1,4 +1,8 @@
-use std::collections::{HashMap, HashSet};
+use std::{
+    collections::{HashMap, HashSet},
+    fmt::Display,
+    str::FromStr,
+};
 
 use cosmian_crypto_core::{bytes_ser_de::Serializable, CsRng};
 use rand::SeedableRng;
@@ -35,28 +39,38 @@ pub(crate) struct Token {
     insert_chains_key: Option<[u8; 16]>,
 }
 
-impl Token {
-    pub fn random_findex_master_key(
-        index_id: String,
-        fetch_entries_key: [u8; 16],
-        fetch_chains_key: [u8; 16],
-        upsert_entries_key: [u8; 16],
-        insert_chains_key: [u8; 16],
-    ) -> Result<Self, FindexErr> {
-        let mut rng = CsRng::from_entropy();
-        let findex_master_key = KeyingMaterial::<MASTER_KEY_LENGTH>::new(&mut rng);
+impl Display for Token {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let mut keys = self.findex_master_key.to_vec();
 
-        Ok(Token {
-            index_id,
-            findex_master_key,
-            fetch_entries_key: Some(fetch_entries_key),
-            fetch_chains_key: Some(fetch_chains_key),
-            upsert_entries_key: Some(upsert_entries_key),
-            insert_chains_key: Some(insert_chains_key),
-        })
+        if let Some(fetch_entries_key) = self.fetch_entries_key {
+            keys.push(0);
+            keys.extend(fetch_entries_key);
+        }
+
+        if let Some(fetch_chains_key) = self.fetch_chains_key {
+            keys.push(1);
+            keys.extend(fetch_chains_key);
+        }
+
+        if let Some(upsert_entries_key) = self.upsert_entries_key {
+            keys.push(2);
+            keys.extend(upsert_entries_key);
+        }
+
+        if let Some(insert_chains_key) = self.insert_chains_key {
+            keys.push(3);
+            keys.extend(insert_chains_key);
+        }
+
+        write!(f, "{}{}", self.index_id, base64::encode(keys))
     }
+}
 
-    pub fn from_str(token: &str) -> Result<Self, FindexErr> {
+impl FromStr for Token {
+    type Err = FindexErr;
+
+    fn from_str(token: &str) -> Result<Self, Self::Err> {
         let (index_id, tail) = token.split_at(5);
         let mut bytes = base64::decode(tail)
             .map_err(|_| {
@@ -107,50 +121,51 @@ impl Token {
 
         Ok(token)
     }
+}
+
+impl Token {
+    pub fn random_findex_master_key(
+        index_id: String,
+        fetch_entries_key: [u8; 16],
+        fetch_chains_key: [u8; 16],
+        upsert_entries_key: [u8; 16],
+        insert_chains_key: [u8; 16],
+    ) -> Result<Self, FindexErr> {
+        let mut rng = CsRng::from_entropy();
+        let findex_master_key = KeyingMaterial::<MASTER_KEY_LENGTH>::new(&mut rng);
+
+        Ok(Token {
+            index_id,
+            findex_master_key,
+            fetch_entries_key: Some(fetch_entries_key),
+            fetch_chains_key: Some(fetch_chains_key),
+            upsert_entries_key: Some(upsert_entries_key),
+            insert_chains_key: Some(insert_chains_key),
+        })
+    }
 
     pub fn reduce_permissions(&mut self, search: bool, index: bool) -> Result<(), FindexErr> {
-        self.fetch_entries_key = reduce_option(self.fetch_entries_key, search || index)?;
-        self.fetch_chains_key = reduce_option(self.fetch_chains_key, search)?;
-        self.upsert_entries_key = reduce_option(self.upsert_entries_key, index)?;
-        self.insert_chains_key = reduce_option(self.insert_chains_key, index)?;
+        self.fetch_entries_key =
+            reduce_option("fetch entries", self.fetch_entries_key, search || index)?;
+        self.fetch_chains_key = reduce_option("fetch chains", self.fetch_chains_key, search)?;
+        self.upsert_entries_key = reduce_option("upsert entries", self.upsert_entries_key, index)?;
+        self.insert_chains_key = reduce_option("insert chains", self.insert_chains_key, index)?;
 
         Ok(())
     }
-
-    pub fn to_string(&self) -> String {
-        let mut keys = self.findex_master_key.to_vec();
-
-        if let Some(fetch_entries_key) = self.fetch_entries_key {
-            keys.push(0);
-            keys.extend(&fetch_entries_key);
-        }
-
-        if let Some(fetch_chains_key) = self.fetch_chains_key {
-            keys.push(1);
-            keys.extend(&fetch_chains_key);
-        }
-
-        if let Some(upsert_entries_key) = self.upsert_entries_key {
-            keys.push(2);
-            keys.extend(&upsert_entries_key);
-        }
-
-        if let Some(insert_chains_key) = self.insert_chains_key {
-            keys.push(3);
-            keys.extend(&insert_chains_key);
-        }
-
-        format!("{}{}", self.index_id, base64::encode(keys))
-    }
 }
 
-fn reduce_option(permission: Option<[u8; 16]>, keep: bool) -> Result<Option<[u8; 16]>, FindexErr> {
+fn reduce_option(
+    debug_info: &str,
+    permission: Option<[u8; 16]>,
+    keep: bool,
+) -> Result<Option<[u8; 16]>, FindexErr> {
     if let Some(permission) = permission {
         if keep {
             Ok(Some(permission))
         } else {
             Err(FindexErr::Other(format!(
-                "The token provided doesn't have the permission"
+                "The token provided doesn't have the permission to {debug_info}"
             )))
         }
     } else {
