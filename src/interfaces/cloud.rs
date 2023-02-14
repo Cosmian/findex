@@ -45,11 +45,10 @@ pub const FINDEX_CLOUD_DEFAULT_DOMAIN: &str = "https://findex.cosmian.com";
 /// lot).
 ///
 /// The string is encoded as follow:
-/// 1. `index_id` `INDEX_ID_LENGTH` unique characters identifying
-/// the index inside our backend
+/// 1. `index_id` `INDEX_ID_LENGTH` chars (see `Token@index_id`)
 /// 2. base64 representation of the different keys:
 ///     1. `SIGNATURE_KEY_LENGTH` bytes of findex master key (this key is never
-/// sent to our backend)
+/// sent to the Findex Cloud backend)
 ///     2. 1 byte prefix identifying the next key
 ///     3. `SIGNATURE_KEY_LENGTH` bytes of callback signature key
 ///     4. 1 byte prefix identifying the next key
@@ -62,7 +61,7 @@ pub const FINDEX_CLOUD_DEFAULT_DOMAIN: &str = "https://findex.cosmian.com";
 /// to disallow the server to differentiate a `fetch_entries` for a search or a
 /// `fetch_entries` for an upsert while still allowing fine grain permissions.
 pub(crate) struct Token {
-    /// This ID identify an index inside our backend
+    /// This ID identify an index inside the Findex Cloud backend
     /// We do not use auto-increment integer ID because we don't want to leak
     /// the number of indexes inside our database.
     /// We do not use UUID because the token is limited in space.
