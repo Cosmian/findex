@@ -243,43 +243,27 @@ pub fn webassembly_generate_new_token(
 ) -> Result<String, JsValue> {
     let token = Token::random_findex_master_key(
         index_id,
-        TryInto::<[u8; SIGNATURE_KEY_LENGTH]>::try_into(fetch_entries_key.to_vec())
-            .map_err(|_| {
-                FindexErr::Other(format!(
-                    "fetch_entries_key is of wrong size ({} received, {SIGNATURE_KEY_LENGTH} \
-                     expected)",
-                    fetch_entries_key.length()
-                ))
-            })?
-            .into(),
-        TryInto::<[u8; SIGNATURE_KEY_LENGTH]>::try_into(fetch_chains_key.to_vec())
-            .map_err(|_| {
-                FindexErr::Other(format!(
-                    "fetch_chains_key is of wrong size ({} received, {SIGNATURE_KEY_LENGTH} \
-                     expected)",
-                    fetch_chains_key.length()
-                ))
-            })?
-            .into(),
-        TryInto::<[u8; SIGNATURE_KEY_LENGTH]>::try_into(upsert_entries_key.to_vec())
-            .map_err(|_| {
-                FindexErr::Other(format!(
-                    "upsert_entries_key is of wrong size ({} received, {SIGNATURE_KEY_LENGTH} \
-                     expected)",
-                    upsert_entries_key.length()
-                ))
-            })?
-            .into(),
-        TryInto::<[u8; SIGNATURE_KEY_LENGTH]>::try_into(insert_chains_key.to_vec())
-            .map_err(|_| {
-                FindexErr::Other(format!(
-                    "insert_chains_key is of wrong size ({} received, {SIGNATURE_KEY_LENGTH} \
-                     expected)",
-                    insert_chains_key.length()
-                ))
-            })?
-            .into(),
+        uint8array_to_key(fetch_entries_key, "fetch_entries_key")?,
+        uint8array_to_key(fetch_chains_key, "fetch_chains_key")?,
+        uint8array_to_key(upsert_entries_key, "upsert_entries_key")?,
+        uint8array_to_key(insert_chains_key, "insert_chains_key")?,
     )?;
 
     Ok(token.to_string())
+}
+
+fn uint8array_to_key(
+    key: Uint8Array,
+    debug_name: &str,
+) -> Result<KeyingMaterial<SIGNATURE_KEY_LENGTH>, FindexErr> {
+    Ok(
+        TryInto::<[u8; SIGNATURE_KEY_LENGTH]>::try_into(key.to_vec())
+            .map_err(|_| {
+                FindexErr::Other(format!(
+                    "{debug_name} is of wrong size ({} received, {SIGNATURE_KEY_LENGTH} expected)",
+                    key.length()
+                ))
+            })?
+            .into(),
+    )
 }
