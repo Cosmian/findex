@@ -32,7 +32,7 @@ pub(crate) struct FindexCloud {
 /// obfuscating the number of index present (contrary to incremented ID).
 /// Moreover, 5 is a small enough value to have inside the size-limited token
 /// (contrary to UUID).
-pub const PUBLIC_INDEX_ID_LENGTH: usize = 5;
+pub const INDEX_ID_LENGTH: usize = 5;
 
 /// The callback signature is a kmac of the body of the request used to do
 /// authorization (checking if this client can call this callback)
@@ -47,7 +47,7 @@ pub const FINDEX_CLOUD_DEFAULT_DOMAIN: &str = "https://findex.cosmian.com";
 /// lot).
 ///
 /// The string is encoded as follow:
-/// 1. `public_index_id` `PUBLIC_INDEX_ID_LENGTH` unique characters identifying
+/// 1. `index_id` `INDEX_ID_LENGTH` unique characters identifying
 /// the index inside our backend
 /// 2. base64 representation of the different keys:
 ///     1. `SIGNATURE_KEY_LENGTH` bytes of findex master key (this key is never
@@ -106,7 +106,7 @@ impl FromStr for Token {
     type Err = FindexErr;
 
     fn from_str(token: &str) -> Result<Self, Self::Err> {
-        let (index_id, tail) = token.split_at(PUBLIC_INDEX_ID_LENGTH);
+        let (index_id, tail) = token.split_at(INDEX_ID_LENGTH);
         let mut bytes = base64::decode(tail)
             .map_err(|_| {
                 FindexErr::Other(format!(
