@@ -30,6 +30,8 @@ use crate::{
 /// - `keywords`                : list of keyword bytes to search
 /// - `max_results_per_keyword` : maximum results returned for a keyword
 /// - `max_depth`               : maximum recursion level allowed
+/// - `fetch_chains_batch_size` : increase this value to improve perfs but
+///   decrease security by batching fetch chains calls
 /// - `progress`                : progress callback
 /// - `fetch_entries`           : callback to fetch from the Entry Table
 /// - `fetch_chains`            : callback to fetch from the Chain Table
@@ -135,9 +137,9 @@ pub async fn webassembly_upsert(
 /// - `keywords`                : list of keyword bytes to search
 /// - `max_results_per_keyword` : maximum results returned for a keyword
 /// - `max_depth`               : maximum recursion level allowed
-/// - `progress`                : progress callback
-/// - `fetch_entries`           : callback to fetch from the Entry Table
-/// - `fetch_chains`            : callback to fetch from the Chain Table
+/// - `fetch_chains_batch_size` : increase this value to improve perfs but
+/// - `base_url`                : base URL for Findex Cloud (with http prefix
+///   and port if required). If null, use the default Findex Cloud server.
 #[wasm_bindgen]
 #[allow(clippy::too_many_arguments)]
 pub async fn webassembly_search_cloud(

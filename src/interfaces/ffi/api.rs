@@ -66,7 +66,7 @@ pub unsafe extern "C" fn get_last_error(error_ptr: *mut c_char, error_len: *mut 
 ///
 /// # Parameters
 ///
-/// - `indexed_values`            : (output) search result
+/// - `search_results`            : (output) search result
 /// - `master_key`                : master key
 /// - `label`                     : additional information used to derive Entry
 ///   Table UIDs
@@ -74,6 +74,8 @@ pub unsafe extern "C" fn get_last_error(error_ptr: *mut c_char, error_len: *mut 
 /// - `max_results_per_keyword`   : maximum number of results returned per
 ///   keyword
 /// - `max_depth`                 : maximum recursion depth allowed
+/// - `fetch_chains_batch_size`   : increase this value to improve perfs but
+///   decrease security by batching fetch chains calls
 /// - `progress_callback`         : callback used to retrieve intermediate
 ///   results and transmit user interrupt
 /// - `fetch_entry_callback`      : callback used to fetch the Entry Table
@@ -315,17 +317,16 @@ pub unsafe extern "C" fn h_compact(
 ///
 /// # Parameters
 ///
-/// - `indexed_values`          : (output) search result
-/// - `master_key`              : master key
-/// - `label`                   : additional information used to derive Entry
+/// - `search_results`            : (output) search result
+/// - `token`                     : findex cloud token
+/// - `label`                     : additional information used to derive Entry
 ///   Table UIDs
-/// - `keywords`                : `serde` serialized list of base64 keywords
-/// - `max_results_per_keyword` : maximum number of results returned per keyword
-/// - `max_depth`               : maximum recursion depth allowed
-/// - `progress_callback`       : callback used to retrieve intermediate results
-///   and transmit user interrupt
-/// - `fetch_entry`             : callback used to fetch the Entry Table
-/// - `fetch_chain`             : callback used to fetch the Chain Table
+/// - `keywords`                  : `serde` serialized list of base64 keywords
+/// - `max_results_per_keyword`   : maximum number of results returned per
+///   keyword
+/// - `max_depth`                 : maximum recursion depth allowed
+/// - `fetch_chains_batch_size`   : increase this value to improve perfs but
+///   decrease security by batching fetch chains calls
 ///
 /// # Safety
 ///
