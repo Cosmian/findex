@@ -228,12 +228,20 @@ impl FindexCloud {
             .body(bytes.to_vec())
             .send()
             .await
-            .map_err(|err| FindexErr::Other(format!("err {err}")))?;
+            .map_err(|err| {
+                FindexErr::Other(format!(
+                    "Impossibe to send the request to FindexCloud: {err}"
+                ))
+            })?;
 
         Ok(res
             .bytes()
             .await
-            .map_err(|err| FindexErr::Other(format!("err2 {err}")))?
+            .map_err(|err| {
+                FindexErr::Other(format!(
+                    "Impossibe to read the returned bytes from FindexCloud:  {err}"
+                ))
+            })?
             .to_vec())
     }
 }
