@@ -10,7 +10,7 @@ use crate::{
     core::{FindexSearch, FindexUpsert, KeyingMaterial, Keyword, Label},
     error::FindexErr,
     interfaces::{
-        cloud::{FindexCloud, Token},
+        cloud::{FindexCloud, Token, SIGNATURE_KEY_LENGTH},
         generic_parameters::{
             MASTER_KEY_LENGTH, MAX_RESULTS_PER_KEYWORD, SECURE_FETCH_CHAINS_BATCH_SIZE,
         },
@@ -243,30 +243,42 @@ pub fn webassembly_generate_new_token(
 ) -> Result<String, JsValue> {
     let token = Token::random_findex_master_key(
         index_id,
-        fetch_entries_key.to_vec().try_into().map_err(|_| {
-            FindexErr::Other(format!(
-                "fetch_entries_key is of wrong size ({} received, 16 expected)",
-                fetch_entries_key.length()
-            ))
-        })?,
-        fetch_chains_key.to_vec().try_into().map_err(|_| {
-            FindexErr::Other(format!(
-                "fetch_chains_key is of wrong size ({} received, 16 expected)",
-                fetch_chains_key.length()
-            ))
-        })?,
-        upsert_entries_key.to_vec().try_into().map_err(|_| {
-            FindexErr::Other(format!(
-                "upsert_entries_key is of wrong size ({} received, 16 expected)",
-                upsert_entries_key.length()
-            ))
-        })?,
-        insert_chains_key.to_vec().try_into().map_err(|_| {
-            FindexErr::Other(format!(
-                "insert_chains_key is of wrong size ({} received, 16 expected)",
-                insert_chains_key.length()
-            ))
-        })?,
+        TryInto::<[u8; SIGNATURE_KEY_LENGTH]>::try_into(fetch_entries_key.to_vec())
+            .map_err(|_| {
+                FindexErr::Other(format!(
+                    "fetch_entries_key is of wrong size ({} received, {SIGNATURE_KEY_LENGTH} \
+                     expected)",
+                    fetch_entries_key.length()
+                ))
+            })?
+            .into(),
+        TryInto::<[u8; SIGNATURE_KEY_LENGTH]>::try_into(fetch_chains_key.to_vec())
+            .map_err(|_| {
+                FindexErr::Other(format!(
+                    "fetch_chains_key is of wrong size ({} received, {SIGNATURE_KEY_LENGTH} \
+                     expected)",
+                    fetch_chains_key.length()
+                ))
+            })?
+            .into(),
+        TryInto::<[u8; SIGNATURE_KEY_LENGTH]>::try_into(upsert_entries_key.to_vec())
+            .map_err(|_| {
+                FindexErr::Other(format!(
+                    "upsert_entries_key is of wrong size ({} received, {SIGNATURE_KEY_LENGTH} \
+                     expected)",
+                    upsert_entries_key.length()
+                ))
+            })?
+            .into(),
+        TryInto::<[u8; SIGNATURE_KEY_LENGTH]>::try_into(insert_chains_key.to_vec())
+            .map_err(|_| {
+                FindexErr::Other(format!(
+                    "insert_chains_key is of wrong size ({} received, {SIGNATURE_KEY_LENGTH} \
+                     expected)",
+                    insert_chains_key.length()
+                ))
+            })?
+            .into(),
     )?;
 
     Ok(token.to_string())

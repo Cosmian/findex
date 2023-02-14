@@ -38,6 +38,8 @@ pub const PUBLIC_INDEX_ID_LENGTH: usize = 5;
 /// authorization (checking if this client can call this callback)
 pub const CALLBACK_SIGNATURE_LENGTH: usize = 32;
 
+pub const SIGNATURE_KEY_LENGTH: usize = 16;
+
 pub const FINDEX_CLOUD_DEFAULT_DOMAIN: &str = "https://findex.cosmian.com";
 
 /// Findex Cloud tokens are a string containing all information required to do
@@ -48,9 +50,10 @@ pub const FINDEX_CLOUD_DEFAULT_DOMAIN: &str = "https://findex.cosmian.com";
 /// 1. `public_index_id` `PUBLIC_INDEX_ID_LENGTH` unique characters identifying
 /// the index inside our backend
 /// 2. base64 representation of the different keys:
-///     1. 16 bytes of findex master key (this key is never sent to our backend)
+///     1. `SIGNATURE_KEY_LENGTH` bytes of findex master key (this key is never
+/// sent to our backend)
 ///     2. 1 byte prefix identifying the next key
-///     3. 16 bytes of callback signature key
+///     3. `SIGNATURE_KEY_LENGTH` bytes of callback signature key
 ///     4. 1 byte prefix identifying the next key
 ///     5. …
 ///
@@ -65,34 +68,34 @@ pub(crate) struct Token {
 
     pub(crate) findex_master_key: KeyingMaterial<MASTER_KEY_LENGTH>,
 
-    fetch_entries_key: Option<[u8; 16]>,
-    fetch_chains_key: Option<[u8; 16]>,
-    upsert_entries_key: Option<[u8; 16]>,
-    insert_chains_key: Option<[u8; 16]>,
+    fetch_entries_key: Option<KeyingMaterial<SIGNATURE_KEY_LENGTH>>,
+    fetch_chains_key: Option<KeyingMaterial<SIGNATURE_KEY_LENGTH>>,
+    upsert_entries_key: Option<KeyingMaterial<SIGNATURE_KEY_LENGTH>>,
+    insert_chains_key: Option<KeyingMaterial<SIGNATURE_KEY_LENGTH>>,
 }
 
 impl Display for Token {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let mut keys = self.findex_master_key.to_vec();
 
-        if let Some(fetch_entries_key) = self.fetch_entries_key {
+        if let Some(fetch_entries_key) = &self.fetch_entries_key {
             keys.push(0);
-            keys.extend(fetch_entries_key);
+            keys.extend(fetch_entries_key.as_ref());
         }
 
-        if let Some(fetch_chains_key) = self.fetch_chains_key {
+        if let Some(fetch_chains_key) = &self.fetch_chains_key {
             keys.push(1);
-            keys.extend(fetch_chains_key);
+            keys.extend(fetch_chains_key.as_ref());
         }
 
-        if let Some(upsert_entries_key) = self.upsert_entries_key {
+        if let Some(upsert_entries_key) = &self.upsert_entries_key {
             keys.push(2);
-            keys.extend(upsert_entries_key);
+            keys.extend(upsert_entries_key.as_ref());
         }
 
-        if let Some(insert_chains_key) = self.insert_chains_key {
+        if let Some(insert_chains_key) = &self.insert_chains_key {
             keys.push(3);
-            keys.extend(insert_chains_key);
+            keys.extend(insert_chains_key.as_ref());
         }
 
         write!(f, "{}{}", self.index_id, base64::encode(keys))
@@ -112,12 +115,13 @@ impl FromStr for Token {
             })?
             .into_iter();
 
-        let findex_master_key =
-            KeyingMaterial::try_from_bytes(&bytes.next_chunk::<16>().map_err(|_| {
+        let findex_master_key = KeyingMaterial::try_from_bytes(
+            &bytes.next_chunk::<MASTER_KEY_LENGTH>().map_err(|_| {
                 FindexErr::Other(
                     "the token is too short, cannot read the Findex master key".to_owned(),
                 )
-            })?)?;
+            })?,
+        )?;
 
         let mut token = Token {
             index_id: index_id.to_owned(),
@@ -130,11 +134,17 @@ impl FromStr for Token {
         };
 
         while let Some(prefix) = bytes.next() {
-            let key = Some(bytes.next_chunk::<16>().map_err(|_| {
-                FindexErr::Other(format!(
-                    "the token is too short, expecting 16 bytes after the prefix {prefix}"
-                ))
-            })?);
+            let key = Some(
+                bytes
+                    .next_chunk::<SIGNATURE_KEY_LENGTH>()
+                    .map_err(|_| {
+                        FindexErr::Other(format!(
+                            "the token is too short, expecting {SIGNATURE_KEY_LENGTH} bytes after \
+                             the prefix {prefix}"
+                        ))
+                    })?
+                    .into(),
+            );
 
             if prefix == 0 {
                 token.fetch_entries_key = key;
@@ -158,10 +168,10 @@ impl FromStr for Token {
 impl Token {
     pub fn random_findex_master_key(
         index_id: String,
-        fetch_entries_key: [u8; 16],
-        fetch_chains_key: [u8; 16],
-        upsert_entries_key: [u8; 16],
-        insert_chains_key: [u8; 16],
+        fetch_entries_key: KeyingMaterial<SIGNATURE_KEY_LENGTH>,
+        fetch_chains_key: KeyingMaterial<SIGNATURE_KEY_LENGTH>,
+        upsert_entries_key: KeyingMaterial<SIGNATURE_KEY_LENGTH>,
+        insert_chains_key: KeyingMaterial<SIGNATURE_KEY_LENGTH>,
     ) -> Result<Self, FindexErr> {
         let mut rng = CsRng::from_entropy();
         let findex_master_key = KeyingMaterial::<MASTER_KEY_LENGTH>::new(&mut rng);
@@ -178,10 +188,10 @@ impl Token {
 
     pub fn reduce_permissions(&mut self, search: bool, index: bool) -> Result<(), FindexErr> {
         self.fetch_entries_key =
-            reduce_option("fetch entries", self.fetch_entries_key, search || index)?;
-        self.fetch_chains_key = reduce_option("fetch chains", self.fetch_chains_key, search)?;
-        self.upsert_entries_key = reduce_option("upsert entries", self.upsert_entries_key, index)?;
-        self.insert_chains_key = reduce_option("insert chains", self.insert_chains_key, index)?;
+            reduce_option("fetch entries", &self.fetch_entries_key, search || index)?;
+        self.fetch_chains_key = reduce_option("fetch chains", &self.fetch_chains_key, search)?;
+        self.upsert_entries_key = reduce_option("upsert entries", &self.upsert_entries_key, index)?;
+        self.insert_chains_key = reduce_option("insert chains", &self.insert_chains_key, index)?;
 
         Ok(())
     }
@@ -192,13 +202,13 @@ impl Token {
 /// If we don't want to keep it, return none.
 fn reduce_option(
     debug_info: &str,
-    permission: Option<[u8; 16]>,
+    permission: &Option<KeyingMaterial<SIGNATURE_KEY_LENGTH>>,
     keep: bool,
-) -> Result<Option<[u8; 16]>, FindexErr> {
+) -> Result<Option<KeyingMaterial<SIGNATURE_KEY_LENGTH>>, FindexErr> {
     match (permission, keep) {
         (_, false) => Ok(None),
 
-        (Some(permission), true) => Ok(Some(permission)),
+        (Some(permission), true) => Ok(Some(permission.clone())),
         (None, true) => Err(FindexErr::Other(format!(
             "The token provided doesn't have the permission to {debug_info}"
         ))),
@@ -222,12 +232,15 @@ impl Callback {
         }
     }
 
-    pub fn get_key(&self, token: &Token) -> Option<[u8; 16]> {
+    pub fn get_key<'a>(
+        &self,
+        token: &'a Token,
+    ) -> &'a Option<KeyingMaterial<SIGNATURE_KEY_LENGTH>> {
         match self {
-            Callback::FetchEntries => token.fetch_entries_key,
-            Callback::FetchChains => token.fetch_chains_key,
-            Callback::UpsertEntries => token.upsert_entries_key,
-            Callback::InsertChains => token.insert_chains_key,
+            Callback::FetchEntries => &token.fetch_entries_key,
+            Callback::FetchChains => &token.fetch_chains_key,
+            Callback::UpsertEntries => &token.upsert_entries_key,
+            Callback::InsertChains => &token.insert_chains_key,
         }
     }
 }
@@ -243,11 +256,13 @@ impl FindexCloud {
     async fn post(&self, callback: Callback, bytes: &[u8]) -> Result<Vec<u8>, FindexErr> {
         let endpoint = callback.get_uri();
 
-        let key = callback
+        let key: KmacKey = callback
             .get_key(&self.token)
+            .as_ref()
             .ok_or(FindexErr::Other(format!(
                 "your key doesn't have the permission to call {endpoint}"
-            )))?;
+            )))?
+            .derive_kmac_key(self.token.index_id.as_bytes());
 
         let signature = base64::encode(kmac!(CALLBACK_SIGNATURE_LENGTH, &key, bytes));
 
