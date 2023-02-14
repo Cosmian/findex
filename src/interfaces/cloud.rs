@@ -28,16 +28,14 @@ pub(crate) struct FindexCloud {
     pub(crate) base_url: Option<String>,
 }
 
-/// This size allows us to have a lot of indexes for ou backend while
-/// obfuscating the number of index present (contrary to incremented ID).
-/// Moreover, 5 is a small enough value to have inside the size-limited token
-/// (contrary to UUID).
+/// See `Token@index_id`
 pub const INDEX_ID_LENGTH: usize = 5;
 
 /// The callback signature is a kmac of the body of the request used to do
 /// authorization (checking if this client can call this callback)
 pub const CALLBACK_SIGNATURE_LENGTH: usize = 32;
 
+/// This key is used to derive a new 32 bytes Kmac key.
 pub const SIGNATURE_KEY_LENGTH: usize = 16;
 
 pub const FINDEX_CLOUD_DEFAULT_DOMAIN: &str = "https://findex.cosmian.com";
@@ -64,6 +62,11 @@ pub const FINDEX_CLOUD_DEFAULT_DOMAIN: &str = "https://findex.cosmian.com";
 /// to disallow the server to differentiate a `fetch_entries` for a search or a
 /// `fetch_entries` for an upsert while still allowing fine grain permissions.
 pub(crate) struct Token {
+    /// This ID identify an index inside our backend
+    /// We do not use auto-increment integer ID because we don't want to leak
+    /// the number of indexes inside our database.
+    /// We do not use UUID because the token is limited in space.
+    /// The abritrary chosen length is `INDEX_ID_LENGTH`.
     index_id: String,
 
     pub(crate) findex_master_key: KeyingMaterial<MASTER_KEY_LENGTH>,
