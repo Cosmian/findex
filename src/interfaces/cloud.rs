@@ -155,21 +155,21 @@ impl Token {
     }
 }
 
+/// If we have the permission and want to keep it, do nothing.
+/// If we don't have the permission and want to keep it, fail.
+/// If we don't want to keep it, return none.
 fn reduce_option(
     debug_info: &str,
     permission: Option<[u8; 16]>,
     keep: bool,
 ) -> Result<Option<[u8; 16]>, FindexErr> {
-    if let Some(permission) = permission {
-        if keep {
-            Ok(Some(permission))
-        } else {
-            Err(FindexErr::Other(format!(
-                "The token provided doesn't have the permission to {debug_info}"
-            )))
-        }
-    } else {
-        Ok(None)
+    match (permission, keep) {
+        (_, false) => Ok(None),
+
+        (Some(permission), true) => Ok(Some(permission)),
+        (None, true) => Err(FindexErr::Other(format!(
+            "The token provided doesn't have the permission to {debug_info}"
+        ))),
     }
 }
 
@@ -211,7 +211,7 @@ impl FindexCloud {
         hasher.update(bytes);
         hasher.finalize(&mut output);
 
-        let signature = hex::encode(output);
+        let signature = base64::encode(output);
 
         let url = format!(
             "{}/indexes/{}/{endpoint}",
