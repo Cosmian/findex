@@ -6,7 +6,6 @@ use std::{
 
 use cosmian_crypto_core::{bytes_ser_de::Serializable, CsRng};
 use rand::SeedableRng;
-use tiny_keccak::{Hasher, Kmac};
 
 use crate::{
     core::{
@@ -21,6 +20,7 @@ use crate::{
         },
         ser_de::serialize_set,
     },
+    kmac,
 };
 
 pub(crate) struct FindexCloud {
@@ -33,6 +33,10 @@ pub(crate) struct FindexCloud {
 /// Moreover, 5 is a small enough value to have inside the size-limited token
 /// (contrary to UUID).
 pub const PUBLIC_INDEX_ID_LENGTH: usize = 5;
+
+/// The callback signature is a kmac of the body of the request used to do
+/// autorization (checking if this client can call this callback)
+pub const CALLBACK_SIGNATURE_LENGTH: usize = 32;
 
 pub const FINDEX_CLOUD_DEFAULT_DOMAIN: &str = "https://findex.cosmian.com";
 
@@ -51,7 +55,7 @@ pub const FINDEX_CLOUD_DEFAULT_DOMAIN: &str = "https://findex.cosmian.com";
 ///     5. …
 ///
 /// Currently each callback have an associated signature key used in a kmac to
-/// send request to the backend. These key are only used for authentification
+/// send request to the backend. These key are only used for authorization
 /// and do not secure the index (the findex master key do). In the future, we
 /// could do optimization to avoid having one key for each callback but we want
 /// to disallow the server to differenciate a `fetch_entries` for a search or a
@@ -245,12 +249,7 @@ impl FindexCloud {
                 "your key doesn't have the permission to call {endpoint}"
             )))?;
 
-        let mut hasher = Kmac::v128(&key, &[]);
-        let mut output = [0u8; 32];
-        hasher.update(bytes);
-        hasher.finalize(&mut output);
-
-        let signature = base64::encode(output);
+        let signature = base64::encode(kmac!(CALLBACK_SIGNATURE_LENGTH, &key, bytes));
 
         let url = format!(
             "{}/indexes/{}/{endpoint}",
