@@ -256,14 +256,10 @@ fn uint8array_to_key(
     key: Uint8Array,
     debug_name: &str,
 ) -> Result<KeyingMaterial<SIGNATURE_KEY_LENGTH>, FindexErr> {
-    Ok(
-        TryInto::<[u8; SIGNATURE_KEY_LENGTH]>::try_into(key.to_vec())
-            .map_err(|_| {
-                FindexErr::Other(format!(
-                    "{debug_name} is of wrong size ({} received, {SIGNATURE_KEY_LENGTH} expected)",
-                    key.length()
-                ))
-            })?
-            .into(),
-    )
+    KeyingMaterial::try_from_bytes(key.to_vec().as_slice()).map_err(|_| {
+        FindexErr::Other(format!(
+            "{debug_name} is of wrong size ({} received, {SIGNATURE_KEY_LENGTH} expected)",
+            key.length()
+        ))
+    })
 }
