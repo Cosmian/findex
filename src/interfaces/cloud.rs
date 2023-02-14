@@ -35,7 +35,7 @@ pub(crate) struct FindexCloud {
 pub const PUBLIC_INDEX_ID_LENGTH: usize = 5;
 
 /// The callback signature is a kmac of the body of the request used to do
-/// autorization (checking if this client can call this callback)
+/// authorization (checking if this client can call this callback)
 pub const CALLBACK_SIGNATURE_LENGTH: usize = 32;
 
 pub const FINDEX_CLOUD_DEFAULT_DOMAIN: &str = "https://findex.cosmian.com";
@@ -58,7 +58,7 @@ pub const FINDEX_CLOUD_DEFAULT_DOMAIN: &str = "https://findex.cosmian.com";
 /// send request to the backend. These key are only used for authorization
 /// and do not secure the index (the findex master key do). In the future, we
 /// could do optimization to avoid having one key for each callback but we want
-/// to disallow the server to differenciate a `fetch_entries` for a search or a
+/// to disallow the server to differentiate a `fetch_entries` for a search or a
 /// `fetch_entries` for an upsert while still allowing fine grain permissions.
 pub(crate) struct Token {
     index_id: String,
@@ -268,7 +268,7 @@ impl FindexCloud {
             .await
             .map_err(|err| {
                 FindexErr::Other(format!(
-                    "Impossibe to send the request to FindexCloud: {err}"
+                    "Impossible to send the request to FindexCloud: {err}"
                 ))
             })?;
 
@@ -277,7 +277,7 @@ impl FindexCloud {
             .await
             .map_err(|err| {
                 FindexErr::Other(format!(
-                    "Impossibe to read the returned bytes from FindexCloud:  {err}"
+                    "Impossible to read the returned bytes from FindexCloud:  {err}"
                 ))
             })?
             .to_vec())
