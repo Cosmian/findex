@@ -28,6 +28,34 @@ pub(crate) struct FindexCloud {
     pub(crate) base_url: Option<String>,
 }
 
+/// This size allows us to have a lot of indexes for ou backend while
+/// obfuscating the number of index present (contrary to incremented ID).
+/// Moreover, 5 is a small enough value to have inside the size-limited token
+/// (contrary to UUID).
+pub const PUBLIC_INDEX_ID_LENGTH: usize = 5;
+
+pub const FINDEX_CLOUD_DEFAULT_DOMAIN: &str = "https://findex.cosmian.com";
+
+/// Findex Cloud tokens are a string containing all information required to do
+/// requests to Findex Cloud (except the label because it is a value changing a
+/// lot).
+///
+/// The string is encoded as follow:
+/// 1. `public_index_id` `PUBLIC_INDEX_ID_LENGTH` unique characters identifying
+/// the index inside our backend
+/// 2. base64 representation of the different keys:
+///     1. 16 bytes of findex master key (this key is never sent to our backend)
+///     2. 1 byte prefix identifying the next key
+///     3. 16 bytes of callback signature key
+///     4. 1 byte prefix identifying the next key
+///     5. …
+///
+/// Currently each callback have an associated signature key used in a kmac to
+/// send request to the backend. These key are only used for authentification
+/// and do not secure the index (the findex master key do). In the future, we
+/// could do optimization to avoid having one key for each callback but we want
+/// to disallow the server to differenciate a `fetch_entries` for a search or a
+/// `fetch_entries` for an upsert while still allowing fine grain permissions.
 pub(crate) struct Token {
     index_id: String,
 
@@ -71,7 +99,7 @@ impl FromStr for Token {
     type Err = FindexErr;
 
     fn from_str(token: &str) -> Result<Self, Self::Err> {
-        let (index_id, tail) = token.split_at(5);
+        let (index_id, tail) = token.split_at(PUBLIC_INDEX_ID_LENGTH);
         let mut bytes = base64::decode(tail)
             .map_err(|_| {
                 FindexErr::Other(format!(
@@ -217,7 +245,7 @@ impl FindexCloud {
             "{}/indexes/{}/{endpoint}",
             self.base_url
                 .as_deref()
-                .unwrap_or("https://findex.cosmian.com"),
+                .unwrap_or(FINDEX_CLOUD_DEFAULT_DOMAIN),
             self.token.index_id,
         );
 
