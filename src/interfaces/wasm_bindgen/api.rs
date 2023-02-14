@@ -50,7 +50,7 @@ pub async fn webassembly_search(
         .map_err(|e| JsValue::from(format!("While parsing master key for Findex search, {e}")))?;
     let label = Label::from(label_bytes.to_vec());
 
-    let keywords: HashSet<_> = Array::from(&JsValue::from(keywords))
+    let keywords = Array::from(&JsValue::from(keywords))
         .iter()
         .map(|word| Keyword::from(Uint8Array::new(&word).to_vec()))
         .collect::<HashSet<_>>();
@@ -157,7 +157,7 @@ pub async fn webassembly_search_cloud(
 
     let label = Label::from(label_bytes.to_vec());
 
-    let keywords: HashSet<_> = Array::from(&JsValue::from(keywords))
+    let keywords = Array::from(&JsValue::from(keywords))
         .iter()
         .map(|word| Keyword::from(Uint8Array::new(&word).to_vec()))
         .collect::<HashSet<_>>();
