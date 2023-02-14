@@ -208,6 +208,26 @@ enum Callback {
     InsertChains,
 }
 
+impl Callback {
+    pub fn get_uri(&self) -> &'static str {
+        match self {
+            Callback::FetchEntries => "fetch_entries",
+            Callback::FetchChains => "fetch_chains",
+            Callback::UpsertEntries => "upsert_entries",
+            Callback::InsertChains => "insert_chains",
+        }
+    }
+
+    pub fn get_key(&self, token: &Token) -> Option<[u8; 16]> {
+        match self {
+            Callback::FetchEntries => token.fetch_entries_key,
+            Callback::FetchChains => token.fetch_chains_key,
+            Callback::UpsertEntries => token.upsert_entries_key,
+            Callback::InsertChains => token.insert_chains_key,
+        }
+    }
+}
+
 impl FindexCloud {
     pub fn new(token: String, base_url: Option<String>) -> Result<Self, FindexErr> {
         Ok(FindexCloud {
@@ -217,22 +237,13 @@ impl FindexCloud {
     }
 
     async fn post(&self, callback: Callback, bytes: &[u8]) -> Result<Vec<u8>, FindexErr> {
-        let endpoint = match callback {
-            Callback::FetchEntries => "fetch_entries",
-            Callback::FetchChains => "fetch_chains",
-            Callback::UpsertEntries => "upsert_entries",
-            Callback::InsertChains => "insert_chains",
-        };
+        let endpoint = callback.get_uri();
 
-        let key = match callback {
-            Callback::FetchEntries => self.token.fetch_entries_key,
-            Callback::FetchChains => self.token.fetch_chains_key,
-            Callback::UpsertEntries => self.token.upsert_entries_key,
-            Callback::InsertChains => self.token.insert_chains_key,
-        }
-        .ok_or(FindexErr::Other(format!(
-            "your key doesn't have the permission to call {endpoint}"
-        )))?;
+        let key = callback
+            .get_key(&self.token)
+            .ok_or(FindexErr::Other(format!(
+                "your key doesn't have the permission to call {endpoint}"
+            )))?;
 
         let mut hasher = Kmac::v128(&key, &[]);
         let mut output = [0u8; 32];
