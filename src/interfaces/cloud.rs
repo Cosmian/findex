@@ -227,6 +227,17 @@ impl Token {
 
         Ok(())
     }
+
+    fn get_key(&self, callback: Callback) -> Option<KmacKey> {
+        match callback {
+            Callback::FetchEntries => &self.fetch_entries_key,
+            Callback::FetchChains => &self.fetch_chains_key,
+            Callback::UpsertEntries => &self.upsert_entries_key,
+            Callback::InsertChains => &self.insert_chains_key,
+        }
+        .as_ref()
+        .map(|key| key.derive_kmac_key(self.index_id.as_bytes()))
+    }
 }
 
 /// If we have the permission and want to keep it, do nothing.
@@ -247,6 +258,7 @@ fn reduce_option(
     }
 }
 
+#[derive(Clone, Copy)]
 enum Callback {
     FetchEntries,
     FetchChains,
@@ -263,16 +275,15 @@ impl Callback {
             Callback::InsertChains => "insert_chains",
         }
     }
+}
 
-    pub fn get_key<'a>(
-        &self,
-        token: &'a Token,
-    ) -> &'a Option<KeyingMaterial<SIGNATURE_KEY_LENGTH>> {
+impl Display for Callback {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Callback::FetchEntries => &token.fetch_entries_key,
-            Callback::FetchChains => &token.fetch_chains_key,
-            Callback::UpsertEntries => &token.upsert_entries_key,
-            Callback::InsertChains => &token.insert_chains_key,
+            Callback::FetchEntries => write!(f, "fetch entries"),
+            Callback::FetchChains => write!(f, "fetch chains"),
+            Callback::UpsertEntries => write!(f, "upsert entries"),
+            Callback::InsertChains => write!(f, "insert chains"),
         }
     }
 }
@@ -286,24 +297,22 @@ impl FindexCloud {
     }
 
     async fn post(&self, callback: Callback, bytes: &[u8]) -> Result<Vec<u8>, FindexErr> {
-        let endpoint = callback.get_uri();
-
-        let key: KmacKey = callback
-            .get_key(&self.token)
-            .as_ref()
-            .ok_or(FindexErr::Other(format!(
-                "your key doesn't have the permission to call {endpoint}"
-            )))?
-            .derive_kmac_key(self.token.index_id.as_bytes());
+        let key = self.token.get_key(callback).ok_or_else(|| {
+            FindexErr::Other(format!(
+                "your token '{}' doesn't have the permission to call {callback}",
+                self.token
+            ))
+        })?;
 
         let signature = base64::encode(kmac!(CALLBACK_SIGNATURE_LENGTH, &key, bytes));
 
         let url = format!(
-            "{}/indexes/{}/{endpoint}",
+            "{}/indexes/{}/{}",
             self.base_url
                 .as_deref()
                 .unwrap_or(FINDEX_CLOUD_DEFAULT_DOMAIN),
             self.token.index_id,
+            callback.get_uri(),
         );
 
         let client = reqwest::Client::new();
