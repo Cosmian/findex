@@ -4,8 +4,7 @@ use std::{
     str::FromStr,
 };
 
-use cosmian_crypto_core::{bytes_ser_de::Serializable, CsRng};
-use rand::SeedableRng;
+use cosmian_crypto_core::{bytes_ser_de::Serializable, reexport::rand_core::SeedableRng, CsRng};
 
 use crate::{
     core::{
