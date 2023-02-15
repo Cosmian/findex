@@ -34,8 +34,8 @@ pub const INDEX_ID_LENGTH: usize = 5;
 /// It is used to assert the client can call this callback.
 pub const CALLBACK_SIGNATURE_LENGTH: usize = 32;
 
-/// This key is used to derive a new 32 bytes Kmac key.
-pub const SIGNATURE_KEY_LENGTH: usize = 16;
+/// This seed is used to derive a new 32 bytes Kmac key.
+pub const SIGNATURE_SEED_LENGTH: usize = 16;
 
 pub const FINDEX_CLOUD_DEFAULT_DOMAIN: &str = "https://findex.cosmian.com";
 
@@ -49,7 +49,7 @@ pub const FINDEX_CLOUD_DEFAULT_DOMAIN: &str = "https://findex.cosmian.com";
 ///     1. `MASTER_KEY_LENGTH` bytes of findex master key (this key is never
 /// sent to the Findex Cloud backend)
 ///     2. 1 byte prefix identifying the next key
-///     3. `SIGNATURE_KEY_LENGTH` bytes of callback signature key
+///     3. `SIGNATURE_SEED_LENGTH` bytes of callback signature key
 ///     4. 1 byte prefix identifying the next key
 ///     5. …
 ///
@@ -71,60 +71,34 @@ pub(crate) struct Token {
 
     pub(crate) findex_master_key: KeyingMaterial<MASTER_KEY_LENGTH>,
 
-    fetch_entries_key: Option<KeyingMaterial<SIGNATURE_KEY_LENGTH>>,
-    fetch_chains_key: Option<KeyingMaterial<SIGNATURE_KEY_LENGTH>>,
-    upsert_entries_key: Option<KeyingMaterial<SIGNATURE_KEY_LENGTH>>,
-    insert_chains_key: Option<KeyingMaterial<SIGNATURE_KEY_LENGTH>>,
+    fetch_entries_seed: Option<KeyingMaterial<SIGNATURE_SEED_LENGTH>>,
+    fetch_chains_seed: Option<KeyingMaterial<SIGNATURE_SEED_LENGTH>>,
+    upsert_entries_seed: Option<KeyingMaterial<SIGNATURE_SEED_LENGTH>>,
+    insert_chains_seed: Option<KeyingMaterial<SIGNATURE_SEED_LENGTH>>,
 }
 
 impl Display for Token {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let size = self.findex_master_key.len()
-            + self
-                .fetch_entries_key
+        let mut size = self.findex_master_key.len();
+        for callback in Callback::ALL {
+            size += self
+                .get_seed(callback)
                 .as_ref()
-                .map(|key| key.len() + 1)
-                .unwrap_or(0)
-            + self
-                .fetch_chains_key
-                .as_ref()
-                .map(|key| key.len() + 1)
-                .unwrap_or(0)
-            + self
-                .upsert_entries_key
-                .as_ref()
-                .map(|key| key.len() + 1)
-                .unwrap_or(0)
-            + self
-                .insert_chains_key
-                .as_ref()
-                .map(|key| key.len() + 1)
+                .map(|seed| seed.len() + 1)
                 .unwrap_or(0);
-
-        let mut keys = Vec::with_capacity(size);
-        keys.extend(self.findex_master_key.as_ref());
-
-        if let Some(fetch_entries_key) = &self.fetch_entries_key {
-            keys.push(0);
-            keys.extend(fetch_entries_key.as_ref());
         }
 
-        if let Some(fetch_chains_key) = &self.fetch_chains_key {
-            keys.push(1);
-            keys.extend(fetch_chains_key.as_ref());
+        let mut seeds = Vec::with_capacity(size);
+        seeds.extend(self.findex_master_key.as_ref());
+
+        for callback in Callback::ALL {
+            if let Some(seed) = self.get_seed(callback) {
+                seeds.push(callback as u8);
+                seeds.extend(seed.as_ref());
+            }
         }
 
-        if let Some(upsert_entries_key) = &self.upsert_entries_key {
-            keys.push(2);
-            keys.extend(upsert_entries_key.as_ref());
-        }
-
-        if let Some(insert_chains_key) = &self.insert_chains_key {
-            keys.push(3);
-            keys.extend(insert_chains_key.as_ref());
-        }
-
-        write!(f, "{}{}", self.index_id, base64::encode(keys))
+        write!(f, "{}{}", self.index_id, base64::encode(seeds))
     }
 }
 
@@ -156,41 +130,35 @@ impl FromStr for Token {
             index_id: index_id.to_owned(),
             findex_master_key,
 
-            fetch_entries_key: None,
-            fetch_chains_key: None,
-            upsert_entries_key: None,
-            insert_chains_key: None,
+            fetch_entries_seed: None,
+            fetch_chains_seed: None,
+            upsert_entries_seed: None,
+            insert_chains_seed: None,
         };
 
         while let Some(prefix) = bytes.next() {
-            let key = Some(
+            let seed = Some(
                 bytes
-                    .next_chunk::<SIGNATURE_KEY_LENGTH>()
+                    .next_chunk::<SIGNATURE_SEED_LENGTH>()
                     .map_err(|_| {
                         FindexErr::Other(format!(
-                            "token '{token}' is malformed, expecting {SIGNATURE_KEY_LENGTH} bytes \
-                             after the prefix {prefix} at keys section offset {}",
+                            "token '{token}' is malformed, expecting {SIGNATURE_SEED_LENGTH} \
+                             bytes after the prefix {prefix} at keys section offset {}",
                             original_length - bytes.len() - 1
                         ))
                     })?
                     .into(),
             );
 
-            if prefix == 0 {
-                token.fetch_entries_key = key;
-            } else if prefix == 1 {
-                token.fetch_chains_key = key;
-            } else if prefix == 2 {
-                token.upsert_entries_key = key;
-            } else if prefix == 3 {
-                token.insert_chains_key = key;
-            } else {
-                return Err(FindexErr::Other(format!(
+            let callback: Callback = prefix.try_into().map_err(|_| {
+                FindexErr::Other(format!(
                     "token '{token}' is malformed, it contains a unknown prefix {prefix} at keys \
                      section offset {}",
                     original_length - bytes.len() - 1
-                )));
-            }
+                ))
+            })?;
+
+            token.set_seed(callback, seed);
         }
 
         Ok(token)
@@ -200,10 +168,10 @@ impl FromStr for Token {
 impl Token {
     pub fn random_findex_master_key(
         index_id: String,
-        fetch_entries_key: KeyingMaterial<SIGNATURE_KEY_LENGTH>,
-        fetch_chains_key: KeyingMaterial<SIGNATURE_KEY_LENGTH>,
-        upsert_entries_key: KeyingMaterial<SIGNATURE_KEY_LENGTH>,
-        insert_chains_key: KeyingMaterial<SIGNATURE_KEY_LENGTH>,
+        fetch_entries_seed: KeyingMaterial<SIGNATURE_SEED_LENGTH>,
+        fetch_chains_seed: KeyingMaterial<SIGNATURE_SEED_LENGTH>,
+        upsert_entries_seed: KeyingMaterial<SIGNATURE_SEED_LENGTH>,
+        insert_chains_seed: KeyingMaterial<SIGNATURE_SEED_LENGTH>,
     ) -> Result<Self, FindexErr> {
         let mut rng = CsRng::from_entropy();
         let findex_master_key = KeyingMaterial::<MASTER_KEY_LENGTH>::new(&mut rng);
@@ -211,32 +179,50 @@ impl Token {
         Ok(Token {
             index_id,
             findex_master_key,
-            fetch_entries_key: Some(fetch_entries_key),
-            fetch_chains_key: Some(fetch_chains_key),
-            upsert_entries_key: Some(upsert_entries_key),
-            insert_chains_key: Some(insert_chains_key),
+            fetch_entries_seed: Some(fetch_entries_seed),
+            fetch_chains_seed: Some(fetch_chains_seed),
+            upsert_entries_seed: Some(upsert_entries_seed),
+            insert_chains_seed: Some(insert_chains_seed),
         })
     }
 
     pub fn reduce_permissions(&mut self, search: bool, index: bool) -> Result<(), FindexErr> {
-        self.fetch_entries_key =
-            reduce_option("fetch entries", &self.fetch_entries_key, search || index)?;
-        self.fetch_chains_key = reduce_option("fetch chains", &self.fetch_chains_key, search)?;
-        self.upsert_entries_key = reduce_option("upsert entries", &self.upsert_entries_key, index)?;
-        self.insert_chains_key = reduce_option("insert chains", &self.insert_chains_key, index)?;
+        self.fetch_entries_seed =
+            reduce_option("fetch entries", &self.fetch_entries_seed, search || index)?;
+        self.fetch_chains_seed = reduce_option("fetch chains", &self.fetch_chains_seed, search)?;
+        self.upsert_entries_seed =
+            reduce_option("upsert entries", &self.upsert_entries_seed, index)?;
+        self.insert_chains_seed = reduce_option("insert chains", &self.insert_chains_seed, index)?;
 
         Ok(())
     }
 
-    fn get_key(&self, callback: Callback) -> Option<KmacKey> {
+    fn get_seed(&self, callback: Callback) -> &Option<KeyingMaterial<SIGNATURE_SEED_LENGTH>> {
         match callback {
-            Callback::FetchEntries => &self.fetch_entries_key,
-            Callback::FetchChains => &self.fetch_chains_key,
-            Callback::UpsertEntries => &self.upsert_entries_key,
-            Callback::InsertChains => &self.insert_chains_key,
+            Callback::FetchEntries => &self.fetch_entries_seed,
+            Callback::FetchChains => &self.fetch_chains_seed,
+            Callback::UpsertEntries => &self.upsert_entries_seed,
+            Callback::InsertChains => &self.insert_chains_seed,
         }
-        .as_ref()
-        .map(|key| key.derive_kmac_key(self.index_id.as_bytes()))
+    }
+
+    fn get_key(&self, callback: Callback) -> Option<KmacKey> {
+        self.get_seed(callback)
+            .as_ref()
+            .map(|seed| seed.derive_kmac_key(self.index_id.as_bytes()))
+    }
+
+    fn set_seed(
+        &mut self,
+        callback: Callback,
+        seed: Option<KeyingMaterial<SIGNATURE_SEED_LENGTH>>,
+    ) {
+        match callback {
+            Callback::FetchEntries => self.fetch_entries_seed = seed,
+            Callback::FetchChains => self.fetch_chains_seed = seed,
+            Callback::UpsertEntries => self.upsert_entries_seed = seed,
+            Callback::InsertChains => self.insert_chains_seed = seed,
+        }
     }
 }
 
@@ -245,9 +231,9 @@ impl Token {
 /// If we don't want to keep it, return none.
 fn reduce_option(
     debug_info: &str,
-    permission: &Option<KeyingMaterial<SIGNATURE_KEY_LENGTH>>,
+    permission: &Option<KeyingMaterial<SIGNATURE_SEED_LENGTH>>,
     keep: bool,
-) -> Result<Option<KeyingMaterial<SIGNATURE_KEY_LENGTH>>, FindexErr> {
+) -> Result<Option<KeyingMaterial<SIGNATURE_SEED_LENGTH>>, FindexErr> {
     match (permission, keep) {
         (_, false) => Ok(None),
 
@@ -259,20 +245,42 @@ fn reduce_option(
 }
 
 #[derive(Clone, Copy)]
+#[repr(u8)]
 enum Callback {
-    FetchEntries,
-    FetchChains,
-    UpsertEntries,
-    InsertChains,
+    FetchEntries = 0,
+    FetchChains = 1,
+    UpsertEntries = 2,
+    InsertChains = 3,
 }
 
 impl Callback {
-    pub fn get_uri(&self) -> &'static str {
+    const ALL: [Callback; 4] = [
+        Self::FetchEntries,
+        Self::FetchChains,
+        Self::UpsertEntries,
+        Self::InsertChains,
+    ];
+
+    pub fn get_uri(self) -> &'static str {
         match self {
             Callback::FetchEntries => "fetch_entries",
             Callback::FetchChains => "fetch_chains",
             Callback::UpsertEntries => "upsert_entries",
             Callback::InsertChains => "insert_chains",
+        }
+    }
+}
+
+impl TryFrom<u8> for Callback {
+    type Error = ();
+
+    fn try_from(value: u8) -> Result<Self, Self::Error> {
+        match value {
+            0 => Ok(Callback::FetchEntries),
+            1 => Ok(Callback::FetchChains),
+            2 => Ok(Callback::UpsertEntries),
+            3 => Ok(Callback::InsertChains),
+            _ => Err(()),
         }
     }
 }

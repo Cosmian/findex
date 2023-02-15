@@ -10,7 +10,7 @@ use crate::{
     core::{FindexSearch, FindexUpsert, KeyingMaterial, Keyword, Label},
     error::FindexErr,
     interfaces::{
-        cloud::{FindexCloud, Token, SIGNATURE_KEY_LENGTH},
+        cloud::{FindexCloud, Token, SIGNATURE_SEED_LENGTH},
         generic_parameters::{
             MASTER_KEY_LENGTH, MAX_RESULTS_PER_KEYWORD, SECURE_FETCH_CHAINS_BATCH_SIZE,
         },
@@ -236,30 +236,30 @@ pub fn webassembly_derive_new_token(
 #[wasm_bindgen]
 pub fn webassembly_generate_new_token(
     index_id: String,
-    fetch_entries_key: Uint8Array,
-    fetch_chains_key: Uint8Array,
-    upsert_entries_key: Uint8Array,
-    insert_chains_key: Uint8Array,
+    fetch_entries_seed: Uint8Array,
+    fetch_chains_seed: Uint8Array,
+    upsert_entries_seed: Uint8Array,
+    insert_chains_seed: Uint8Array,
 ) -> Result<String, JsValue> {
     let token = Token::random_findex_master_key(
         index_id,
-        uint8array_to_key(fetch_entries_key, "fetch_entries_key")?,
-        uint8array_to_key(fetch_chains_key, "fetch_chains_key")?,
-        uint8array_to_key(upsert_entries_key, "upsert_entries_key")?,
-        uint8array_to_key(insert_chains_key, "insert_chains_key")?,
+        uint8array_to_seed(fetch_entries_seed, "fetch_entries_seed")?,
+        uint8array_to_seed(fetch_chains_seed, "fetch_chains_seed")?,
+        uint8array_to_seed(upsert_entries_seed, "upsert_entries_seed")?,
+        uint8array_to_seed(insert_chains_seed, "insert_chains_seed")?,
     )?;
 
     Ok(token.to_string())
 }
 
-fn uint8array_to_key(
-    key: Uint8Array,
+fn uint8array_to_seed(
+    seed: Uint8Array,
     debug_name: &str,
-) -> Result<KeyingMaterial<SIGNATURE_KEY_LENGTH>, FindexErr> {
-    KeyingMaterial::try_from_bytes(key.to_vec().as_slice()).map_err(|_| {
+) -> Result<KeyingMaterial<SIGNATURE_SEED_LENGTH>, FindexErr> {
+    KeyingMaterial::try_from_bytes(seed.to_vec().as_slice()).map_err(|_| {
         FindexErr::Other(format!(
-            "{debug_name} is of wrong size ({} received, {SIGNATURE_KEY_LENGTH} expected)",
-            key.length()
+            "{debug_name} is of wrong size ({} received, {SIGNATURE_SEED_LENGTH} expected)",
+            seed.length()
         ))
     })
 }
