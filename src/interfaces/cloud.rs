@@ -64,6 +64,8 @@ pub(crate) struct Token {
     /// This ID identify an index inside the Findex Cloud backend
     /// We do not use auto-increment integer ID because we don't want to leak
     /// the number of indexes inside our database.
+    /// This number is not sensitive, it's only an ID. If someone find this ID,
+    /// it cannot do requests on the index because it doesn't have the keys.
     /// We do not use UUID because the token is limited in space.
     /// The abritrary chosen length is `INDEX_ID_LENGTH`.
     index_id: String,
