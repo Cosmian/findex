@@ -2,6 +2,7 @@ use std::{
     collections::{HashMap, HashSet},
     fmt::Display,
     str::FromStr,
+    time::SystemTime,
 };
 
 use cosmian_crypto_core::{bytes_ser_de::Serializable, reexport::rand_core::SeedableRng, CsRng};
@@ -33,6 +34,11 @@ pub const INDEX_ID_LENGTH: usize = 5;
 /// The callback signature is a kmac of the body of the request.
 /// It is used to assert the client can call this callback.
 pub const CALLBACK_SIGNATURE_LENGTH: usize = 32;
+
+/// The number of seconds of validity of the requests to the Findex Cloud
+/// backend. After this time, the request cannot be accepted by the backend.
+/// This is done to prevent replay attacks.
+pub const REQUEST_SIGNATURE_TIMEOUT_AS_SECS: u64 = 60;
 
 /// This seed is used to derive a new 32 bytes Kmac key.
 pub const SIGNATURE_SEED_LENGTH: usize = 16;
@@ -308,7 +314,19 @@ impl FindexCloud {
             ))
         })?;
 
-        let signature = base64::encode(kmac!(CALLBACK_SIGNATURE_LENGTH, &key, &bytes));
+        let timestamp_bytes = (SystemTime::now()
+            .duration_since(SystemTime::UNIX_EPOCH)
+            .map_err(|_| FindexErr::Other("SystemTime is before UNIX_EPOCH".to_owned()))?
+            .as_secs()
+            + REQUEST_SIGNATURE_TIMEOUT_AS_SECS)
+            .to_be_bytes();
+
+        let signature = kmac!(CALLBACK_SIGNATURE_LENGTH, &key, &timestamp_bytes, &bytes);
+
+        let mut body = Vec::with_capacity(signature.len() + timestamp_bytes.len() + bytes.len());
+        body.extend_from_slice(&signature);
+        body.extend_from_slice(&timestamp_bytes);
+        body.extend_from_slice(&bytes);
 
         let url = format!(
             "{}/indexes/{}/{}",
@@ -320,17 +338,11 @@ impl FindexCloud {
         );
 
         let client = reqwest::Client::new();
-        let res = client
-            .post(url)
-            .header("X-Findex-Cloud-Signature", &signature)
-            .body(bytes)
-            .send()
-            .await
-            .map_err(|err| {
-                FindexErr::Other(format!(
-                    "Impossible to send the request to FindexCloud: {err}"
-                ))
-            })?;
+        let res = client.post(url).body(body).send().await.map_err(|err| {
+            FindexErr::Other(format!(
+                "Impossible to send the request to FindexCloud: {err}"
+            ))
+        })?;
 
         Ok(res
             .bytes()
