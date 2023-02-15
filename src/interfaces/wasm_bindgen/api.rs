@@ -151,7 +151,7 @@ pub async fn webassembly_search_cloud(
     fetch_chains_batch_size: i32,
     base_url: Option<String>,
 ) -> Result<SearchResults, JsValue> {
-    let mut findex_cloud = FindexCloud::new(token, base_url)?;
+    let mut findex_cloud = FindexCloud::new(&token, base_url)?;
     let master_key = KeyingMaterial::<MASTER_KEY_LENGTH>::try_from_bytes(
         findex_cloud.token.findex_master_key.as_ref(),
     )
@@ -203,7 +203,7 @@ pub async fn webassembly_upsert_cloud(
     label_bytes: Uint8Array,
     indexed_values_to_keywords: IndexedValuesAndWords,
 ) -> Result<(), JsValue> {
-    let mut findex_cloud = FindexCloud::new(token, None)?;
+    let mut findex_cloud = FindexCloud::new(&token, None)?;
 
     let master_key = KeyingMaterial::<MASTER_KEY_LENGTH>::try_from_bytes(
         findex_cloud.token.findex_master_key.as_ref(),

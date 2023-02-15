@@ -344,7 +344,7 @@ pub unsafe extern "C" fn h_search_cloud(
 ) -> c_int {
     let token = ffi_read_string!("keywords", token_ptr);
 
-    let findex = ffi_unwrap!(FindexCloud::new(token, None));
+    let findex = ffi_unwrap!(FindexCloud::new(&token, None));
     let master_key = findex.token.findex_master_key.clone();
 
     ffi_search(
@@ -401,7 +401,7 @@ pub unsafe extern "C" fn h_upsert_cloud(
 ) -> c_int {
     let token = ffi_read_string!("keywords", token_ptr);
 
-    let findex = ffi_unwrap!(FindexCloud::new(token, None));
+    let findex = ffi_unwrap!(FindexCloud::new(&token, None));
     let master_key = findex.token.findex_master_key.clone();
 
     ffi_upsert(

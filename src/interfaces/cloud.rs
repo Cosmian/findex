@@ -79,7 +79,30 @@ pub(crate) struct Token {
 
 impl Display for Token {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let mut keys = self.findex_master_key.to_vec();
+        let size = self.findex_master_key.len()
+            + self
+                .fetch_entries_key
+                .as_ref()
+                .map(|key| key.len() + 1)
+                .unwrap_or(0)
+            + self
+                .fetch_chains_key
+                .as_ref()
+                .map(|key| key.len() + 1)
+                .unwrap_or(0)
+            + self
+                .upsert_entries_key
+                .as_ref()
+                .map(|key| key.len() + 1)
+                .unwrap_or(0)
+            + self
+                .insert_chains_key
+                .as_ref()
+                .map(|key| key.len() + 1)
+                .unwrap_or(0);
+
+        let mut keys = Vec::with_capacity(size);
+        keys.extend(self.findex_master_key.as_ref());
 
         if let Some(fetch_entries_key) = &self.fetch_entries_key {
             keys.push(0);
@@ -113,15 +136,18 @@ impl FromStr for Token {
         let mut bytes = base64::decode(tail)
             .map_err(|_| {
                 FindexErr::Other(format!(
-                    "token {token} is not a valid base64 encoded string"
+                    "token '{token}' is malformed, the keys section are not base64 encoded."
                 ))
             })?
             .into_iter();
+        let original_length = bytes.len();
 
         let findex_master_key = KeyingMaterial::try_from_bytes(
             &bytes.next_chunk::<MASTER_KEY_LENGTH>().map_err(|_| {
                 FindexErr::Other(
-                    "the token is too short, cannot read the Findex master key".to_owned(),
+                    "token '{token}' is malformed, cannot read the Findex master key at the \
+                     beginning of the keys section"
+                        .to_owned(),
                 )
             })?,
         )?;
@@ -142,8 +168,9 @@ impl FromStr for Token {
                     .next_chunk::<SIGNATURE_KEY_LENGTH>()
                     .map_err(|_| {
                         FindexErr::Other(format!(
-                            "the token is too short, expecting {SIGNATURE_KEY_LENGTH} bytes after \
-                             the prefix {prefix}"
+                            "token '{token}' is malformed, expecting {SIGNATURE_KEY_LENGTH} bytes \
+                             after the prefix {prefix} at keys section offset {}",
+                            original_length - bytes.len() - 1
                         ))
                     })?
                     .into(),
@@ -159,7 +186,9 @@ impl FromStr for Token {
                 token.insert_chains_key = key;
             } else {
                 return Err(FindexErr::Other(format!(
-                    "the token contains a unknown prefix {prefix}"
+                    "token '{token}' is malformed, it contains a unknown prefix {prefix} at keys \
+                     section offset {}",
+                    original_length - bytes.len() - 1
                 )));
             }
         }
@@ -251,7 +280,7 @@ impl Callback {
 impl FindexCloud {
     pub fn new(token: &str, base_url: Option<String>) -> Result<Self, FindexErr> {
         Ok(FindexCloud {
-            token: Token::from_str(&token)?,
+            token: Token::from_str(token)?,
             base_url,
         })
     }
