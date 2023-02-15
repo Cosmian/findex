@@ -81,11 +81,7 @@ impl Display for Token {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let mut size = self.findex_master_key.len();
         for callback in Callback::ALL {
-            size += self
-                .get_seed(callback)
-                .as_ref()
-                .map(|seed| seed.len() + 1)
-                .unwrap_or(0);
+            size += self.get_seed(callback).map_or(0, |seed| seed.len() + 1);
         }
 
         let mut seeds = Vec::with_capacity(size);
@@ -110,7 +106,7 @@ impl FromStr for Token {
         let mut bytes = base64::decode(tail)
             .map_err(|_| {
                 FindexErr::Other(format!(
-                    "token '{token}' is malformed, the keys section are not base64 encoded."
+                    "token '{token}' is malformed, the keys section is not base64 encoded."
                 ))
             })?
             .into_iter();
@@ -197,18 +193,18 @@ impl Token {
         Ok(())
     }
 
-    fn get_seed(&self, callback: Callback) -> &Option<KeyingMaterial<SIGNATURE_SEED_LENGTH>> {
+    fn get_seed(&self, callback: Callback) -> Option<&KeyingMaterial<SIGNATURE_SEED_LENGTH>> {
         match callback {
             Callback::FetchEntries => &self.fetch_entries_seed,
             Callback::FetchChains => &self.fetch_chains_seed,
             Callback::UpsertEntries => &self.upsert_entries_seed,
             Callback::InsertChains => &self.insert_chains_seed,
         }
+        .as_ref()
     }
 
     fn get_key(&self, callback: Callback) -> Option<KmacKey> {
         self.get_seed(callback)
-            .as_ref()
             .map(|seed| seed.derive_kmac_key(self.index_id.as_bytes()))
     }
 
