@@ -296,7 +296,7 @@ impl FindexCloud {
         })
     }
 
-    async fn post(&self, callback: Callback, bytes: &[u8]) -> Result<Vec<u8>, FindexErr> {
+    async fn post(&self, callback: Callback, bytes: Vec<u8>) -> Result<Vec<u8>, FindexErr> {
         let key = self.token.get_key(callback).ok_or_else(|| {
             FindexErr::Other(format!(
                 "your token '{}' doesn't have the permission to call {callback}",
@@ -304,7 +304,7 @@ impl FindexCloud {
             ))
         })?;
 
-        let signature = base64::encode(kmac!(CALLBACK_SIGNATURE_LENGTH, &key, bytes));
+        let signature = base64::encode(kmac!(CALLBACK_SIGNATURE_LENGTH, &key, &bytes));
 
         let url = format!(
             "{}/indexes/{}/{}",
@@ -319,7 +319,7 @@ impl FindexCloud {
         let res = client
             .post(url)
             .header("X-Findex-Cloud-Signature", &signature)
-            .body(bytes.to_vec())
+            .body(bytes)
             .send()
             .await
             .map_err(|err| {
@@ -354,7 +354,7 @@ impl FindexCallbacks<UID_LENGTH> for FindexCloud {
     ) -> Result<EncryptedTable<UID_LENGTH>, FindexErr> {
         let serialized_uids = serialize_set(entry_table_uids)?;
 
-        let bytes = self.post(Callback::FetchEntries, &serialized_uids).await?;
+        let bytes = self.post(Callback::FetchEntries, serialized_uids).await?;
 
         EncryptedTable::try_from_bytes(&bytes)
     }
@@ -365,7 +365,7 @@ impl FindexCallbacks<UID_LENGTH> for FindexCloud {
     ) -> Result<EncryptedTable<UID_LENGTH>, FindexErr> {
         let serialized_uids = serialize_set(chain_table_uids)?;
 
-        let bytes = self.post(Callback::FetchChains, &serialized_uids).await?;
+        let bytes = self.post(Callback::FetchChains, serialized_uids).await?;
 
         EncryptedTable::try_from_bytes(&bytes)
     }
@@ -377,7 +377,7 @@ impl FindexCallbacks<UID_LENGTH> for FindexCloud {
         let serialized_upsert = items.try_to_bytes()?;
 
         let bytes = self
-            .post(Callback::UpsertEntries, &serialized_upsert)
+            .post(Callback::UpsertEntries, serialized_upsert)
             .await?;
 
         EncryptedTable::try_from_bytes(&bytes)
@@ -389,8 +389,7 @@ impl FindexCallbacks<UID_LENGTH> for FindexCloud {
     ) -> Result<(), FindexErr> {
         let serialized_insert = items.try_to_bytes()?;
 
-        self.post(Callback::InsertChains, &serialized_insert)
-            .await?;
+        self.post(Callback::InsertChains, serialized_insert).await?;
 
         Ok(())
     }
