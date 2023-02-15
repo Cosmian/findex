@@ -30,8 +30,8 @@ pub(crate) struct FindexCloud {
 /// See `Token@index_id`
 pub const INDEX_ID_LENGTH: usize = 5;
 
-/// The callback signature is a kmac of the body of the request used to do
-/// authorization (checking if this client can call this callback)
+/// The callback signature is a kmac of the body of the request.
+/// It is used to assert the client can call this callback.
 pub const CALLBACK_SIGNATURE_LENGTH: usize = 32;
 
 /// This key is used to derive a new 32 bytes Kmac key.
@@ -46,27 +46,27 @@ pub const FINDEX_CLOUD_DEFAULT_DOMAIN: &str = "https://findex.cosmian.com";
 /// The string is encoded as follow:
 /// 1. `index_id` `INDEX_ID_LENGTH` chars (see `Token@index_id`)
 /// 2. base64 representation of the different keys:
-///     1. `SIGNATURE_KEY_LENGTH` bytes of findex master key (this key is never
+///     1. `MASTER_KEY_LENGTH` bytes of findex master key (this key is never
 /// sent to the Findex Cloud backend)
 ///     2. 1 byte prefix identifying the next key
 ///     3. `SIGNATURE_KEY_LENGTH` bytes of callback signature key
 ///     4. 1 byte prefix identifying the next key
 ///     5. …
 ///
-/// Currently each callback have an associated signature key used in a kmac to
+/// Currently each callback has an associated signature key used in a kmac to
 /// send request to the backend. These key are only used for authorization
 /// and do not secure the index (the findex master key do). In the future, we
 /// could do optimization to avoid having one key for each callback but we want
 /// to disallow the server to differentiate a `fetch_entries` for a search or a
 /// `fetch_entries` for an upsert while still allowing fine grain permissions.
 pub(crate) struct Token {
-    /// This ID identify an index inside the Findex Cloud backend
-    /// This number is not sensitive, it's only an ID. If someone find this ID,
+    /// This ID identifies an index inside the Findex Cloud backend
+    /// This number is not sensitive, it's only an ID. If someone finds this ID,
     /// it cannot do requests on the index because it doesn't have the keys.
     /// We do not use auto-increment integer ID because we don't want to leak
     /// the number of indexes inside our database.
     /// We do not use UUID because the token is limited in space.
-    /// The abritrary chosen length is `INDEX_ID_LENGTH`.
+    /// The arbitrary chosen length is `INDEX_ID_LENGTH`.
     index_id: String,
 
     pub(crate) findex_master_key: KeyingMaterial<MASTER_KEY_LENGTH>,
@@ -249,7 +249,7 @@ impl Callback {
 }
 
 impl FindexCloud {
-    pub fn new(token: String, base_url: Option<String>) -> Result<Self, FindexErr> {
+    pub fn new(token: &str, base_url: Option<String>) -> Result<Self, FindexErr> {
         Ok(FindexCloud {
             token: Token::from_str(&token)?,
             base_url,
