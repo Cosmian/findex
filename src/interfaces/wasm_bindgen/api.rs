@@ -197,13 +197,16 @@ pub async fn webassembly_search_cloud(
 /// - `token`                       : findex cloud token
 /// - `label_bytes`                 : public label used for hashing
 /// - `indexed_value_to_keywords`   : map of `IndexedValue`s to `Keyword` bytes
+/// - `base_url`                : base URL for Findex Cloud (with http prefix
+///   and port if required). If null, use the default Findex Cloud server.
 #[wasm_bindgen]
 pub async fn webassembly_upsert_cloud(
     token: String,
     label_bytes: Uint8Array,
     indexed_values_to_keywords: IndexedValuesAndWords,
+    base_url: Option<String>,
 ) -> Result<(), JsValue> {
-    let mut findex_cloud = FindexCloud::new(&token, None)?;
+    let mut findex_cloud = FindexCloud::new(&token, base_url)?;
 
     let master_key = KeyingMaterial::<MASTER_KEY_LENGTH>::try_from_bytes(
         findex_cloud.token.findex_master_key.as_ref(),

@@ -1,11 +1,15 @@
+#[cfg(not(feature = "wasm_bindgen"))]
+use std::time::SystemTime;
 use std::{
     collections::{HashMap, HashSet},
     fmt::Display,
     str::FromStr,
-    time::SystemTime,
 };
 
 use cosmian_crypto_core::{bytes_ser_de::Serializable, reexport::rand_core::SeedableRng, CsRng};
+#[cfg(feature = "wasm_bindgen")]
+use js_sys::Date;
+use reqwest::Client;
 
 use crate::{
     core::{
@@ -314,18 +318,30 @@ impl FindexCloud {
             ))
         })?;
 
-        let timestamp_bytes = (SystemTime::now()
+        // SystemTime::now() panics in WASM <https://github.com/rust-lang/rust/issues/48564>
+        #[cfg(feature = "wasm_bindgen")]
+        let current_timestamp = (Date::now() / 1000.0) as u64; // Date::now() returns milliseconds
+
+        #[cfg(not(feature = "wasm_bindgen"))]
+        let current_timestamp = SystemTime::now()
             .duration_since(SystemTime::UNIX_EPOCH)
             .map_err(|_| FindexErr::Other("SystemTime is before UNIX_EPOCH".to_owned()))?
-            .as_secs()
-            + REQUEST_SIGNATURE_TIMEOUT_AS_SECS)
-            .to_be_bytes();
+            .as_secs();
 
-        let signature = kmac!(CALLBACK_SIGNATURE_LENGTH, &key, &timestamp_bytes, &bytes);
+        let expiration_timestamp_bytes =
+            (current_timestamp + REQUEST_SIGNATURE_TIMEOUT_AS_SECS).to_be_bytes();
 
-        let mut body = Vec::with_capacity(signature.len() + timestamp_bytes.len() + bytes.len());
+        let signature = kmac!(
+            CALLBACK_SIGNATURE_LENGTH,
+            &key,
+            &expiration_timestamp_bytes,
+            &bytes
+        );
+
+        let mut body =
+            Vec::with_capacity(signature.len() + expiration_timestamp_bytes.len() + bytes.len());
         body.extend_from_slice(&signature);
-        body.extend_from_slice(&timestamp_bytes);
+        body.extend_from_slice(&expiration_timestamp_bytes);
         body.extend_from_slice(&bytes);
 
         let url = format!(
@@ -337,14 +353,29 @@ impl FindexCloud {
             callback.get_uri(),
         );
 
-        let client = reqwest::Client::new();
-        let res = client.post(url).body(body).send().await.map_err(|err| {
-            FindexErr::Other(format!(
-                "Impossible to send the request to FindexCloud: {err}"
-            ))
-        })?;
+        let response = Client::new()
+            .post(url)
+            .body(body)
+            .send()
+            .await
+            .map_err(|err| {
+                FindexErr::Other(format!(
+                    "Impossible to send the request to FindexCloud: {err}"
+                ))
+            })?;
 
-        Ok(res
+        if !response.status().is_success() {
+            return Err(FindexErr::Other(format!(
+                "request to Findex Cloud failed, status code is {}, response is {}",
+                response.status(),
+                response
+                    .text()
+                    .await
+                    .unwrap_or_else(|_| "cannot parse response".to_owned())
+            )));
+        }
+
+        Ok(response
             .bytes()
             .await
             .map_err(|err| {
