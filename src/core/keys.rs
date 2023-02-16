@@ -37,10 +37,7 @@ impl<const LENGTH: usize> KeyingMaterial<LENGTH> {
     /// guarantee the 128 bits of security.
     #[must_use]
     #[inline]
-    pub(crate) fn derive_kmac_key<
-        const KMAC_KEY_LENGTH: usize,
-        KmacKey: SymKey<KMAC_KEY_LENGTH>,
-    >(
+    pub fn derive_kmac_key<const KMAC_KEY_LENGTH: usize, KmacKey: SymKey<KMAC_KEY_LENGTH>>(
         &self,
         info: &[u8],
     ) -> KmacKey {

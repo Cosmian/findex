@@ -16,6 +16,7 @@
 // It allows the Wasm Findex implementation to reuse the common traits
 // for searching and upserting indexes.
 #![feature(async_fn_in_trait)]
+#![feature(iter_next_chunk)]
 #![allow(incomplete_features)]
 
 pub mod core;
