@@ -327,6 +327,8 @@ pub unsafe extern "C" fn h_compact(
 /// - `max_depth`                 : maximum recursion depth allowed
 /// - `fetch_chains_batch_size`   : increase this value to improve perfs but
 ///   decrease security by batching fetch chains calls
+/// - `base_url`                  : base URL for Findex Cloud (with http prefix
+///   and port if required). If null, use the default Findex Cloud server.
 ///
 /// # Safety
 ///
@@ -341,10 +343,17 @@ pub unsafe extern "C" fn h_search_cloud(
     max_results_per_keyword: c_int,
     max_depth: c_int,
     fetch_chains_batch_size: c_uint,
+    base_url_ptr: *const c_char,
 ) -> c_int {
     let token = ffi_read_string!("keywords", token_ptr);
 
-    let findex = ffi_unwrap!(FindexCloud::new(&token, None));
+    let base_url = if base_url_ptr.is_null() {
+        None
+    } else {
+        Some(ffi_read_string!("base url", base_url_ptr))
+    };
+
+    let findex = ffi_unwrap!(FindexCloud::new(&token, base_url));
     let master_key = findex.token.findex_master_key.clone();
 
     ffi_search(
@@ -389,6 +398,8 @@ pub unsafe extern "C" fn h_search_cloud(
 /// - `label`           : additional information used to derive Entry Table UIDs
 /// - `indexed_values_and_keywords` : serialized list of values and the keywords
 ///   used to index them
+/// - `base_url`                  : base URL for Findex Cloud (with http prefix
+///   and port if required). If null, use the default Findex Cloud server.
 ///
 /// # Safety
 ///
@@ -398,10 +409,17 @@ pub unsafe extern "C" fn h_upsert_cloud(
     label_ptr: *const u8,
     label_len: c_int,
     indexed_values_and_keywords_ptr: *const c_char,
+    base_url_ptr: *const c_char,
 ) -> c_int {
     let token = ffi_read_string!("keywords", token_ptr);
 
-    let findex = ffi_unwrap!(FindexCloud::new(&token, None));
+    let base_url = if base_url_ptr.is_null() {
+        None
+    } else {
+        Some(ffi_read_string!("base url", base_url_ptr))
+    };
+
+    let findex = ffi_unwrap!(FindexCloud::new(&token, base_url));
     let master_key = findex.token.findex_master_key.clone();
 
     ffi_upsert(
@@ -481,6 +499,7 @@ unsafe fn ffi_search<
     // We want to forward error code returned by callbacks to the parent caller to
     // do error management client side.
     let rt = ffi_unwrap!(tokio::runtime::Runtime::new());
+
     let results = match rt.block_on(findex.search(
         &keywords,
         master_key,
