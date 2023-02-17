@@ -15,17 +15,13 @@ use cosmian_crypto_core::{
     reexport::rand_core::CryptoRngCore,
     symmetric_crypto::{Dem, SymKey},
 };
-use zeroize::Zeroize;
 
-use super::structs::Block;
 use crate::{
-    core::{
-        chain_table::{ChainTable, ChainTableValue, KwiChainUids},
-        keys::KeyCache,
-        structs::{EncryptedTable, IndexedValue, Label, Uid},
-        KeyingMaterial, Keyword, CHAIN_TABLE_KEY_DERIVATION_INFO,
-    },
-    error::FindexErr,
+    chain_table::{ChainTable, ChainTableValue, KwiChainUids},
+    error::CoreError as Error,
+    keys::KeyCache,
+    structs::{Block, EncryptedTable, IndexedValue, Label, Uid},
+    KeyingMaterial, Keyword, CHAIN_TABLE_KEY_DERIVATION_INFO,
 };
 
 /// A value of the Entry Table.
@@ -53,7 +49,6 @@ impl<const UID_LENGTH: usize, const KWI_LENGTH: usize> EntryTableValue<UID_LENGT
     ///
     /// - `rng`             : random number generator
     /// - `keyword_hash`    : hash of the indexing keyword
-    #[inline]
     pub(crate) fn new<
         const BLOCK_LENGTH: usize,
         const KMAC_KEY_LENGTH: usize,
@@ -77,7 +72,6 @@ impl<const UID_LENGTH: usize, const KWI_LENGTH: usize> EntryTableValue<UID_LENGT
     /// value and returns this UID.
     ///
     /// - `kwi_uid` : KMAC key used to generate Chain Table UIDs.
-    #[inline]
     pub(crate) fn next_chain_table_uid<
         const BLOCK_LENGTH: usize,
         const KMAC_KEY_LENGTH: usize,
@@ -119,7 +113,7 @@ impl<const UID_LENGTH: usize, const KWI_LENGTH: usize> EntryTableValue<UID_LENGT
         kwi_value: &DemScheme::Key,
         chain_table: &mut EncryptedTable<UID_LENGTH>,
         rng: &mut impl CryptoRngCore,
-    ) -> Result<(), FindexErr> {
+    ) -> Result<(), Error> {
         let mut chain_table_value =
             if let Some(encrypted_chain_table_value) = chain_table.get(&self.chain_table_uid) {
                 ChainTableValue::<BLOCK_LENGTH>::decrypt::<TABLE_WIDTH, DEM_KEY_LENGTH, DemScheme>(
@@ -157,7 +151,6 @@ impl<const UID_LENGTH: usize, const KWI_LENGTH: usize> EntryTableValue<UID_LENGT
     ///
     /// - `k_value` : `𝐾_value`
     /// - `rng`     : random number generator
-    #[inline]
     pub(crate) fn encrypt<
         const BLOCK_LENGTH: usize,
         const DEM_KEY_LENGTH: usize,
@@ -166,19 +159,18 @@ impl<const UID_LENGTH: usize, const KWI_LENGTH: usize> EntryTableValue<UID_LENGT
         &self,
         k_value: &DemScheme::Key,
         rng: &mut impl CryptoRngCore,
-    ) -> Result<Vec<u8>, FindexErr> {
+    ) -> Result<Vec<u8>, Error> {
         let mut ser = Serializer::new();
         ser.write_array(&self.chain_table_uid)?;
         ser.write_array(&self.kwi)?;
         ser.write_array(&self.keyword_hash)?;
-        DemScheme::encrypt(rng, k_value, &ser.finalize(), None).map_err(FindexErr::from)
+        DemScheme::encrypt(rng, k_value, &ser.finalize(), None).map_err(Error::from)
     }
 
     /// Decrypts an encrypted `EntryTableValue` using the given `𝐾_value`.
     ///
     /// - `k_value`     : `𝐾_value`
     /// - `ciphertext`  : encrypted entry table value
-    #[inline]
     pub(crate) fn decrypt<
         const BLOCK_LENGTH: usize,
         const DEM_KEY_LENGTH: usize,
@@ -186,7 +178,7 @@ impl<const UID_LENGTH: usize, const KWI_LENGTH: usize> EntryTableValue<UID_LENGT
     >(
         k_value: &DemScheme::Key,
         ciphertext: &[u8],
-    ) -> Result<Self, FindexErr> {
+    ) -> Result<Self, Error> {
         let bytes = DemScheme::decrypt(k_value, ciphertext, None)?;
         let mut de = Deserializer::new(&bytes);
         let chain_table_uid = de.read_array::<UID_LENGTH>()?;
@@ -254,26 +246,6 @@ impl<const UID_LENGTH: usize, const KWI_LENGTH: usize> EntryTableValue<UID_LENGT
     }
 }
 
-impl<const UID_LENGTH: usize, const KEY_LENGTH: usize> Zeroize
-    for EntryTableValue<UID_LENGTH, KEY_LENGTH>
-{
-    #[inline]
-    fn zeroize(&mut self) {
-        self.chain_table_uid.zeroize();
-        self.kwi.zeroize();
-        self.keyword_hash.zeroize();
-    }
-}
-
-impl<const UID_LENGTH: usize, const KEY_LENGTH: usize> Drop
-    for EntryTableValue<UID_LENGTH, KEY_LENGTH>
-{
-    #[inline]
-    fn drop(&mut self) {
-        self.zeroize();
-    }
-}
-
 /// Entry Table.
 #[derive(Debug, Default)]
 pub struct EntryTable<const UID_LENGTH: usize, const KWI_LENGTH: usize>(
@@ -300,7 +272,6 @@ impl<const UID_LENGTH: usize, const KWI_LENGTH: usize> DerefMut
 
 impl<const UID_LENGTH: usize, const KWI_LENGTH: usize> EntryTable<UID_LENGTH, KWI_LENGTH> {
     /// Creates a new Entry Table with the given capacity.
-    #[inline]
     pub fn with_capacity(capacity: usize) -> Self {
         Self(HashMap::with_capacity(capacity))
     }
@@ -312,7 +283,6 @@ impl<const UID_LENGTH: usize, const KWI_LENGTH: usize> EntryTable<UID_LENGTH, KW
     /// - `key`             : KMAC key
     /// - `keyword_hash`    : `Keyword` to hash
     /// - `label`           : additional information used during the derivation
-    #[inline]
     pub fn generate_uid<const KMAC_KEY_LENGTH: usize, KmacKey: SymKey<KMAC_KEY_LENGTH>>(
         key: &KmacKey,
         keyword_hash: &[u8; Keyword::HASH_LENGTH],
@@ -332,7 +302,7 @@ impl<const UID_LENGTH: usize, const KWI_LENGTH: usize> EntryTable<UID_LENGTH, KW
     >(
         k_value: &DemScheme::Key,
         encrypted_entry_table: &EncryptedTable<UID_LENGTH>,
-    ) -> Result<Self, FindexErr> {
+    ) -> Result<Self, Error> {
         let mut entry_table = Self::with_capacity(encrypted_entry_table.len());
         for (k, v) in encrypted_entry_table.iter() {
             let decrypted_value = EntryTableValue::<UID_LENGTH, KWI_LENGTH>::decrypt::<
@@ -341,14 +311,13 @@ impl<const UID_LENGTH: usize, const KWI_LENGTH: usize> EntryTable<UID_LENGTH, KW
                 DemScheme,
             >(k_value, v)
             .map_err(|_| {
-                FindexErr::CallBack(format!(
+                Error::CryptoError(format!(
                     "fail to decrypt one of the `value` returned by the fetch entries callback \
-                     (uid as hex was '{}', value {})",
-                    hex::encode(k),
+                     (uid was '{k:?}', value was {})",
                     if v.is_empty() {
-                        "was empty".to_owned()
+                        "empty".to_owned()
                     } else {
-                        format!("as hex was '{}'", hex::encode(v))
+                        format!("'{v:?}'")
                     },
                 ))
             })?;
@@ -370,7 +339,7 @@ impl<const UID_LENGTH: usize, const KWI_LENGTH: usize> EntryTable<UID_LENGTH, KW
         &self,
         k_value: &DemScheme::Key,
         rng: &mut impl CryptoRngCore,
-    ) -> Result<EncryptedTable<UID_LENGTH>, FindexErr> {
+    ) -> Result<EncryptedTable<UID_LENGTH>, Error> {
         let mut encrypted_entry_table = EncryptedTable::with_capacity(self.len());
         for (k, v) in self.iter() {
             encrypted_entry_table.insert(
@@ -455,7 +424,7 @@ impl<const UID_LENGTH: usize, const KWI_LENGTH: usize> EntryTable<UID_LENGTH, KW
         rng: &mut impl CryptoRngCore,
         new_chain_elements: &HashMap<Keyword, HashSet<IndexedValue>>,
         entry_table_uid_cache: &HashMap<Keyword, Uid<UID_LENGTH>>,
-    ) -> Result<HashMap<Uid<UID_LENGTH>, EncryptedTable<UID_LENGTH>>, FindexErr> {
+    ) -> Result<HashMap<Uid<UID_LENGTH>, EncryptedTable<UID_LENGTH>>, Error> {
         // Cache the KMAC and DEM keys
         let mut key_cache = KeyCache::with_capacity(entry_table_uid_cache.len());
 
@@ -463,7 +432,7 @@ impl<const UID_LENGTH: usize, const KWI_LENGTH: usize> EntryTable<UID_LENGTH, KW
         for (keyword, indexed_values) in new_chain_elements {
             // Get the corresponding Entry Table UID from the cache.
             let entry_table_uid = entry_table_uid_cache.get(keyword).ok_or_else(|| {
-                FindexErr::CryptoError(format!(
+                Error::CryptoError(format!(
                     "No entry in Entry Table UID cache for keyword '{keyword:?}'"
                 ))
             })?;
@@ -519,14 +488,13 @@ mod tests {
 
     use cosmian_crypto_core::{
         bytes_ser_de::Serializable,
-        reexport::rand_core::SeedableRng,
+        reexport::rand_core::{RngCore, SeedableRng},
         symmetric_crypto::{aes_256_gcm_pure::Aes256GcmCrypto, key::Key, Dem},
         CsRng,
     };
-    use rand::RngCore;
 
     use super::*;
-    use crate::core::{structs::Location, Keyword, ENTRY_TABLE_KEY_DERIVATION_INFO};
+    use crate::{structs::Location, Keyword, ENTRY_TABLE_KEY_DERIVATION_INFO};
 
     const MASTER_KEY_LENGTH: usize = 16;
     const UID_LENGTH: usize = 32;

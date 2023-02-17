@@ -1,12 +1,9 @@
 use std::collections::{HashMap, HashSet};
 
-use crate::{
-    core::{EncryptedTable, IndexedValue, Keyword, Location, Uid, UpsertData},
-    error::FindexErr,
-};
+use crate::{CallbackError, EncryptedTable, IndexedValue, Keyword, Location, Uid, UpsertData};
 
 /// Trait implementing all callbacks needed by Findex.
-pub trait FindexCallbacks<const UID_LENGTH: usize> {
+pub trait FindexCallbacks<Error: std::error::Error + CallbackError, const UID_LENGTH: usize> {
     /// Returns partial results during a search. Stops the search if the
     /// returned value is `false`. This can be useful to stop the search when an
     /// intermediate result contains the search answers.
@@ -15,10 +12,10 @@ pub trait FindexCallbacks<const UID_LENGTH: usize> {
     async fn progress(
         &self,
         results: &HashMap<Keyword, HashSet<IndexedValue>>,
-    ) -> Result<bool, FindexErr>;
+    ) -> Result<bool, Error>;
 
     /// Fetch all the UIDs from the entry table
-    async fn fetch_all_entry_table_uids(&self) -> Result<HashSet<Uid<UID_LENGTH>>, FindexErr>;
+    async fn fetch_all_entry_table_uids(&self) -> Result<HashSet<Uid<UID_LENGTH>>, Error>;
 
     /// Fetch the lines with the given UIDs from the Entry Table. The returned
     /// values are encrypted since they are stored that way. The decryption
@@ -37,7 +34,7 @@ pub trait FindexCallbacks<const UID_LENGTH: usize> {
     async fn fetch_entry_table(
         &self,
         entry_table_uids: &HashSet<Uid<UID_LENGTH>>,
-    ) -> Result<EncryptedTable<UID_LENGTH>, FindexErr>;
+    ) -> Result<EncryptedTable<UID_LENGTH>, Error>;
 
     /// Fetch the lines with the given UIDs from the Chain Table. The returned
     /// values are encrypted since they are stored that way. The decryption is
@@ -56,7 +53,7 @@ pub trait FindexCallbacks<const UID_LENGTH: usize> {
     async fn fetch_chain_table(
         &self,
         chain_table_uids: &HashSet<Uid<UID_LENGTH>>,
-    ) -> Result<EncryptedTable<UID_LENGTH>, FindexErr>;
+    ) -> Result<EncryptedTable<UID_LENGTH>, Error>;
 
     /// Upserts lines in the Entry Table. The input data maps each Entry Table
     /// UID to upsert to the last value known by the client and the new value to
@@ -79,7 +76,7 @@ pub trait FindexCallbacks<const UID_LENGTH: usize> {
     async fn upsert_entry_table(
         &mut self,
         items: &UpsertData<UID_LENGTH>,
-    ) -> Result<EncryptedTable<UID_LENGTH>, FindexErr>;
+    ) -> Result<EncryptedTable<UID_LENGTH>, Error>;
 
     /// Inserts the given lines into the Chain Table.
     ///
@@ -91,10 +88,8 @@ pub trait FindexCallbacks<const UID_LENGTH: usize> {
     /// # Parameters
     ///
     /// - `items`   : items to be inserted
-    async fn insert_chain_table(
-        &mut self,
-        items: &EncryptedTable<UID_LENGTH>,
-    ) -> Result<(), FindexErr>;
+    async fn insert_chain_table(&mut self, items: &EncryptedTable<UID_LENGTH>)
+    -> Result<(), Error>;
 
     /// Updates the indexes with the given data.
     ///
@@ -149,7 +144,7 @@ pub trait FindexCallbacks<const UID_LENGTH: usize> {
         chain_table_uids_to_remove: HashSet<Uid<UID_LENGTH>>,
         new_entry_table_items: EncryptedTable<UID_LENGTH>,
         new_chain_table_items: EncryptedTable<UID_LENGTH>,
-    ) -> Result<(), FindexErr>;
+    ) -> Result<(), Error>;
 
     /// Returns all locations among the ones given that do not exist anymore.
     ///
@@ -163,5 +158,5 @@ pub trait FindexCallbacks<const UID_LENGTH: usize> {
     fn list_removed_locations(
         &self,
         locations: &HashSet<Location>,
-    ) -> Result<HashSet<Location>, FindexErr>;
+    ) -> Result<HashSet<Location>, Error>;
 }
