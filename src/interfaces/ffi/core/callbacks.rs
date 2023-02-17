@@ -8,8 +8,10 @@ use std::ffi::{c_int, c_uchar, c_uint};
 ///
 /// The intermediate results are serialized as follows:
 ///
-/// `LEB128(results.len()) || serialized_keyword_1
-///     || serialized_results_for_keyword_1`
+/// `LEB128(n_keywords) || LEB128(keyword_1)
+///     || keyword_1 || LEB128(n_associated_results)
+///     || LEB128(associated_result_1) || associated_result_1
+///     || ...`
 ///
 /// With the serialization of a keyword being:
 ///
