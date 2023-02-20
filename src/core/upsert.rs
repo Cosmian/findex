@@ -125,6 +125,7 @@ pub trait FindexUpsert<
                 }
             }
         }
+
         Ok(())
     }
 

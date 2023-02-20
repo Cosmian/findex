@@ -54,7 +54,10 @@ extern "C" {
 #[wasm_bindgen]
 extern "C" {
     /// See [`FindexCallbacks::progress()`](crate::core::FindexCallbacks::progress).
-    #[wasm_bindgen(typescript_type = "(indexedValues: Uint8Array[]) => Promise<Boolean>")]
+    #[wasm_bindgen(
+        typescript_type = "(progressResults: Array<{ keyword: Uint8Array, results: \
+                           Array<Uint8Array> }>) => Promise<Boolean>"
+    )]
     pub type Progress;
 }
 

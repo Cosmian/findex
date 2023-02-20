@@ -16,7 +16,7 @@ const CHAIN_TABLE_KEY_DERIVATION_INFO: &[u8] = b"Chain Table key derivation info
 
 // Macros should be defined first in order to be available for other modules
 #[macro_use]
-mod macros;
+pub mod macros;
 
 mod callbacks;
 mod chain_table;
