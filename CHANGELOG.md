@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.1.0] - 2023-02-20
+
+### Bug Fixes
+
+- Update wasm type of progress callback
+
+### Features
+
+- Update `ProgressResult` serialization in ffi
+
 ## [2.0.1] - 2023-02-02
 
 ### Features
