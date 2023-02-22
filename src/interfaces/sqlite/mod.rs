@@ -43,15 +43,12 @@ pub async fn upsert(sqlite_db_path: &PathBuf, dataset_path: &str) -> Result<(), 
     let users = SqliteDatabase::select_all_users(&connection)?;
     let mut locations_and_words = HashMap::new();
     for (idx, user) in users.iter().enumerate() {
-        let db_uid = (0..16)
-            .map(|_e| format!("{:02x}", idx + 1))
-            .collect::<String>();
         let mut words = HashSet::new();
         for word in &user.values() {
             words.insert(Keyword::from(word.as_bytes()));
         }
         locations_and_words.insert(
-            IndexedValue::Location(Location::from(db_uid.as_bytes())),
+            IndexedValue::Location(Location::from((idx as i64).to_be_bytes().as_slice())),
             words,
         );
     }
@@ -102,14 +99,17 @@ pub async fn search(
     let mut db_uids = Vec::with_capacity(results.len());
     for (_, locations) in results {
         for location in locations {
-            let db_uid = String::from_utf8(location.into())
-                .map_err(|e| FindexErr::ConversionError(format!("Invalid location: {e}")))?;
+            let db_uid = i64::from_be_bytes(
+                (*location)
+                    .try_into()
+                    .map_err(|e| FindexErr::ConversionError(format!("Invalid location: {e}")))?,
+            );
             db_uids.push(db_uid);
         }
     }
     if check {
         db_uids.sort();
-        let mut search_results: Vec<String> =
+        let mut search_results: Vec<i64> =
             serde_json::from_str(include_str!("../../../datasets/expected_db_uids.json"))?;
         search_results.sort();
         assert_eq!(db_uids, search_results);

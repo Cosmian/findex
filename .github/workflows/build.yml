@@ -18,6 +18,6 @@ jobs:
       branch-java: develop
       branch-js: develop
       branch-flutter: develop
-      branch-python: main
+      branch-python: develop
       bench-features: sqlite
     secrets: inherit
