@@ -21,6 +21,3 @@
 
 pub mod core;
 pub mod error;
-
-#[cfg(feature = "interfaces")]
-pub mod interfaces;
