@@ -37,7 +37,8 @@ futures = { version = "0.3" }
 hex = "0.4"
 js-sys = { version = "0.3", optional = true }
 leb128 = "0.2"
-pyo3 = { version = "0.17", features = ["extension-module", "abi3", "abi3-py37", "generate-import-lib"], optional = true }
+pyo3 = { version = "0.18", features = ["extension-module", "abi3", "abi3-py37", "generate-import-lib"], optional = true }
+pyo3-asyncio = { version = "0.18", features = ["tokio-runtime"] }
 rand = "0.8"
 reqwest = { version = "0.11.14", features = ["rustls-tls"], default-features = false, optional = true }
 rusqlite = { version = "0.28", features = ["bundled"], optional = true }

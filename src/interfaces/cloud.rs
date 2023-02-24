@@ -132,7 +132,7 @@ impl FromStr for Token {
             })?,
         )?;
 
-        let mut token = Token {
+        let mut token = Self {
             index_id: index_id.to_owned(),
             findex_master_key,
 
@@ -182,7 +182,7 @@ impl Token {
         let mut rng = CsRng::from_entropy();
         let findex_master_key = KeyingMaterial::<MASTER_KEY_LENGTH>::new(&mut rng);
 
-        Ok(Token {
+        Ok(Self {
             index_id,
             findex_master_key,
             fetch_entries_seed: Some(fetch_entries_seed),
@@ -260,7 +260,7 @@ enum Callback {
 }
 
 impl Callback {
-    const ALL: [Callback; 4] = [
+    const ALL: [Self; 4] = [
         Self::FetchEntries,
         Self::FetchChains,
         Self::UpsertEntries,
@@ -269,10 +269,10 @@ impl Callback {
 
     pub fn get_uri(self) -> &'static str {
         match self {
-            Callback::FetchEntries => "fetch_entries",
-            Callback::FetchChains => "fetch_chains",
-            Callback::UpsertEntries => "upsert_entries",
-            Callback::InsertChains => "insert_chains",
+            Self::FetchEntries => "fetch_entries",
+            Self::FetchChains => "fetch_chains",
+            Self::UpsertEntries => "upsert_entries",
+            Self::InsertChains => "insert_chains",
         }
     }
 }
@@ -282,10 +282,10 @@ impl TryFrom<u8> for Callback {
 
     fn try_from(value: u8) -> Result<Self, Self::Error> {
         match value {
-            0 => Ok(Callback::FetchEntries),
-            1 => Ok(Callback::FetchChains),
-            2 => Ok(Callback::UpsertEntries),
-            3 => Ok(Callback::InsertChains),
+            0 => Ok(Self::FetchEntries),
+            1 => Ok(Self::FetchChains),
+            2 => Ok(Self::UpsertEntries),
+            3 => Ok(Self::InsertChains),
             _ => Err(()),
         }
     }
@@ -294,17 +294,17 @@ impl TryFrom<u8> for Callback {
 impl Display for Callback {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Callback::FetchEntries => write!(f, "fetch entries"),
-            Callback::FetchChains => write!(f, "fetch chains"),
-            Callback::UpsertEntries => write!(f, "upsert entries"),
-            Callback::InsertChains => write!(f, "insert chains"),
+            Self::FetchEntries => write!(f, "fetch entries"),
+            Self::FetchChains => write!(f, "fetch chains"),
+            Self::UpsertEntries => write!(f, "upsert entries"),
+            Self::InsertChains => write!(f, "insert chains"),
         }
     }
 }
 
 impl FindexCloud {
     pub fn new(token: &str, base_url: Option<String>) -> Result<Self, FindexErr> {
-        Ok(FindexCloud {
+        Ok(Self {
             token: Token::from_str(token)?,
             base_url,
         })

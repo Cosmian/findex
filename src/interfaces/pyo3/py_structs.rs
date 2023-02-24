@@ -137,6 +137,18 @@ impl Label {
         Self(LabelRust::from(label_bytes))
     }
 
+    /// Load from a string.
+    ///
+    /// Args:
+    ///     label_str (str)
+    ///
+    /// Returns:
+    ///     Label
+    #[staticmethod]
+    pub fn from_string(label_str: &str) -> Self {
+        Self(LabelRust::from(label_str))
+    }
+
     /// Convert to bytes.
     ///
     /// Returns:

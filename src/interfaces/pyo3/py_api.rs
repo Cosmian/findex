@@ -430,10 +430,15 @@ impl InternalFindex {
     ///
     /// Returns: List[IndexedValue]
     // use `u32::MAX` for `max_result_per_keyword`
-    #[args(max_result_per_keyword = "4294967295")]
-    #[args(max_depth = "100")]
-    #[args(fetch_chains_batch_size = "0")]
-    #[args(progress_callback = "None")]
+    #[pyo3(signature = (
+        keywords,
+        master_key,
+        label,
+        max_result_per_keyword = std::usize::MAX,
+        max_depth = 100,
+        fetch_chains_batch_size = 0,
+        progress_callback = None
+    ))]
     #[allow(clippy::too_many_arguments)]
     pub fn search_wrapper(
         &mut self,
@@ -558,10 +563,14 @@ impl FindexCloud {
     ///
     /// Returns: List[IndexedValue]
     // use `u32::MAX` for `max_result_per_keyword`
-    #[args(max_result_per_keyword = "4294967295")]
-    #[args(max_depth = "100")]
-    #[args(fetch_chains_batch_size = "0")]
-    #[args(progress_callback = "None")]
+    #[pyo3(signature = (
+        keywords,
+        master_key,
+        label,
+        max_result_per_keyword = std::usize::MAX,
+        max_depth = 100,
+        fetch_chains_batch_size = 0
+    ))]
     #[allow(clippy::too_many_arguments)]
     pub fn search(
         &mut self,
