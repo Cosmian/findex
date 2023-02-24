@@ -108,10 +108,10 @@ pub async fn search(
         }
     }
     if check {
-        db_uids.sort();
+        db_uids.sort_unstable();
         let mut search_results: Vec<i64> =
             serde_json::from_str(include_str!("../../../datasets/expected_db_uids.json"))?;
-        search_results.sort();
+        search_results.sort_unstable();
         assert_eq!(db_uids, search_results);
     }
     Ok(())

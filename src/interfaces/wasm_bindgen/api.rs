@@ -235,7 +235,7 @@ pub fn webassembly_derive_new_token(
     Ok(token.to_string())
 }
 
-/// Generate a new Findex Cloud token with reduced permissions
+/// Generate a new random Findex Cloud token
 #[wasm_bindgen]
 pub fn webassembly_generate_new_token(
     index_id: String,

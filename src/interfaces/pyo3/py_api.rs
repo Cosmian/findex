@@ -1,8 +1,10 @@
 use std::{
     collections::{HashMap, HashSet},
     num::NonZeroUsize,
+    str::FromStr,
 };
 
+use cosmian_crypto_core::bytes_ser_de::Serializable;
 use futures::executor::block_on;
 use pyo3::{
     prelude::*,
@@ -12,10 +14,11 @@ use pyo3::{
 use crate::{
     core::{
         EncryptedTable, FindexCallbacks, FindexCompact, FindexSearch, FindexUpsert,
-        IndexedValue as IndexedValueRust, Keyword, Location, Uid, UpsertData,
+        IndexedValue as IndexedValueRust, KeyingMaterial, Keyword, Location, Uid, UpsertData,
     },
     error::FindexErr,
     interfaces::{
+        cloud::{FindexCloud as FindexCloudRust, Token, SIGNATURE_SEED_LENGTH},
         generic_parameters::{
             DemScheme, KmacKey, BLOCK_LENGTH, DEM_KEY_LENGTH, KMAC_KEY_LENGTH, KWI_LENGTH,
             MASTER_KEY_LENGTH, SECURE_FETCH_CHAINS_BATCH_SIZE, TABLE_WIDTH, UID_LENGTH,
@@ -26,7 +29,7 @@ use crate::{
     },
 };
 
-#[pyclass(subclass)]
+#[pyclass]
 pub struct InternalFindex {
     fetch_entry: PyObject,
     fetch_chain: PyObject,
@@ -393,25 +396,20 @@ impl InternalFindex {
     ///
     /// Parameters
     ///
-    /// - `indexed_values_and_strings`  : map of `IndexedValue` to keywords
+    /// - `indexed_values_and_keywords` : map of `IndexedValue` to keywords
     /// - `master_key`                  : Findex master key
     /// - `label`                       : label used to allow versioning
     pub fn upsert_wrapper(
         &mut self,
-        indexed_values_and_strings: HashMap<IndexedValuePy, Vec<&str>>,
+        py_indexed_values_and_keywords: HashMap<IndexedValuePy, Vec<&str>>,
         master_key: &MasterKeyPy,
         label: &LabelPy,
     ) -> PyResult<()> {
-        let mut indexed_values_and_keywords =
-            HashMap::with_capacity(indexed_values_and_strings.len());
-        for (indexed_value, strings) in indexed_values_and_strings {
-            let mut keywords = HashSet::with_capacity(strings.len());
-            for string in strings {
-                keywords.insert(Keyword::from(string));
-            }
-            indexed_values_and_keywords.insert(indexed_value.0, keywords);
-        }
-        let future = self.upsert(indexed_values_and_keywords, &master_key.0, &label.0);
+        let future = self.upsert(
+            indexed_values_and_keywords_to_rust(py_indexed_values_and_keywords),
+            &master_key.0,
+            &label.0,
+        );
         block_on(future).map_err(PyErr::from)
     }
 
@@ -468,23 +466,7 @@ impl InternalFindex {
             0,
         ))?;
 
-        Ok(results
-            .iter()
-            .map(|(keyword, indexed_values)| {
-                (
-                    // Convert keyword to string or base64
-                    match keyword.clone().try_into_string() {
-                        Ok(s) => s,
-                        Err(_) => format!("{keyword:?}"),
-                    },
-                    // Convert Locations to bytes
-                    indexed_values
-                        .iter()
-                        .map(|location| PyBytes::new(py, location).into_py(py))
-                        .collect::<Vec<_>>(),
-                )
-            })
-            .collect::<HashMap<_, _>>())
+        Ok(search_results_to_python(results, py))
     }
 
     /// Replace all the previous Index Entry Table UIDs and
@@ -520,4 +502,174 @@ impl InternalFindex {
         ))
         .map_err(PyErr::from)
     }
+}
+
+#[pyclass]
+pub struct FindexCloud(FindexCloudRust);
+
+#[pymethods]
+impl FindexCloud {
+    #[new]
+    pub fn new(token: &str, base_url: Option<String>) -> PyResult<Self> {
+        Ok(Self(FindexCloudRust::new(token, base_url)?))
+    }
+
+    /// Upserts the given relations between `IndexedValue` and `Keyword` into
+    /// Findex tables. After upserting, any search for a `Word` given in the
+    /// aforementioned relations will result in finding (at least) the
+    /// corresponding `IndexedValue`.
+    ///
+    /// Parameters
+    ///
+    /// - `indexed_values_and_keywords` : map of `IndexedValue` to keywords
+    /// - `master_key`                  : Findex master key
+    /// - `label`                       : label used to allow versioning
+    pub fn upsert(
+        &mut self,
+        py_indexed_values_and_keywords: HashMap<IndexedValuePy, Vec<&str>>,
+        master_key: &MasterKeyPy,
+        label: &LabelPy,
+    ) -> PyResult<()> {
+        let future = self.0.upsert(
+            indexed_values_and_keywords_to_rust(py_indexed_values_and_keywords),
+            &master_key.0,
+            &label.0,
+        );
+        // We want to forward error code returned by callbacks to the parent caller to
+        // do error management client side.
+        let rt = tokio::runtime::Runtime::new()?;
+        rt.block_on(future).map_err(PyErr::from)
+    }
+
+    /// Recursively search Findex graphs for `Location` corresponding to the
+    /// given `Keyword`.
+    ///
+    /// Parameters
+    ///
+    /// - `keywords`                : keywords to search using Findex
+    /// - `master_key`              : user secret key
+    /// - `label`                   : public label used in keyword hashing
+    /// - `max_results_per_keyword` : maximum number of results to fetch per
+    ///   keyword
+    /// - `max_depth`               : maximum recursion level allowed
+    /// - `fetch_chains_batch_size` : batch size during fetch chain
+    /// - `progress_callback`       : optional callback to process intermediate
+    ///   search results.
+    ///
+    /// Returns: List[IndexedValue]
+    // use `u32::MAX` for `max_result_per_keyword`
+    #[args(max_result_per_keyword = "4294967295")]
+    #[args(max_depth = "100")]
+    #[args(fetch_chains_batch_size = "0")]
+    #[args(progress_callback = "None")]
+    #[allow(clippy::too_many_arguments)]
+    pub fn search(
+        &mut self,
+        keywords: Vec<&str>,
+        master_key: &MasterKeyPy,
+        label: &LabelPy,
+        max_result_per_keyword: usize,
+        max_depth: usize,
+        fetch_chains_batch_size: usize,
+        py: Python,
+    ) -> PyResult<HashMap<String, Vec<PyObject>>> {
+        let keywords_set: HashSet<Keyword> = keywords
+            .iter()
+            .map(|keyword| Keyword::from(*keyword))
+            .collect();
+
+        // We want to forward error code returned by callbacks to the parent caller to
+        // do error management client side.
+        let rt = tokio::runtime::Runtime::new()?;
+
+        let results = rt.block_on(self.0.search(
+            &keywords_set,
+            &master_key.0,
+            &label.0,
+            max_result_per_keyword,
+            max_depth,
+            NonZeroUsize::new(fetch_chains_batch_size).unwrap_or(SECURE_FETCH_CHAINS_BATCH_SIZE),
+            0,
+        ))?;
+
+        Ok(search_results_to_python(results, py))
+    }
+
+    /// Generate a new Findex Cloud token with reduced permissions
+    #[staticmethod]
+    pub fn derive_new_token(token: String, search: bool, index: bool) -> PyResult<String> {
+        let mut token = Token::from_str(&token)?;
+
+        token.reduce_permissions(search, index)?;
+
+        Ok(token.to_string())
+    }
+
+    /// Generate a new random Findex Cloud token
+    #[staticmethod]
+    pub fn generate_new_token(
+        index_id: String,
+        fetch_entries_seed: &[u8],
+        fetch_chains_seed: &[u8],
+        upsert_entries_seed: &[u8],
+        insert_chains_seed: &[u8],
+    ) -> PyResult<String> {
+        let token = Token::random_findex_master_key(
+            index_id,
+            uint8slice_to_seed(fetch_entries_seed, "fetch_entries_seed")?,
+            uint8slice_to_seed(fetch_chains_seed, "fetch_chains_seed")?,
+            uint8slice_to_seed(upsert_entries_seed, "upsert_entries_seed")?,
+            uint8slice_to_seed(insert_chains_seed, "insert_chains_seed")?,
+        )?;
+
+        Ok(token.to_string())
+    }
+}
+
+fn uint8slice_to_seed(
+    seed: &[u8],
+    debug_name: &str,
+) -> Result<KeyingMaterial<SIGNATURE_SEED_LENGTH>, FindexErr> {
+    KeyingMaterial::try_from_bytes(seed).map_err(|_| {
+        FindexErr::Other(format!(
+            "{debug_name} is of wrong size ({SIGNATURE_SEED_LENGTH} expected)",
+        ))
+    })
+}
+
+fn indexed_values_and_keywords_to_rust(
+    indexed_values_and_strings: HashMap<IndexedValuePy, Vec<&str>>,
+) -> HashMap<IndexedValueRust, HashSet<Keyword>> {
+    let mut indexed_values_and_keywords = HashMap::with_capacity(indexed_values_and_strings.len());
+    for (indexed_value, strings) in indexed_values_and_strings {
+        let mut keywords = HashSet::with_capacity(strings.len());
+        for string in strings {
+            keywords.insert(Keyword::from(string));
+        }
+        indexed_values_and_keywords.insert(indexed_value.0, keywords);
+    }
+    indexed_values_and_keywords
+}
+
+fn search_results_to_python(
+    search_results: HashMap<Keyword, HashSet<Location>>,
+    py: Python,
+) -> HashMap<String, Vec<PyObject>> {
+    search_results
+        .iter()
+        .map(|(keyword, locations)| {
+            (
+                // Convert keyword to string or base64
+                match keyword.clone().try_into_string() {
+                    Ok(s) => s,
+                    Err(_) => format!("{keyword:?}"),
+                },
+                // Convert Locations to bytes
+                locations
+                    .iter()
+                    .map(|location| PyBytes::new(py, location).into_py(py))
+                    .collect::<Vec<_>>(),
+            )
+        })
+        .collect::<HashMap<_, _>>()
 }

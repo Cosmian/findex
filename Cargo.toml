@@ -25,7 +25,7 @@ sqlite = ["rusqlite", "faker_rand", "interfaces", "serde", "serde_json"]
 wasm_bindgen = ["interfaces", "js-sys", "wasm-bindgen", "wasm-bindgen-futures", "cloud"]
 interfaces = []
 cloud = ["interfaces", "serde", "reqwest"]
-python = ["interfaces", "pyo3"]
+python = ["interfaces", "pyo3", "cloud", "tokio"]
 
 [dependencies]
 async-recursion = "1.0.0"
