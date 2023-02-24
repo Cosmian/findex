@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
+## [3.0.0] - 2023-02-27
+
+### Refactor
+
+- [**breaking**] Move all interfaces (FFI, Wasm, pyo3) to `cloudproof_rust` repository
+
+### Testing
+
+- Change number encoding in non regression vectors
+
 ## [2.1.0] - 2023-02-20
 
 ### Bug Fixes

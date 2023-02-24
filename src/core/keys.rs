@@ -23,7 +23,7 @@ impl<const LENGTH: usize> KeyingMaterial<LENGTH> {
     ///
     /// - `rng` : random number generator
     #[inline]
-    pub(crate) fn new(rng: &mut impl CryptoRngCore) -> Self {
+    pub fn new(rng: &mut impl CryptoRngCore) -> Self {
         let mut bytes = [0; LENGTH];
         rng.fill_bytes(&mut bytes);
         Self(bytes)

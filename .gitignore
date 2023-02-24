@@ -10,3 +10,4 @@ jniLibs
 *.svg
 perf.data*
 *dataset.json
+Cargo.lock
