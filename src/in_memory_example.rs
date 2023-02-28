@@ -28,7 +28,7 @@ impl std::error::Error for ExampleError {}
 
 impl crate::CallbackError for ExampleError {}
 
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct FindexInMemory<const UID_LENGTH: usize> {
     entry_table: EncryptedTable<UID_LENGTH>,
     chain_table: EncryptedTable<UID_LENGTH>,

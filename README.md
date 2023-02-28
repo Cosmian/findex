@@ -26,7 +26,6 @@ Findex is part of Cosmian Cloudproof Encryption.
     - [Implementation details](#implementation-details-2)
   - [Benchmarks](#benchmarks)
 - [Documentation](#documentation)
-- [Releases](#releases)
 
 <!-- tocstop -->
 
@@ -358,6 +357,4 @@ The benchmarks presented in this section are run on a Intel(R) Xeon(R) Platinum 
 
 Findex technical documentation can be found [here](https://github.com/Cosmian/findex/blob/main/documentation/Findex.pdf).
 
-## Releases
-
-All releases can be found in the public URL [package.cosmian.com](https://package.cosmian.com).
+The developer documentation can be found on [doc.rs](https://docs.rs/cosmian_findex/latest/cosmian_findex/index.html)
