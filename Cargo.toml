@@ -6,7 +6,7 @@ authors = [
   "Bruno Grieder <bruno.grieder@cosmian.com>",
   "Célia Corsin <celia.corsin@cosmian.com>",
   "Emmanuel Coste <emmanuel.coste@cosmian.com>",
-  "Théophile Brézot <theophile.brezot@cosmian.com>"
+  "Théophile Brézot <theophile.brezot@cosmian.com>",
 ]
 categories = ["cosmian::crypto"]
 edition = "2021"
@@ -20,8 +20,9 @@ crate-type = ["cdylib", "rlib", "staticlib"]
 name = "cosmian_findex"
 path = "src/lib.rs"
 
-[workspace]
-members = ["findex_sqlite", "findex_in_memory"]
+[[bench]]
+harness = false
+name = "benches"
 
 [dependencies]
 async-recursion = "1.0.0"
@@ -33,10 +34,6 @@ zeroize = "1.5"
 
 [dev-dependencies]
 actix-rt = "2.8"
-findex_in_memory = { path = "./findex_in_memory" }
-findex_sqlite = { path = "./findex_sqlite" }
+criterion = { version = "0.4", features = ["html_reports", "async_futures"], default_features = false }
 futures = "0.3"
 serde_json = "1.0"
-
-[profile.bench]
-debug = true

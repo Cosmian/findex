@@ -4,7 +4,7 @@ use core::fmt::{Debug, Display};
 
 use cosmian_crypto_core::CryptoCoreError;
 
-/// Marker trait indicating an error type is used as CallbackError.
+/// Marker trait indicating an error type is used as `CallbackError`.
 pub trait CallbackError {}
 
 #[derive(Debug)]

@@ -350,7 +350,9 @@ sequenceDiagram
 
 ### Benchmarks
 
-TODO
+The benchmarks presented in this section are run on a Intel(R) Xeon(R) Platinum 8171M CPU @ 2.60GHz.
+
+- [Findex in memory (no database)](./benches/BENCHMARKS.md)
 
 ## Documentation
 

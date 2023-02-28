@@ -37,6 +37,7 @@ mod search;
 mod structs;
 mod upsert;
 
+pub mod in_memory_example;
 pub mod parameters;
 
 pub use callbacks::FindexCallbacks;
