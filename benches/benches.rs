@@ -5,7 +5,6 @@ use cosmian_findex::{
     in_memory_example::FindexInMemory, parameters::SECURE_FETCH_CHAINS_BATCH_SIZE, FindexSearch,
     FindexUpsert, IndexedValue, KeyingMaterial, Keyword, Label, Location,
 };
-// use cosmian_findex_in_memory::interfaces::sqlite::{delete_db, search, upsert};
 use criterion::{async_executor::FuturesExecutor, criterion_group, criterion_main, Criterion};
 use futures::executor::block_on;
 use rand::SeedableRng;
@@ -92,6 +91,7 @@ fn bench_search(c: &mut Criterion) {
                 .expect("search failed");
         });
     });
+
     //
     // Search 100 words
     //
@@ -113,6 +113,7 @@ fn bench_search(c: &mut Criterion) {
                 .expect("search failed");
         });
     });
+
     //
     // Search 1000 words
     //

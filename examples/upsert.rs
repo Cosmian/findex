@@ -1,20 +1,16 @@
 #![allow(incomplete_features)]
 #![feature(async_fn_in_trait)]
 
+#[cfg(feature = "in_memory")]
 use std::collections::{HashMap, HashSet};
 
-use cosmian_crypto_core::{reexport::rand_core::SeedableRng, CsRng};
-use cosmian_findex::{
-    in_memory_example::FindexInMemory, FindexUpsert, IndexedValue, KeyingMaterial, Keyword, Label,
-    Location,
-};
-use futures::executor::block_on;
-
-const N_ITER: usize = 100;
+#[cfg(feature = "in_memory")]
+use cosmian_findex::Keyword;
 
 /// Converts the given strings as a `HashSet` of Keywords.
 ///
 /// - `keywords`    : strings to convert
+#[cfg(feature = "in_memory")]
 fn hashset_keywords(keywords: &[&'static str]) -> HashSet<Keyword> {
     keywords
         .iter()
@@ -23,41 +19,52 @@ fn hashset_keywords(keywords: &[&'static str]) -> HashSet<Keyword> {
 }
 
 fn main() {
-    let mut rng = CsRng::from_entropy();
-    let label = Label::random(&mut rng);
-    let master_key = KeyingMaterial::new(&mut rng);
+    #[cfg(feature = "in_memory")]
+    {
+        use cosmian_crypto_core::{reexport::rand_core::SeedableRng, CsRng};
+        use cosmian_findex::{
+            in_memory_example::FindexInMemory, FindexUpsert, IndexedValue, KeyingMaterial, Label,
+            Location,
+        };
+        use futures::executor::block_on;
 
-    let mut indexed_value_to_keywords = HashMap::new();
+        let mut rng = CsRng::from_entropy();
+        let label = Label::random(&mut rng);
+        let master_key = KeyingMaterial::new(&mut rng);
 
-    // direct location robert doe
-    let robert_doe_location = Location::from("robert doe DB location");
-    indexed_value_to_keywords.insert(
-        IndexedValue::Location(robert_doe_location),
-        hashset_keywords(&["robert", "doe"]),
-    );
+        let mut indexed_value_to_keywords = HashMap::new();
 
-    // direct location john doe
-    let john_doe_location = Location::from("john doe DB location");
-    indexed_value_to_keywords.insert(
-        IndexedValue::Location(john_doe_location),
-        hashset_keywords(&["john", "doe"]),
-    );
+        // direct location robert doe
+        let robert_doe_location = Location::from("robert doe DB location");
+        indexed_value_to_keywords.insert(
+            IndexedValue::Location(robert_doe_location),
+            hashset_keywords(&["robert", "doe"]),
+        );
 
-    // direct location for rob...
-    let rob_location = Location::from("rob DB location");
-    indexed_value_to_keywords.insert(
-        IndexedValue::Location(rob_location),
-        hashset_keywords(&["rob"]),
-    );
-    // ... and indirection to robert
-    indexed_value_to_keywords.insert(
-        IndexedValue::NextKeyword(Keyword::from("robert")),
-        hashset_keywords(&["rob"]),
-    );
+        // direct location john doe
+        let john_doe_location = Location::from("john doe DB location");
+        indexed_value_to_keywords.insert(
+            IndexedValue::Location(john_doe_location),
+            hashset_keywords(&["john", "doe"]),
+        );
 
-    let mut findex = FindexInMemory::default();
+        // direct location for rob...
+        let rob_location = Location::from("rob DB location");
+        indexed_value_to_keywords.insert(
+            IndexedValue::Location(rob_location),
+            hashset_keywords(&["rob"]),
+        );
+        // ... and indirection to robert
+        indexed_value_to_keywords.insert(
+            IndexedValue::NextKeyword(Keyword::from("robert")),
+            hashset_keywords(&["rob"]),
+        );
 
-    for _ in 0..N_ITER {
-        block_on(findex.upsert(indexed_value_to_keywords.clone(), &master_key, &label)).unwrap();
+        let mut findex = FindexInMemory::default();
+
+        for _ in 0..100 {
+            block_on(findex.upsert(indexed_value_to_keywords.clone(), &master_key, &label))
+                .unwrap();
+        }
     }
 }

@@ -37,6 +37,7 @@ mod search;
 mod structs;
 mod upsert;
 
+#[cfg(feature = "in_memory")]
 pub mod in_memory_example;
 pub mod parameters;
 

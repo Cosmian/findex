@@ -24,6 +24,9 @@ path = "src/lib.rs"
 harness = false
 name = "benches"
 
+[features]
+in_memory = []
+
 [dependencies]
 async-recursion = "1.0.0"
 cosmian_crypto_core = "7.0.0"

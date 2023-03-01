@@ -283,7 +283,6 @@ mod examples {
     };
 
     use cosmian_crypto_core::{reexport::rand_core::SeedableRng, CsRng};
-    // use cosmian_findex_in_memory::FindexInMemory;
     use rand::Rng;
 
     use super::ExampleError;
