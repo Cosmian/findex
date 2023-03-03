@@ -1,14 +1,21 @@
+#[cfg(feature = "in_memory")]
 use std::collections::{HashMap, HashSet};
 
+#[cfg(feature = "in_memory")]
 use cosmian_crypto_core::CsRng;
+#[cfg(feature = "in_memory")]
 use cosmian_findex::{
     in_memory_example::FindexInMemory, parameters::SECURE_FETCH_CHAINS_BATCH_SIZE, FindexSearch,
     FindexUpsert, IndexedValue, KeyingMaterial, Keyword, Label, Location,
 };
+#[cfg(feature = "in_memory")]
 use criterion::{async_executor::FuturesExecutor, criterion_group, criterion_main, Criterion};
+#[cfg(feature = "in_memory")]
 use futures::executor::block_on;
+#[cfg(feature = "in_memory")]
 use rand::SeedableRng;
 
+#[cfg(feature = "in_memory")]
 fn prepare_locations_and_words(number: i64) -> HashMap<IndexedValue, HashSet<Keyword>> {
     let mut locations_and_words = HashMap::new();
     for idx in 0..number {
@@ -23,6 +30,8 @@ fn prepare_locations_and_words(number: i64) -> HashMap<IndexedValue, HashSet<Key
     }
     locations_and_words
 }
+
+#[cfg(feature = "in_memory")]
 fn prepare_keywords(number: i64) -> HashSet<Keyword> {
     let mut keywords = HashSet::new();
     for idx in 0..number {
@@ -31,6 +40,7 @@ fn prepare_keywords(number: i64) -> HashSet<Keyword> {
     keywords
 }
 
+#[cfg(feature = "in_memory")]
 fn bench_search(c: &mut Criterion) {
     //
     // Generate new dataset
@@ -143,6 +153,7 @@ fn bench_search(c: &mut Criterion) {
     group.finish();
 }
 
+#[cfg(feature = "in_memory")]
 fn bench_upsert(c: &mut Criterion) {
     //
     // Generate new dataset
@@ -184,6 +195,7 @@ fn bench_upsert(c: &mut Criterion) {
     group.finish();
 }
 
+#[cfg(feature = "in_memory")]
 criterion_group!(
     name = benches;
     config = Criterion::default().sample_size(5000);
@@ -192,4 +204,11 @@ criterion_group!(
         bench_upsert,
 );
 
+#[cfg(feature = "in_memory")]
 criterion_main!(benches);
+
+#[cfg(not(feature = "in_memory"))]
+fn main() {}
+
+#[cfg(not(feature = "in_memory"))]
+compile_error!("Benches require the `in_mempry` feature.");
