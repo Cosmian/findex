@@ -211,4 +211,4 @@ criterion_main!(benches);
 fn main() {}
 
 #[cfg(not(feature = "in_memory"))]
-compile_error!("Benches require the `in_mempry` feature.");
+compile_error!("Benches require the `in_memory` feature.");
