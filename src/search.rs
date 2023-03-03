@@ -12,15 +12,13 @@ use cosmian_crypto_core::{
 };
 use futures::future::join_all;
 
-use super::{callbacks::FindexCallbacks, structs::Block};
 use crate::{
-    core::{
-        chain_table::{ChainTableValue, KwiChainUids},
-        entry_table::EntryTable,
-        structs::{IndexedValue, Keyword, Label, Location, Uid},
-        KeyingMaterial, CHAIN_TABLE_KEY_DERIVATION_INFO, ENTRY_TABLE_KEY_DERIVATION_INFO,
-    },
-    error::FindexErr,
+    callbacks::FindexCallbacks,
+    chain_table::{ChainTableValue, KwiChainUids},
+    entry_table::EntryTable,
+    error::CallbackError,
+    structs::{Block, IndexedValue, Keyword, Label, Location, Uid},
+    Error, KeyingMaterial, CHAIN_TABLE_KEY_DERIVATION_INFO, ENTRY_TABLE_KEY_DERIVATION_INFO,
 };
 
 /// Trait implementing the search functionality of Findex.
@@ -34,7 +32,8 @@ pub trait FindexSearch<
     const DEM_KEY_LENGTH: usize,
     KmacKey: SymKey<KMAC_KEY_LENGTH>,
     DemScheme: Dem<DEM_KEY_LENGTH>,
->: Sized + FindexCallbacks<UID_LENGTH>
+    CustomError: std::error::Error + CallbackError,
+>: Sized + FindexCallbacks<CustomError, UID_LENGTH>
 {
     /// Searches for a set of keywords, returning the corresponding indexed
     /// values.
@@ -56,7 +55,7 @@ pub trait FindexSearch<
         label: &Label,
         max_results_per_keyword: usize,
         fetch_chains_batch_size: NonZeroUsize,
-    ) -> Result<HashMap<Keyword, HashSet<IndexedValue>>, FindexErr> {
+    ) -> Result<HashMap<Keyword, HashSet<IndexedValue>>, Error<CustomError>> {
         if keywords.is_empty() {
             return Ok(HashMap::new());
         }
@@ -97,13 +96,13 @@ pub trait FindexSearch<
             .iter()
             .map(|(uid, value)| -> Result<_, _> {
                 let keyword = entry_table_uid_map.get(uid).ok_or_else(|| {
-                    FindexErr::CryptoError(format!(
+                    Error::<CustomError>::CryptoError(format!(
                         "Could not find keyword associated to UID {uid:?}."
                     ))
                 })?;
                 Ok((&value.kwi, *keyword))
             })
-            .collect::<Result<HashMap<_, _>, FindexErr>>()?;
+            .collect::<Result<HashMap<_, _>, Error<_>>>()?;
 
         //
         // Get all the corresponding Chain Table UIDs
@@ -125,9 +124,9 @@ pub trait FindexSearch<
         // Convert the block of the given chains into indexed values.
         let mut res = HashMap::<Keyword, HashSet<IndexedValue>>::new();
         for (kwi, chain) in chains {
-            let keyword = *reversed_map
-                .get(&kwi)
-                .ok_or_else(|| FindexErr::CryptoError(String::new()))?;
+            let keyword = *reversed_map.get(&kwi).ok_or_else(|| {
+                Error::<CustomError>::CryptoError("Missing Kwi in reversed map.".to_string())
+            })?;
             let entry = res.entry(keyword.clone()).or_default();
             let blocks = chain.into_iter().flat_map(|(_, v)| v).collect::<Vec<_>>();
             for bytes in Block::unpad(&blocks)? {
@@ -162,7 +161,7 @@ pub trait FindexSearch<
         max_depth: usize,
         fetch_chains_batch_size: NonZeroUsize,
         current_depth: usize,
-    ) -> Result<HashMap<Keyword, HashSet<Location>>, FindexErr> {
+    ) -> Result<HashMap<Keyword, HashSet<Location>>, Error<CustomError>> {
         // Get indexed values associated to the given keywords
         let res = self
             .non_recursive_search(
@@ -211,7 +210,9 @@ pub trait FindexSearch<
                 .await?
             {
                 let prev_keyword = keyword_map.get(&keyword).ok_or_else(|| {
-                    FindexErr::CryptoError("Could not find previous keyword in cache.".to_string())
+                    Error::<CustomError>::CryptoError(
+                        "Could not find previous keyword in cache.".to_string(),
+                    )
                 })?;
                 let entry = results.entry(prev_keyword.clone()).or_default();
                 entry.extend(indexed_values);
@@ -236,7 +237,7 @@ pub trait FindexSearch<
         batch_size: NonZeroUsize,
     ) -> Result<
         HashMap<KeyingMaterial<KWI_LENGTH>, Vec<(Uid<UID_LENGTH>, ChainTableValue<BLOCK_LENGTH>)>>,
-        FindexErr,
+        Error<CustomError>,
     > {
         let mut chains = HashMap::with_capacity(kwi_chain_table_uids.len());
         for (kwi, chain_table_uids) in kwi_chain_table_uids.iter() {
@@ -266,14 +267,13 @@ pub trait FindexSearch<
                         DemScheme,
                     >(&kwi_value, &value)
                     .map_err(|_| {
-                        FindexErr::CallBack(format!(
+                        Error::<CustomError>::CryptoError(format!(
                             "fail to decrypt one of the `value` returned by the fetch chains \
-                             callback (uid as hex was '{}', value {})",
-                            hex::encode(&uid),
+                             callback (uid was '{uid:?}', value was {})",
                             if value.is_empty() {
-                                "was empty".to_owned()
+                                "empty".to_owned()
                             } else {
-                                format!("as hex was '{}'", hex::encode(value))
+                                format!("'{value:?}'")
                             },
                         ))
                     })?;

@@ -18,6 +18,33 @@
 #![feature(async_fn_in_trait)]
 #![feature(iter_next_chunk)]
 #![allow(incomplete_features)]
+#![feature(never_type)]
 
-pub mod core;
-pub mod error;
+const ENTRY_TABLE_KEY_DERIVATION_INFO: &[u8] = b"Entry Table key derivation info.";
+const CHAIN_TABLE_KEY_DERIVATION_INFO: &[u8] = b"Chain Table key derivation info.";
+
+// Macros should be defined first in order to be available for other modules
+#[macro_use]
+pub mod macros;
+
+mod callbacks;
+mod chain_table;
+mod compact;
+mod entry_table;
+mod error;
+mod keys;
+mod search;
+mod structs;
+mod upsert;
+
+#[cfg(feature = "in_memory")]
+pub mod in_memory_example;
+pub mod parameters;
+
+pub use callbacks::FindexCallbacks;
+pub use compact::FindexCompact;
+pub use error::{CallbackError, CoreError, Error};
+pub use keys::KeyingMaterial;
+pub use search::FindexSearch;
+pub use structs::{EncryptedTable, IndexedValue, Keyword, Label, Location, Uid, UpsertData};
+pub use upsert::FindexUpsert;

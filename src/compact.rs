@@ -10,15 +10,13 @@ use cosmian_crypto_core::{
 };
 use rand::seq::IteratorRandom;
 
-use super::FindexCallbacks;
 use crate::{
-    core::{
-        chain_table::{ChainTableValue, KwiChainUids},
-        entry_table::{EntryTable, EntryTableValue},
-        structs::{Block, EncryptedTable, IndexedValue, Label, Uid},
-        KeyingMaterial, CHAIN_TABLE_KEY_DERIVATION_INFO, ENTRY_TABLE_KEY_DERIVATION_INFO,
-    },
-    error::FindexErr,
+    chain_table::{ChainTableValue, KwiChainUids},
+    entry_table::{EntryTable, EntryTableValue},
+    error::CallbackError,
+    structs::{Block, EncryptedTable, IndexedValue, Label, Uid},
+    Error, FindexCallbacks, KeyingMaterial, CHAIN_TABLE_KEY_DERIVATION_INFO,
+    ENTRY_TABLE_KEY_DERIVATION_INFO,
 };
 
 /// The compact is an operation required to remove old indexes from the Index
@@ -34,7 +32,8 @@ pub trait FindexCompact<
     const DEM_KEY_LENGTH: usize,
     KmacKey: SymKey<KMAC_KEY_LENGTH>,
     DemScheme: Dem<DEM_KEY_LENGTH>,
->: FindexCallbacks<UID_LENGTH>
+    CustomError: std::error::Error + CallbackError,
+>: FindexCallbacks<CustomError, UID_LENGTH>
 {
     /// Replaces all the Index Entry Table UIDs and values. New UIDs are derived
     /// using the given label and the KMAC key derived from the new master key.
@@ -64,9 +63,9 @@ pub trait FindexCompact<
         master_key: &KeyingMaterial<MASTER_KEY_LENGTH>,
         new_master_key: &KeyingMaterial<MASTER_KEY_LENGTH>,
         label: &Label,
-    ) -> Result<(), FindexErr> {
+    ) -> Result<(), Error<CustomError>> {
         if num_reindexing_before_full_set == 0 {
-            return Err(FindexErr::CryptoError(
+            return Err(Error::CryptoError(
                 "`num_reindexing_before_full_set` cannot be 0.".to_owned(),
             ));
         }
@@ -163,7 +162,7 @@ pub trait FindexCompact<
 
         for entry_table_uid in entry_table_items_to_reindex {
             let entry_table_value = entry_table.get(&entry_table_uid).ok_or_else(|| {
-                FindexErr::CryptoError(format!(
+                Error::<CustomError>::CryptoError(format!(
                     "No match in the Entry Table for UID: {entry_table_uid:?}"
                 ))
             })?;
@@ -172,7 +171,10 @@ pub trait FindexCompact<
             let indexed_values_for_this_keyword = reindexed_chain_values
                 .get(&entry_table_value.kwi)
                 .ok_or_else(|| {
-                    FindexErr::CryptoError(format!("Unknown kwi: {:?}", &entry_table_value.kwi))
+                    Error::<CustomError>::CryptoError(format!(
+                        "Unknown kwi: {:?}",
+                        &entry_table_value.kwi
+                    ))
                 })?;
 
             // Filter out the values removed from the DB.
@@ -247,7 +249,7 @@ pub trait FindexCompact<
         kwi_chain_table_uids: &KwiChainUids<UID_LENGTH, KWI_LENGTH>,
     ) -> Result<
         HashMap<KeyingMaterial<KWI_LENGTH>, Vec<(Uid<UID_LENGTH>, ChainTableValue<BLOCK_LENGTH>)>>,
-        FindexErr,
+        Error<CustomError>,
     > {
         let chain_table_uids = kwi_chain_table_uids
             .values()
@@ -265,7 +267,7 @@ pub trait FindexCompact<
             let mut chain = Vec::with_capacity(chain_table_uids.len());
             for uid in chain_table_uids {
                 let encrypted_item = encrypted_chain_table_items.get(uid).ok_or_else(|| {
-                    FindexErr::CryptoError(format!(
+                    Error::<CustomError>::CryptoError(format!(
                         "Chain UID does not exist in Chain Table: {uid:?}",
                     ))
                 })?;

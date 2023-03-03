@@ -10,13 +10,11 @@ use cosmian_crypto_core::{
 };
 
 use crate::{
-    core::{
-        entry_table::EntryTable,
-        keys::KeyingMaterial,
-        structs::{EncryptedTable, IndexedValue, Keyword, Label, Uid, UpsertData},
-        FindexCallbacks, ENTRY_TABLE_KEY_DERIVATION_INFO,
-    },
-    error::FindexErr,
+    entry_table::EntryTable,
+    error::{CallbackError, Error},
+    keys::KeyingMaterial,
+    structs::{EncryptedTable, IndexedValue, Keyword, Label, Uid, UpsertData},
+    FindexCallbacks, ENTRY_TABLE_KEY_DERIVATION_INFO,
 };
 
 /// This the public trait exposed to the users of the Findex Upsert API.
@@ -30,7 +28,8 @@ pub trait FindexUpsert<
     const DEM_KEY_LENGTH: usize,
     KmacKey: SymKey<KMAC_KEY_LENGTH>,
     DemScheme: Dem<DEM_KEY_LENGTH>,
->: FindexCallbacks<UID_LENGTH>
+    CustomError: std::error::Error + CallbackError,
+>: FindexCallbacks<CustomError, UID_LENGTH>
 {
     /// Index the given values for the given keywords. After upserting, any
     /// search for such a keyword will result in finding (at least) the
@@ -47,7 +46,7 @@ pub trait FindexUpsert<
         indexed_value_to_keywords: HashMap<IndexedValue, HashSet<Keyword>>,
         master_key: &KeyingMaterial<MASTER_KEY_LENGTH>,
         label: &Label,
-    ) -> Result<(), FindexErr> {
+    ) -> Result<(), Error<CustomError>> {
         let mut rng = CsRng::from_entropy();
 
         // Revert the `HashMap`.
@@ -125,7 +124,6 @@ pub trait FindexUpsert<
                 }
             }
         }
-
         Ok(())
     }
 
@@ -141,7 +139,7 @@ pub trait FindexUpsert<
         old_entry_table: EncryptedTable<UID_LENGTH>,
         new_entry_table: EncryptedTable<UID_LENGTH>,
         mut chain_table_additions: HashMap<Uid<UID_LENGTH>, EncryptedTable<UID_LENGTH>>,
-    ) -> Result<EncryptedTable<UID_LENGTH>, FindexErr> {
+    ) -> Result<EncryptedTable<UID_LENGTH>, Error<CustomError>> {
         // Convert old and new Entry Tables to the correct format.
         let entry_table_modifications = UpsertData::new(&old_entry_table, new_entry_table);
 

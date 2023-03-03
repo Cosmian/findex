@@ -11,23 +11,22 @@ use cosmian_crypto_core::{
     bytes_ser_de::{to_leb128_len, Deserializer, Serializable, Serializer},
     reexport::rand_core::CryptoRngCore,
 };
-use sha3::{Digest, Sha3_256};
+use tiny_keccak::{Hasher, Sha3};
 
-use crate::error::FindexErr;
+use crate::error::CoreError as Error;
 
 /// The labels are used to provide additional public information to the hash
 /// algorithm when generating Entry Table UIDs.
 //
 // TODO (TBZ): Should the label size be at least 32-bytes?
 #[must_use]
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Label(Vec<u8>);
 
 impl Label {
     /// Generates a new random label of 32 bytes.
     ///
     /// - `rng` : random number generator
-    #[inline]
     pub fn random(rng: &mut impl CryptoRngCore) -> Self {
         let mut bytes = vec![0; 32];
         rng.fill_bytes(&mut bytes);
@@ -39,7 +38,7 @@ impl_byte_vector!(Label);
 
 /// A [`Keyword`] is a byte vector used to index other values.
 #[must_use]
-#[derive(Hash, PartialEq, Eq, Clone)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct Keyword(Vec<u8>);
 
 impl_byte_vector!(Keyword);
@@ -50,29 +49,22 @@ impl Keyword {
 
     /// Hash this keyword using SHA3-256.
     #[must_use]
-    #[inline]
     pub fn hash(&self) -> [u8; Self::HASH_LENGTH] {
-        let mut hasher = Sha3_256::default();
+        let mut hasher = Sha3::v256();
         hasher.update(self);
         let mut bytes = [0; Self::HASH_LENGTH];
-        for (i, byte) in hasher.finalize().into_iter().enumerate() {
+        hasher.finalize(&mut bytes);
+        for (i, byte) in bytes.into_iter().enumerate() {
             bytes[i] = byte;
         }
         bytes
-    }
-
-    /// Converts this `Keyword` into an UTF-8 `String`.
-    pub fn try_into_string(self) -> Result<String, FindexErr> {
-        String::from_utf8(self.0).map_err(|e| {
-            FindexErr::ConversionError(format!("Could not convert keyword into `String`: {e:?}"))
-        })
     }
 }
 
 /// A `Block` defines a fixed-size block of bytes.
 ///
-/// It is used to store variable length values in the Chain Table. This pads
-/// lines to an equal size and avoids leaking information.
+/// It is used to store variable length values in the Chain Table. It allows
+/// padding lines to an equal size which avoids leaking information.
 ///
 /// A value can be represented by several blocks. The first blocks representing
 /// a value are full, i.e. no padding is necessary. The first byte is set to
@@ -93,7 +85,7 @@ impl Keyword {
 /// wasted space for small values (a small value would be padded to `LENGTH -
 /// 1`).
 #[must_use]
-#[derive(Hash, PartialEq, Eq, Clone)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct Block<const LENGTH: usize>(pub(crate) [u8; LENGTH]);
 
 impl_byte_array!(Block);
@@ -105,16 +97,16 @@ impl<const LENGTH: usize> Block<LENGTH> {
     ///
     /// - `bytes`           : bytes to store in the block
     /// - `is_terminating`  : true if the block is the last block of a value
-    pub fn new(bytes: &[u8], is_terminating: bool) -> Result<Self, FindexErr> {
+    pub fn new(bytes: &[u8], is_terminating: bool) -> Result<Self, Error> {
         if LENGTH > u8::MAX as usize {
-            return Err(FindexErr::CryptoError(format!(
+            return Err(Error::CryptoError(format!(
                 "Blocks cannot be of size {LENGTH}"
             )));
         }
         // The first byte of a block is used to write the size of the data stored inside
         // this block.
         if bytes.len() > LENGTH - 1 {
-            return Err(FindexErr::CryptoError(format!(
+            return Err(Error::CryptoError(format!(
                 "Cannot create a block holding more than {} block",
                 LENGTH - 1
             )));
@@ -136,7 +128,7 @@ impl<const LENGTH: usize> Block<LENGTH> {
     /// Unpads the byte vectors contained in the given list of `Block`.
     ///
     /// - `blocks`  : list of blocks to unpad
-    pub fn unpad(blocks: &[Self]) -> Result<Vec<Vec<u8>>, FindexErr> {
+    pub fn unpad(blocks: &[Self]) -> Result<Vec<Vec<u8>>, Error> {
         let mut blocks = blocks;
         let mut res = Vec::new();
         while !blocks.is_empty() {
@@ -148,7 +140,7 @@ impl<const LENGTH: usize> Block<LENGTH> {
             }
             let length = blocks[0][0] as usize;
             if length == LENGTH {
-                return Err(FindexErr::CryptoError(
+                return Err(Error::CryptoError(
                     "Last block given is a non-terminating block.".to_string(),
                 ));
             }
@@ -168,7 +160,7 @@ impl<const LENGTH: usize> Block<LENGTH> {
     /// # Parameters
     ///
     /// - `bytes`   : bytes to be padded in to a `Block`
-    pub fn pad(mut bytes: &[u8]) -> Result<Vec<Self>, FindexErr> {
+    pub fn pad(mut bytes: &[u8]) -> Result<Vec<Self>, Error> {
         // Number of blocks needed.
         let mut partition_size = bytes.len() / (LENGTH - 1);
         if bytes.len() % (LENGTH - 1) != 0 {
@@ -185,11 +177,16 @@ impl<const LENGTH: usize> Block<LENGTH> {
 
         Ok(blocks)
     }
+
+    /// Generates a new empty block.
+    pub const fn new_empty_block() -> Self {
+        Self([0; LENGTH])
+    }
 }
 
 impl<const BLOCK_LENGTH: usize> Default for Block<BLOCK_LENGTH> {
     fn default() -> Self {
-        Self([0; BLOCK_LENGTH])
+        Self::new_empty_block()
     }
 }
 
@@ -197,7 +194,7 @@ impl<const BLOCK_LENGTH: usize> Default for Block<BLOCK_LENGTH> {
 /// by a [`Keyword`]. It may be a database UID, physical location coordinates of
 /// a resources, an URL etc.
 #[must_use]
-#[derive(Hash, Default, PartialEq, Eq, Clone)]
+#[derive(Clone, Debug, Hash, Default, PartialEq, Eq)]
 pub struct Location(Vec<u8>);
 
 impl_byte_vector!(Location);
@@ -208,7 +205,7 @@ impl_byte_vector!(Location);
 /// When serialized, it is prefixed by `b'l'` if it is a [`Location`] and by
 /// `b'w'` if it is a [`Keyword`].
 #[must_use]
-#[derive(Hash, PartialEq, Eq, Clone, Debug)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub enum IndexedValue {
     Location(Location),
     NextKeyword(Keyword),
@@ -239,7 +236,6 @@ impl IndexedValue {
     }
 
     /// Returns `true` if the [`IndexedValue`] is a [`Location`].
-    #[inline]
     #[must_use]
     pub const fn is_location(&self) -> bool {
         matches!(self, Self::Location(_))
@@ -247,7 +243,6 @@ impl IndexedValue {
 
     /// Returns the underlying [`Location`] if the [`IndexedValue`] is a
     /// [`Location`].
-    #[inline]
     #[must_use]
     pub const fn get_location(&self) -> Option<&Location> {
         match &self {
@@ -257,7 +252,6 @@ impl IndexedValue {
     }
 
     /// Returns `true` if the [`IndexedValue`] is a [`Keyword`].
-    #[inline]
     #[must_use]
     pub const fn is_keyword(&self) -> bool {
         matches!(self, Self::NextKeyword(_))
@@ -265,7 +259,6 @@ impl IndexedValue {
 
     /// Returns the underlying [`Keyword`] if the [`IndexedValue`] is a
     /// [`Keyword`].
-    #[inline]
     #[must_use]
     pub const fn get_keyword(&self) -> Option<&Keyword> {
         match &self {
@@ -276,7 +269,6 @@ impl IndexedValue {
 }
 
 impl Default for IndexedValue {
-    #[inline]
     fn default() -> Self {
         Self::Location(Location::default())
     }
@@ -284,18 +276,18 @@ impl Default for IndexedValue {
 
 /// The reverse implementation of `to_vec()` for [`IndexedValue`].
 impl TryFrom<&[u8]> for IndexedValue {
-    type Error = FindexErr;
+    type Error = Error;
 
     fn try_from(value: &[u8]) -> Result<Self, Self::Error> {
         if value.len() < 2 {
-            return Err(FindexErr::ConversionError(
+            return Err(Error::ConversionError(
                 "Invalid Indexed Value: too short".to_string(),
             ));
         }
         match value[0] {
             b'l' => Ok(Self::Location(Location::from(&value[1..]))),
             b'w' => Ok(Self::NextKeyword(Keyword::from(&value[1..]))),
-            x => Err(FindexErr::ConversionError(format!(
+            x => Err(Error::ConversionError(format!(
                 "Invalid Indexed Value starting with {x:?}"
             ))),
         }
@@ -303,21 +295,19 @@ impl TryFrom<&[u8]> for IndexedValue {
 }
 
 impl From<Location> for IndexedValue {
-    #[inline]
     fn from(value: Location) -> Self {
         Self::Location(value)
     }
 }
 
 impl From<Keyword> for IndexedValue {
-    #[inline]
     fn from(value: Keyword) -> Self {
         Self::NextKeyword(value)
     }
 }
 
 impl TryFrom<IndexedValue> for Location {
-    type Error = FindexErr;
+    type Error = Error;
 
     fn try_from(value: IndexedValue) -> Result<Self, Self::Error> {
         match value {
@@ -330,9 +320,8 @@ impl TryFrom<IndexedValue> for Location {
 }
 
 impl Serializable for IndexedValue {
-    type Error = FindexErr;
+    type Error = Error;
 
-    #[inline]
     fn length(&self) -> usize {
         let length = 1 + match self {
             Self::Location(l) => l.len(),
@@ -341,7 +330,6 @@ impl Serializable for IndexedValue {
         to_leb128_len(length) + length
     }
 
-    #[inline]
     fn write(
         &self,
         ser: &mut cosmian_crypto_core::bytes_ser_de::Serializer,
@@ -349,18 +337,15 @@ impl Serializable for IndexedValue {
         ser.write_vec(&self.to_vec()).map_err(Self::Error::from)
     }
 
-    #[inline]
     fn read(de: &mut cosmian_crypto_core::bytes_ser_de::Deserializer) -> Result<Self, Self::Error> {
         Self::try_from(de.read_vec()?.as_slice())
     }
 
-    #[inline]
     fn try_to_bytes(&self) -> Result<Vec<u8>, Self::Error> {
         // don't call `write()` to avoir writing size
         Ok(self.to_vec())
     }
 
-    #[inline]
     fn try_from_bytes(bytes: &[u8]) -> Result<Self, Self::Error> {
         // don't call `read()` since there is no leading size
         Self::try_from(bytes)
@@ -369,7 +354,7 @@ impl Serializable for IndexedValue {
 
 /// Index tables UID type.
 #[must_use]
-#[derive(Clone, PartialEq, Eq, Hash)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Uid<const LENGTH: usize>([u8; LENGTH]);
 
 impl_byte_array!(Uid);
@@ -389,14 +374,12 @@ impl<const UID_LENGTH: usize> EncryptedTable<UID_LENGTH> {
 impl<const UID_LENGTH: usize> Deref for EncryptedTable<UID_LENGTH> {
     type Target = HashMap<Uid<UID_LENGTH>, Vec<u8>>;
 
-    #[inline]
     fn deref(&self) -> &Self::Target {
         &self.0
     }
 }
 
 impl<const UID_LENGTH: usize> DerefMut for EncryptedTable<UID_LENGTH> {
-    #[inline]
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.0
     }
@@ -405,14 +388,12 @@ impl<const UID_LENGTH: usize> DerefMut for EncryptedTable<UID_LENGTH> {
 impl<const UID_LENGTH: usize> From<EncryptedTable<UID_LENGTH>>
     for HashMap<Uid<UID_LENGTH>, Vec<u8>>
 {
-    #[inline]
     fn from(encrypted_table: EncryptedTable<UID_LENGTH>) -> Self {
         encrypted_table.0
     }
 }
 
 impl<const UID_LENGTH: usize> From<<Self as Deref>::Target> for EncryptedTable<UID_LENGTH> {
-    #[inline]
     fn from(hashmap: <Self as Deref>::Target) -> Self {
         Self(hashmap)
     }
@@ -422,7 +403,6 @@ impl<const UID_LENGTH: usize> IntoIterator for EncryptedTable<UID_LENGTH> {
     type IntoIter = <<Self as Deref>::Target as IntoIterator>::IntoIter;
     type Item = (Uid<UID_LENGTH>, Vec<u8>);
 
-    #[inline]
     fn into_iter(self) -> Self::IntoIter {
         self.0.into_iter()
     }
@@ -438,9 +418,8 @@ impl<const UID_LENGTH: usize> FromIterator<(Uid<UID_LENGTH>, Vec<u8>)>
 }
 
 impl<const UID_LENGTH: usize> Serializable for EncryptedTable<UID_LENGTH> {
-    type Error = FindexErr;
+    type Error = Error;
 
-    #[inline]
     fn length(&self) -> usize {
         let mut length = UID_LENGTH * self.len();
         for value in self.values() {
@@ -449,10 +428,9 @@ impl<const UID_LENGTH: usize> Serializable for EncryptedTable<UID_LENGTH> {
         length
     }
 
-    #[inline]
     fn write(&self, ser: &mut Serializer) -> Result<usize, Self::Error> {
         let mut n = 0;
-        n += ser.write_u64(self.0.len() as u64)?;
+        n += ser.write_leb128_u64(self.0.len() as u64)?;
         for (uid, value) in &self.0 {
             n += ser.write_array(uid)?;
             n += ser.write_vec(value)?;
@@ -460,9 +438,8 @@ impl<const UID_LENGTH: usize> Serializable for EncryptedTable<UID_LENGTH> {
         Ok(n)
     }
 
-    #[inline]
     fn read(de: &mut Deserializer) -> Result<Self, Self::Error> {
-        let length = <usize>::try_from(de.read_u64()?)?;
+        let length = <usize>::try_from(de.read_leb128_u64()?)?;
         let mut items = HashMap::with_capacity(length);
         for _ in 0..length {
             let key = Uid::from(de.read_array()?);
@@ -487,7 +464,6 @@ impl<const UID_LENGTH: usize> UpsertData<UID_LENGTH> {
     ///
     /// - `old_table`   : previous state of the table
     /// - `new_table`   : new state of the table
-    #[inline]
     pub fn new(
         old_table: &EncryptedTable<UID_LENGTH>,
         new_table: EncryptedTable<UID_LENGTH>,
@@ -516,14 +492,13 @@ impl<const UID_LENGTH: usize> IntoIterator for UpsertData<UID_LENGTH> {
     type IntoIter = <<Self as Deref>::Target as IntoIterator>::IntoIter;
     type Item = (Uid<UID_LENGTH>, (Option<Vec<u8>>, Vec<u8>));
 
-    #[inline]
     fn into_iter(self) -> Self::IntoIter {
         self.0.into_iter()
     }
 }
 
 impl<const UID_LENGTH: usize> Serializable for UpsertData<UID_LENGTH> {
-    type Error = FindexErr;
+    type Error = Error;
 
     fn length(&self) -> usize {
         self.values()
@@ -540,7 +515,7 @@ impl<const UID_LENGTH: usize> Serializable for UpsertData<UID_LENGTH> {
 
     fn write(&self, ser: &mut Serializer) -> Result<usize, Self::Error> {
         let empty_vec = vec![];
-        let mut n = ser.write_u64(self.len() as u64)?;
+        let mut n = ser.write_leb128_u64(self.len() as u64)?;
         for (uid, (old_value, new_value)) in self.iter() {
             n += ser.write(uid)?;
             n += ser.write_vec(old_value.as_ref().unwrap_or(&empty_vec))?;
@@ -550,7 +525,7 @@ impl<const UID_LENGTH: usize> Serializable for UpsertData<UID_LENGTH> {
     }
 
     fn read(de: &mut Deserializer) -> Result<Self, Self::Error> {
-        let length = de.read_u64()? as usize;
+        let length = de.read_leb128_u64()? as usize;
         let mut res = HashMap::with_capacity(length);
         for _ in 0..length {
             let uid = de.read::<Uid<UID_LENGTH>>()?;
@@ -569,7 +544,7 @@ impl<const UID_LENGTH: usize> Serializable for UpsertData<UID_LENGTH> {
 
 #[cfg(test)]
 mod tests {
-    use crate::core::structs::Block;
+    use crate::structs::Block;
 
     #[test]
     fn test_padding() {

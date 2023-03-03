@@ -26,10 +26,10 @@ use cosmian_crypto_core::{
     symmetric_crypto::{Dem, SymKey},
 };
 
-use super::{structs::Block, CHAIN_TABLE_KEY_DERIVATION_INFO};
 use crate::{
-    core::{structs::Uid, KeyingMaterial},
-    error::FindexErr,
+    error::CoreError as Error,
+    structs::{Block, Uid},
+    KeyingMaterial, CHAIN_TABLE_KEY_DERIVATION_INFO,
 };
 
 /// Value of the Chain Table. It is composed of a maximum of `TABLE_WIDTH`
@@ -42,12 +42,9 @@ impl<const BLOCK_LENGTH: usize> ChainTableValue<BLOCK_LENGTH> {
     /// Creates a new Chain Table value with the given blocks.
     ///
     /// - `blocks`  : blocks to store in this Chain Table entry.
-    #[inline]
-    pub fn new<const TABLE_WIDTH: usize>(
-        blocks: Vec<Block<BLOCK_LENGTH>>,
-    ) -> Result<Self, FindexErr> {
+    pub fn new<const TABLE_WIDTH: usize>(blocks: Vec<Block<BLOCK_LENGTH>>) -> Result<Self, Error> {
         if blocks.len() > TABLE_WIDTH {
-            return Err(FindexErr::ConversionError(format!(
+            return Err(Error::ConversionError(format!(
                 "Cannot add more than {TABLE_WIDTH} values inside a `ChainTableValue`"
             )));
         }
@@ -58,28 +55,27 @@ impl<const BLOCK_LENGTH: usize> ChainTableValue<BLOCK_LENGTH> {
     ///
     /// - `kwi_value`   : DEM key used to encrypt the value
     /// - `rng`         : random number generator
-    #[inline]
     pub fn encrypt<const TABLE_WIDTH: usize, const KEY_LENGTH: usize, DEM: Dem<KEY_LENGTH>>(
         &self,
         kwi_value: &DEM::Key,
         rng: &mut impl CryptoRngCore,
-    ) -> Result<Vec<u8>, FindexErr> {
+    ) -> Result<Vec<u8>, Error> {
         let mut ser = Serializer::with_capacity(BLOCK_LENGTH * TABLE_WIDTH);
         for block in self.iter() {
             ser.write(block)?;
         }
-        // Pad the line with empty block if needed.
+        // Pad the line with empty blocks if needed.
+        let padding = Block::<BLOCK_LENGTH>::new_empty_block();
         for _ in self.len()..TABLE_WIDTH {
-            ser.write_array(&[0; BLOCK_LENGTH])?;
+            ser.write_array(&padding)?;
         }
-        DEM::encrypt(rng, kwi_value, &ser.finalize(), None).map_err(FindexErr::from)
+        DEM::encrypt(rng, kwi_value, &ser.finalize(), None).map_err(Error::from)
     }
 
     /// Decrypts the Chain Table value using the given DEM key.
     ///
     /// - `kwi_value`   : DEM key used to encrypt the value
     /// - `ciphertext`  : encrypted Chain Table value
-    #[inline]
     pub fn decrypt<
         const TABLE_WIDTH: usize,
         const DEM_KEY_LENGTH: usize,
@@ -87,23 +83,26 @@ impl<const BLOCK_LENGTH: usize> ChainTableValue<BLOCK_LENGTH> {
     >(
         kwi_value: &DEM::Key,
         ciphertext: &[u8],
-    ) -> Result<Self, FindexErr> {
+    ) -> Result<Self, Error> {
+        if TABLE_WIDTH * BLOCK_LENGTH + DEM::ENCRYPTION_OVERHEAD != ciphertext.len() {
+            return Err(Error::CryptoError(format!(
+                "invalid ciphertext length: given {}, should be {}",
+                ciphertext.len(),
+                TABLE_WIDTH * BLOCK_LENGTH + DEM::ENCRYPTION_OVERHEAD
+            )));
+        }
         let bytes = DEM::decrypt(kwi_value, ciphertext, None)?;
         let mut de = Deserializer::new(&bytes);
         let mut res = Vec::with_capacity(TABLE_WIDTH);
         for _ in 0..TABLE_WIDTH {
             let block = de.read::<Block<BLOCK_LENGTH>>()?;
             // Blocks starting by `0` are padding.
-            if block[0] != 0 {
-                res.push(block);
+            // There cannot be any meaningful block after a padding block.
+            if block[0] == 0 {
+                break;
             }
+            res.push(block);
         }
-        if !de.finalize().is_empty() {
-            return Err(FindexErr::ConversionError(
-                "Remaining bytes after converting ciphertext into Chain Table value.".to_string(),
-            ));
-        }
-        res.shrink_to_fit();
         Ok(Self(res))
     }
 }
@@ -111,14 +110,12 @@ impl<const BLOCK_LENGTH: usize> ChainTableValue<BLOCK_LENGTH> {
 impl<const BLOCK_LENGTH: usize> Deref for ChainTableValue<BLOCK_LENGTH> {
     type Target = Vec<Block<BLOCK_LENGTH>>;
 
-    #[inline]
     fn deref(&self) -> &Self::Target {
         &self.0
     }
 }
 
 impl<const BLOCK_LENGTH: usize> DerefMut for ChainTableValue<BLOCK_LENGTH> {
-    #[inline]
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.0
     }
@@ -128,7 +125,6 @@ impl<const BLOCK_LENGTH: usize> IntoIterator for ChainTableValue<BLOCK_LENGTH> {
     type IntoIter = std::vec::IntoIter<Block<BLOCK_LENGTH>>;
     type Item = Block<BLOCK_LENGTH>;
 
-    #[inline]
     fn into_iter(self) -> Self::IntoIter {
         self.0.into_iter()
     }
@@ -144,7 +140,6 @@ impl<const UID_LENGTH: usize, const BLOCK_LENGTH: usize> ChainTable<UID_LENGTH, 
     ///
     /// - `key`     : KMAC key
     /// - `bytes`   : bytes from which to derive the UID
-    #[inline]
     pub fn generate_uid<const KMAC_KEY_LENGTH: usize, KmacKey: SymKey<KMAC_KEY_LENGTH>>(
         key: &KmacKey,
         bytes: &[u8],
@@ -202,7 +197,6 @@ impl<const UID_LENGTH: usize, const KEY_LENGTH: usize> Deref
 {
     type Target = HashMap<KeyingMaterial<KEY_LENGTH>, Vec<Uid<UID_LENGTH>>>;
 
-    #[inline]
     fn deref(&self) -> &Self::Target {
         &self.0
     }
@@ -211,7 +205,6 @@ impl<const UID_LENGTH: usize, const KEY_LENGTH: usize> Deref
 impl<const UID_LENGTH: usize, const KEY_LENGTH: usize> DerefMut
     for KwiChainUids<UID_LENGTH, KEY_LENGTH>
 {
-    #[inline]
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.0
     }
@@ -220,7 +213,6 @@ impl<const UID_LENGTH: usize, const KEY_LENGTH: usize> DerefMut
 impl<const KEY_LENGTH: usize, const UID_LENGTH: usize> Default
     for KwiChainUids<UID_LENGTH, KEY_LENGTH>
 {
-    #[inline]
     fn default() -> Self {
         Self(HashMap::default())
     }
@@ -230,7 +222,6 @@ impl<const UID_LENGTH: usize, const KEY_LENGTH: usize> KwiChainUids<UID_LENGTH, 
     /// Creates a `KwiChainUids` with the given `capacity`.
     ///
     /// - `capacity`    : capacity to set
-    #[inline]
     pub fn with_capacity(capacity: usize) -> Self {
         Self(HashMap::with_capacity(capacity))
     }
@@ -245,7 +236,7 @@ mod tests {
     };
 
     use super::*;
-    use crate::core::{
+    use crate::{
         structs::{IndexedValue, Location},
         Keyword, CHAIN_TABLE_KEY_DERIVATION_INFO,
     };
