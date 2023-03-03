@@ -1,12 +1,3 @@
 pkg/
-.cargo_check/
 target/
-target_2.17/
-*nix
-/*.sh
-*__pycache__
-*.wasm
-jniLibs
-*.svg
-perf.data*
-*dataset.json
+**/Cargo.lock

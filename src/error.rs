@@ -1,144 +1,65 @@
 //! Defines error type and conversions for Findex.
 
-use std::fmt::Display;
+use core::fmt::{Debug, Display};
 
-use base64::DecodeError;
 use cosmian_crypto_core::CryptoCoreError;
-#[cfg(feature = "wasm_bindgen")]
-use js_sys::{JsString, Object};
-#[cfg(feature = "wasm_bindgen")]
-use wasm_bindgen::{JsCast, JsValue};
+
+/// Marker trait indicating an error type is used as `CallbackError`.
+pub trait CallbackError {}
 
 #[derive(Debug)]
-pub enum FindexErr {
+pub enum Error<T: std::error::Error> {
     CryptoError(String),
     CryptoCoreError(CryptoCoreError),
     ConversionError(String),
-    Other(String),
-
-    // Findex implementation for FFI
-    CallBack(String),
-    #[cfg(feature = "interfaces")]
-    CallbackErrorCode {
-        name: &'static str,
-        code: i32,
-    },
-
-    /// Findex implementation with sqlite
-    #[cfg(feature = "sqlite")]
-    RusqliteError(rusqlite::Error),
-    #[cfg(feature = "sqlite")]
-    IoError(std::io::Error),
-
-    #[cfg(any(feature = "sqlite", feature = "ffi"))]
-    SerdeJsonError(serde_json::Error),
-
-    DecodeError(DecodeError),
-
-    #[cfg(feature = "wasm_bindgen")]
-    JsError(JsValue),
+    Callback(T),
 }
 
-impl Display for FindexErr {
+impl<T: std::error::Error> Display for Error<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::CryptoError(msg) | Self::ConversionError(msg) | Self::Other(msg) => {
+            Self::CryptoError(msg) | Self::ConversionError(msg) => {
                 write!(f, "{msg}")
             }
             Self::CryptoCoreError(err) => write!(f, "{err}"),
-
-            #[cfg(feature = "sqlite")]
-            Self::RusqliteError(err) => write!(f, "{err}"),
-            #[cfg(feature = "sqlite")]
-            Self::IoError(err) => write!(f, "{err}"),
-
-            #[cfg(any(feature = "sqlite", feature = "ffi"))]
-            Self::SerdeJsonError(err) => write!(f, "{err}"),
-            Self::DecodeError(err) => write!(f, "{err}"),
-
-            Self::CallBack(msg) => write!(f, "{msg}"),
-            #[cfg(feature = "interfaces")]
-            Self::CallbackErrorCode { name, code } => {
-                write!(f, "callback '{name}' returned an error code: {code}")
-            }
-
-            #[cfg(feature = "wasm_bindgen")]
-            Self::JsError(value) => match value.dyn_ref::<JsString>() {
-                Some(string) => write!(f, "{string}"),
-                None => match value.dyn_ref::<Object>() {
-                    // Object in Err is often an `Error` with a simple toString()
-                    Some(object) => write!(f, "{}", object.to_string()),
-                    // If it's neither a string, nor an object, print the debug JsValue.
-                    None => write!(f, "{value:?}"),
-                },
-            },
+            Self::Callback(msg) => write!(f, "{msg}"),
         }
     }
 }
 
-impl From<std::num::TryFromIntError> for FindexErr {
+impl<T: std::error::Error> From<std::num::TryFromIntError> for Error<T> {
     fn from(e: std::num::TryFromIntError) -> Self {
         Self::ConversionError(e.to_string())
     }
 }
 
-impl From<CryptoCoreError> for FindexErr {
+impl<T: std::error::Error> From<CryptoCoreError> for Error<T> {
     fn from(e: CryptoCoreError) -> Self {
         Self::CryptoCoreError(e)
     }
 }
 
-impl From<DecodeError> for FindexErr {
-    fn from(e: DecodeError) -> Self {
-        Self::DecodeError(e)
+impl<T: std::error::Error + CallbackError> From<T> for Error<T> {
+    fn from(value: T) -> Self {
+        Self::Callback(value)
     }
 }
 
-#[cfg(feature = "ffi")]
-impl From<std::ffi::NulError> for FindexErr {
-    fn from(e: std::ffi::NulError) -> Self {
-        Self::Other(format!("FFI error: {e}"))
-    }
-}
+impl<T: std::error::Error> std::error::Error for Error<T> {}
 
-#[cfg(feature = "wasm_bindgen")]
-impl From<FindexErr> for JsValue {
-    fn from(e: FindexErr) -> Self {
-        Self::from_str(&e.to_string())
-    }
-}
+/// Alias used to represent a Findex error that does not originate from a
+/// callback.
+pub type CoreError = Error<!>;
 
-#[cfg(feature = "wasm_bindgen")]
-impl From<JsValue> for FindexErr {
-    fn from(e: JsValue) -> Self {
-        Self::JsError(e)
-    }
-}
-
-#[cfg(feature = "sqlite")]
-impl From<rusqlite::Error> for FindexErr {
-    fn from(e: rusqlite::Error) -> Self {
-        Self::RusqliteError(e)
-    }
-}
-
-#[cfg(feature = "sqlite")]
-impl From<std::io::Error> for FindexErr {
-    fn from(e: std::io::Error) -> Self {
-        Self::IoError(e)
-    }
-}
-
-#[cfg(any(feature = "sqlite", feature = "ffi"))]
-impl From<serde_json::Error> for FindexErr {
-    fn from(e: serde_json::Error) -> Self {
-        Self::SerdeJsonError(e)
-    }
-}
-
-#[cfg(feature = "python")]
-impl From<FindexErr> for pyo3::PyErr {
-    fn from(e: FindexErr) -> Self {
-        pyo3::exceptions::PyException::new_err(format!("{e}"))
+impl<T: std::error::Error + CallbackError> From<CoreError> for Error<T> {
+    fn from(value: CoreError) -> Self {
+        match value {
+            CoreError::CryptoError(err) => Self::CryptoError(err),
+            CoreError::CryptoCoreError(err) => Self::CryptoCoreError(err),
+            CoreError::ConversionError(err) => Self::ConversionError(err),
+            CoreError::Callback(_) => {
+                panic!("this cannot happen because CoreError uses the `!` type");
+            }
+        }
     }
 }

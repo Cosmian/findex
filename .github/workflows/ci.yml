@@ -8,3 +8,11 @@ jobs:
     uses: Cosmian/reusable_workflows/.github/workflows/cargo-nursery.yml@main
     with:
       toolchain: nightly-2022-10-28
+  cargo-publish:
+    needs:
+      - cargo-lint
+    uses: Cosmian/reusable_workflows/.github/workflows/cargo-publish.yml@develop
+    if: github.event_name == 'push' && contains(github.ref, 'refs/tags/')
+    with:
+      toolchain: nightly-2022-10-28
+    secrets: inherit
