@@ -48,6 +48,11 @@ fn bench_search(c: &mut Criterion) {
     let mut findex = FindexInMemory::default();
     block_on(findex.upsert(locations_and_words, &master_key, &label)).expect("msg");
 
+    println!("Entry Table length: {}", findex.entry_table_len());
+    println!("Entry Table size: {}", findex.entry_table_size());
+    println!("Chain Table length: {}", findex.chain_table_len());
+    println!("Chain Table size: {}", findex.chain_table_size());
+
     //
     // Search 1 word
     //
