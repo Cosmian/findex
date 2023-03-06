@@ -25,7 +25,7 @@ use crate::{
 pub trait FindexSearch<
     const UID_LENGTH: usize,
     const BLOCK_LENGTH: usize,
-    const TABLE_WIDTH: usize,
+    const CHAIN_TABLE_WIDTH: usize,
     const MASTER_KEY_LENGTH: usize,
     const KWI_LENGTH: usize,
     const KMAC_KEY_LENGTH: usize,
@@ -108,7 +108,7 @@ pub trait FindexSearch<
         // Get all the corresponding Chain Table UIDs
         //
         let kwi_chain_table_uids = entry_table
-            .unchain::<BLOCK_LENGTH, KMAC_KEY_LENGTH, DEM_KEY_LENGTH, KmacKey, DemScheme>(
+            .unchain::<CHAIN_TABLE_WIDTH, BLOCK_LENGTH, KMAC_KEY_LENGTH, DEM_KEY_LENGTH, KmacKey, DemScheme>(
                 entry_table_uid_map.keys(),
                 max_results_per_keyword,
             );
@@ -128,7 +128,10 @@ pub trait FindexSearch<
                 Error::<CustomError>::CryptoError("Missing Kwi in reversed map.".to_string())
             })?;
             let entry = res.entry(keyword.clone()).or_default();
-            let blocks = chain.into_iter().flat_map(|(_, v)| v).collect::<Vec<_>>();
+            let blocks = chain
+                .into_iter()
+                .flat_map(|(_, chain_table_value)| chain_table_value.as_blocks().to_vec())
+                .collect::<Vec<_>>();
             for bytes in Block::unpad(&blocks)? {
                 entry.insert(IndexedValue::try_from_bytes(&bytes)?);
             }
@@ -236,7 +239,13 @@ pub trait FindexSearch<
         kwi_chain_table_uids: &KwiChainUids<UID_LENGTH, KWI_LENGTH>,
         batch_size: NonZeroUsize,
     ) -> Result<
-        HashMap<KeyingMaterial<KWI_LENGTH>, Vec<(Uid<UID_LENGTH>, ChainTableValue<BLOCK_LENGTH>)>>,
+        HashMap<
+            KeyingMaterial<KWI_LENGTH>,
+            Vec<(
+                Uid<UID_LENGTH>,
+                ChainTableValue<CHAIN_TABLE_WIDTH, BLOCK_LENGTH>,
+            )>,
+        >,
         Error<CustomError>,
     > {
         let mut chains = HashMap::with_capacity(kwi_chain_table_uids.len());
@@ -261,22 +270,22 @@ pub trait FindexSearch<
                 // Use a vector not to shuffle the chain. This is important because indexed
                 // values can be divided in blocks that span several lines in the chain.
                 for (uid, value) in encrypted_item? {
-                    let decrypted_value = ChainTableValue::<BLOCK_LENGTH>::decrypt::<
-                        TABLE_WIDTH,
-                        DEM_KEY_LENGTH,
-                        DemScheme,
-                    >(&kwi_value, &value)
-                    .map_err(|_| {
-                        Error::<CustomError>::CryptoError(format!(
-                            "fail to decrypt one of the `value` returned by the fetch chains \
-                             callback (uid was '{uid:?}', value was {})",
-                            if value.is_empty() {
-                                "empty".to_owned()
-                            } else {
-                                format!("'{value:?}'")
-                            },
-                        ))
-                    })?;
+                    let decrypted_value =
+                        ChainTableValue::<CHAIN_TABLE_WIDTH, BLOCK_LENGTH>::decrypt::<
+                            DEM_KEY_LENGTH,
+                            DemScheme,
+                        >(&kwi_value, &value)
+                        .map_err(|_| {
+                            Error::<CustomError>::CryptoError(format!(
+                                "fail to decrypt one of the `value` returned by the fetch chains \
+                                 callback (uid was '{uid:?}', value was {})",
+                                if value.is_empty() {
+                                    "empty".to_owned()
+                                } else {
+                                    format!("'{value:?}'")
+                                },
+                            ))
+                        })?;
 
                     chain.push((uid, decrypted_value));
                 }

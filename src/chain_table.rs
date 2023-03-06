@@ -21,124 +21,151 @@ use std::{
 };
 
 use cosmian_crypto_core::{
-    bytes_ser_de::{Deserializer, Serializer},
+    bytes_ser_de::{Deserializer, Serializable, Serializer},
     reexport::rand_core::CryptoRngCore,
     symmetric_crypto::{Dem, SymKey},
 };
 
 use crate::{
     error::CoreError as Error,
-    structs::{Block, Uid},
+    structs::{Block, BlockType, Uid},
     KeyingMaterial, CHAIN_TABLE_KEY_DERIVATION_INFO,
 };
 
 /// Value of the Chain Table. It is composed of a maximum of `TABLE_WIDTH`
 /// blocks of length `BLOCK_LENGTH`.
 #[must_use]
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
-pub struct ChainTableValue<const BLOCK_LENGTH: usize>(Vec<Block<BLOCK_LENGTH>>);
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ChainTableValue<const TABLE_WIDTH: usize, const BLOCK_LENGTH: usize> {
+    length: usize,
+    blocks: [Block<BLOCK_LENGTH>; TABLE_WIDTH],
+}
 
-impl<const BLOCK_LENGTH: usize> ChainTableValue<BLOCK_LENGTH> {
-    /// Creates a new Chain Table value with the given blocks.
+impl<const TABLE_WIDTH: usize, const BLOCK_LENGTH: usize> Default
+    for ChainTableValue<TABLE_WIDTH, BLOCK_LENGTH>
+{
+    fn default() -> Self {
+        Self {
+            length: 0,
+            blocks: [<Block<BLOCK_LENGTH>>::default(); TABLE_WIDTH],
+        }
+    }
+}
+
+impl<const TABLE_WIDTH: usize, const BLOCK_LENGTH: usize>
+    ChainTableValue<TABLE_WIDTH, BLOCK_LENGTH>
+{
+    /// Push a new addition to the Chain Table value.
     ///
-    /// - `blocks`  : blocks to store in this Chain Table entry.
-    pub fn new<const TABLE_WIDTH: usize>(
-        mut blocks: Vec<Block<BLOCK_LENGTH>>,
-    ) -> Result<Self, Error> {
-        if blocks.len() > TABLE_WIDTH {
+    /// Pushing an addition sets to 1 the corresponding bit in the flag byte.
+    ///
+    /// # Parameters
+    ///
+    /// - block:    block to add
+    pub fn try_push(&mut self, block: Block<BLOCK_LENGTH>) -> Result<(), Error> {
+        if self.length >= TABLE_WIDTH {
             return Err(Error::ConversionError(format!(
-                "Cannot add more than {TABLE_WIDTH} values inside a `ChainTableValue`"
+                "cannot store more than {TABLE_WIDTH} blocks inside a `ChainTableValue`"
             )));
         }
-        blocks.reserve_exact(TABLE_WIDTH - blocks.len());
-        Ok(Self(blocks))
+        self.blocks[self.length] = block;
+        self.length += 1;
+        Ok(())
+    }
+
+    /// Returns a slice over the non-padding blocks of this Chain Table value.
+    pub fn as_blocks(&self) -> &[Block<BLOCK_LENGTH>] {
+        &self.blocks[..self.length]
     }
 
     /// Encrypts the Chain Table value using the given DEM key.
     ///
     /// - `kwi_value`   : DEM key used to encrypt the value
     /// - `rng`         : random number generator
-    pub fn encrypt<const TABLE_WIDTH: usize, const KEY_LENGTH: usize, DEM: Dem<KEY_LENGTH>>(
+    pub fn encrypt<const KEY_LENGTH: usize, DEM: Dem<KEY_LENGTH>>(
         &self,
         kwi_value: &DEM::Key,
         rng: &mut impl CryptoRngCore,
     ) -> Result<Vec<u8>, Error> {
-        let mut ser = Serializer::with_capacity(BLOCK_LENGTH * TABLE_WIDTH);
-        for block in self.iter() {
-            ser.write(block)?;
-        }
-        // Pad the line with empty blocks if needed.
-        let padding = Block::<BLOCK_LENGTH>::new_empty_block();
-        for _ in self.len()..TABLE_WIDTH {
-            ser.write_array(&padding)?;
-        }
-        DEM::encrypt(rng, kwi_value, &ser.finalize(), None).map_err(Error::from)
+        let bytes = self.try_to_bytes()?;
+        DEM::encrypt(rng, kwi_value, &bytes, None).map_err(Error::from)
     }
 
     /// Decrypts the Chain Table value using the given DEM key.
     ///
     /// - `kwi_value`   : DEM key used to encrypt the value
     /// - `ciphertext`  : encrypted Chain Table value
-    pub fn decrypt<
-        const TABLE_WIDTH: usize,
-        const DEM_KEY_LENGTH: usize,
-        DEM: Dem<DEM_KEY_LENGTH>,
-    >(
+    pub fn decrypt<const DEM_KEY_LENGTH: usize, DEM: Dem<DEM_KEY_LENGTH>>(
         kwi_value: &DEM::Key,
         ciphertext: &[u8],
     ) -> Result<Self, Error> {
-        if TABLE_WIDTH * BLOCK_LENGTH + DEM::ENCRYPTION_OVERHEAD != ciphertext.len() {
+        if 1 + TABLE_WIDTH * BLOCK_LENGTH + DEM::ENCRYPTION_OVERHEAD != ciphertext.len() {
             return Err(Error::CryptoError(format!(
                 "invalid ciphertext length: given {}, should be {}",
                 ciphertext.len(),
-                TABLE_WIDTH * BLOCK_LENGTH + DEM::ENCRYPTION_OVERHEAD
+                1 + TABLE_WIDTH * BLOCK_LENGTH + DEM::ENCRYPTION_OVERHEAD
             )));
         }
         let bytes = DEM::decrypt(kwi_value, ciphertext, None)?;
-        let mut de = Deserializer::new(&bytes);
-        let mut res = Vec::with_capacity(TABLE_WIDTH);
-        for _ in 0..TABLE_WIDTH {
-            let block = de.read::<Block<BLOCK_LENGTH>>()?;
-            // Blocks starting by `0` are padding.
-            // There cannot be any meaningful block after a padding block.
-            if block[0] == 0 {
-                break;
+        Self::try_from_bytes(&bytes)
+    }
+}
+
+impl<const TABLE_WIDTH: usize, const BLOCK_LENGTH: usize> Serializable
+    for ChainTableValue<TABLE_WIDTH, BLOCK_LENGTH>
+{
+    type Error = Error;
+
+    fn length(&self) -> usize {
+        // The leading byte corresponds to the flag byte.
+        1 + TABLE_WIDTH * BLOCK_LENGTH
+    }
+
+    fn write(&self, ser: &mut Serializer) -> Result<usize, Self::Error> {
+        let mut flag = 0u8;
+        for i in 0..self.length {
+            flag <<= 1;
+            // Set the corresponding bit to 1 in the flag byte.
+            if self.blocks[i].is_addition() {
+                flag += 1;
             }
-            res.push(block);
         }
-        Ok(Self(res))
+        let mut n = ser.write_array(&[flag])?;
+        for block in self.blocks {
+            n += ser.write_array(&block.data)?;
+        }
+        Ok(n)
     }
-}
 
-impl<const BLOCK_LENGTH: usize> Deref for ChainTableValue<BLOCK_LENGTH> {
-    type Target = Vec<Block<BLOCK_LENGTH>>;
+    fn read(de: &mut Deserializer) -> Result<Self, Self::Error> {
+        let mut flag = de.read_array::<1>()?[0];
+        let mut res = Self::default();
+        for _ in 0..TABLE_WIDTH {
+            let data = de.read_array::<BLOCK_LENGTH>()?;
+            // Blocks starting by `0` are padding.
+            if 0 != data[0] {
+                let block_type = if flag % 2 == 1 {
+                    BlockType::Addition
+                } else {
+                    BlockType::Deletion
+                };
+                res.try_push(Block { block_type, data })?;
+            }
 
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-impl<const BLOCK_LENGTH: usize> DerefMut for ChainTableValue<BLOCK_LENGTH> {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
-    }
-}
-
-impl<const BLOCK_LENGTH: usize> IntoIterator for ChainTableValue<BLOCK_LENGTH> {
-    type IntoIter = std::vec::IntoIter<Block<BLOCK_LENGTH>>;
-    type Item = Block<BLOCK_LENGTH>;
-
-    fn into_iter(self) -> Self::IntoIter {
-        self.0.into_iter()
+            flag >>= 1;
+        }
+        Ok(res)
     }
 }
 
 /// Chain Table
-pub struct ChainTable<const UID_LENGTH: usize, const BLOCK_LENGTH: usize>(
-    HashMap<Uid<UID_LENGTH>, ChainTableValue<BLOCK_LENGTH>>,
+pub struct ChainTable<const UID_LENGTH: usize, const TABLE_WIDTH: usize, const BLOCK_LENGTH: usize>(
+    HashMap<Uid<UID_LENGTH>, ChainTableValue<TABLE_WIDTH, BLOCK_LENGTH>>,
 );
 
-impl<const UID_LENGTH: usize, const BLOCK_LENGTH: usize> ChainTable<UID_LENGTH, BLOCK_LENGTH> {
+impl<const UID_LENGTH: usize, const TABLE_WIDTH: usize, const BLOCK_LENGTH: usize>
+    ChainTable<UID_LENGTH, TABLE_WIDTH, BLOCK_LENGTH>
+{
     /// Derives a Chain Table UID using the given KMAC key and bytes.
     ///
     /// - `key`     : KMAC key
@@ -157,26 +184,26 @@ impl<const UID_LENGTH: usize, const BLOCK_LENGTH: usize> ChainTable<UID_LENGTH, 
     }
 }
 
-impl<const UID_LENGTH: usize, const BLOCK_LENGTH: usize> Deref
-    for ChainTable<UID_LENGTH, BLOCK_LENGTH>
+impl<const UID_LENGTH: usize, const TABLE_WIDTH: usize, const BLOCK_LENGTH: usize> Deref
+    for ChainTable<UID_LENGTH, TABLE_WIDTH, BLOCK_LENGTH>
 {
-    type Target = HashMap<Uid<UID_LENGTH>, ChainTableValue<BLOCK_LENGTH>>;
+    type Target = HashMap<Uid<UID_LENGTH>, ChainTableValue<TABLE_WIDTH, BLOCK_LENGTH>>;
 
     fn deref(&self) -> &Self::Target {
         &self.0
     }
 }
 
-impl<const UID_LENGTH: usize, const BLOCK_LENGTH: usize> DerefMut
-    for ChainTable<UID_LENGTH, BLOCK_LENGTH>
+impl<const UID_LENGTH: usize, const TABLE_WIDTH: usize, const BLOCK_LENGTH: usize> DerefMut
+    for ChainTable<UID_LENGTH, TABLE_WIDTH, BLOCK_LENGTH>
 {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.0
     }
 }
 
-impl<const UID_LENGTH: usize, const BLOCK_LENGTH: usize> IntoIterator
-    for ChainTable<UID_LENGTH, BLOCK_LENGTH>
+impl<const UID_LENGTH: usize, const TABLE_WIDTH: usize, const BLOCK_LENGTH: usize> IntoIterator
+    for ChainTable<UID_LENGTH, TABLE_WIDTH, BLOCK_LENGTH>
 {
     type IntoIter = <<Self as Deref>::Target as IntoIterator>::IntoIter;
     type Item = <<Self as Deref>::Target as IntoIterator>::Item;
@@ -246,7 +273,32 @@ mod tests {
 
     const KWI_LENGTH: usize = 16;
     const BLOCK_LENGTH: usize = 32;
-    const TABLE_WIDTH: usize = 2;
+    const CHAIN_TABLE_WIDTH: usize = 2;
+
+    #[test]
+    fn test_serialization() {
+        let indexed_value_1 = IndexedValue::from(Location::from("location1".as_bytes()));
+        let indexed_value_2 = IndexedValue::from(Location::from("location2".as_bytes()));
+        let mut chain_table_value = ChainTableValue::<CHAIN_TABLE_WIDTH, BLOCK_LENGTH>::default();
+        for block in
+            Block::<BLOCK_LENGTH>::pad(BlockType::Addition, &indexed_value_1.to_vec()).unwrap()
+        {
+            chain_table_value.try_push(block).unwrap();
+        }
+        let bytes = chain_table_value.try_to_bytes().unwrap();
+        assert_eq!(chain_table_value.length(), bytes.len());
+        let res = ChainTableValue::try_from_bytes(&bytes).unwrap();
+        assert_eq!(chain_table_value, res);
+        for block in
+            Block::<BLOCK_LENGTH>::pad(BlockType::Addition, &indexed_value_2.to_vec()).unwrap()
+        {
+            chain_table_value.try_push(block).unwrap();
+        }
+        let bytes = chain_table_value.try_to_bytes().unwrap();
+        assert_eq!(chain_table_value.length(), bytes.len());
+        let res = ChainTableValue::try_from_bytes(&bytes).unwrap();
+        assert_eq!(chain_table_value, res);
+    }
 
     #[test]
     fn test_encryption() {
@@ -260,39 +312,37 @@ mod tests {
         let indexed_value1 = IndexedValue::from(keyword);
         let indexed_value2 = IndexedValue::from(location);
 
-        let mut chain_table_value1 = ChainTableValue::<BLOCK_LENGTH>::default();
-        chain_table_value1.extend_from_slice(&Block::pad(&indexed_value1.to_vec()).unwrap());
-        chain_table_value1.extend_from_slice(&Block::pad(&indexed_value2.to_vec()).unwrap());
+        let mut chain_table_value1 = ChainTableValue::<CHAIN_TABLE_WIDTH, BLOCK_LENGTH>::default();
+        for block in Block::pad(BlockType::Addition, &indexed_value1.to_vec()).unwrap() {
+            chain_table_value1.try_push(block).unwrap();
+        }
+        for block in Block::pad(BlockType::Addition, &indexed_value2.to_vec()).unwrap() {
+            chain_table_value1.try_push(block).unwrap();
+        }
         // The indexed values should be short enough to fit in a single block.
-        assert_eq!(chain_table_value1.len(), 2);
+        assert_eq!(chain_table_value1.blocks.len(), 2);
 
-        let mut chain_table_value2 = ChainTableValue::<BLOCK_LENGTH>::default();
-        chain_table_value2.extend_from_slice(&Block::pad(&indexed_value1.to_vec()).unwrap());
+        let mut chain_table_value2 = ChainTableValue::<CHAIN_TABLE_WIDTH, BLOCK_LENGTH>::default();
+        for block in Block::pad(BlockType::Addition, &indexed_value1.to_vec()).unwrap() {
+            chain_table_value2.try_push(block).unwrap();
+        }
         // The indexed values should be short enough to fit in a single block.
-        assert_eq!(chain_table_value2.len(), 1);
+        assert_eq!(chain_table_value2.length, 1);
 
         let c1 = chain_table_value1
-            .encrypt::<TABLE_WIDTH, { Aes256GcmCrypto::KEY_LENGTH }, Aes256GcmCrypto>(
-                &kwi_value, &mut rng,
-            )
+            .encrypt::<{ Aes256GcmCrypto::KEY_LENGTH }, Aes256GcmCrypto>(&kwi_value, &mut rng)
             .unwrap();
         let c2 = chain_table_value2
-            .encrypt::<TABLE_WIDTH, { Aes256GcmCrypto::KEY_LENGTH }, Aes256GcmCrypto>(
-                &kwi_value, &mut rng,
-            )
+            .encrypt::<{ Aes256GcmCrypto::KEY_LENGTH }, Aes256GcmCrypto>(&kwi_value, &mut rng)
             .unwrap();
 
-        let res1 = ChainTableValue::decrypt::<
-            TABLE_WIDTH,
-            { Aes256GcmCrypto::KEY_LENGTH },
-            Aes256GcmCrypto,
-        >(&kwi_value, &c1)
+        let res1 = ChainTableValue::decrypt::<{ Aes256GcmCrypto::KEY_LENGTH }, Aes256GcmCrypto>(
+            &kwi_value, &c1,
+        )
         .unwrap();
-        let res2 = ChainTableValue::decrypt::<
-            TABLE_WIDTH,
-            { Aes256GcmCrypto::KEY_LENGTH },
-            Aes256GcmCrypto,
-        >(&kwi_value, &c2)
+        let res2 = ChainTableValue::decrypt::<{ Aes256GcmCrypto::KEY_LENGTH }, Aes256GcmCrypto>(
+            &kwi_value, &c2,
+        )
         .unwrap();
 
         assert_eq!(

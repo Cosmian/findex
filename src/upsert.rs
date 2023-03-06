@@ -21,7 +21,7 @@ use crate::{
 pub trait FindexUpsert<
     const UID_LENGTH: usize,
     const BLOCK_LENGTH: usize,
-    const TABLE_WIDTH: usize,
+    const CHAIN_TABLE_WIDTH: usize,
     const MASTER_KEY_LENGTH: usize,
     const KWI_LENGTH: usize,
     const KMAC_KEY_LENGTH: usize,
@@ -94,8 +94,8 @@ pub trait FindexUpsert<
 
             // Upsert keywords locally.
             let chain_table_additions = entry_table.upsert::<
+                CHAIN_TABLE_WIDTH,
                 BLOCK_LENGTH,
-                TABLE_WIDTH,
                 KMAC_KEY_LENGTH,
                 DEM_KEY_LENGTH,
                 KmacKey,
