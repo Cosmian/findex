@@ -2,7 +2,7 @@
 name: Benches on demand
 
 # on: push
-on: workflow_dispatch
+on: [workflow_dispatch, pull_request]
 
 jobs:
   bench:
