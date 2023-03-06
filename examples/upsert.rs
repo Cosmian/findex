@@ -1,6 +1,3 @@
-#![allow(incomplete_features)]
-#![feature(async_fn_in_trait)]
-
 #[cfg(feature = "in_memory")]
 use std::collections::{HashMap, HashSet};
 
