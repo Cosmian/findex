@@ -42,12 +42,15 @@ impl<const BLOCK_LENGTH: usize> ChainTableValue<BLOCK_LENGTH> {
     /// Creates a new Chain Table value with the given blocks.
     ///
     /// - `blocks`  : blocks to store in this Chain Table entry.
-    pub fn new<const TABLE_WIDTH: usize>(blocks: Vec<Block<BLOCK_LENGTH>>) -> Result<Self, Error> {
+    pub fn new<const TABLE_WIDTH: usize>(
+        mut blocks: Vec<Block<BLOCK_LENGTH>>,
+    ) -> Result<Self, Error> {
         if blocks.len() > TABLE_WIDTH {
             return Err(Error::ConversionError(format!(
                 "Cannot add more than {TABLE_WIDTH} values inside a `ChainTableValue`"
             )));
         }
+        blocks.reserve_exact(TABLE_WIDTH - blocks.len());
         Ok(Self(blocks))
     }
 
