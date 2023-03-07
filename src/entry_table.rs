@@ -20,7 +20,7 @@ use crate::{
     chain_table::{ChainTable, ChainTableValue, KwiChainUids},
     error::CoreError as Error,
     keys::KeyCache,
-    structs::{Block, BlockType, EncryptedTable, IndexedValue, Label, Uid},
+    structs::{Block, EncryptedTable, IndexedValue, InsertionType, Label, Uid},
     KeyingMaterial, Keyword, CHAIN_TABLE_KEY_DERIVATION_INFO,
 };
 
@@ -133,7 +133,7 @@ impl<const UID_LENGTH: usize, const KWI_LENGTH: usize> EntryTableValue<UID_LENGT
                 ChainTableValue::default()
             };
 
-        for block in Block::pad(BlockType::Addition, &indexed_value.to_vec())? {
+        for block in Block::pad(InsertionType::Addition, &indexed_value.to_vec())? {
             if chain_table_value.as_blocks().len() >= CHAIN_TABLE_WIDTH {
                 // Encrypt and insert the current value in the Chain Table.
                 let encrypted_chain_table_value =

@@ -8,7 +8,7 @@ use cosmian_crypto_core::symmetric_crypto::{aes_256_gcm_pure::Aes256GcmCrypto, k
 pub const UID_LENGTH: usize = 32;
 
 /// Length of the blocks in the Chain Table in bytes.
-pub const BLOCK_LENGTH: usize = 33;
+pub const BLOCK_LENGTH: usize = 32;
 
 /// Number of blocks per Chain Table value.
 pub const TABLE_WIDTH: usize = 5;

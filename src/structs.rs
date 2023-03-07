@@ -62,9 +62,43 @@ impl Keyword {
 }
 
 #[derive(Copy, Clone, Debug, Hash, PartialEq, Eq)]
-pub enum BlockType {
+pub enum InsertionType {
     Addition,
     Deletion,
+}
+
+#[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
+pub enum BlockPrefix<const BLOCK_LENGTH: usize> {
+    NonTerminating,
+    Terminating { length: usize },
+    Padding,
+}
+
+impl<const BLOCK_LENGTH: usize> TryFrom<BlockPrefix<BLOCK_LENGTH>> for u8 {
+    type Error = Error;
+
+    fn try_from(value: BlockPrefix<BLOCK_LENGTH>) -> Result<Self, Self::Error> {
+        let res = match value {
+            BlockPrefix::NonTerminating => BLOCK_LENGTH,
+            BlockPrefix::Terminating { length } => length,
+            BlockPrefix::Padding => 0,
+        };
+        u8::try_from(res).map_err(|e| Self::Error::ConversionError(e.to_string()))
+    }
+}
+
+impl<const BLOCK_LENGTH: usize> From<u8> for BlockPrefix<BLOCK_LENGTH> {
+    fn from(value: u8) -> Self {
+        if value == 0 {
+            Self::Padding
+        } else if value as usize == BLOCK_LENGTH {
+            Self::NonTerminating
+        } else {
+            Self::Terminating {
+                length: value as usize,
+            }
+        }
+    }
 }
 
 /// A `Block` defines a fixed-size block of bytes.
@@ -93,7 +127,8 @@ pub enum BlockType {
 #[must_use]
 #[derive(Copy, Clone, Debug, Hash, PartialEq, Eq)]
 pub struct Block<const LENGTH: usize> {
-    pub(crate) block_type: BlockType,
+    pub(crate) block_type: InsertionType,
+    pub(crate) prefix: BlockPrefix<LENGTH>,
     pub(crate) data: [u8; LENGTH],
 }
 
@@ -105,36 +140,36 @@ impl<const LENGTH: usize> Block<LENGTH> {
     /// - `block_type`      : addition or deletion
     /// - `bytes`           : bytes to store in the block
     /// - `is_terminating`  : true if the block is the last block of a value
-    pub fn new(block_type: BlockType, bytes: &[u8], is_terminating: bool) -> Result<Self, Error> {
+    pub fn new(
+        block_type: InsertionType,
+        prefix: BlockPrefix<LENGTH>,
+        bytes: &[u8],
+    ) -> Result<Self, Error> {
         if LENGTH > u8::MAX as usize {
             return Err(Error::CryptoError(format!(
-                "block size should be lower than {LENGTH}"
+                "block length should be smaller than {}",
+                u8::MAX
             )));
         }
-        // The first byte of a block is used to write the size of the data stored inside
-        // this block.
-        if bytes.len() > LENGTH - 1 {
-            return Err(Error::CryptoError(format!(
-                "block cannot hold more than {} ({} given)",
-                LENGTH - 1,
+        if LENGTH < bytes.len() {
+            return Err(crate::Error::CryptoError(format!(
+                "blocks can't hold more than {LENGTH} bytes ({} given)",
                 bytes.len()
             )));
         }
-        let mut block = Self::new_empty_block(block_type);
-        if is_terminating {
-            block.data[0] = bytes.len() as u8;
-        } else {
-            block.data[0] = LENGTH as u8;
-        }
-
-        for (i, b) in bytes.iter().enumerate() {
-            block.data[i + 1] = *b;
-        }
-        Ok(block)
+        let mut data = [0; LENGTH];
+        data[..bytes.len()].copy_from_slice(bytes);
+        Ok(Self {
+            block_type,
+            prefix,
+            data,
+        })
     }
 
+    /// Returns `true` if this block is an addition, and `false` if it is a
+    /// deletion.
     pub fn is_addition(&self) -> bool {
-        self.block_type == BlockType::Addition
+        self.block_type == InsertionType::Addition
     }
 
     /// Unpads the byte vectors contained in the given list of `Block`.
@@ -144,19 +179,19 @@ impl<const LENGTH: usize> Block<LENGTH> {
         let mut blocks = blocks;
         let mut res = Vec::new();
         while !blocks.is_empty() {
-            // At least `LENGTH - 1` bytes will be read
-            let mut bytes = Vec::with_capacity(LENGTH - 1);
-            while blocks.len() > 1 && blocks[0].data[0] == LENGTH as u8 {
-                bytes.extend_from_slice(&blocks[0].data[1..]);
+            // Try reading blocks until a terminating block is encountered.
+            let mut bytes = Vec::with_capacity(LENGTH);
+            while blocks.len() > 1 && blocks[0].prefix == BlockPrefix::NonTerminating {
+                bytes.extend_from_slice(&blocks[0].data);
                 blocks = &blocks[1..];
             }
-            let length = blocks[0].data[0] as usize;
-            if length == LENGTH {
+            if BlockPrefix::NonTerminating == blocks[0].prefix {
                 return Err(Error::CryptoError(
                     "Last block given is a non-terminating block.".to_string(),
                 ));
             }
-            bytes.extend_from_slice(&blocks[0].data[1..=length]);
+            let length = <u8>::try_from(blocks[0].prefix)? as usize;
+            bytes.extend_from_slice(&blocks[0].data[..length]);
             blocks = &blocks[1..];
             res.push(bytes);
         }
@@ -172,36 +207,41 @@ impl<const LENGTH: usize> Block<LENGTH> {
     /// # Parameters
     ///
     /// - `bytes`   : bytes to be padded in to a `Block`
-    pub fn pad(block_type: BlockType, mut bytes: &[u8]) -> Result<Vec<Self>, Error> {
+    pub fn pad(block_type: InsertionType, mut bytes: &[u8]) -> Result<Vec<Self>, Error> {
         // Number of blocks needed.
-        let mut partition_size = bytes.len() / (LENGTH - 1);
-        if bytes.len() % (LENGTH - 1) != 0 {
+        let mut partition_size = bytes.len() / LENGTH;
+        if bytes.len() % LENGTH != 0 {
             partition_size += 1;
         }
 
         let mut blocks = Vec::with_capacity(partition_size);
-        while bytes.len() > LENGTH - 1 {
+        while bytes.len() > LENGTH {
             // this is a non-terminating block
-            blocks.push(Self::new(block_type, &bytes[..LENGTH - 1], false)?);
-            bytes = &bytes[LENGTH - 1..];
+            blocks.push(Self::new(
+                block_type,
+                BlockPrefix::NonTerminating,
+                &bytes[..LENGTH],
+            )?);
+            bytes = &bytes[LENGTH..];
         }
-        blocks.push(Self::new(block_type, bytes, true)?);
+        blocks.push(Self::new(
+            block_type,
+            BlockPrefix::Terminating {
+                length: bytes.len(),
+            },
+            bytes,
+        )?);
 
         Ok(blocks)
     }
 
     /// Generates a new empty block.
-    pub const fn new_empty_block(block_type: BlockType) -> Self {
+    pub const fn padding_block() -> Self {
         Self {
-            block_type,
+            block_type: InsertionType::Deletion,
+            prefix: BlockPrefix::Padding,
             data: [0; LENGTH],
         }
-    }
-}
-
-impl<const BLOCK_LENGTH: usize> Default for Block<BLOCK_LENGTH> {
-    fn default() -> Self {
-        Self::new_empty_block(BlockType::Deletion)
     }
 }
 
@@ -566,23 +606,21 @@ mod tests {
         const BLOCK_LENGTH: usize = 3;
         // Pad vector with remaining bytes.
         let bytes = vec![1, 2, 3, 4, 5];
-        let blocks = Block::<BLOCK_LENGTH>::pad(BlockType::Addition, &bytes).unwrap();
-        assert_eq!(blocks.len(), 3);
+        let blocks = Block::<BLOCK_LENGTH>::pad(InsertionType::Addition, &bytes).unwrap();
+        assert_eq!(blocks.len(), 2);
         assert_eq!(
             blocks,
             vec![
                 Block {
-                    block_type: BlockType::Addition,
-                    data: [3, 1, 2]
+                    block_type: InsertionType::Addition,
+                    prefix: BlockPrefix::NonTerminating,
+                    data: [1, 2, 3]
                 },
                 Block {
-                    block_type: BlockType::Addition,
-                    data: [3, 3, 4]
+                    block_type: InsertionType::Addition,
+                    prefix: BlockPrefix::Terminating { length: 2 },
+                    data: [4, 5, 0]
                 },
-                Block {
-                    block_type: BlockType::Addition,
-                    data: [1, 5, 0]
-                }
             ]
         );
 
@@ -591,21 +629,16 @@ mod tests {
         assert_eq!(res[0], bytes);
 
         // Pad vector without remaining byte.
-        let bytes = vec![1, 2, 3, 4];
-        let blocks = Block::<BLOCK_LENGTH>::pad(BlockType::Addition, &bytes).unwrap();
-        assert_eq!(blocks.len(), 2);
+        let bytes = vec![1, 2, 3];
+        let blocks = Block::<BLOCK_LENGTH>::pad(InsertionType::Addition, &bytes).unwrap();
+        assert_eq!(blocks.len(), 1);
         assert_eq!(
             blocks,
-            vec![
-                Block {
-                    block_type: BlockType::Addition,
-                    data: [3, 1, 2]
-                },
-                Block {
-                    block_type: BlockType::Addition,
-                    data: [2, 3, 4]
-                },
-            ]
+            vec![Block {
+                block_type: InsertionType::Addition,
+                prefix: BlockPrefix::Terminating { length: 3 },
+                data: [1, 2, 3]
+            },]
         );
 
         let res = Block::<BLOCK_LENGTH>::unpad(&blocks).unwrap();
@@ -615,7 +648,7 @@ mod tests {
         // Pad vector in one big block
         const BLOCK_LENGTH_2: usize = 32;
         let bytes = vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
-        let mut blocks = Block::<BLOCK_LENGTH_2>::pad(BlockType::Addition, &bytes).unwrap();
+        let mut blocks = Block::<BLOCK_LENGTH_2>::pad(InsertionType::Addition, &bytes).unwrap();
         assert_eq!(blocks.len(), 1);
         // Append another big block containing the same vector.
         blocks.push(blocks[0]);
