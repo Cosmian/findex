@@ -602,7 +602,7 @@ mod tests {
                 .to_vec()
             })
             .collect();
-        let indexed_values = Block::<BLOCK_LENGTH>::unpad(&blocks).unwrap();
+        let indexed_values = Block::<BLOCK_LENGTH>::unpad(blocks).unwrap();
 
         // Assert the correct indexed values have been recovered.
         assert_eq!(indexed_values.len(), CHAIN_TABLE_WIDTH + 1);
@@ -653,7 +653,7 @@ mod tests {
                 .to_vec()
             })
             .collect();
-        let indexed_values = Block::<BLOCK_LENGTH>::unpad(&blocks).unwrap();
+        let indexed_values = Block::<BLOCK_LENGTH>::unpad(blocks).unwrap();
 
         // Assert the correct indexed values have been recovered.
         assert_eq!(indexed_values.len(), 1);
@@ -727,7 +727,7 @@ mod tests {
             })
             .collect();
 
-        let indexed_values = Block::<BLOCK_LENGTH>::unpad(&blocks).unwrap();
+        let indexed_values = Block::<BLOCK_LENGTH>::unpad(blocks).unwrap();
 
         assert_eq!(indexed_values.len(), 1);
 

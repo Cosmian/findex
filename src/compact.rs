@@ -142,7 +142,7 @@ pub trait FindexCompact<
                 .into_iter()
                 .flat_map(|(_, chain_value)| chain_value.as_blocks().to_vec())
                 .collect::<Vec<_>>();
-            reindexed_chain_values.insert(kwi.clone(), Block::unpad(&blocks)?);
+            reindexed_chain_values.insert(kwi.clone(), Block::unpad(blocks)?);
         }
 
         //

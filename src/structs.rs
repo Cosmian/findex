@@ -140,12 +140,6 @@ impl<const LENGTH: usize> Block<LENGTH> {
         prefix: BlockPrefix,
         bytes: &[u8],
     ) -> Result<Self, Error> {
-        if LENGTH > (u8::MAX - 1) as usize {
-            return Err(Error::CryptoError(format!(
-                "block length should be smaller than {}",
-                u8::MAX - 1
-            )));
-        }
         if LENGTH < bytes.len() {
             return Err(crate::Error::CryptoError(format!(
                 "blocks can't hold more than {LENGTH} bytes ({} given)",
@@ -170,46 +164,39 @@ impl<const LENGTH: usize> Block<LENGTH> {
     /// Unpads the indexed values contained in the given list of `Block`.
     ///
     /// - `blocks`  : list of blocks to unpad
-    pub fn unpad(blocks: &[Self]) -> Result<HashSet<IndexedValue>, Error> {
-        let mut blocks = blocks;
-        let mut res = HashSet::with_capacity(blocks.len());
-        while !blocks.is_empty() {
-            //let (block_type, next_byte_vector) = Self::unpad_byte_vector(blocks)?;
-            // Try reading blocks until a terminating block is encountered.
+    pub fn unpad(blocks: impl IntoIterator<Item = Self>) -> Result<HashSet<IndexedValue>, Error> {
+        let mut blocks = blocks.into_iter();
+        let mut indexed_values = HashSet::new();
+        while let Some(mut block) = blocks.next() {
+            let block_type = block.block_type;
             let mut next_byte_vector = Vec::with_capacity(LENGTH);
-            let block_type = blocks[0].block_type;
-            while blocks.len() > 1 && blocks[0].prefix == BlockPrefix::NonTerminating {
-                if blocks[0].block_type != block_type {
+
+            // Try reading blocks until a terminating block is encountered.
+            while block.prefix == BlockPrefix::NonTerminating {
+                next_byte_vector.extend(block.data);
+                block = blocks.next().ok_or(Error::CryptoError(
+                    "last block is a non-terminating block".to_string(),
+                ))?;
+                // All blocks composing a byte vector should share the same type.
+                if block.block_type != block_type {
                     return Err(crate::Error::CryptoError(
                         "mixed block types for a single byte vector".to_string(),
                     ));
                 }
-                next_byte_vector.extend_from_slice(&blocks[0].data);
-                blocks = &blocks[1..];
             }
-            if BlockPrefix::NonTerminating == blocks[0].prefix {
-                return Err(Error::CryptoError(
-                    "Last block given is a non-terminating block.".to_string(),
-                ));
-            }
-            if blocks[0].block_type != block_type {
-                return Err(crate::Error::CryptoError(
-                    "mixed block types for a single byte vector".to_string(),
-                ));
-            }
-            let length = <u8>::from(blocks[0].prefix) as usize;
-            next_byte_vector.extend_from_slice(&blocks[0].data[..length]);
-            blocks = &blocks[1..];
 
-            // Add the unpadded indexed value
+            // This block is terminating the byte vector.
+            let length = <u8>::from(block.prefix) as usize;
+            next_byte_vector.extend(&block.data[..length]);
+
             let value = IndexedValue::try_from_bytes(&next_byte_vector)?;
             if InsertionType::Addition == block_type {
-                res.insert(value);
+                indexed_values.insert(value);
             } else {
-                res.remove(&value);
+                indexed_values.remove(&value);
             }
         }
-        Ok(res)
+        Ok(indexed_values)
     }
 
     /// Pads the given bytes into blocks. Uses the first byte to differentiate
@@ -244,6 +231,7 @@ impl<const LENGTH: usize> Block<LENGTH> {
             )?);
             pos += LENGTH;
         }
+
         blocks.push(Self::new(
             block_type,
             BlockPrefix::Terminating {
@@ -255,7 +243,7 @@ impl<const LENGTH: usize> Block<LENGTH> {
         Ok(blocks)
     }
 
-    /// Generates a new empty block.
+    /// Generates a new padding block.
     pub const fn padding_block() -> Self {
         Self {
             block_type: InsertionType::Deletion,
@@ -644,7 +632,7 @@ mod tests {
         }
 
         // Assert unpadding the resulting blocks leads to the correct result.
-        let res = Block::<BLOCK_LENGTH>::unpad(&blocks).unwrap();
+        let res = Block::<BLOCK_LENGTH>::unpad(blocks.clone()).unwrap();
         assert_eq!(res.len(), N_ADDITIONS + 1);
         assert!(res.contains(&long_indexed_value));
         for i in 0..N_ADDITIONS {
@@ -663,7 +651,7 @@ mod tests {
         }
 
         // Assert unpadding the resulting blocks leads to the correct result.
-        let res = Block::<BLOCK_LENGTH>::unpad(&blocks).unwrap();
+        let res = Block::<BLOCK_LENGTH>::unpad(blocks).unwrap();
         assert_eq!(res.len(), 1);
         assert!(res.contains(&IndexedValue::from(Location::from(vec![0]))));
     }
