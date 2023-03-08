@@ -283,8 +283,7 @@ mod tests {
         let indexed_value_1 = IndexedValue::from(Location::from("location1".as_bytes()));
         let indexed_value_2 = IndexedValue::from(Location::from("location2".as_bytes()));
         let mut chain_table_value = ChainTableValue::<CHAIN_TABLE_WIDTH, BLOCK_LENGTH>::default();
-        for block in
-            Block::<BLOCK_LENGTH>::pad(InsertionType::Addition, &indexed_value_1.to_vec()).unwrap()
+        for block in Block::<BLOCK_LENGTH>::pad(InsertionType::Addition, &indexed_value_1).unwrap()
         {
             chain_table_value.try_push(block).unwrap();
         }
@@ -292,8 +291,7 @@ mod tests {
         assert_eq!(chain_table_value.length(), bytes.len());
         let res = ChainTableValue::try_from_bytes(&bytes).unwrap();
         assert_eq!(chain_table_value, res);
-        for block in
-            Block::<BLOCK_LENGTH>::pad(InsertionType::Addition, &indexed_value_2.to_vec()).unwrap()
+        for block in Block::<BLOCK_LENGTH>::pad(InsertionType::Addition, &indexed_value_2).unwrap()
         {
             chain_table_value.try_push(block).unwrap();
         }
@@ -316,17 +314,17 @@ mod tests {
         let indexed_value2 = IndexedValue::from(location);
 
         let mut chain_table_value1 = ChainTableValue::<CHAIN_TABLE_WIDTH, BLOCK_LENGTH>::default();
-        for block in Block::pad(InsertionType::Addition, &indexed_value1.to_vec()).unwrap() {
+        for block in Block::pad(InsertionType::Addition, &indexed_value1).unwrap() {
             chain_table_value1.try_push(block).unwrap();
         }
-        for block in Block::pad(InsertionType::Deletion, &indexed_value2.to_vec()).unwrap() {
+        for block in Block::pad(InsertionType::Deletion, &indexed_value2).unwrap() {
             chain_table_value1.try_push(block).unwrap();
         }
         // The indexed values should be short enough to fit in a single block.
         assert_eq!(chain_table_value1.length, 2);
 
         let mut chain_table_value2 = ChainTableValue::<CHAIN_TABLE_WIDTH, BLOCK_LENGTH>::default();
-        for block in Block::pad(InsertionType::Addition, &indexed_value1.to_vec()).unwrap() {
+        for block in Block::pad(InsertionType::Addition, &indexed_value1).unwrap() {
             chain_table_value2.try_push(block).unwrap();
         }
         // The indexed values should be short enough to fit in a single block.

@@ -6,10 +6,7 @@ use std::{
 };
 
 use async_recursion::async_recursion;
-use cosmian_crypto_core::{
-    bytes_ser_de::Serializable,
-    symmetric_crypto::{Dem, SymKey},
-};
+use cosmian_crypto_core::symmetric_crypto::{Dem, SymKey};
 use futures::future::join_all;
 
 use crate::{
@@ -17,7 +14,7 @@ use crate::{
     chain_table::{ChainTableValue, KwiChainUids},
     entry_table::EntryTable,
     error::CallbackError,
-    structs::{Block, IndexedValue, InsertionType, Keyword, Label, Location, Uid},
+    structs::{Block, IndexedValue, Keyword, Label, Location, Uid},
     Error, KeyingMaterial, CHAIN_TABLE_KEY_DERIVATION_INFO, ENTRY_TABLE_KEY_DERIVATION_INFO,
 };
 
@@ -127,19 +124,12 @@ pub trait FindexSearch<
             let keyword = *reversed_map.get(&kwi).ok_or_else(|| {
                 Error::<CustomError>::CryptoError("Missing Kwi in reversed map.".to_string())
             })?;
-            let entry = res.entry(keyword.clone()).or_default();
             let blocks = chain
                 .into_iter()
                 .flat_map(|(_, chain_table_value)| chain_table_value.as_blocks().to_vec())
                 .collect::<Vec<_>>();
-            for (block_type, bytes) in Block::unpad(&blocks)? {
-                let value = IndexedValue::try_from_bytes(&bytes)?;
-                if InsertionType::Addition == block_type {
-                    entry.insert(value);
-                } else {
-                    entry.remove(&value);
-                }
-            }
+            let indexed_values = Block::<BLOCK_LENGTH>::unpad(&blocks)?;
+            res.insert(keyword.clone(), indexed_values);
         }
         Ok(res)
     }

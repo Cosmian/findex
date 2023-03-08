@@ -1,7 +1,7 @@
 //! This module defines all useful structures used by Findex.
 
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     fmt::Debug,
     ops::{Deref, DerefMut},
     vec::Vec,
@@ -167,15 +167,16 @@ impl<const LENGTH: usize> Block<LENGTH> {
         self.block_type == InsertionType::Addition
     }
 
-    /// Unpads the byte vectors contained in the given list of `Block`.
+    /// Unpads the indexed values contained in the given list of `Block`.
     ///
     /// - `blocks`  : list of blocks to unpad
-    pub fn unpad(blocks: &[Self]) -> Result<Vec<(InsertionType, Vec<u8>)>, Error> {
+    pub fn unpad(blocks: &[Self]) -> Result<HashSet<IndexedValue>, Error> {
         let mut blocks = blocks;
-        let mut res = Vec::new();
+        let mut res = HashSet::with_capacity(blocks.len());
         while !blocks.is_empty() {
+            //let (block_type, next_byte_vector) = Self::unpad_byte_vector(blocks)?;
             // Try reading blocks until a terminating block is encountered.
-            let mut bytes = Vec::with_capacity(LENGTH);
+            let mut next_byte_vector = Vec::with_capacity(LENGTH);
             let block_type = blocks[0].block_type;
             while blocks.len() > 1 && blocks[0].prefix == BlockPrefix::NonTerminating {
                 if blocks[0].block_type != block_type {
@@ -183,7 +184,7 @@ impl<const LENGTH: usize> Block<LENGTH> {
                         "mixed block types for a single byte vector".to_string(),
                     ));
                 }
-                bytes.extend_from_slice(&blocks[0].data);
+                next_byte_vector.extend_from_slice(&blocks[0].data);
                 blocks = &blocks[1..];
             }
             if BlockPrefix::NonTerminating == blocks[0].prefix {
@@ -197,9 +198,16 @@ impl<const LENGTH: usize> Block<LENGTH> {
                 ));
             }
             let length = <u8>::from(blocks[0].prefix) as usize;
-            bytes.extend_from_slice(&blocks[0].data[..length]);
+            next_byte_vector.extend_from_slice(&blocks[0].data[..length]);
             blocks = &blocks[1..];
-            res.push((block_type, bytes));
+
+            // Add the unpadded indexed value
+            let value = IndexedValue::try_from_bytes(&next_byte_vector)?;
+            if InsertionType::Addition == block_type {
+                res.insert(value);
+            } else {
+                res.remove(&value);
+            }
         }
         Ok(res)
     }
@@ -213,7 +221,13 @@ impl<const LENGTH: usize> Block<LENGTH> {
     /// # Parameters
     ///
     /// - `bytes`   : bytes to be padded in to a `Block`
-    pub fn pad(block_type: InsertionType, mut bytes: &[u8]) -> Result<Vec<Self>, Error> {
+    pub fn pad(
+        block_type: InsertionType,
+        indexed_value: &IndexedValue,
+    ) -> Result<Vec<Self>, Error> {
+        let bytes = indexed_value.to_vec();
+        let mut pos = 0;
+
         // Number of blocks needed.
         let mut partition_size = bytes.len() / LENGTH;
         if bytes.len() % LENGTH != 0 {
@@ -221,21 +235,21 @@ impl<const LENGTH: usize> Block<LENGTH> {
         }
 
         let mut blocks = Vec::with_capacity(partition_size);
-        while bytes.len() > LENGTH {
+        while bytes.len() - pos > LENGTH {
             // this is a non-terminating block
             blocks.push(Self::new(
                 block_type,
                 BlockPrefix::NonTerminating,
-                &bytes[..LENGTH],
+                &bytes[pos..pos + LENGTH],
             )?);
-            bytes = &bytes[LENGTH..];
+            pos += LENGTH;
         }
         blocks.push(Self::new(
             block_type,
             BlockPrefix::Terminating {
-                length: <u8>::try_from(bytes.len())?,
+                length: <u8>::try_from(bytes.len() - pos)?,
             },
-            bytes,
+            &bytes[pos..],
         )?);
 
         Ok(blocks)
@@ -610,57 +624,47 @@ mod tests {
     #[test]
     fn test_padding() {
         const BLOCK_LENGTH: usize = 3;
-        // Pad vector with remaining bytes.
-        let bytes = vec![1, 2, 3, 4, 5];
-        let blocks = Block::<BLOCK_LENGTH>::pad(InsertionType::Addition, &bytes).unwrap();
-        assert_eq!(blocks.len(), 2);
-        assert_eq!(
-            blocks,
-            vec![
-                Block {
-                    block_type: InsertionType::Addition,
-                    prefix: BlockPrefix::NonTerminating,
-                    data: [1, 2, 3]
-                },
-                Block {
-                    block_type: InsertionType::Addition,
-                    prefix: BlockPrefix::Terminating { length: 2 },
-                    data: [4, 5, 0]
-                },
-            ]
+        const N_ADDITIONS: usize = 5;
+
+        let mut blocks = Vec::new();
+
+        // Add a value that does not fit in a single block.
+        let long_indexed_value =
+            IndexedValue::from(Location::from(vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10]));
+        blocks.extend(
+            &Block::<BLOCK_LENGTH>::pad(InsertionType::Addition, &long_indexed_value).unwrap(),
         );
 
-        let res = Block::<BLOCK_LENGTH>::unpad(&blocks).unwrap();
-        assert_eq!(res.len(), 1);
-        assert_eq!(res[0], (InsertionType::Addition, bytes));
+        // Try padding some small values.
+        for i in 0..N_ADDITIONS {
+            let indexed_value = IndexedValue::from(Location::from(vec![i as u8]));
+            blocks.extend(
+                &Block::<BLOCK_LENGTH>::pad(InsertionType::Addition, &indexed_value).unwrap(),
+            );
+        }
 
-        // Pad vector without remaining byte.
-        let bytes = vec![1, 2, 3];
-        let blocks = Block::<BLOCK_LENGTH>::pad(InsertionType::Addition, &bytes).unwrap();
-        assert_eq!(blocks.len(), 1);
-        assert_eq!(
-            blocks,
-            vec![Block {
-                block_type: InsertionType::Addition,
-                prefix: BlockPrefix::Terminating { length: 3 },
-                data: [1, 2, 3]
-            },]
+        // Assert unpadding the resulting blocks leads to the correct result.
+        let res = Block::<BLOCK_LENGTH>::unpad(&blocks).unwrap();
+        assert_eq!(res.len(), N_ADDITIONS + 1);
+        assert!(res.contains(&long_indexed_value));
+        for i in 0..N_ADDITIONS {
+            assert!(res.contains(&IndexedValue::from(Location::from(vec![i as u8]))));
+        }
+
+        // Try deleting some values.
+        blocks.extend(
+            &Block::<BLOCK_LENGTH>::pad(InsertionType::Deletion, &long_indexed_value).unwrap(),
         );
+        for i in 1..N_ADDITIONS {
+            let indexed_value = IndexedValue::from(Location::from(vec![i as u8]));
+            blocks.extend(
+                &Block::<BLOCK_LENGTH>::pad(InsertionType::Deletion, &indexed_value).unwrap(),
+            );
+        }
 
+        // Assert unpadding the resulting blocks leads to the correct result.
         let res = Block::<BLOCK_LENGTH>::unpad(&blocks).unwrap();
         assert_eq!(res.len(), 1);
-        assert_eq!(res[0], (InsertionType::Addition, bytes));
-
-        // Pad vector in one big block
-        const BLOCK_LENGTH_2: usize = 32;
-        let bytes = vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
-        let mut blocks = Block::<BLOCK_LENGTH_2>::pad(InsertionType::Addition, &bytes).unwrap();
-        assert_eq!(blocks.len(), 1);
-        // Append another big block containing the same vector.
-        blocks.push(blocks[0]);
-        let res = Block::<BLOCK_LENGTH_2>::unpad(&blocks).unwrap();
-        assert_eq!(res.len(), 2);
-        assert_eq!(res[0], (InsertionType::Addition, bytes.clone()));
-        assert_eq!(res[1], (InsertionType::Addition, bytes));
+        assert!(res.contains(&IndexedValue::from(Location::from(vec![0]))));
     }
 }

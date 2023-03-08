@@ -3,7 +3,6 @@
 use std::collections::{HashMap, HashSet};
 
 use cosmian_crypto_core::{
-    bytes_ser_de::Serializable,
     reexport::rand_core::SeedableRng,
     symmetric_crypto::{Dem, SymKey},
     CsRng,
@@ -139,20 +138,11 @@ pub trait FindexCompact<
         // Get the values stored in the reindexed chains.
         let mut reindexed_chain_values = HashMap::with_capacity(chains_to_reindex.len());
         for (kwi, chain) in chains_to_reindex {
-            let mut indexed_values = HashSet::new();
             let blocks = chain
                 .into_iter()
                 .flat_map(|(_, chain_value)| chain_value.as_blocks().to_vec())
                 .collect::<Vec<_>>();
-            for (block_type, bytes) in Block::unpad(&blocks)? {
-                let value = IndexedValue::try_from_bytes(&bytes)?;
-                if InsertionType::Addition == block_type {
-                    indexed_values.insert(value);
-                } else {
-                    indexed_values.remove(&value);
-                }
-            }
-            reindexed_chain_values.insert(kwi.clone(), indexed_values);
+            reindexed_chain_values.insert(kwi.clone(), Block::unpad(&blocks)?);
         }
 
         //

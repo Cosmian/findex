@@ -134,7 +134,7 @@ impl<const UID_LENGTH: usize, const KWI_LENGTH: usize> EntryTableValue<UID_LENGT
                 ChainTableValue::default()
             };
 
-        for block in Block::pad(insertion_type, &indexed_value.to_vec())? {
+        for block in Block::pad(insertion_type, indexed_value)? {
             if chain_table_value.as_blocks().len() >= CHAIN_TABLE_WIDTH {
                 // Encrypt and insert the current value in the Chain Table.
                 let encrypted_chain_table_value =
@@ -501,7 +501,6 @@ impl<const UID_LENGTH: usize, const KWI_LENGTH: usize> EntryTable<UID_LENGTH, KW
 mod tests {
 
     use cosmian_crypto_core::{
-        bytes_ser_de::Serializable,
         reexport::rand_core::{RngCore, SeedableRng},
         symmetric_crypto::{aes_256_gcm_pure::Aes256GcmCrypto, Dem},
         CsRng,
@@ -603,21 +602,14 @@ mod tests {
                 .to_vec()
             })
             .collect();
-        let bytes = Block::<BLOCK_LENGTH>::unpad(&blocks).unwrap();
-        let indexed_values = bytes
-            .into_iter()
-            .map(|(_, bytes)| IndexedValue::try_from_bytes(&bytes).unwrap());
+        let indexed_values = Block::<BLOCK_LENGTH>::unpad(&blocks).unwrap();
 
         // Assert the correct indexed values have been recovered.
         assert_eq!(indexed_values.len(), CHAIN_TABLE_WIDTH + 1);
-        for (i, indexed_value) in indexed_values.enumerate() {
-            assert!(indexed_value.is_location());
-            assert_eq!(
-                indexed_value,
-                IndexedValue::from(Location::from(
-                    format!("Robert's location nb {i}").as_bytes()
-                ))
-            );
+        for i in 0..=CHAIN_TABLE_WIDTH {
+            assert!(indexed_values.contains(&IndexedValue::from(Location::from(
+                format!("Robert's location nb {i}").as_bytes()
+            ))));
         }
 
         // Delete all indexed values except the first one.
@@ -661,25 +653,13 @@ mod tests {
                 .to_vec()
             })
             .collect();
-        let bytes = Block::<BLOCK_LENGTH>::unpad(&blocks).unwrap();
-        assert_eq!(bytes.len(), 2 * CHAIN_TABLE_WIDTH + 1);
-        let mut indexed_values = HashSet::with_capacity(bytes.len());
-        for (block_type, bytes) in bytes {
-            let value = IndexedValue::try_from_bytes(&bytes).unwrap();
-            if InsertionType::Addition == block_type {
-                indexed_values.insert(value);
-            } else {
-                let was_present = indexed_values.remove(&value);
-                assert!(was_present);
-            }
-        }
+        let indexed_values = Block::<BLOCK_LENGTH>::unpad(&blocks).unwrap();
 
         // Assert the correct indexed values have been recovered.
         assert_eq!(indexed_values.len(), 1);
-        assert_eq!(
-            indexed_values.into_iter().next().unwrap(),
-            IndexedValue::from(Location::from("Robert's location nb 0".as_bytes()))
-        );
+        assert!(indexed_values.contains(&IndexedValue::from(Location::from(
+            "Robert's location nb 0".as_bytes()
+        ))));
     }
 
     #[test]
@@ -747,15 +727,7 @@ mod tests {
             })
             .collect();
 
-        for block in &blocks {
-            println!("{}: {block:?}", block.data.len());
-        }
-        let bytes = Block::<BLOCK_LENGTH>::unpad(&blocks).unwrap();
-        println!("{bytes:?}");
-
-        let indexed_values = bytes
-            .into_iter()
-            .map(|(_, bytes)| IndexedValue::try_from_bytes(&bytes).unwrap());
+        let indexed_values = Block::<BLOCK_LENGTH>::unpad(&blocks).unwrap();
 
         assert_eq!(indexed_values.len(), 1);
 
