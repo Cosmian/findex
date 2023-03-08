@@ -6,7 +6,7 @@
 //! associated keyword.
 
 use std::{
-    collections::{HashMap, HashSet},
+    collections::HashMap,
     ops::{Deref, DerefMut},
 };
 
@@ -436,16 +436,16 @@ impl<const UID_LENGTH: usize, const KWI_LENGTH: usize> EntryTable<UID_LENGTH, KW
     >(
         &mut self,
         rng: &mut impl CryptoRngCore,
-        new_chain_elements: &HashMap<Keyword, HashSet<IndexedValue>>,
-        entry_table_uid_cache: &HashMap<Keyword, Uid<UID_LENGTH>>,
+        new_chain_elements: &HashMap<Keyword, HashMap<IndexedValue, BlockType>>,
+        keyword_to_entry_table_uid: &HashMap<Keyword, Uid<UID_LENGTH>>,
     ) -> Result<HashMap<Uid<UID_LENGTH>, EncryptedTable<UID_LENGTH>>, Error> {
         // Cache the KMAC and DEM keys
-        let mut key_cache = KeyCache::with_capacity(entry_table_uid_cache.len());
+        let mut key_cache = KeyCache::with_capacity(keyword_to_entry_table_uid.len());
 
         let mut chain_table_additions = HashMap::with_capacity(new_chain_elements.len());
         for (keyword, indexed_values) in new_chain_elements {
             // Get the corresponding Entry Table UID from the cache.
-            let entry_table_uid = entry_table_uid_cache.get(keyword).ok_or_else(|| {
+            let entry_table_uid = keyword_to_entry_table_uid.get(keyword).ok_or_else(|| {
                 Error::CryptoError(format!(
                     "No entry in Entry Table UID cache for keyword '{keyword:?}'"
                 ))
@@ -481,7 +481,7 @@ impl<const UID_LENGTH: usize, const KWI_LENGTH: usize> EntryTable<UID_LENGTH, KW
                 .get_entry_or_insert(&entry_table_value.kwi, CHAIN_TABLE_KEY_DERIVATION_INFO);
 
             // Add new indexed values to the chain.
-            for indexed_value in indexed_values {
+            for (indexed_value, block_type) in indexed_values {
                 entry_table_value.upsert_indexed_value::<
                     CHAIN_TABLE_WIDTH,
                     BLOCK_LENGTH,
@@ -489,7 +489,7 @@ impl<const UID_LENGTH: usize, const KWI_LENGTH: usize> EntryTable<UID_LENGTH, KW
                     DEM_KEY_LENGTH,
                     KmacKey,
                     DemScheme
-                >(BlockType::Addition, indexed_value, kwi_uid, kwi_value, new_chain_table_entries, rng)?;
+                >(*block_type, indexed_value, kwi_uid, kwi_value, new_chain_table_entries, rng)?;
             }
         }
 

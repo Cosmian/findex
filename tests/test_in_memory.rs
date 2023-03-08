@@ -115,7 +115,12 @@ async fn test_findex() -> Result<(), Error<ExampleError>> {
 
     let mut findex = FindexInMemory::default();
     findex
-        .upsert(indexed_value_to_keywords, &master_key, &label)
+        .upsert(
+            indexed_value_to_keywords,
+            HashMap::new(),
+            &master_key,
+            &label,
+        )
         .await?;
 
     let robert_keyword = Keyword::from("robert");
@@ -207,7 +212,12 @@ async fn test_findex() -> Result<(), Error<ExampleError>> {
         hashset_keywords(&["jane", "doe"]),
     );
     findex
-        .upsert(indexed_value_to_keywords, &master_key, &label)
+        .upsert(
+            indexed_value_to_keywords,
+            HashMap::new(),
+            &master_key,
+            &label,
+        )
         .await?;
 
     // search jane
@@ -415,6 +425,36 @@ async fn test_findex() -> Result<(), Error<ExampleError>> {
         check_search_result(&doe_search, &doe_keyword, &john_doe_location);
     }
 
+    // Try deleting John Doe from the `doe_keyword`.
+    let mut indexed_value_to_keywords = HashMap::new();
+    indexed_value_to_keywords.insert(
+        IndexedValue::from(john_doe_location.clone()),
+        HashSet::from_iter(vec![doe_keyword.clone()]),
+    );
+    findex
+        .upsert(
+            HashMap::new(),
+            indexed_value_to_keywords,
+            &master_key,
+            &new_label,
+        )
+        .await?;
+
+    // Assert John Doe cannot be found by searching for Doe.
+    let doe_search = findex
+        .search(
+            &HashSet::from_iter(vec![doe_keyword.clone()]),
+            &master_key,
+            &new_label,
+            usize::MAX,
+            0,
+            SECURE_FETCH_CHAINS_BATCH_SIZE,
+            0,
+        )
+        .await?;
+    let doe_search = doe_search.get(&doe_keyword).unwrap();
+    assert!(!doe_search.contains(&john_doe_location));
+
     Ok(())
 }
 
@@ -468,7 +508,9 @@ async fn test_first_names() -> Result<(), Error<ExampleError>> {
             add_keyword_graph(&Keyword::from(first_name), MIN_KEYWORD_LENGTH, &mut map);
         }
 
-        graph_findex.upsert(map, &master_key, &label).await?;
+        graph_findex
+            .upsert(map, HashMap::new(), &master_key, &label)
+            .await?;
 
         // naive Findex
         let mut keywords = HashSet::<Keyword>::new();
@@ -491,7 +533,9 @@ async fn test_first_names() -> Result<(), Error<ExampleError>> {
             let iv = IndexedValue::Location(Location::from(format!("{first_name}_{i}").as_str()));
             map_naive.insert(iv, keywords.clone());
         }
-        naive_findex.upsert(map_naive, &master_key, &label).await?;
+        naive_findex
+            .upsert(map_naive, HashMap::new(), &master_key, &label)
+            .await?;
 
         if first_names_number % 1000 == 0 {
             println!("    ...{first_names_number}");
@@ -605,7 +649,12 @@ async fn test_graph_compacting() {
     // Graph upsert
     let mut label = Label::random(&mut rng);
     findex
-        .upsert(indexed_value_to_keywords, &master_key, &label)
+        .upsert(
+            indexed_value_to_keywords,
+            HashMap::new(),
+            &master_key,
+            &label,
+        )
         .await
         .unwrap();
 
