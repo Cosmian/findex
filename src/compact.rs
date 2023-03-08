@@ -13,7 +13,7 @@ use crate::{
     chain_table::{ChainTableValue, KwiChainUids},
     entry_table::{EntryTable, EntryTableValue},
     error::CallbackError,
-    structs::{Block, EncryptedTable, IndexedValue, InsertionType, Label, Uid},
+    structs::{Block, BlockType, EncryptedTable, IndexedValue, Label, Uid},
     Error, FindexCallbacks, KeyingMaterial, CHAIN_TABLE_KEY_DERIVATION_INFO,
     ENTRY_TABLE_KEY_DERIVATION_INFO,
 };
@@ -212,7 +212,7 @@ pub trait FindexCompact<
             // Upsert each remaining location in the Chain Table.
             for remaining_location in remaining_indexed_values_for_this_keyword {
                 new_entry_table_value.upsert_indexed_value::<CHAIN_TABLE_WIDTH, BLOCK_LENGTH, KMAC_KEY_LENGTH, DEM_KEY_LENGTH, KmacKey, DemScheme>(
-                    InsertionType::Addition,
+                    BlockType::Addition,
                     &remaining_location,
                     &kwi_uid,
                     &kwi_value,

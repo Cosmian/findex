@@ -20,7 +20,7 @@ use crate::{
     chain_table::{ChainTable, ChainTableValue, KwiChainUids},
     error::CoreError as Error,
     keys::KeyCache,
-    structs::{Block, EncryptedTable, IndexedValue, InsertionType, Label, Uid},
+    structs::{Block, BlockType, EncryptedTable, IndexedValue, Label, Uid},
     KeyingMaterial, Keyword, CHAIN_TABLE_KEY_DERIVATION_INFO,
 };
 
@@ -112,7 +112,7 @@ impl<const UID_LENGTH: usize, const KWI_LENGTH: usize> EntryTableValue<UID_LENGT
         DemScheme: Dem<DEM_KEY_LENGTH>,
     >(
         &mut self,
-        insertion_type: InsertionType,
+        insertion_type: BlockType,
         indexed_value: &IndexedValue,
         // TODO (TBZ): this should be an `Option` (it can be recomputed from the Entry Table
         // value).
@@ -489,7 +489,7 @@ impl<const UID_LENGTH: usize, const KWI_LENGTH: usize> EntryTable<UID_LENGTH, KW
                     DEM_KEY_LENGTH,
                     KmacKey,
                     DemScheme
-                >(InsertionType::Addition, indexed_value, kwi_uid, kwi_value, new_chain_table_entries, rng)?;
+                >(BlockType::Addition, indexed_value, kwi_uid, kwi_value, new_chain_table_entries, rng)?;
             }
         }
 
@@ -572,7 +572,7 @@ mod tests {
                 {Aes256GcmCrypto::KEY_LENGTH},
                 KmacKey,
                 Aes256GcmCrypto
-            >(InsertionType::Addition, &indexed_value, &kwi_uid, &kwi_value, &mut chain_table, &mut rng).unwrap();
+            >(BlockType::Addition, &indexed_value, &kwi_uid, &kwi_value, &mut chain_table, &mut rng).unwrap();
         }
 
         // Recover Chain Table UIDs associated to the Entry Table value.
@@ -623,7 +623,7 @@ mod tests {
                 {Aes256GcmCrypto::KEY_LENGTH},
                 KmacKey,
                 Aes256GcmCrypto
-            >(InsertionType::Deletion, &indexed_value, &kwi_uid, &kwi_value, &mut chain_table, &mut rng).unwrap();
+            >(BlockType::Deletion, &indexed_value, &kwi_uid, &kwi_value, &mut chain_table, &mut rng).unwrap();
         }
 
         // Recover Chain Table UIDs associated to the Entry Table value.
@@ -697,7 +697,7 @@ mod tests {
             {Aes256GcmCrypto::KEY_LENGTH},
             KmacKey,
             Aes256GcmCrypto
-        >(InsertionType::Addition, &long_location, &kwi_uid, &kwi_value, &mut chain_table, &mut rng).unwrap();
+        >(BlockType::Addition, &long_location, &kwi_uid, &kwi_value, &mut chain_table, &mut rng).unwrap();
 
         let mut kwi_chain_table_uids = KwiChainUids::default();
         entry_table_value.unchain::<

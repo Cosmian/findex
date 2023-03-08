@@ -62,7 +62,7 @@ impl Keyword {
 }
 
 #[derive(Copy, Clone, Debug, Hash, PartialEq, Eq)]
-pub enum InsertionType {
+pub enum BlockType {
     Addition,
     Deletion,
 }
@@ -122,7 +122,7 @@ impl From<u8> for BlockPrefix {
 #[must_use]
 #[derive(Copy, Clone, Debug, Hash, PartialEq, Eq)]
 pub struct Block<const LENGTH: usize> {
-    pub(crate) block_type: InsertionType,
+    pub(crate) block_type: BlockType,
     pub(crate) prefix: BlockPrefix,
     pub(crate) data: [u8; LENGTH],
 }
@@ -135,11 +135,7 @@ impl<const LENGTH: usize> Block<LENGTH> {
     /// - `block_type`      : addition or deletion
     /// - `bytes`           : bytes to store in the block
     /// - `is_terminating`  : true if the block is the last block of a value
-    pub fn new(
-        block_type: InsertionType,
-        prefix: BlockPrefix,
-        bytes: &[u8],
-    ) -> Result<Self, Error> {
+    pub fn new(block_type: BlockType, prefix: BlockPrefix, bytes: &[u8]) -> Result<Self, Error> {
         if LENGTH < bytes.len() {
             return Err(crate::Error::CryptoError(format!(
                 "blocks can't hold more than {LENGTH} bytes ({} given)",
@@ -158,7 +154,7 @@ impl<const LENGTH: usize> Block<LENGTH> {
     /// Returns `true` if this block is an addition, and `false` if it is a
     /// deletion.
     pub fn is_addition(&self) -> bool {
-        self.block_type == InsertionType::Addition
+        self.block_type == BlockType::Addition
     }
 
     /// Unpads the indexed values contained in the given list of `Block`.
@@ -190,7 +186,7 @@ impl<const LENGTH: usize> Block<LENGTH> {
             next_byte_vector.extend(&block.data[..length]);
 
             let value = IndexedValue::try_from_bytes(&next_byte_vector)?;
-            if InsertionType::Addition == block_type {
+            if BlockType::Addition == block_type {
                 indexed_values.insert(value);
             } else {
                 indexed_values.remove(&value);
@@ -208,10 +204,7 @@ impl<const LENGTH: usize> Block<LENGTH> {
     /// # Parameters
     ///
     /// - `bytes`   : bytes to be padded in to a `Block`
-    pub fn pad(
-        block_type: InsertionType,
-        indexed_value: &IndexedValue,
-    ) -> Result<Vec<Self>, Error> {
+    pub fn pad(block_type: BlockType, indexed_value: &IndexedValue) -> Result<Vec<Self>, Error> {
         let bytes = indexed_value.to_vec();
         let mut pos = 0;
 
@@ -246,7 +239,7 @@ impl<const LENGTH: usize> Block<LENGTH> {
     /// Generates a new padding block.
     pub const fn padding_block() -> Self {
         Self {
-            block_type: InsertionType::Deletion,
+            block_type: BlockType::Deletion,
             prefix: BlockPrefix::Padding,
             data: [0; LENGTH],
         }
@@ -619,16 +612,14 @@ mod tests {
         // Add a value that does not fit in a single block.
         let long_indexed_value =
             IndexedValue::from(Location::from(vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10]));
-        blocks.extend(
-            &Block::<BLOCK_LENGTH>::pad(InsertionType::Addition, &long_indexed_value).unwrap(),
-        );
+        blocks
+            .extend(&Block::<BLOCK_LENGTH>::pad(BlockType::Addition, &long_indexed_value).unwrap());
 
         // Try padding some small values.
         for i in 0..N_ADDITIONS {
             let indexed_value = IndexedValue::from(Location::from(vec![i as u8]));
-            blocks.extend(
-                &Block::<BLOCK_LENGTH>::pad(InsertionType::Addition, &indexed_value).unwrap(),
-            );
+            blocks
+                .extend(&Block::<BLOCK_LENGTH>::pad(BlockType::Addition, &indexed_value).unwrap());
         }
 
         // Assert unpadding the resulting blocks leads to the correct result.
@@ -640,14 +631,12 @@ mod tests {
         }
 
         // Try deleting some values.
-        blocks.extend(
-            &Block::<BLOCK_LENGTH>::pad(InsertionType::Deletion, &long_indexed_value).unwrap(),
-        );
+        blocks
+            .extend(&Block::<BLOCK_LENGTH>::pad(BlockType::Deletion, &long_indexed_value).unwrap());
         for i in 1..N_ADDITIONS {
             let indexed_value = IndexedValue::from(Location::from(vec![i as u8]));
-            blocks.extend(
-                &Block::<BLOCK_LENGTH>::pad(InsertionType::Deletion, &indexed_value).unwrap(),
-            );
+            blocks
+                .extend(&Block::<BLOCK_LENGTH>::pad(BlockType::Deletion, &indexed_value).unwrap());
         }
 
         // Assert unpadding the resulting blocks leads to the correct result.

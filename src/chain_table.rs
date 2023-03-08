@@ -28,7 +28,7 @@ use cosmian_crypto_core::{
 
 use crate::{
     error::CoreError as Error,
-    structs::{Block, BlockPrefix, InsertionType, Uid},
+    structs::{Block, BlockPrefix, BlockType, Uid},
     KeyingMaterial, CHAIN_TABLE_KEY_DERIVATION_INFO,
 };
 
@@ -145,9 +145,9 @@ impl<const TABLE_WIDTH: usize, const BLOCK_LENGTH: usize> Serializable
             let data = de.read_array::<BLOCK_LENGTH>()?;
             if BlockPrefix::Padding != prefix {
                 let block_type = if flag % 2 == 1 {
-                    InsertionType::Addition
+                    BlockType::Addition
                 } else {
-                    InsertionType::Deletion
+                    BlockType::Deletion
                 };
                 res.try_push(Block {
                     block_type,
@@ -283,16 +283,14 @@ mod tests {
         let indexed_value_1 = IndexedValue::from(Location::from("location1".as_bytes()));
         let indexed_value_2 = IndexedValue::from(Location::from("location2".as_bytes()));
         let mut chain_table_value = ChainTableValue::<CHAIN_TABLE_WIDTH, BLOCK_LENGTH>::default();
-        for block in Block::<BLOCK_LENGTH>::pad(InsertionType::Addition, &indexed_value_1).unwrap()
-        {
+        for block in Block::<BLOCK_LENGTH>::pad(BlockType::Addition, &indexed_value_1).unwrap() {
             chain_table_value.try_push(block).unwrap();
         }
         let bytes = chain_table_value.try_to_bytes().unwrap();
         assert_eq!(chain_table_value.length(), bytes.len());
         let res = ChainTableValue::try_from_bytes(&bytes).unwrap();
         assert_eq!(chain_table_value, res);
-        for block in Block::<BLOCK_LENGTH>::pad(InsertionType::Addition, &indexed_value_2).unwrap()
-        {
+        for block in Block::<BLOCK_LENGTH>::pad(BlockType::Addition, &indexed_value_2).unwrap() {
             chain_table_value.try_push(block).unwrap();
         }
         let bytes = chain_table_value.try_to_bytes().unwrap();
@@ -314,17 +312,17 @@ mod tests {
         let indexed_value2 = IndexedValue::from(location);
 
         let mut chain_table_value1 = ChainTableValue::<CHAIN_TABLE_WIDTH, BLOCK_LENGTH>::default();
-        for block in Block::pad(InsertionType::Addition, &indexed_value1).unwrap() {
+        for block in Block::pad(BlockType::Addition, &indexed_value1).unwrap() {
             chain_table_value1.try_push(block).unwrap();
         }
-        for block in Block::pad(InsertionType::Deletion, &indexed_value2).unwrap() {
+        for block in Block::pad(BlockType::Deletion, &indexed_value2).unwrap() {
             chain_table_value1.try_push(block).unwrap();
         }
         // The indexed values should be short enough to fit in a single block.
         assert_eq!(chain_table_value1.length, 2);
 
         let mut chain_table_value2 = ChainTableValue::<CHAIN_TABLE_WIDTH, BLOCK_LENGTH>::default();
-        for block in Block::pad(InsertionType::Addition, &indexed_value1).unwrap() {
+        for block in Block::pad(BlockType::Addition, &indexed_value1).unwrap() {
             chain_table_value2.try_push(block).unwrap();
         }
         // The indexed values should be short enough to fit in a single block.
