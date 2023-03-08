@@ -124,15 +124,14 @@ impl<const TABLE_WIDTH: usize, const BLOCK_LENGTH: usize> Serializable
     fn write(&self, ser: &mut Serializer) -> Result<usize, Self::Error> {
         let mut flag = 0u8;
         for i in 0..self.length {
-            flag <<= 1;
             // Set the corresponding bit to 1 in the flag byte.
             if self.blocks[i].is_addition() {
-                flag += 1;
+                flag += 1 << i;
             }
         }
         let mut n = ser.write_array(&[flag])?;
         for block in self.blocks {
-            n += ser.write_array(&[<u8>::try_from(block.prefix)?])?;
+            n += ser.write_array(&[<u8>::from(block.prefix)])?;
             n += ser.write_array(&block.data)?;
         }
         Ok(n)
@@ -320,11 +319,11 @@ mod tests {
         for block in Block::pad(InsertionType::Addition, &indexed_value1.to_vec()).unwrap() {
             chain_table_value1.try_push(block).unwrap();
         }
-        for block in Block::pad(InsertionType::Addition, &indexed_value2.to_vec()).unwrap() {
+        for block in Block::pad(InsertionType::Deletion, &indexed_value2.to_vec()).unwrap() {
             chain_table_value1.try_push(block).unwrap();
         }
         // The indexed values should be short enough to fit in a single block.
-        assert_eq!(chain_table_value1.blocks.len(), 2);
+        assert_eq!(chain_table_value1.length, 2);
 
         let mut chain_table_value2 = ChainTableValue::<CHAIN_TABLE_WIDTH, BLOCK_LENGTH>::default();
         for block in Block::pad(InsertionType::Addition, &indexed_value1.to_vec()).unwrap() {

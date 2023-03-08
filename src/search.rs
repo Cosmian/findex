@@ -17,7 +17,7 @@ use crate::{
     chain_table::{ChainTableValue, KwiChainUids},
     entry_table::EntryTable,
     error::CallbackError,
-    structs::{Block, IndexedValue, Keyword, Label, Location, Uid},
+    structs::{Block, IndexedValue, InsertionType, Keyword, Label, Location, Uid},
     Error, KeyingMaterial, CHAIN_TABLE_KEY_DERIVATION_INFO, ENTRY_TABLE_KEY_DERIVATION_INFO,
 };
 
@@ -132,8 +132,13 @@ pub trait FindexSearch<
                 .into_iter()
                 .flat_map(|(_, chain_table_value)| chain_table_value.as_blocks().to_vec())
                 .collect::<Vec<_>>();
-            for bytes in Block::unpad(&blocks)? {
-                entry.insert(IndexedValue::try_from_bytes(&bytes)?);
+            for (block_type, bytes) in Block::unpad(&blocks)? {
+                let value = IndexedValue::try_from_bytes(&bytes)?;
+                if InsertionType::Addition == block_type {
+                    entry.insert(value);
+                } else {
+                    entry.remove(&value);
+                }
             }
         }
         Ok(res)

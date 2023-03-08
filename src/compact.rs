@@ -14,7 +14,7 @@ use crate::{
     chain_table::{ChainTableValue, KwiChainUids},
     entry_table::{EntryTable, EntryTableValue},
     error::CallbackError,
-    structs::{Block, EncryptedTable, IndexedValue, Label, Uid},
+    structs::{Block, EncryptedTable, IndexedValue, InsertionType, Label, Uid},
     Error, FindexCallbacks, KeyingMaterial, CHAIN_TABLE_KEY_DERIVATION_INFO,
     ENTRY_TABLE_KEY_DERIVATION_INFO,
 };
@@ -144,8 +144,13 @@ pub trait FindexCompact<
                 .into_iter()
                 .flat_map(|(_, chain_value)| chain_value.as_blocks().to_vec())
                 .collect::<Vec<_>>();
-            for bytes in Block::unpad(&blocks)? {
-                indexed_values.insert(IndexedValue::try_from_bytes(&bytes)?);
+            for (block_type, bytes) in Block::unpad(&blocks)? {
+                let value = IndexedValue::try_from_bytes(&bytes)?;
+                if InsertionType::Addition == block_type {
+                    indexed_values.insert(value);
+                } else {
+                    indexed_values.remove(&value);
+                }
             }
             reindexed_chain_values.insert(kwi.clone(), indexed_values);
         }
@@ -217,6 +222,7 @@ pub trait FindexCompact<
             // Upsert each remaining location in the Chain Table.
             for remaining_location in remaining_indexed_values_for_this_keyword {
                 new_entry_table_value.upsert_indexed_value::<CHAIN_TABLE_WIDTH, BLOCK_LENGTH, KMAC_KEY_LENGTH, DEM_KEY_LENGTH, KmacKey, DemScheme>(
+                    InsertionType::Addition,
                     &remaining_location,
                     &kwi_uid,
                     &kwi_value,

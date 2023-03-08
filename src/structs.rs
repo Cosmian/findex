@@ -68,67 +68,62 @@ pub enum InsertionType {
 }
 
 #[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
-pub enum BlockPrefix<const BLOCK_LENGTH: usize> {
+pub enum BlockPrefix {
     NonTerminating,
-    Terminating { length: usize },
+    Terminating { length: u8 },
     Padding,
 }
 
-impl<const BLOCK_LENGTH: usize> TryFrom<BlockPrefix<BLOCK_LENGTH>> for u8 {
-    type Error = Error;
-
-    fn try_from(value: BlockPrefix<BLOCK_LENGTH>) -> Result<Self, Self::Error> {
-        let res = match value {
-            BlockPrefix::NonTerminating => BLOCK_LENGTH,
+impl From<BlockPrefix> for u8 {
+    fn from(value: BlockPrefix) -> Self {
+        match value {
+            BlockPrefix::NonTerminating => u8::MAX,
             BlockPrefix::Terminating { length } => length,
             BlockPrefix::Padding => 0,
-        };
-        u8::try_from(res).map_err(|e| Self::Error::ConversionError(e.to_string()))
+        }
     }
 }
 
-impl<const BLOCK_LENGTH: usize> From<u8> for BlockPrefix<BLOCK_LENGTH> {
+impl From<u8> for BlockPrefix {
     fn from(value: u8) -> Self {
-        if value == 0 {
+        if 0 == value {
             Self::Padding
-        } else if value as usize == BLOCK_LENGTH {
+        } else if u8::MAX == value {
             Self::NonTerminating
         } else {
-            Self::Terminating {
-                length: value as usize,
-            }
+            Self::Terminating { length: value }
         }
     }
 }
 
 /// A `Block` defines a fixed-size block of bytes.
 ///
-/// It is used to store variable length values in the Chain Table. It allows
-/// padding lines to an equal size which avoids leaking information.
+/// It is used to store variable length values in the Chain Table by fixed-sized
+/// chunks. It allows padding lines to an equal size which avoids leaking
+/// information.
 ///
 /// A value can be represented by several blocks. The first blocks representing
-/// a value are full, i.e. no padding is necessary. The first byte is set to
-/// `LENGTH`. The last block representing a value may not be full. It is
-/// padded with 0s. The first byte is used to write the size of the data stored
-/// in this block.
+/// a value are full. The first byte is set to `u8::MAX`. The last block
+/// representing a value may not be full. It is padded with 0s. The first byte
+/// is used to write the size of the data stored in this block. The special
+/// prefix value `0` means the block contains no data.
 ///
 /// +-------------------------+--------------------------+
 /// |        1 byte           | `BLOCK_LENGTH` - 1 bytes |
 /// +-------------------------+--------------------------+
-/// |         `LENGTH`        |                          |
+/// |      `0` or `u8::MAX`   |                          |
 /// |            or           |       padded data        |
 /// | number of bytes written |                          |
 /// +-------------------------+--------------------------+
 ///
-/// The corollary is that the size of a block shall not be greater than 255
-/// (`u8::MAX`). This is enough in practice because bigger blocks imply more
-/// wasted space for small values (a small value would be padded to `LENGTH -
-/// 1`).
+/// The corollary is that the length of a block shall not be greater than 254
+/// (`u8::MAX - 1`); this is enough because bigger blocks imply more wasted
+/// space for small values (a small value would be padded to `LENGTH` bytes).
 #[must_use]
 #[derive(Copy, Clone, Debug, Hash, PartialEq, Eq)]
 pub struct Block<const LENGTH: usize> {
     pub(crate) block_type: InsertionType,
-    pub(crate) prefix: BlockPrefix<LENGTH>,
+    pub(crate) prefix: BlockPrefix,
     pub(crate) data: [u8; LENGTH],
 }
 
@@ -142,13 +137,13 @@ impl<const LENGTH: usize> Block<LENGTH> {
     /// - `is_terminating`  : true if the block is the last block of a value
     pub fn new(
         block_type: InsertionType,
-        prefix: BlockPrefix<LENGTH>,
+        prefix: BlockPrefix,
         bytes: &[u8],
     ) -> Result<Self, Error> {
-        if LENGTH > u8::MAX as usize {
+        if LENGTH > (u8::MAX - 1) as usize {
             return Err(Error::CryptoError(format!(
                 "block length should be smaller than {}",
-                u8::MAX
+                u8::MAX - 1
             )));
         }
         if LENGTH < bytes.len() {
@@ -175,13 +170,19 @@ impl<const LENGTH: usize> Block<LENGTH> {
     /// Unpads the byte vectors contained in the given list of `Block`.
     ///
     /// - `blocks`  : list of blocks to unpad
-    pub fn unpad(blocks: &[Self]) -> Result<Vec<Vec<u8>>, Error> {
+    pub fn unpad(blocks: &[Self]) -> Result<Vec<(InsertionType, Vec<u8>)>, Error> {
         let mut blocks = blocks;
         let mut res = Vec::new();
         while !blocks.is_empty() {
             // Try reading blocks until a terminating block is encountered.
             let mut bytes = Vec::with_capacity(LENGTH);
+            let block_type = blocks[0].block_type;
             while blocks.len() > 1 && blocks[0].prefix == BlockPrefix::NonTerminating {
+                if blocks[0].block_type != block_type {
+                    return Err(crate::Error::CryptoError(
+                        "mixed block types for a single byte vector".to_string(),
+                    ));
+                }
                 bytes.extend_from_slice(&blocks[0].data);
                 blocks = &blocks[1..];
             }
@@ -190,10 +191,15 @@ impl<const LENGTH: usize> Block<LENGTH> {
                     "Last block given is a non-terminating block.".to_string(),
                 ));
             }
-            let length = <u8>::try_from(blocks[0].prefix)? as usize;
+            if blocks[0].block_type != block_type {
+                return Err(crate::Error::CryptoError(
+                    "mixed block types for a single byte vector".to_string(),
+                ));
+            }
+            let length = <u8>::from(blocks[0].prefix) as usize;
             bytes.extend_from_slice(&blocks[0].data[..length]);
             blocks = &blocks[1..];
-            res.push(bytes);
+            res.push((block_type, bytes));
         }
         Ok(res)
     }
@@ -227,7 +233,7 @@ impl<const LENGTH: usize> Block<LENGTH> {
         blocks.push(Self::new(
             block_type,
             BlockPrefix::Terminating {
-                length: bytes.len(),
+                length: <u8>::try_from(bytes.len())?,
             },
             bytes,
         )?);
@@ -626,7 +632,7 @@ mod tests {
 
         let res = Block::<BLOCK_LENGTH>::unpad(&blocks).unwrap();
         assert_eq!(res.len(), 1);
-        assert_eq!(res[0], bytes);
+        assert_eq!(res[0], (InsertionType::Addition, bytes));
 
         // Pad vector without remaining byte.
         let bytes = vec![1, 2, 3];
@@ -643,7 +649,7 @@ mod tests {
 
         let res = Block::<BLOCK_LENGTH>::unpad(&blocks).unwrap();
         assert_eq!(res.len(), 1);
-        assert_eq!(res[0], bytes);
+        assert_eq!(res[0], (InsertionType::Addition, bytes));
 
         // Pad vector in one big block
         const BLOCK_LENGTH_2: usize = 32;
@@ -654,7 +660,7 @@ mod tests {
         blocks.push(blocks[0]);
         let res = Block::<BLOCK_LENGTH_2>::unpad(&blocks).unwrap();
         assert_eq!(res.len(), 2);
-        assert_eq!(res[0], bytes);
-        assert_eq!(res[1], bytes);
+        assert_eq!(res[0], (InsertionType::Addition, bytes.clone()));
+        assert_eq!(res[1], (InsertionType::Addition, bytes));
     }
 }

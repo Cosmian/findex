@@ -164,7 +164,7 @@ macro_rules! impl_findex_search {
             FindexSearch<
                 { $crate::parameters::UID_LENGTH },
                 { $crate::parameters::BLOCK_LENGTH },
-                { $crate::parameters::TABLE_WIDTH },
+                { $crate::parameters::CHAIN_TABLE_WIDTH },
                 { $crate::parameters::MASTER_KEY_LENGTH },
                 { $crate::parameters::KWI_LENGTH },
                 { $crate::parameters::KMAC_KEY_LENGTH },
@@ -185,7 +185,7 @@ macro_rules! impl_findex_upsert {
             FindexUpsert<
                 { $crate::parameters::UID_LENGTH },
                 { $crate::parameters::BLOCK_LENGTH },
-                { $crate::parameters::TABLE_WIDTH },
+                { $crate::parameters::CHAIN_TABLE_WIDTH },
                 { $crate::parameters::MASTER_KEY_LENGTH },
                 { $crate::parameters::KWI_LENGTH },
                 { $crate::parameters::KMAC_KEY_LENGTH },
@@ -206,7 +206,7 @@ macro_rules! impl_findex_compact {
             FindexCompact<
                 { $crate::parameters::UID_LENGTH },
                 { $crate::parameters::BLOCK_LENGTH },
-                { $crate::parameters::TABLE_WIDTH },
+                { $crate::parameters::CHAIN_TABLE_WIDTH },
                 { $crate::parameters::MASTER_KEY_LENGTH },
                 { $crate::parameters::KWI_LENGTH },
                 { $crate::parameters::KMAC_KEY_LENGTH },

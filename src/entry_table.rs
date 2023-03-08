@@ -112,6 +112,7 @@ impl<const UID_LENGTH: usize, const KWI_LENGTH: usize> EntryTableValue<UID_LENGT
         DemScheme: Dem<DEM_KEY_LENGTH>,
     >(
         &mut self,
+        insertion_type: InsertionType,
         indexed_value: &IndexedValue,
         // TODO (TBZ): this should be an `Option` (it can be recomputed from the Entry Table
         // value).
@@ -133,7 +134,7 @@ impl<const UID_LENGTH: usize, const KWI_LENGTH: usize> EntryTableValue<UID_LENGT
                 ChainTableValue::default()
             };
 
-        for block in Block::pad(InsertionType::Addition, &indexed_value.to_vec())? {
+        for block in Block::pad(insertion_type, &indexed_value.to_vec())? {
             if chain_table_value.as_blocks().len() >= CHAIN_TABLE_WIDTH {
                 // Encrypt and insert the current value in the Chain Table.
                 let encrypted_chain_table_value =
@@ -488,7 +489,7 @@ impl<const UID_LENGTH: usize, const KWI_LENGTH: usize> EntryTable<UID_LENGTH, KW
                     DEM_KEY_LENGTH,
                     KmacKey,
                     DemScheme
-                >(indexed_value, kwi_uid, kwi_value, new_chain_table_entries, rng)?;
+                >(InsertionType::Addition, indexed_value, kwi_uid, kwi_value, new_chain_table_entries, rng)?;
             }
         }
 
@@ -502,20 +503,12 @@ mod tests {
     use cosmian_crypto_core::{
         bytes_ser_de::Serializable,
         reexport::rand_core::{RngCore, SeedableRng},
-        symmetric_crypto::{aes_256_gcm_pure::Aes256GcmCrypto, key::Key, Dem},
+        symmetric_crypto::{aes_256_gcm_pure::Aes256GcmCrypto, Dem},
         CsRng,
     };
 
     use super::*;
-    use crate::{structs::Location, Keyword, ENTRY_TABLE_KEY_DERIVATION_INFO};
-
-    const MASTER_KEY_LENGTH: usize = 16;
-    const UID_LENGTH: usize = 32;
-    const KWI_LENGTH: usize = 16;
-    const KMAC_KEY_LENGTH: usize = 32;
-    const BLOCK_LENGTH: usize = 33;
-    const CHAIN_TABLE_WIDTH: usize = 5;
-    type KmacKey = Key<KMAC_KEY_LENGTH>;
+    use crate::{parameters::*, structs::Location, Keyword, ENTRY_TABLE_KEY_DERIVATION_INFO};
 
     #[test]
     fn test_encryption() {
@@ -551,7 +544,6 @@ mod tests {
     #[test]
     fn test_upsert_many_values() {
         let mut rng = CsRng::from_entropy();
-
         let keyword = Keyword::from("Robert".as_bytes());
 
         let mut entry_table_value = EntryTableValue::<UID_LENGTH, KWI_LENGTH>::new::<
@@ -581,15 +573,23 @@ mod tests {
                 {Aes256GcmCrypto::KEY_LENGTH},
                 KmacKey,
                 Aes256GcmCrypto
-            >(&indexed_value, &kwi_uid, &kwi_value, &mut chain_table, &mut rng).unwrap();
+            >(InsertionType::Addition, &indexed_value, &kwi_uid, &kwi_value, &mut chain_table, &mut rng).unwrap();
         }
 
+        // Recover Chain Table UIDs associated to the Entry Table value.
         let mut kwi_chain_table_uids = KwiChainUids::default();
-        entry_table_value.unchain::<CHAIN_TABLE_WIDTH, BLOCK_LENGTH, KMAC_KEY_LENGTH, {Aes256GcmCrypto::KEY_LENGTH}, KmacKey, Aes256GcmCrypto>(usize::MAX, &mut kwi_chain_table_uids);
+        entry_table_value.unchain::<
+            CHAIN_TABLE_WIDTH,
+            BLOCK_LENGTH,
+            KMAC_KEY_LENGTH,
+            {Aes256GcmCrypto::KEY_LENGTH},
+            KmacKey,
+            Aes256GcmCrypto
+        >(usize::MAX, &mut kwi_chain_table_uids);
 
         assert_eq!(kwi_chain_table_uids.len(), 1);
 
-        // Recover the indexed values from the chain.
+        // Recover the indexed values from the Chain Table blocks.
         let blocks: Vec<Block<BLOCK_LENGTH>> = kwi_chain_table_uids[&entry_table_value.kwi]
             .iter()
             .filter_map(|uid| chain_table.get(uid))
@@ -603,15 +603,13 @@ mod tests {
                 .to_vec()
             })
             .collect();
-
         let bytes = Block::<BLOCK_LENGTH>::unpad(&blocks).unwrap();
-
         let indexed_values = bytes
             .into_iter()
-            .map(|bytes| IndexedValue::try_from_bytes(&bytes).unwrap());
+            .map(|(_, bytes)| IndexedValue::try_from_bytes(&bytes).unwrap());
 
+        // Assert the correct indexed values have been recovered.
         assert_eq!(indexed_values.len(), CHAIN_TABLE_WIDTH + 1);
-
         for (i, indexed_value) in indexed_values.enumerate() {
             assert!(indexed_value.is_location());
             assert_eq!(
@@ -621,6 +619,67 @@ mod tests {
                 ))
             );
         }
+
+        // Delete all indexed values except the first one.
+        for i in 1..=CHAIN_TABLE_WIDTH {
+            let location = Location::from(format!("Robert's location nb {i}").as_bytes());
+            let indexed_value = IndexedValue::from(location);
+            entry_table_value.upsert_indexed_value::<
+                CHAIN_TABLE_WIDTH,
+                BLOCK_LENGTH,
+                KMAC_KEY_LENGTH,
+                {Aes256GcmCrypto::KEY_LENGTH},
+                KmacKey,
+                Aes256GcmCrypto
+            >(InsertionType::Deletion, &indexed_value, &kwi_uid, &kwi_value, &mut chain_table, &mut rng).unwrap();
+        }
+
+        // Recover Chain Table UIDs associated to the Entry Table value.
+        let mut kwi_chain_table_uids = KwiChainUids::default();
+        entry_table_value.unchain::<
+            CHAIN_TABLE_WIDTH,
+            BLOCK_LENGTH,
+            KMAC_KEY_LENGTH,
+            {Aes256GcmCrypto::KEY_LENGTH},
+            KmacKey,
+            Aes256GcmCrypto
+        >(usize::MAX, &mut kwi_chain_table_uids);
+
+        assert_eq!(kwi_chain_table_uids.len(), 1);
+
+        // Recover the indexed values from the Chain Table blocks.
+        let blocks: Vec<Block<BLOCK_LENGTH>> = kwi_chain_table_uids[&entry_table_value.kwi]
+            .iter()
+            .filter_map(|uid| chain_table.get(uid))
+            .flat_map(|encrypted_chain_table_value| {
+                ChainTableValue::<CHAIN_TABLE_WIDTH, BLOCK_LENGTH>::decrypt::<
+                    { Aes256GcmCrypto::KEY_LENGTH },
+                    Aes256GcmCrypto,
+                >(&kwi_value, encrypted_chain_table_value)
+                .unwrap()
+                .as_blocks()
+                .to_vec()
+            })
+            .collect();
+        let bytes = Block::<BLOCK_LENGTH>::unpad(&blocks).unwrap();
+        assert_eq!(bytes.len(), 2 * CHAIN_TABLE_WIDTH + 1);
+        let mut indexed_values = HashSet::with_capacity(bytes.len());
+        for (block_type, bytes) in bytes {
+            let value = IndexedValue::try_from_bytes(&bytes).unwrap();
+            if InsertionType::Addition == block_type {
+                indexed_values.insert(value);
+            } else {
+                let was_present = indexed_values.remove(&value);
+                assert!(was_present);
+            }
+        }
+
+        // Assert the correct indexed values have been recovered.
+        assert_eq!(indexed_values.len(), 1);
+        assert_eq!(
+            indexed_values.into_iter().next().unwrap(),
+            IndexedValue::from(Location::from("Robert's location nb 0".as_bytes()))
+        );
     }
 
     #[test]
@@ -652,16 +711,23 @@ mod tests {
 
         let mut chain_table = EncryptedTable::default();
         entry_table_value.upsert_indexed_value::<
-                CHAIN_TABLE_WIDTH,
-                BLOCK_LENGTH,
-                KMAC_KEY_LENGTH,
-                {Aes256GcmCrypto::KEY_LENGTH},
-                KmacKey,
-                Aes256GcmCrypto
-            >(&long_location, &kwi_uid, &kwi_value, &mut chain_table, &mut rng).unwrap();
+            CHAIN_TABLE_WIDTH,
+            BLOCK_LENGTH,
+            KMAC_KEY_LENGTH,
+            {Aes256GcmCrypto::KEY_LENGTH},
+            KmacKey,
+            Aes256GcmCrypto
+        >(InsertionType::Addition, &long_location, &kwi_uid, &kwi_value, &mut chain_table, &mut rng).unwrap();
 
         let mut kwi_chain_table_uids = KwiChainUids::default();
-        entry_table_value.unchain::<CHAIN_TABLE_WIDTH, BLOCK_LENGTH, KMAC_KEY_LENGTH, {Aes256GcmCrypto::KEY_LENGTH}, KmacKey, Aes256GcmCrypto>(usize::MAX, &mut kwi_chain_table_uids);
+        entry_table_value.unchain::<
+            CHAIN_TABLE_WIDTH,
+            BLOCK_LENGTH,
+            KMAC_KEY_LENGTH,
+            {Aes256GcmCrypto::KEY_LENGTH},
+            KmacKey,
+            Aes256GcmCrypto
+        >(usize::MAX, &mut kwi_chain_table_uids);
 
         // Only one keyword is indexed.
         assert_eq!(kwi_chain_table_uids.len(), 1);
@@ -689,7 +755,7 @@ mod tests {
 
         let indexed_values = bytes
             .into_iter()
-            .map(|bytes| IndexedValue::try_from_bytes(&bytes).unwrap());
+            .map(|(_, bytes)| IndexedValue::try_from_bytes(&bytes).unwrap());
 
         assert_eq!(indexed_values.len(), 1);
 
