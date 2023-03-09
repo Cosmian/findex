@@ -32,6 +32,11 @@ use crate::{
     KeyingMaterial, CHAIN_TABLE_KEY_DERIVATION_INFO,
 };
 
+/// Due to the flag byte implementation (see the `Serializable` implementation
+/// for `ChainTableValue`), no more than 8 `Block`s can be added to a
+/// `ChainTableValue`.
+pub const MAX_CHAIN_TABLE_WIDTH: usize = 8;
+
 /// Value of the Chain Table. It is composed of a maximum of `TABLE_WIDTH`
 /// blocks of length `BLOCK_LENGTH`.
 #[must_use]
@@ -55,6 +60,13 @@ impl<const TABLE_WIDTH: usize, const BLOCK_LENGTH: usize> Default
 impl<const TABLE_WIDTH: usize, const BLOCK_LENGTH: usize>
     ChainTableValue<TABLE_WIDTH, BLOCK_LENGTH>
 {
+    /// This checks that the `TABLE_WIDTH` does not exceed the
+    /// `MAX_CHAIN_TABLE_WIDTH`.
+    pub const CHECK_TABLE_WIDTH: () = assert!(
+        !(TABLE_WIDTH > MAX_CHAIN_TABLE_WIDTH),
+        "`CHAIN_TABLE_WIDTH` should *not* be greater than 8",
+    );
+
     /// Push a new addition to the Chain Table value.
     ///
     /// Pushing an addition sets to 1 the corresponding bit in the flag byte.
@@ -99,11 +111,12 @@ impl<const TABLE_WIDTH: usize, const BLOCK_LENGTH: usize>
         kwi_value: &DEM::Key,
         ciphertext: &[u8],
     ) -> Result<Self, Error> {
-        if 1 + TABLE_WIDTH * (1 + BLOCK_LENGTH) + DEM::ENCRYPTION_OVERHEAD != ciphertext.len() {
+        let max_ciphertext_length = 1 + TABLE_WIDTH * (1 + BLOCK_LENGTH) + DEM::ENCRYPTION_OVERHEAD;
+        if max_ciphertext_length != ciphertext.len() {
             return Err(Error::CryptoError(format!(
                 "invalid ciphertext length: given {}, should be {}",
                 ciphertext.len(),
-                1 + TABLE_WIDTH * (1 + BLOCK_LENGTH) + DEM::ENCRYPTION_OVERHEAD
+                max_ciphertext_length
             )));
         }
         let bytes = DEM::decrypt(kwi_value, ciphertext, None)?;

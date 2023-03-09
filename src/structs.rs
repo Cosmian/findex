@@ -127,7 +127,18 @@ pub struct Block<const LENGTH: usize> {
     pub(crate) data: [u8; LENGTH],
 }
 
+/// A block length should be a valid `u8` to allow writing in one byte, and the
+/// value `u8::MAX` is reserved to indicate a non-terminating block.
+const MAX_BLOCK_LENGTH: usize = 254; // `u8::MAX - 1`
+
 impl<const LENGTH: usize> Block<LENGTH> {
+    /// This checks that the `BLOCK_LENGTH` does not exceed the
+    /// `MAX_BLOCK_LENGTH`.
+    pub const CHECK_LENGTH: () = assert!(
+        LENGTH <= MAX_BLOCK_LENGTH,
+        "`BLOCK_LENGTH` should be *not* be greater than 254",
+    );
+
     /// Creates a new `Block` from the given bytes. Terminating blocks are
     /// prepended with the number of bytes written and padded with 0s.
     /// Non-terminating blocks are prepended with `LENGTH`.

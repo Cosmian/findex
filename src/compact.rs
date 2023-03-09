@@ -13,6 +13,7 @@ use crate::{
     chain_table::{ChainTableValue, KwiChainUids},
     entry_table::{EntryTable, EntryTableValue},
     error::CallbackError,
+    parameters::check_parameter_constraints,
     structs::{BlockType, EncryptedTable, IndexedValue, Label, Uid},
     Error, FindexCallbacks, KeyingMaterial, CHAIN_TABLE_KEY_DERIVATION_INFO,
     ENTRY_TABLE_KEY_DERIVATION_INFO,
@@ -63,6 +64,7 @@ pub trait FindexCompact<
         new_master_key: &KeyingMaterial<MASTER_KEY_LENGTH>,
         label: &Label,
     ) -> Result<(), Error<CustomError>> {
+        check_parameter_constraints::<CHAIN_TABLE_WIDTH, BLOCK_LENGTH>();
         if num_reindexing_before_full_set == 0 {
             return Err(Error::CryptoError(
                 "`num_reindexing_before_full_set` cannot be 0.".to_owned(),

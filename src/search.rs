@@ -14,6 +14,7 @@ use crate::{
     chain_table::{ChainTableValue, KwiChainUids},
     entry_table::EntryTable,
     error::CallbackError,
+    parameters::check_parameter_constraints,
     structs::{IndexedValue, Keyword, Label, Location, Uid},
     Error, KeyingMaterial, CHAIN_TABLE_KEY_DERIVATION_INFO, ENTRY_TABLE_KEY_DERIVATION_INFO,
 };
@@ -159,6 +160,7 @@ pub trait FindexSearch<
         fetch_chains_batch_size: NonZeroUsize,
         current_depth: usize,
     ) -> Result<HashMap<Keyword, HashSet<Location>>, Error<CustomError>> {
+        check_parameter_constraints::<CHAIN_TABLE_WIDTH, BLOCK_LENGTH>();
         // Get indexed values associated to the given keywords
         let res = self
             .non_recursive_search(

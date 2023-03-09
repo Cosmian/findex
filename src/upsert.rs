@@ -13,6 +13,7 @@ use crate::{
     entry_table::EntryTable,
     error::{CallbackError, Error},
     keys::KeyingMaterial,
+    parameters::check_parameter_constraints,
     structs::{BlockType, EncryptedTable, IndexedValue, Keyword, Label, Uid, UpsertData},
     FindexCallbacks, ENTRY_TABLE_KEY_DERIVATION_INFO,
 };
@@ -48,6 +49,7 @@ pub trait FindexUpsert<
         master_key: &KeyingMaterial<MASTER_KEY_LENGTH>,
         label: &Label,
     ) -> Result<(), Error<CustomError>> {
+        check_parameter_constraints::<CHAIN_TABLE_WIDTH, BLOCK_LENGTH>();
         let mut rng = CsRng::from_entropy();
 
         // Revert the `HashMap`.

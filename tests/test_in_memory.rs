@@ -475,7 +475,7 @@ async fn test_first_names() -> Result<(), Error<ExampleError>> {
 
     let label = Label::random(&mut rng);
 
-    let file = File::open("tests/first_names.txt").unwrap();
+    let file = File::open("datasets/first_names.txt").unwrap();
     let reader = BufReader::new(file);
     println!("Indexing...");
     for maybe_line in reader.lines() {
