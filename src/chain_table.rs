@@ -55,6 +55,11 @@ impl<const TABLE_WIDTH: usize, const BLOCK_LENGTH: usize> Default
 impl<const TABLE_WIDTH: usize, const BLOCK_LENGTH: usize>
     ChainTableValue<TABLE_WIDTH, BLOCK_LENGTH>
 {
+    /// Assert the Chain Table width is smaller than 8. This is needed because
+    /// for a given line, an only byte is used to write the deletion flag.
+    #[allow(dead_code)]
+    const COMPILE_TIME_CHECK: () = assert!(TABLE_WIDTH < 8);
+
     /// Push a new addition to the Chain Table value.
     ///
     /// Pushing an addition sets to 1 the corresponding bit in the flag byte.
@@ -276,7 +281,7 @@ mod tests {
 
     const KWI_LENGTH: usize = 16;
     const BLOCK_LENGTH: usize = 32;
-    const CHAIN_TABLE_WIDTH: usize = 2;
+    const CHAIN_TABLE_WIDTH: usize = 20;
 
     #[test]
     fn test_serialization() {

@@ -128,6 +128,11 @@ pub struct Block<const LENGTH: usize> {
 }
 
 impl<const LENGTH: usize> Block<LENGTH> {
+    /// Assert that the block length is smaller than `u8::MAX`. This value is
+    /// reserved for the non-terminating block prefix.
+    #[allow(dead_code)]
+    const COMPILE_TIME_CHECK: () = assert!(LENGTH < 255);
+
     /// Creates a new `Block` from the given bytes. Terminating blocks are
     /// prepended with the number of bytes written and padded with 0s.
     /// Non-terminating blocks are prepended with `LENGTH`.
