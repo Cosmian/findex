@@ -13,7 +13,7 @@ use crate::{
     chain_table::{ChainTableValue, KwiChainUids},
     entry_table::{EntryTable, EntryTableValue},
     error::CallbackError,
-    structs::{Block, BlockType, EncryptedTable, IndexedValue, Label, Uid},
+    structs::{BlockType, EncryptedTable, IndexedValue, Label, Uid},
     Error, FindexCallbacks, KeyingMaterial, CHAIN_TABLE_KEY_DERIVATION_INFO,
     ENTRY_TABLE_KEY_DERIVATION_INFO,
 };
@@ -142,7 +142,7 @@ pub trait FindexCompact<
                 .into_iter()
                 .flat_map(|(_, chain_value)| chain_value.as_blocks().to_vec())
                 .collect::<Vec<_>>();
-            reindexed_chain_values.insert(kwi.clone(), Block::unpad(blocks)?);
+            reindexed_chain_values.insert(kwi.clone(), IndexedValue::from_blocks(blocks)?);
         }
 
         //

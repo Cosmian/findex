@@ -20,7 +20,7 @@ use crate::{
     chain_table::{ChainTable, ChainTableValue, KwiChainUids},
     error::CoreError as Error,
     keys::KeyCache,
-    structs::{Block, BlockType, EncryptedTable, IndexedValue, Label, Uid},
+    structs::{BlockType, EncryptedTable, IndexedValue, Label, Uid},
     KeyingMaterial, Keyword, CHAIN_TABLE_KEY_DERIVATION_INFO,
 };
 
@@ -134,7 +134,7 @@ impl<const UID_LENGTH: usize, const KWI_LENGTH: usize> EntryTableValue<UID_LENGT
                 ChainTableValue::default()
             };
 
-        for block in Block::pad(insertion_type, indexed_value)? {
+        for block in indexed_value.to_blocks(insertion_type)? {
             if chain_table_value.as_blocks().len() >= CHAIN_TABLE_WIDTH {
                 // Encrypt and insert the current value in the Chain Table.
                 let encrypted_chain_table_value =
@@ -507,7 +507,11 @@ mod tests {
     };
 
     use super::*;
-    use crate::{parameters::*, structs::Location, Keyword, ENTRY_TABLE_KEY_DERIVATION_INFO};
+    use crate::{
+        parameters::*,
+        structs::{Block, Location},
+        Keyword, ENTRY_TABLE_KEY_DERIVATION_INFO,
+    };
 
     #[test]
     fn test_encryption() {
@@ -602,7 +606,7 @@ mod tests {
                 .to_vec()
             })
             .collect();
-        let indexed_values = Block::<BLOCK_LENGTH>::unpad(blocks).unwrap();
+        let indexed_values = IndexedValue::from_blocks(blocks).unwrap();
 
         // Assert the correct indexed values have been recovered.
         assert_eq!(indexed_values.len(), CHAIN_TABLE_WIDTH + 1);
@@ -653,7 +657,7 @@ mod tests {
                 .to_vec()
             })
             .collect();
-        let indexed_values = Block::<BLOCK_LENGTH>::unpad(blocks).unwrap();
+        let indexed_values = IndexedValue::from_blocks(blocks).unwrap();
 
         // Assert the correct indexed values have been recovered.
         assert_eq!(indexed_values.len(), 1);
@@ -727,7 +731,7 @@ mod tests {
             })
             .collect();
 
-        let indexed_values = Block::<BLOCK_LENGTH>::unpad(blocks).unwrap();
+        let indexed_values = IndexedValue::from_blocks(blocks).unwrap();
 
         assert_eq!(indexed_values.len(), 1);
 

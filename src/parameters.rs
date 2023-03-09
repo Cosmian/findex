@@ -11,6 +11,7 @@ pub const UID_LENGTH: usize = 32;
 pub const BLOCK_LENGTH: usize = 32;
 
 /// Number of blocks per Chain Table value.
+/// This parameter should be *smaller* than 8.
 pub const CHAIN_TABLE_WIDTH: usize = 5;
 
 /// Length of the Findex master key in bytes.

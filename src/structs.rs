@@ -157,85 +157,6 @@ impl<const LENGTH: usize> Block<LENGTH> {
         self.block_type == BlockType::Addition
     }
 
-    /// Unpads the indexed values contained in the given list of `Block`.
-    ///
-    /// - `blocks`  : list of blocks to unpad
-    pub fn unpad(blocks: impl IntoIterator<Item = Self>) -> Result<HashSet<IndexedValue>, Error> {
-        let mut blocks = blocks.into_iter();
-        let mut indexed_values = HashSet::new();
-        while let Some(mut block) = blocks.next() {
-            let block_type = block.block_type;
-            let mut next_byte_vector = Vec::with_capacity(LENGTH);
-
-            // Try reading blocks until a terminating block is encountered.
-            while block.prefix == BlockPrefix::NonTerminating {
-                next_byte_vector.extend(block.data);
-                block = blocks.next().ok_or(Error::CryptoError(
-                    "last block is a non-terminating block".to_string(),
-                ))?;
-                // All blocks composing a byte vector should share the same type.
-                if block.block_type != block_type {
-                    return Err(crate::Error::CryptoError(
-                        "mixed block types for a single byte vector".to_string(),
-                    ));
-                }
-            }
-
-            // This block is terminating the byte vector.
-            let length = <u8>::from(block.prefix) as usize;
-            next_byte_vector.extend(&block.data[..length]);
-
-            let value = IndexedValue::try_from_bytes(&next_byte_vector)?;
-            if BlockType::Addition == block_type {
-                indexed_values.insert(value);
-            } else {
-                indexed_values.remove(&value);
-            }
-        }
-        Ok(indexed_values)
-    }
-
-    /// Pads the given bytes into blocks. Uses the first byte to differentiate
-    /// terminating blocks:
-    ///
-    /// - non-terminating blocks are prefixed by `LENGTH`;
-    /// - terminating blocks are prefixed by the actual length written.
-    ///
-    /// # Parameters
-    ///
-    /// - `bytes`   : bytes to be padded in to a `Block`
-    pub fn pad(block_type: BlockType, indexed_value: &IndexedValue) -> Result<Vec<Self>, Error> {
-        let bytes = indexed_value.to_vec();
-        let mut pos = 0;
-
-        // Number of blocks needed.
-        let mut partition_size = bytes.len() / LENGTH;
-        if bytes.len() % LENGTH != 0 {
-            partition_size += 1;
-        }
-
-        let mut blocks = Vec::with_capacity(partition_size);
-        while bytes.len() - pos > LENGTH {
-            // this is a non-terminating block
-            blocks.push(Self::new(
-                block_type,
-                BlockPrefix::NonTerminating,
-                &bytes[pos..pos + LENGTH],
-            )?);
-            pos += LENGTH;
-        }
-
-        blocks.push(Self::new(
-            block_type,
-            BlockPrefix::Terminating {
-                length: <u8>::try_from(bytes.len() - pos)?,
-            },
-            &bytes[pos..],
-        )?);
-
-        Ok(blocks)
-    }
-
     /// Generates a new padding block.
     pub const fn padding_block() -> Self {
         Self {
@@ -289,6 +210,97 @@ impl IndexedValue {
                 b
             }
         }
+    }
+
+    /// Extracts `IndexedValue`s from the given `Block`s.
+    ///
+    /// Reads the `Block`s *in order* until a non-terminating `Block` is found.
+    /// Converts the `Block`s read into an `IndexedValue` and adds it to the
+    /// results if the `Block`s read were additions. Otherwise removes it from
+    /// the results.
+    ///
+    /// Repeats this process until all the given `Block`s are read.
+    ///
+    /// # Parameters
+    ///
+    /// - `blocks`  : list of `Block`s to read from
+    pub fn from_blocks<const BLOCK_LENGTH: usize>(
+        blocks: Vec<Block<BLOCK_LENGTH>>,
+    ) -> Result<HashSet<Self>, Error> {
+        let mut blocks = blocks.into_iter();
+
+        // There is no simple way to know the number of `IndexedValue`s beforehand.
+        let mut indexed_values = HashSet::new();
+
+        while let Some(mut block) = blocks.next() {
+            let block_type = block.block_type;
+            let mut byte_vector = Vec::with_capacity(BLOCK_LENGTH);
+
+            // Read blocks until a terminating block is encountered.
+            while block.prefix == BlockPrefix::NonTerminating {
+                byte_vector.extend(block.data);
+                block = blocks.next().ok_or(Error::CryptoError(
+                    "last block is a non-terminating block".to_string(),
+                ))?;
+                if block.block_type != block_type {
+                    return Err(crate::Error::CryptoError(
+                        "mixed block types for a single byte vector".to_string(),
+                    ));
+                }
+            }
+
+            // This block is terminating the byte vector.
+            let length = <u8>::from(block.prefix) as usize;
+            byte_vector.extend(&block.data[..length]);
+
+            let value = Self::try_from_bytes(&byte_vector)?;
+            if BlockType::Addition == block_type {
+                indexed_values.insert(value);
+            } else {
+                indexed_values.remove(&value);
+            }
+        }
+
+        Ok(indexed_values)
+    }
+
+    /// Pads the given `IndexedValue` into blocks of `BLOCK_LENGTH` bytes. The
+    /// last chunk is padded with `0`s if needed.
+    ///
+    /// # Parameters
+    ///
+    /// - `block_type`  : a block can be an addition or a deletion
+    pub fn to_blocks<const BLOCK_LENGTH: usize>(
+        &self,
+        block_type: BlockType,
+    ) -> Result<Vec<Block<BLOCK_LENGTH>>, Error> {
+        // TODO (TBZ): implement this conversion without copy.
+        let bytes = self.to_vec();
+
+        let mut n_blocks = bytes.len() / BLOCK_LENGTH;
+        if bytes.len() % BLOCK_LENGTH != 0 {
+            n_blocks += 1;
+        }
+
+        let mut blocks = Vec::with_capacity(n_blocks);
+        let mut pos = 0;
+        while bytes.len() - pos > BLOCK_LENGTH {
+            blocks.push(Block::new(
+                block_type,
+                BlockPrefix::NonTerminating,
+                &bytes[pos..pos + BLOCK_LENGTH],
+            )?);
+            pos += BLOCK_LENGTH;
+        }
+        blocks.push(Block::new(
+            block_type,
+            BlockPrefix::Terminating {
+                length: <u8>::try_from(bytes.len() - pos)?,
+            },
+            &bytes[pos..],
+        )?);
+
+        Ok(blocks)
     }
 
     /// Returns `true` if the [`IndexedValue`] is a [`Location`].
@@ -607,23 +619,21 @@ mod tests {
         const BLOCK_LENGTH: usize = 3;
         const N_ADDITIONS: usize = 5;
 
-        let mut blocks = Vec::new();
+        let mut blocks = Vec::<Block<BLOCK_LENGTH>>::new();
 
         // Add a value that does not fit in a single block.
         let long_indexed_value =
             IndexedValue::from(Location::from(vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10]));
-        blocks
-            .extend(&Block::<BLOCK_LENGTH>::pad(BlockType::Addition, &long_indexed_value).unwrap());
+        blocks.extend(&long_indexed_value.to_blocks(BlockType::Addition).unwrap());
 
         // Try padding some small values.
         for i in 0..N_ADDITIONS {
             let indexed_value = IndexedValue::from(Location::from(vec![i as u8]));
-            blocks
-                .extend(&Block::<BLOCK_LENGTH>::pad(BlockType::Addition, &indexed_value).unwrap());
+            blocks.extend(&indexed_value.to_blocks(BlockType::Addition).unwrap());
         }
 
         // Assert unpadding the resulting blocks leads to the correct result.
-        let res = Block::<BLOCK_LENGTH>::unpad(blocks.clone()).unwrap();
+        let res = IndexedValue::from_blocks(blocks.clone()).unwrap();
         assert_eq!(res.len(), N_ADDITIONS + 1);
         assert!(res.contains(&long_indexed_value));
         for i in 0..N_ADDITIONS {
@@ -631,16 +641,14 @@ mod tests {
         }
 
         // Try deleting some values.
-        blocks
-            .extend(&Block::<BLOCK_LENGTH>::pad(BlockType::Deletion, &long_indexed_value).unwrap());
+        blocks.extend(&long_indexed_value.to_blocks(BlockType::Deletion).unwrap());
         for i in 1..N_ADDITIONS {
             let indexed_value = IndexedValue::from(Location::from(vec![i as u8]));
-            blocks
-                .extend(&Block::<BLOCK_LENGTH>::pad(BlockType::Deletion, &indexed_value).unwrap());
+            blocks.extend(indexed_value.to_blocks(BlockType::Deletion).unwrap());
         }
 
         // Assert unpadding the resulting blocks leads to the correct result.
-        let res = Block::<BLOCK_LENGTH>::unpad(blocks).unwrap();
+        let res = IndexedValue::from_blocks(blocks).unwrap();
         assert_eq!(res.len(), 1);
         assert!(res.contains(&IndexedValue::from(Location::from(vec![0]))));
     }
