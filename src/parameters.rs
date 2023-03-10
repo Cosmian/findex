@@ -10,7 +10,7 @@ use crate::{chain_table::ChainTableValue, structs::Block};
 pub const UID_LENGTH: usize = 32;
 
 /// Length of the blocks in the Chain Table in bytes.
-pub const BLOCK_LENGTH: usize = 32;
+pub const BLOCK_LENGTH: usize = 16;
 
 /// Number of blocks per Chain Table value.
 /// This parameter should be *smaller* than 8.
