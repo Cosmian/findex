@@ -57,37 +57,9 @@ To build Findex without the interfaces, run:
 cargo build --release
 ```
 
-To build the FFI interface, run:
+To run all the tests, run:
 
 ```bash
-cargo build --release --features ffi
-```
-
-To build the WebAssembly interface, run:
-
-```bash
-cargo build --release --features wasm_bindgen
-```
-
-To build the Python interface, run:
-
-```bash
-maturin build --release --features python
-```
-
-**Note**: when a new function or class is added to the PyO3 interface, its
-signature needs to be added to [`__init__.pyi`](./python/cosmian_findex/__init__.pyi).
-
-To run tests on the Python interface, run:
-
-```bash
-./python/scripts/test.sh
-```
-
-And finally, to build everything and test it, run:
-
-```bash
-cargo build --release --all-features
 cargo test --release --all-features
 ```
 
@@ -98,59 +70,124 @@ cargo test --release --all-features
 Findex relies on two server-side indexes - Entry Table and Chain Table - to
 solve the following search problem:
 
-> How to securely recover the UIDs of DB Table to obtain the matching lines
-> from a given keyword?
+> How to securely recover the *location* of an encrypted data matching a given
+> keyword?
 
-- Entry Table: provides the mandatory values to access the Chain Table.
-- Chain Table: securely stores the indexed values. In the case this solution is
-  built on top of an encrypted database, the Chain Table would store  UIDs of
-  this table, but Findex can be used to index any kind of value (URL, path...).
+- Entry Table: provides the values needed to fetch the correct locations from
+  the Chain Table.
+- Chain Table: securely stores the indexed values. These indexed values may be
+  locations or pointers to other keywords. Locations usually are database UIDs,
+  but Findex can be used to index any kind of location (URL, path...).
 
-Each index table contains two columns: the `uid` and `value` columns:
+Findex index tables are key value stores which structure is given in the
+following tables.
 
-|              | uid        | value     |
-|--------------|------------|-----------|
-| Size (bytes) | UID_LENGTH | see below |
+<table>
+	<tr>
+		<th colspan=4>Entry Table</th>
+	<tr>
+		<th>key</th>
+		<th colspan=3>value</th>
+	</tr>
+	<tr>
+		<td>UID</td>
+		<td>K<sub>wi</sub></td>
+		<td>H<sub>wi</sub></td>
+		<td>UID</td>
+	</tr>
+</table>
 
-Where `UID_LENGTH = 32`. The table values contain encrypted data:
+<table>
+	<tr>
+		<th colspan=4>Chain Table</th>
+	<tr>
+	<tr>
+		<th>key</th>
+		<th colspan=3>value</th>
+	</tr>
+	<tr>
+		<td>UID</td>
+		<td>Block<sub>1</sub></td>
+		<td>...</td>
+		<td>Block<sub>B</sub></td>
+	</tr>
+</table>
 
-|              | AES-GCM encrypted data | MAC | Nonce |
-|--------------|------------------------|-----|-------|
-| Size (bytes) | see below              | 16  | 12    |
+Where:
+- the keys used are random-like 32 bytes long UIDs.
+- the values are symmetrically encrypted with an AEAD (using a 16-bytes MAC tag
+  and a 12-bytes nonce).
+- there is one Entry Table line per keyword `w_i`.
+- the `Kwi` is a 16-bytes seed used to generate the Chain Table values
+  associated to the keyword `w_i`.
+- the `Hwi` is a 32-bytes hash of the keyword `wi` that is used by the compact
+  operation.
+- the UID stored in the Entry Table corresponds to the last Chain Table UID
+  that stores values indexed by `w_i`.
+- the blocks stored in the Chain Table are used to pad the Chain Table lines to
+  an equal size. Each block is 16-bytes long (which is enough to store an
+  UUID). An indexed value is stored in the Chain Table by chunks of 16 bytes.
+  The last chunk may not be full and is padded with 0s.
+- the number of blocks per Chain Table value (`B`) used is 5.
 
-The encrypted data for the Index Entry Table is:
+The Chain Table values are serialized as follows (sizes are given in bytes):
 
-|              | Entry Table encrypted data                    |
-|--------------|-----------------------------------------------|
-| Size (bytes) | KWI_LENGTH + UID_LENGTH + KEYWORD_HASH_LENGTH |
+<table>
+	<tr>
+		<th rowspan=2>flag</th>
+		<th colspan=2>Block<sub>1</sub></th>
+		<th>...</th>
+		<th colspan=2>Block<sub>B</sub></th>
+	</tr>
+	<tr>
+		<th>prefix</th>
+		<th>data</th>
+		<th>...</th>
+		<th>prefix</th>
+		<th>data</th>
+	</tr>
+	<tr>
+		<td>1</td>
+		<td>1</td>
+		<td>16</td>
+		<td>...</td>
+		<td>1</td>
+		<td>16</td>
+	</tr>
+</table>
 
-where `KWI_LENGTH = 16` and `KEYWORD_HASH_LENGTH = 32`. The encrypted data for
-the Chain Table is:
+The flag is used to mark the blocks as being addition or deletions (cf [Findex
+upsert](#findex-upsert)). Each bit corresponds to a block, which limits the
+possible number of blocks inside a single Chain Table value to 8. The prefix is
+used to write the actual length of the data stored inside a block.
 
-|              | Chain Table encrypted data  |
-|--------------|-----------------------------|
-| Size (bytes) | TABLE_WIDTH \* BLOCK_LENGTH |
-
-where `TABLE_WIDTH = 5`, and `BLOCK_LENGTH = 32`.
-
-Therefore, given `N` the number of indexing keywords, the size of the Entry
-Table in bytes is given by:
+Therefore, given `N` the number of keywords used, the size of the Entry Table
+in bytes is given by:
 
 ``` text
-N * (UID_LENGTH + ENCRYPTION_OVERHEAD + KWI_LENGTH + UID_LENGTH + KEYWORD_HASH_LENGTH)
-= N * 140
+entry_table_size = N * (UID_LENGTH + ENCRYPTION_OVERHEAD + KWI_LENGTH + HWI_LENGTH + UID_LENGTH)
+                 = N * 140
 ```
 
-Given `M` the average number of values indexed by keyword, the size of the
-compacted Chain Table in bytes is given by:
+Given `V(w_i)` the volume of the keyword `w_i` (i.e. the number of values
+indexed by this keyword), the size of the Chain Table in bytes after compacting
+is given by:
 
 ``` text
-N * ceil(M / TABLE_WIDTH) * (UID_LENGTH + ENCRYPTION_OVERHEAD + TABLE_WIDTH * BLOCK_LENGTH)
-= N * ceil(M / 5) * 220
+chain_table_size = sum_{w_i}(ceil(V(w_i) / CHAIN_TABLE_WIDTH)) * (UID_LENGTH + ENCRYPTION_OVERHEAD + 1 + CHAIN_TABLE_WIDTH * (1 + BLOCK_LENGTH))
+                 = 146 * sum_{w_i}(ceil(V(w_i) / 5))
 ```
 
 where `ceil()` is the ceiling function that maps x to the least integer greater
-than or equal to x.
+than or equal to x, `CHAIN_TABLE_WIDTH = 5` and `BLOCK_LENGTH = 16`.
+
+**Example**:
+- if an index contains 1000 keywords, the size of the Entry Table is 140KB. If
+  each keyword indexes an only value (i.e. `V(w_i) = 1` for each `w_i`), the
+  size of the Chain Table is 146KB.
+- adding a new keyword in the indexes increases the Entry Table size of 140B.
+- indexing up to 5 new values for a given keyword increases the Chain Table
+  size of 146B.
 
 ### Findex callbacks
 
@@ -158,32 +195,8 @@ Findex implementation uses callback functions. The signature of these callbacks
 and a detailed description of the functionalities they need to implement is
 given in the core [`callbacks.rs`](./src/core/callbacks.rs).
 
-An example implementation of the Findex callbacks in Rust for an SQLite
-database is available in [`findex.rs`](./src/interfaces/sqlite/findex.rs).
-
-**Note**: for the FFI interface, serialization is needed and a pagination
-should be implemented to fetch the entire Entry Table in `fetch_entry_table()`.
-A detailed documentation of the serialization is given in the FFI
-[`callbacks.rs`](./src/interfaces/ffi/core/callbacks.rs). The following figure
-summarizes the serialization process in FFI callbacks.
-
-```mermaid
-sequenceDiagram
-    participant C as FFI Client
-    participant R as Rust Findex
-    C->>+R: FFI function call
-    R->>R: allocate Rust memory for callback output
-    R->>R: serialize callback input
-    R->>+C: callback call
-    C->>C: deserialize data
-    C->>C: process data
-    C->>C: serialize result
-    C->>C: write serialized result to Rust output buffer
-    C->>-R: callback return
-    R->>R: check returned code
-    R->>R: deserialize output data
-    R->>-C: FFI function return
-```
+An example implementation of the Findex callbacks in Rust for an in-memory
+database is available in [`in_memory_example.rs`](./src/in_memory_example.rs).
 
 ### Findex search
 
@@ -224,9 +237,12 @@ sequenceDiagram
 
 ### Findex upsert
 
-Indexing values is done through the method `upsert` implemented by th trait
-`FindexUpsert`. It allows indexing values (locations or keywords) by a set of
-keywords.
+Indexing values is done through the method `upsert` implemented by the trait
+`FindexUpsert`. It allows indexing and desindexing values for a set of
+keywords. When desindexing a value for a given keyword, a suppression of this
+value is added to the chain of this keyword. Any preceding addition of this
+value in the chain will be ignored by subsequent search queries. The value can
+later be reindexed for this keyword by upserting it again.
 
 Parameter documentation and method signature can be found in
 [`upsert.rs`](./src/core/upsert.rs#L35-50).
@@ -307,17 +323,17 @@ Parameter documentation and method signature can be found in
 
 #### Implementation details
 
-A compacting operation fetches the entire Entry Table and decrypts it. A
-random subset of this table is then selected and the corresponding chains are
-fetched from the Chain Table and recomputed from a new random `Kwi`. This
-allows removing obsolete locations and avoiding useless padding in the Chain
-Table values. Only the last Chain Table value in a chain may need padding. The
-Entry Table values of the selected subset are updated with the new `Kwi` and
-last chain UID. The UIDs of the entire Entry Table are rederived from a new key
-and a label, and the table is encrypted using a key derived from this new key.
-The chains are encrypted using a key derived from the new `Kwi`s. The old
-chains are removed from the Chain Table, the new chains are added, and the new
-Entry Table replaces the old one.
+A compacting operation fetches the entire Entry Table and decrypts it. A random
+subset of this table is then selected and the corresponding chains are fetched
+from the Chain Table and recomputed from a new random `Kwi`. This allows
+removing obsolete locations, deleted values and avoiding useless padding in the
+Chain Table values. Only the last Chain Table value in a chain may need
+padding. The Entry Table values of the selected subset are updated with the new
+`Kwi` and last chain UID. The UIDs of the entire Entry Table are rederived from
+a new key and a label, and the table is encrypted using a key derived from this
+new key. The chains are encrypted using a key derived from the new `Kwi`s. The
+old chains are removed from the Chain Table, the new chains are added, and the
+new Entry Table replaces the old one.
 
 The following sequence diagram illustrates the `compact` process.
 

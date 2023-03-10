@@ -32,16 +32,24 @@ pub trait FindexUpsert<
     CustomError: std::error::Error + CallbackError,
 >: FindexCallbacks<CustomError, UID_LENGTH>
 {
-    /// Index the given values for the given keywords. After upserting, any
-    /// search for such a keyword will result in finding (at least) the
-    /// corresponding value.
+    /// Index the given added values for the given keywords. Desindex the given
+    /// deleted values for the given keywords.
+    ///
+    /// After upserting, searching for a keyword with added values will result
+    /// in finding (at least) these values. Searching for a keyword with deleted
+    /// values will not result in finding these values.
+    ///
+    /// If a value is indexed for a keyword and desindexed for the same keyword
+    /// in the same upsert operation, the deletion takes precendence over
+    /// the addition.
     ///
     /// # Parameters
     ///
-    /// - `new_chain_elements`  : values to index by keywords
-    /// - `master_key`          : Findex master key
-    /// - `label`               : additional public information used for hashing
-    ///   Entry Table UIDs
+    /// - `additions`   : keywords to index values for
+    /// - `deletions`   : keywords to desindex values for
+    /// - `master_key`  : Findex master key
+    /// - `label`       : additional public information used for hashing Entry
+    ///   Table UIDs
     async fn upsert(
         &mut self,
         additions: HashMap<IndexedValue, HashSet<Keyword>>,

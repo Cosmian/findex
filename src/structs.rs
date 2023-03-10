@@ -109,7 +109,7 @@ impl From<u8> for BlockPrefix {
 /// prefix value `0` means the block contains no data.
 ///
 /// +-------------------------+--------------------------+
-/// |        1 byte           | `BLOCK_LENGTH` - 1 bytes |
+/// |        1 byte           |      `BLOCK_LENGTH`      |
 /// +-------------------------+--------------------------+
 /// |      `0` or `u8::MAX`   |                          |
 /// |            or           |       padded data        |
