@@ -52,7 +52,11 @@ pub trait FindexSearch<
         label: &Label,
         max_results_per_keyword: usize,
         fetch_chains_batch_size: NonZeroUsize,
-    ) -> Result<HashMap<Keyword, HashSet<IndexedValue>>, Error<CustomError>> {
+    ) -> Result<HashMap<Keyword, HashSet<IndexedValue>>, Error<CustomError>>
+    where
+        crate::chain_table::Condition<{ CHAIN_TABLE_WIDTH < crate::chain_table::MAX_TABLE_WIDTH }>:
+            crate::chain_table::IsTrue,
+    {
         if keywords.is_empty() {
             return Ok(HashMap::new());
         }
@@ -159,7 +163,11 @@ pub trait FindexSearch<
         max_depth: usize,
         fetch_chains_batch_size: NonZeroUsize,
         current_depth: usize,
-    ) -> Result<HashMap<Keyword, HashSet<Location>>, Error<CustomError>> {
+    ) -> Result<HashMap<Keyword, HashSet<Location>>, Error<CustomError>>
+    where
+        crate::chain_table::Condition<{ CHAIN_TABLE_WIDTH < crate::chain_table::MAX_TABLE_WIDTH }>:
+            crate::chain_table::IsTrue,
+    {
         // Get indexed values associated to the given keywords
         let res = self
             .non_recursive_search(
@@ -242,7 +250,11 @@ pub trait FindexSearch<
             )>,
         >,
         Error<CustomError>,
-    > {
+    >
+    where
+        crate::chain_table::Condition<{ CHAIN_TABLE_WIDTH < crate::chain_table::MAX_TABLE_WIDTH }>:
+            crate::chain_table::IsTrue,
+    {
         let mut chains = HashMap::with_capacity(kwi_chain_table_uids.len());
         for (kwi, chain_table_uids) in kwi_chain_table_uids.iter() {
             let kwi_value: DemScheme::Key = kwi.derive_dem_key(CHAIN_TABLE_KEY_DERIVATION_INFO);

@@ -62,7 +62,11 @@ pub trait FindexCompact<
         master_key: &KeyingMaterial<MASTER_KEY_LENGTH>,
         new_master_key: &KeyingMaterial<MASTER_KEY_LENGTH>,
         label: &Label,
-    ) -> Result<(), Error<CustomError>> {
+    ) -> Result<(), Error<CustomError>>
+    where
+        crate::chain_table::Condition<{ CHAIN_TABLE_WIDTH < crate::chain_table::MAX_TABLE_WIDTH }>:
+            crate::chain_table::IsTrue,
+    {
         if num_reindexing_before_full_set == 0 {
             return Err(Error::CryptoError(
                 "`num_reindexing_before_full_set` cannot be 0.".to_owned(),
@@ -256,7 +260,11 @@ pub trait FindexCompact<
             )>,
         >,
         Error<CustomError>,
-    > {
+    >
+    where
+        crate::chain_table::Condition<{ CHAIN_TABLE_WIDTH < crate::chain_table::MAX_TABLE_WIDTH }>:
+            crate::chain_table::IsTrue,
+    {
         let chain_table_uids = kwi_chain_table_uids
             .values()
             .flatten()

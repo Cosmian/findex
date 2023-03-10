@@ -57,7 +57,11 @@ impl<const UID_LENGTH: usize, const KWI_LENGTH: usize> EntryTableValue<UID_LENGT
     >(
         rng: &mut impl CryptoRngCore,
         keyword_hash: [u8; Keyword::HASH_LENGTH],
-    ) -> Self {
+    ) -> Self
+    where
+        crate::chain_table::Condition<{ CHAIN_TABLE_WITH < crate::chain_table::MAX_TABLE_WIDTH }>:
+            crate::chain_table::IsTrue,
+    {
         let kwi = KeyingMaterial::new(rng);
         let kwi_uid: KmacKey = kwi.derive_kmac_key(CHAIN_TABLE_KEY_DERIVATION_INFO);
         let chain_table_uid =
@@ -84,7 +88,11 @@ impl<const UID_LENGTH: usize, const KWI_LENGTH: usize> EntryTableValue<UID_LENGT
     >(
         &mut self,
         kwi_uid: &KmacKey,
-    ) -> &Uid<UID_LENGTH> {
+    ) -> &Uid<UID_LENGTH>
+    where
+        crate::chain_table::Condition<{ CHAIN_TABLE_WITH < crate::chain_table::MAX_TABLE_WIDTH }>:
+            crate::chain_table::IsTrue,
+    {
         self.chain_table_uid =
             ChainTable::<UID_LENGTH, CHAIN_TABLE_WITH, BLOCK_LENGTH>::generate_uid(
                 kwi_uid,
@@ -122,7 +130,11 @@ impl<const UID_LENGTH: usize, const KWI_LENGTH: usize> EntryTableValue<UID_LENGT
         kwi_value: &DemScheme::Key,
         chain_table: &mut EncryptedTable<UID_LENGTH>,
         rng: &mut impl CryptoRngCore,
-    ) -> Result<(), Error> {
+    ) -> Result<(), Error>
+    where
+        crate::chain_table::Condition<{ CHAIN_TABLE_WIDTH < crate::chain_table::MAX_TABLE_WIDTH }>:
+            crate::chain_table::IsTrue,
+    {
         let mut chain_table_value =
             if let Some(encrypted_chain_table_value) = chain_table.get(&self.chain_table_uid) {
                 ChainTableValue::<CHAIN_TABLE_WIDTH, BLOCK_LENGTH>::decrypt::<
@@ -226,7 +238,10 @@ impl<const UID_LENGTH: usize, const KWI_LENGTH: usize> EntryTableValue<UID_LENGT
         &self,
         max_results: usize,
         kwi_chain_table_uids: &mut KwiChainUids<UID_LENGTH, KWI_LENGTH>,
-    ) {
+    ) where
+        crate::chain_table::Condition<{ CHAIN_TABLE_WIDTH < crate::chain_table::MAX_TABLE_WIDTH }>:
+            crate::chain_table::IsTrue,
+    {
         let kwi_uid: KmacKey = self.kwi.derive_kmac_key(CHAIN_TABLE_KEY_DERIVATION_INFO);
 
         let entry = kwi_chain_table_uids
@@ -384,7 +399,11 @@ impl<const UID_LENGTH: usize, const KWI_LENGTH: usize> EntryTable<UID_LENGTH, KW
         &self,
         uids: impl Iterator<Item = &'a Uid<UID_LENGTH>>,
         max_results_per_uid: usize,
-    ) -> KwiChainUids<UID_LENGTH, KWI_LENGTH> {
+    ) -> KwiChainUids<UID_LENGTH, KWI_LENGTH>
+    where
+        crate::chain_table::Condition<{ CHAIN_TABLE_WITH < crate::chain_table::MAX_TABLE_WIDTH }>:
+            crate::chain_table::IsTrue,
+    {
         let mut kwi_chain_table_uids = KwiChainUids::default();
         for entry_table_uid in uids {
             if let Some(value) = self.get(entry_table_uid) {
@@ -438,7 +457,11 @@ impl<const UID_LENGTH: usize, const KWI_LENGTH: usize> EntryTable<UID_LENGTH, KW
         rng: &mut impl CryptoRngCore,
         new_chain_elements: &HashMap<Keyword, HashMap<IndexedValue, BlockType>>,
         keyword_to_entry_table_uid: &HashMap<Keyword, Uid<UID_LENGTH>>,
-    ) -> Result<HashMap<Uid<UID_LENGTH>, EncryptedTable<UID_LENGTH>>, Error> {
+    ) -> Result<HashMap<Uid<UID_LENGTH>, EncryptedTable<UID_LENGTH>>, Error>
+    where
+        crate::chain_table::Condition<{ CHAIN_TABLE_WIDTH < crate::chain_table::MAX_TABLE_WIDTH }>:
+            crate::chain_table::IsTrue,
+    {
         // Cache the KMAC and DEM keys
         let mut key_cache = KeyCache::with_capacity(keyword_to_entry_table_uid.len());
 

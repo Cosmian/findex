@@ -47,7 +47,11 @@ pub trait FindexUpsert<
         deletions: HashMap<IndexedValue, HashSet<Keyword>>,
         master_key: &KeyingMaterial<MASTER_KEY_LENGTH>,
         label: &Label,
-    ) -> Result<(), Error<CustomError>> {
+    ) -> Result<(), Error<CustomError>>
+    where
+        crate::chain_table::Condition<{ CHAIN_TABLE_WIDTH < crate::chain_table::MAX_TABLE_WIDTH }>:
+            crate::chain_table::IsTrue,
+    {
         let mut rng = CsRng::from_entropy();
 
         // Revert the `HashMap`.

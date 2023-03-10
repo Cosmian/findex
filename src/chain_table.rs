@@ -41,8 +41,15 @@ pub struct ChainTableValue<const TABLE_WIDTH: usize, const BLOCK_LENGTH: usize> 
     blocks: [Block<BLOCK_LENGTH>; TABLE_WIDTH],
 }
 
+pub const MAX_TABLE_WIDTH: usize = 8;
+pub struct Condition<const B: bool>();
+pub trait IsTrue {}
+impl IsTrue for Condition<true> {}
+
 impl<const TABLE_WIDTH: usize, const BLOCK_LENGTH: usize> Default
     for ChainTableValue<TABLE_WIDTH, BLOCK_LENGTH>
+where
+    Condition<{ TABLE_WIDTH < MAX_TABLE_WIDTH }>: IsTrue,
 {
     fn default() -> Self {
         Self {
@@ -52,13 +59,14 @@ impl<const TABLE_WIDTH: usize, const BLOCK_LENGTH: usize> Default
     }
 }
 
-impl<const TABLE_WIDTH: usize, const BLOCK_LENGTH: usize>
-    ChainTableValue<TABLE_WIDTH, BLOCK_LENGTH>
+impl<const TABLE_WIDTH: usize, const BLOCK_LENGTH: usize> ChainTableValue<TABLE_WIDTH, BLOCK_LENGTH>
+where
+    Condition<{ TABLE_WIDTH < MAX_TABLE_WIDTH }>: IsTrue,
 {
     /// Assert the Chain Table width is smaller than 8. This is needed because
     /// for a given line, an only byte is used to write the deletion flag.
-    #[allow(dead_code)]
-    const COMPILE_TIME_CHECK: () = assert!(TABLE_WIDTH < 8);
+    // #[allow(dead_code)]
+    // const _COMPILE_TIME_CHECK: () = assert!(TABLE_WIDTH < 8);
 
     /// Push a new addition to the Chain Table value.
     ///
@@ -118,6 +126,8 @@ impl<const TABLE_WIDTH: usize, const BLOCK_LENGTH: usize>
 
 impl<const TABLE_WIDTH: usize, const BLOCK_LENGTH: usize> Serializable
     for ChainTableValue<TABLE_WIDTH, BLOCK_LENGTH>
+where
+    Condition<{ TABLE_WIDTH < MAX_TABLE_WIDTH }>: IsTrue,
 {
     type Error = Error;
 
@@ -173,6 +183,8 @@ pub struct ChainTable<const UID_LENGTH: usize, const TABLE_WIDTH: usize, const B
 
 impl<const UID_LENGTH: usize, const TABLE_WIDTH: usize, const BLOCK_LENGTH: usize>
     ChainTable<UID_LENGTH, TABLE_WIDTH, BLOCK_LENGTH>
+where
+    Condition<{ TABLE_WIDTH < MAX_TABLE_WIDTH }>: IsTrue,
 {
     /// Derives a Chain Table UID using the given KMAC key and bytes.
     ///
@@ -194,6 +206,8 @@ impl<const UID_LENGTH: usize, const TABLE_WIDTH: usize, const BLOCK_LENGTH: usiz
 
 impl<const UID_LENGTH: usize, const TABLE_WIDTH: usize, const BLOCK_LENGTH: usize> Deref
     for ChainTable<UID_LENGTH, TABLE_WIDTH, BLOCK_LENGTH>
+where
+    Condition<{ TABLE_WIDTH < MAX_TABLE_WIDTH }>: IsTrue,
 {
     type Target = HashMap<Uid<UID_LENGTH>, ChainTableValue<TABLE_WIDTH, BLOCK_LENGTH>>;
 
@@ -204,6 +218,8 @@ impl<const UID_LENGTH: usize, const TABLE_WIDTH: usize, const BLOCK_LENGTH: usiz
 
 impl<const UID_LENGTH: usize, const TABLE_WIDTH: usize, const BLOCK_LENGTH: usize> DerefMut
     for ChainTable<UID_LENGTH, TABLE_WIDTH, BLOCK_LENGTH>
+where
+    Condition<{ TABLE_WIDTH < MAX_TABLE_WIDTH }>: IsTrue,
 {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.0
@@ -212,6 +228,8 @@ impl<const UID_LENGTH: usize, const TABLE_WIDTH: usize, const BLOCK_LENGTH: usiz
 
 impl<const UID_LENGTH: usize, const TABLE_WIDTH: usize, const BLOCK_LENGTH: usize> IntoIterator
     for ChainTable<UID_LENGTH, TABLE_WIDTH, BLOCK_LENGTH>
+where
+    Condition<{ TABLE_WIDTH < MAX_TABLE_WIDTH }>: IsTrue,
 {
     type IntoIter = <<Self as Deref>::Target as IntoIterator>::IntoIter;
     type Item = <<Self as Deref>::Target as IntoIterator>::Item;
@@ -281,7 +299,7 @@ mod tests {
 
     const KWI_LENGTH: usize = 16;
     const BLOCK_LENGTH: usize = 32;
-    const CHAIN_TABLE_WIDTH: usize = 20;
+    const CHAIN_TABLE_WIDTH: usize = 5;
 
     #[test]
     fn test_serialization() {

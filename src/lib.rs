@@ -19,6 +19,7 @@
 #![feature(iter_next_chunk)]
 #![allow(incomplete_features)]
 #![feature(never_type)]
+#![feature(generic_const_exprs)]
 
 const ENTRY_TABLE_KEY_DERIVATION_INFO: &[u8] = b"Entry Table key derivation info.";
 const CHAIN_TABLE_KEY_DERIVATION_INFO: &[u8] = b"Chain Table key derivation info.";
