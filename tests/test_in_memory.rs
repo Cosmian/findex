@@ -426,18 +426,13 @@ async fn test_findex() -> Result<(), Error<ExampleError>> {
     }
 
     // Try deleting John Doe from the `doe_keyword`.
-    let mut indexed_value_to_keywords = HashMap::new();
-    indexed_value_to_keywords.insert(
+    let mut deletions = HashMap::new();
+    deletions.insert(
         IndexedValue::from(john_doe_location.clone()),
         HashSet::from_iter(vec![doe_keyword.clone()]),
     );
     findex
-        .upsert(
-            HashMap::new(),
-            indexed_value_to_keywords,
-            &master_key,
-            &new_label,
-        )
+        .upsert(HashMap::new(), deletions, &master_key, &new_label)
         .await?;
 
     // Assert John Doe cannot be found by searching for Doe.

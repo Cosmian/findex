@@ -300,8 +300,6 @@ compared to 1 for the naive solution.
 Advantage of graphs: optimal storage of the locations info since they are not
 repeated in the chain table.
 
-TODO: what does the `size` represent?
-
 | Avg locations | #records graphs | #records naive | ratio | size (kb) graphs | size (kb) naive | ratio |
 |---------------|-----------------|----------------|-------|------------------|-----------------|-------|
 | 1             | 86018           | 86018          | 1.00  | 5605             | 5704            | 1.01  |
