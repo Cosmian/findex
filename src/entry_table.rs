@@ -602,11 +602,10 @@ mod tests {
                     Aes256GcmCrypto,
                 >(&kwi_value, encrypted_chain_table_value)
                 .unwrap()
-                .as_blocks()
-                .to_vec()
+                .into_blocks()
             })
             .collect();
-        let indexed_values = IndexedValue::from_blocks(blocks).unwrap();
+        let indexed_values = IndexedValue::from_blocks(blocks.iter()).unwrap();
 
         // Assert the correct indexed values have been recovered.
         assert_eq!(indexed_values.len(), CHAIN_TABLE_WIDTH + 1);
@@ -653,11 +652,10 @@ mod tests {
                     Aes256GcmCrypto,
                 >(&kwi_value, encrypted_chain_table_value)
                 .unwrap()
-                .as_blocks()
-                .to_vec()
+                .into_blocks()
             })
             .collect();
-        let indexed_values = IndexedValue::from_blocks(blocks).unwrap();
+        let indexed_values = IndexedValue::from_blocks(blocks.iter()).unwrap();
 
         // Assert the correct indexed values have been recovered.
         assert_eq!(indexed_values.len(), 1);
@@ -726,12 +724,11 @@ mod tests {
                     Aes256GcmCrypto,
                 >(&kwi_value, encrypted_chain_table_value)
                 .unwrap()
-                .as_blocks()
-                .to_vec()
+                .into_blocks()
             })
             .collect();
 
-        let indexed_values = IndexedValue::from_blocks(blocks).unwrap();
+        let indexed_values = IndexedValue::from_blocks(blocks.iter()).unwrap();
 
         assert_eq!(indexed_values.len(), 1);
 

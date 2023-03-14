@@ -127,9 +127,9 @@ pub trait FindexSearch<
             })?;
             let blocks = chain
                 .into_iter()
-                .flat_map(|(_, chain_table_value)| chain_table_value.as_blocks().to_vec())
+                .flat_map(|(_, chain_table_value)| chain_table_value.into_blocks())
                 .collect::<Vec<_>>();
-            res.insert(keyword.clone(), IndexedValue::from_blocks(blocks)?);
+            res.insert(keyword.clone(), IndexedValue::from_blocks(blocks.iter())?);
         }
         Ok(res)
     }

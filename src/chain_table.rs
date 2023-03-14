@@ -90,6 +90,10 @@ impl<const TABLE_WIDTH: usize, const BLOCK_LENGTH: usize>
         &self.blocks[..self.length]
     }
 
+    pub fn into_blocks(self) -> [Block<BLOCK_LENGTH>; TABLE_WIDTH] {
+        self.blocks
+    }
+
     /// Encrypts the Chain Table value using the given DEM key.
     ///
     /// - `kwi_value`   : DEM key used to encrypt the value
@@ -152,12 +156,12 @@ impl<const TABLE_WIDTH: usize, const BLOCK_LENGTH: usize> Serializable
 
     fn read(de: &mut Deserializer) -> Result<Self, Self::Error> {
         let mut res = Self::default();
-        let mut flag = de.read_array::<1>()?[0];
-        for _ in 0..TABLE_WIDTH {
+        let flag = de.read_array::<1>()?[0];
+        for i in 0..TABLE_WIDTH {
             let prefix = BlockPrefix::from(de.read_array::<1>()?[0]);
             let data = de.read_array::<BLOCK_LENGTH>()?;
             if BlockPrefix::Padding != prefix {
-                let block_type = if flag % 2 == 1 {
+                let block_type = if (flag >> i) % 2 == 1 {
                     BlockType::Addition
                 } else {
                     BlockType::Deletion
@@ -168,7 +172,6 @@ impl<const TABLE_WIDTH: usize, const BLOCK_LENGTH: usize> Serializable
                     data,
                 })?;
             }
-            flag >>= 1;
         }
         Ok(res)
     }

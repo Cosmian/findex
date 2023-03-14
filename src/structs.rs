@@ -86,12 +86,10 @@ impl From<BlockPrefix> for u8 {
 
 impl From<u8> for BlockPrefix {
     fn from(value: u8) -> Self {
-        if 0 == value {
-            Self::Padding
-        } else if u8::MAX == value {
-            Self::NonTerminating
-        } else {
-            Self::Terminating { length: value }
+        match value {
+            0 => Self::Padding,
+            u8::MAX => Self::NonTerminating,
+            length => Self::Terminating { length },
         }
     }
 }
@@ -129,7 +127,7 @@ pub struct Block<const LENGTH: usize> {
 
 /// A block length should be a valid `u8` to allow writing in one byte, and the
 /// value `u8::MAX` is reserved to indicate a non-terminating block.
-const MAX_BLOCK_LENGTH: usize = 254; // `u8::MAX - 1`
+const MAX_BLOCK_LENGTH: usize = (u8::MAX - 1) as usize;
 
 impl<const LENGTH: usize> Block<LENGTH> {
     /// This checks that the `BLOCK_LENGTH` does not exceed the
@@ -171,6 +169,7 @@ impl<const LENGTH: usize> Block<LENGTH> {
     /// Generates a new padding block.
     pub const fn padding_block() -> Self {
         Self {
+            // A deletion is ignored when computing the flag.
             block_type: BlockType::Deletion,
             prefix: BlockPrefix::Padding,
             data: [0; LENGTH],
@@ -235,8 +234,8 @@ impl IndexedValue {
     /// # Parameters
     ///
     /// - `blocks`  : list of `Block`s to read from
-    pub fn from_blocks<const BLOCK_LENGTH: usize>(
-        blocks: Vec<Block<BLOCK_LENGTH>>,
+    pub fn from_blocks<'a, const BLOCK_LENGTH: usize>(
+        blocks: impl IntoIterator<Item = &'a Block<BLOCK_LENGTH>>,
     ) -> Result<HashSet<Self>, Error> {
         let mut blocks = blocks.into_iter();
 
@@ -262,13 +261,15 @@ impl IndexedValue {
 
             // This block is terminating the byte vector.
             let length = <u8>::from(block.prefix) as usize;
-            byte_vector.extend(&block.data[..length]);
-
-            let value = Self::try_from_bytes(&byte_vector)?;
-            if BlockType::Addition == block_type {
-                indexed_values.insert(value);
-            } else {
-                indexed_values.remove(&value);
+            if length != 0 {
+                // This block is not padding.
+                byte_vector.extend(&block.data[..length]);
+                let value = Self::try_from_bytes(&byte_vector)?;
+                if BlockType::Addition == block_type {
+                    indexed_values.insert(value);
+                } else {
+                    indexed_values.remove(&value);
+                }
             }
         }
 
@@ -644,7 +645,7 @@ mod tests {
         }
 
         // Assert unpadding the resulting blocks leads to the correct result.
-        let res = IndexedValue::from_blocks(blocks.clone()).unwrap();
+        let res = IndexedValue::from_blocks(blocks.iter()).unwrap();
         assert_eq!(res.len(), N_ADDITIONS + 1);
         assert!(res.contains(&long_indexed_value));
         for i in 0..N_ADDITIONS {
@@ -659,7 +660,7 @@ mod tests {
         }
 
         // Assert unpadding the resulting blocks leads to the correct result.
-        let res = IndexedValue::from_blocks(blocks).unwrap();
+        let res = IndexedValue::from_blocks(blocks.iter()).unwrap();
         assert_eq!(res.len(), 1);
         assert!(res.contains(&IndexedValue::from(Location::from(vec![0]))));
     }
