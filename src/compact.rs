@@ -3,7 +3,6 @@
 use std::collections::{HashMap, HashSet};
 
 use cosmian_crypto_core::{
-    bytes_ser_de::Serializable,
     reexport::rand_core::SeedableRng,
     symmetric_crypto::{Dem, SymKey},
     CsRng,
@@ -14,7 +13,8 @@ use crate::{
     chain_table::{ChainTableValue, KwiChainUids},
     entry_table::{EntryTable, EntryTableValue},
     error::CallbackError,
-    structs::{Block, EncryptedTable, IndexedValue, Label, Uid},
+    parameters::check_parameter_constraints,
+    structs::{BlockType, EncryptedTable, IndexedValue, Label, Uid},
     Error, FindexCallbacks, KeyingMaterial, CHAIN_TABLE_KEY_DERIVATION_INFO,
     ENTRY_TABLE_KEY_DERIVATION_INFO,
 };
@@ -25,7 +25,7 @@ use crate::{
 pub trait FindexCompact<
     const UID_LENGTH: usize,
     const BLOCK_LENGTH: usize,
-    const TABLE_WIDTH: usize,
+    const CHAIN_TABLE_WIDTH: usize,
     const MASTER_KEY_LENGTH: usize,
     const KWI_LENGTH: usize,
     const KMAC_KEY_LENGTH: usize,
@@ -64,6 +64,7 @@ pub trait FindexCompact<
         new_master_key: &KeyingMaterial<MASTER_KEY_LENGTH>,
         label: &Label,
     ) -> Result<(), Error<CustomError>> {
+        check_parameter_constraints::<CHAIN_TABLE_WIDTH, BLOCK_LENGTH>();
         if num_reindexing_before_full_set == 0 {
             return Err(Error::CryptoError(
                 "`num_reindexing_before_full_set` cannot be 0.".to_owned(),
@@ -114,7 +115,7 @@ pub trait FindexCompact<
 
         // Unchain the Entry Table entries to be reindexed.
         let kwi_chain_table_uids = entry_table
-            .unchain::<BLOCK_LENGTH, KMAC_KEY_LENGTH, DEM_KEY_LENGTH, KmacKey, DemScheme>(
+            .unchain::<CHAIN_TABLE_WIDTH, BLOCK_LENGTH, KMAC_KEY_LENGTH, DEM_KEY_LENGTH, KmacKey, DemScheme>(
                 entry_table_items_to_reindex.iter(),
                 usize::MAX,
             );
@@ -139,12 +140,11 @@ pub trait FindexCompact<
         // Get the values stored in the reindexed chains.
         let mut reindexed_chain_values = HashMap::with_capacity(chains_to_reindex.len());
         for (kwi, chain) in chains_to_reindex {
-            let mut indexed_values = HashSet::new();
-            let blocks = chain.into_iter().flat_map(|(_, v)| v).collect::<Vec<_>>();
-            for bytes in Block::unpad(&blocks)? {
-                indexed_values.insert(IndexedValue::try_from_bytes(&bytes)?);
-            }
-            reindexed_chain_values.insert(kwi.clone(), indexed_values);
+            let blocks = chain
+                .into_iter()
+                .flat_map(|(_, chain_value)| chain_value.into_blocks())
+                .collect::<Vec<_>>();
+            reindexed_chain_values.insert(kwi.clone(), IndexedValue::from_blocks(blocks.iter())?);
         }
 
         //
@@ -197,6 +197,7 @@ pub trait FindexCompact<
 
             // Start a new chain from scratch.
             let mut new_entry_table_value = EntryTableValue::<UID_LENGTH, KWI_LENGTH>::new::<
+                CHAIN_TABLE_WIDTH,
                 BLOCK_LENGTH,
                 KMAC_KEY_LENGTH,
                 KmacKey,
@@ -212,7 +213,8 @@ pub trait FindexCompact<
 
             // Upsert each remaining location in the Chain Table.
             for remaining_location in remaining_indexed_values_for_this_keyword {
-                new_entry_table_value.upsert_indexed_value::<BLOCK_LENGTH, TABLE_WIDTH, KMAC_KEY_LENGTH, DEM_KEY_LENGTH, KmacKey, DemScheme>(
+                new_entry_table_value.upsert_indexed_value::<CHAIN_TABLE_WIDTH, BLOCK_LENGTH, KMAC_KEY_LENGTH, DEM_KEY_LENGTH, KmacKey, DemScheme>(
+                    BlockType::Addition,
                     &remaining_location,
                     &kwi_uid,
                     &kwi_value,
@@ -248,7 +250,13 @@ pub trait FindexCompact<
         &self,
         kwi_chain_table_uids: &KwiChainUids<UID_LENGTH, KWI_LENGTH>,
     ) -> Result<
-        HashMap<KeyingMaterial<KWI_LENGTH>, Vec<(Uid<UID_LENGTH>, ChainTableValue<BLOCK_LENGTH>)>>,
+        HashMap<
+            KeyingMaterial<KWI_LENGTH>,
+            Vec<(
+                Uid<UID_LENGTH>,
+                ChainTableValue<CHAIN_TABLE_WIDTH, BLOCK_LENGTH>,
+            )>,
+        >,
         Error<CustomError>,
     > {
         let chain_table_uids = kwi_chain_table_uids
@@ -275,8 +283,7 @@ pub trait FindexCompact<
                 // values can be divided in blocks that span several lines in the chain.
                 chain.push((
                     uid.clone(),
-                    ChainTableValue::<BLOCK_LENGTH>::decrypt::<
-                        TABLE_WIDTH,
+                    ChainTableValue::<CHAIN_TABLE_WIDTH, BLOCK_LENGTH>::decrypt::<
                         DEM_KEY_LENGTH,
                         DemScheme,
                     >(&kwi_value, encrypted_item)?,

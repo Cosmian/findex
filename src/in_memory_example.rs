@@ -101,10 +101,6 @@ impl<const UID_LENGTH: usize> FindexCallbacks<ExampleError, UID_LENGTH>
         &self,
         entry_table_uids: &HashSet<Uid<UID_LENGTH>>,
     ) -> Result<EncryptedTable<UID_LENGTH>, ExampleError> {
-        //println!(
-        //"Fetch {} items from the Entry Table",
-        //entry_table_uids.len()
-        //);
         let mut entry_table_items = EncryptedTable::default();
         for keyword_hash in entry_table_uids {
             if let Some(value) = self.entry_table.get(keyword_hash) {
@@ -118,7 +114,6 @@ impl<const UID_LENGTH: usize> FindexCallbacks<ExampleError, UID_LENGTH>
         &self,
         chain_uids: &HashSet<Uid<UID_LENGTH>>,
     ) -> Result<EncryptedTable<UID_LENGTH>, ExampleError> {
-        //println!("Fetch {} items from the Chain Table", chain_uids.len());
         Ok(chain_uids
             .iter()
             .filter_map(|uid| {
@@ -134,7 +129,6 @@ impl<const UID_LENGTH: usize> FindexCallbacks<ExampleError, UID_LENGTH>
         &mut self,
         modifications: &UpsertData<UID_LENGTH>,
     ) -> Result<EncryptedTable<UID_LENGTH>, ExampleError> {
-        //println!("Upsert {} items in the Entry Table", modifications.len());
         let mut rng = CsRng::from_entropy();
         let mut rejected = EncryptedTable::default();
         // Simulate insertion failures.
@@ -146,7 +140,6 @@ impl<const UID_LENGTH: usize> FindexCallbacks<ExampleError, UID_LENGTH>
                 self.entry_table.insert(uid.clone(), new_value.clone());
             }
         }
-        //println!("{} rejected upsertions", rejected.len());
         Ok(rejected)
     }
 
@@ -154,7 +147,6 @@ impl<const UID_LENGTH: usize> FindexCallbacks<ExampleError, UID_LENGTH>
         &mut self,
         items: &EncryptedTable<UID_LENGTH>,
     ) -> Result<(), ExampleError> {
-        //println!("Insert {} items in the Chain Table", items.len());
         for (uid, value) in items.iter() {
             if self.chain_table.contains_key(uid) {
                 return Err(ExampleError(format!(
@@ -172,19 +164,6 @@ impl<const UID_LENGTH: usize> FindexCallbacks<ExampleError, UID_LENGTH>
         new_encrypted_entry_table_items: EncryptedTable<UID_LENGTH>,
         new_encrypted_chain_table_items: EncryptedTable<UID_LENGTH>,
     ) -> Result<(), ExampleError> {
-        //println!(
-        //"Remove {} items from the Chain Table",
-        //chain_table_uids_to_remove.len()
-        //);
-        //println!(
-        //"Insert {} items to the Chain Table",
-        //new_encrypted_chain_table_items.len()
-        //);
-        //println!(
-        //"Insert {} items to the Entry Table",
-        //new_encrypted_entry_table_items.len()
-        //);
-
         self.entry_table = EncryptedTable::default();
 
         for new_encrypted_entry_table_item in new_encrypted_entry_table_items.iter() {
