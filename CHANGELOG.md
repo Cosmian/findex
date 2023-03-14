@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## Unreleased
+
+### Changed
+
+- deletions in upsert
+- format of the Chain Table
+
 ## [3.1.0] - 2023-03-03
 
 ### Added
