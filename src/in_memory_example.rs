@@ -200,8 +200,8 @@ impl<const UID_LENGTH: usize> FindexCallbacks<ExampleError, UID_LENGTH>
     }
 }
 
-impl_findex_search!(FindexInMemory<UID_LENGTH>, ExampleError);
+impl_findex_trait!(FindexSearch, FindexInMemory<UID_LENGTH>, ExampleError);
 
-impl_findex_upsert!(FindexInMemory<UID_LENGTH>, ExampleError);
+impl_findex_trait!(FindexUpsert, FindexInMemory<UID_LENGTH>, ExampleError);
 
-impl_findex_compact!(FindexInMemory<UID_LENGTH>, ExampleError);
+impl_findex_trait!(FindexCompact, FindexInMemory<UID_LENGTH>, ExampleError);

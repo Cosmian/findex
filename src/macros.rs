@@ -158,52 +158,10 @@ macro_rules! kmac {
 }
 
 #[macro_export]
-macro_rules! impl_findex_search {
-    ($findex:ty, $error:ty) => {
+macro_rules! impl_findex_trait {
+    ($trait:ident, $findex:ty, $error:ty) => {
         impl
-            FindexSearch<
-                { $crate::parameters::UID_LENGTH },
-                { $crate::parameters::BLOCK_LENGTH },
-                { $crate::parameters::CHAIN_TABLE_WIDTH },
-                { $crate::parameters::MASTER_KEY_LENGTH },
-                { $crate::parameters::KWI_LENGTH },
-                { $crate::parameters::KMAC_KEY_LENGTH },
-                { $crate::parameters::DEM_KEY_LENGTH },
-                $crate::parameters::KmacKey,
-                $crate::parameters::DemScheme,
-                $error,
-            > for $findex
-        {
-        }
-    };
-}
-
-#[macro_export]
-macro_rules! impl_findex_upsert {
-    ($findex:ty, $error:ty) => {
-        impl
-            FindexUpsert<
-                { $crate::parameters::UID_LENGTH },
-                { $crate::parameters::BLOCK_LENGTH },
-                { $crate::parameters::CHAIN_TABLE_WIDTH },
-                { $crate::parameters::MASTER_KEY_LENGTH },
-                { $crate::parameters::KWI_LENGTH },
-                { $crate::parameters::KMAC_KEY_LENGTH },
-                { $crate::parameters::DEM_KEY_LENGTH },
-                $crate::parameters::KmacKey,
-                $crate::parameters::DemScheme,
-                $error,
-            > for $findex
-        {
-        }
-    };
-}
-
-#[macro_export]
-macro_rules! impl_findex_compact {
-    ($findex:ty, $error:ty) => {
-        impl
-            FindexCompact<
+            $trait<
                 { $crate::parameters::UID_LENGTH },
                 { $crate::parameters::BLOCK_LENGTH },
                 { $crate::parameters::CHAIN_TABLE_WIDTH },
