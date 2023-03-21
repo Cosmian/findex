@@ -82,22 +82,23 @@ solve the following search problem:
 Findex index tables are key value stores which structure is given in the
 following tables.
 
-<table>
+<table style="width:25%">
 	<tr>
 		<th colspan=4>Entry Table</th>
+	</tr>
 	<tr>
 		<th>key</th>
 		<th colspan=3>value</th>
 	</tr>
 	<tr>
 		<td>UID</td>
-		<td>K<sub>wi</sub></td>
-		<td>H<sub>wi</sub></td>
-		<td>UID</td>
+		<td>$K_{w_i}$</sub></td>
+		<td>$H_{w_i}$</sub></td>
+		<td>$UID_{last}$</td>
 	</tr>
 </table>
 
-<table>
+<table style="width:25%">
 	<tr>
 		<th colspan=4>Chain Table</th>
 	<tr>
@@ -117,18 +118,18 @@ Where:
 - the keys used are random-like 32 bytes long UIDs.
 - the values are symmetrically encrypted with an AEAD (using a 16-bytes MAC tag
   and a 12-bytes nonce).
-- there is one Entry Table line per keyword `w_i`.
-- the `Kwi` is a 16-bytes seed used to generate the Chain Table values
-  associated to the keyword `w_i`.
-- the `Hwi` is a 32-bytes hash of the keyword `wi` that is used by the compact
+- there is one Entry Table line per keyword $w_i$.
+- the $K_{w_i}$ is a 16-bytes seed used to generate the Chain Table values
+  associated to the keyword $w_i$.
+- the $H_{w_i}$ is a 32-bytes hash of the keyword $w_i$ that is used by the compact
   operation.
 - the UID stored in the Entry Table corresponds to the last Chain Table UID
-  that stores values indexed by `w_i`.
+  that stores values indexed by $w_i$.
 - the blocks stored in the Chain Table are used to pad the Chain Table lines to
   an equal size. Each block is 16-bytes long (which is enough to store an
   UUID). An indexed value is stored in the Chain Table by chunks of 16 bytes.
   The last chunk may not be full and is padded with 0s.
-- the number of blocks per Chain Table value (`B`) used is 5.
+- the number of blocks per Chain Table value ($B$) used is 5.
 
 The Chain Table values are serialized as follows (sizes are given in bytes):
 
@@ -161,25 +162,28 @@ upsert](#findex-upsert)). Each bit corresponds to a block, which limits the
 possible number of blocks inside a single Chain Table value to 8. The prefix is
 used to write the actual length of the data stored inside a block.
 
-Therefore, given `N` the number of keywords used, the size of the Entry Table
-in bytes is given by:
+Therefore, given $N$ the number of keywords used, the size of the Entry Table
+is given by (in bytes):
 
-``` text
-entry_table_size = N * (UID_LENGTH + ENCRYPTION_OVERHEAD + KWI_LENGTH + HWI_LENGTH + UID_LENGTH)
-                 = N * 140
+``` math
+L_{entry~table} = (L_{uid} + C_e + L_{K_{w_i}} + L_{H_{w_i}} + L_{uid}) \cdot N
+                = 140 \cdot N
 ```
 
-Given `V(w_i)` the volume of the keyword `w_i` (i.e. the number of values
-indexed by this keyword), the size of the Chain Table in bytes after compacting
-is given by:
+Given $V(w_i)$ the volume of the keyword $w_i$ (i.e. the number of values
+indexed by this keyword), and if each indexed value fits in a single block, the
+size of the compacted Chain Table is given by (in bytes):
 
-``` text
-chain_table_size = sum_{w_i}(ceil(V(w_i) / CHAIN_TABLE_WIDTH)) * (UID_LENGTH + ENCRYPTION_OVERHEAD + 1 + CHAIN_TABLE_WIDTH * (1 + BLOCK_LENGTH))
-                 = 146 * sum_{w_i}(ceil(V(w_i) / 5))
+``` math
+L_{chain~table} = \left(L_{uid} + C_e + 1 + B * (1 + L_{block})\right) \sum\limits_{i~\in~[1,N]}\left\lceil \frac{V(w_i)}{B}\right\rceil
+                = 146 \sum\limits_{i~\in~[1;N]}\left\lceil \frac{V(w_i)}{B}\right\rceil
 ```
 
-where `ceil()` is the ceiling function that maps x to the least integer greater
-than or equal to x, `CHAIN_TABLE_WIDTH = 5` and `BLOCK_LENGTH = 16`.
+where:
+- the UID length: $L_{uid} = 32~\textnormal{bytes}$
+- the encryption overhead: $C_e = 28~\textnormal{bytes}$
+- the block length: $L_{block} = 16~\textnormal{bytes}$
+- the Chain Table width: $B = 5~\textnormal{bytes}$
 
 **Example**:
 - if an index contains 1000 keywords, the size of the Entry Table is 140KB. If

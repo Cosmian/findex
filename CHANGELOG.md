@@ -7,7 +7,7 @@ All notable changes to this project will be documented in this file.
 ### Changed
 
 - deletions in upsert
-- format of the Chain Table
+- format of the Chain Table (block length is now 16)
 
 ## [3.1.0] - 2023-03-03
 
