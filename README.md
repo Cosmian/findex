@@ -42,12 +42,12 @@ no database-specific code is part of it. These callbacks need to be implemented
 through the trait `FindexCallbacks`. See the section
 [Callbacks](#findex-callbacks) for an implementation example.
 
-The main Findex traits can be derived automatically (see
-[`ffi/core/traits.rs`](./src/interfaces/ffi/core/traits.rs#L254-297) for an
+The main Findex traits can be derived automatically using the provided macros
+(see [`in_memory_example.rs`](./src/in_memory_example.rs#L203-207) for an
 example).
 
-The generics used by Findex are defined in [`generic_parameters.rs`](./src/interfaces/generic_parameters.rs).
-Their values allow using AES-256-GCM and KMAC128 and minimizing the size of the indexes.
+The generics used by Findex are defined in [`parameters.rs`](./src/parameters.rs).
+Their values allow using AES-256-GCM and minimizing the size of the indexes.
 
 ## Building and testing
 
@@ -82,7 +82,7 @@ solve the following search problem:
 Findex index tables are key value stores which structure is given in the
 following tables.
 
-<table style="width:25%">
+<table style="width:50%">
 	<tr>
 		<th colspan=4>Entry Table</th>
 	</tr>
@@ -98,7 +98,7 @@ following tables.
 	</tr>
 </table>
 
-<table style="width:25%">
+<table style="width:50%">
 	<tr>
 		<th colspan=4>Chain Table</th>
 	<tr>
@@ -197,7 +197,7 @@ where:
 
 Findex implementation uses callback functions. The signature of these callbacks
 and a detailed description of the functionalities they need to implement is
-given in the core [`callbacks.rs`](./src/core/callbacks.rs).
+given in the core [`callbacks.rs`](./src/callbacks.rs).
 
 An example implementation of the Findex callbacks in Rust for an in-memory
 database is available in [`in_memory_example.rs`](./src/in_memory_example.rs).
@@ -211,7 +211,7 @@ is found or the maximum recursion level is reached depending on whichever comes
 first.
 
 Parameter documentation and method signature can be found in
-[`search.rs`](./src/core/search.rs#L133-156).
+[`search.rs`](./src/search.rs#L137-150).
 
 #### Implementation details
 
@@ -249,7 +249,7 @@ value in the chain will be ignored by subsequent search queries. The value can
 later be reindexed for this keyword by upserting it again.
 
 Parameter documentation and method signature can be found in
-[`upsert.rs`](./src/core/upsert.rs#L35-50).
+[`upsert.rs`](./src/upsert.rs#L35-52).
 
 #### Implementation details
 
@@ -321,7 +321,7 @@ some upserts, indexes may waste a lot of space. This is why a compacting
 operation is needed.
 
 Parameter documentation and method signature can be found in
-[`compact.rs`](./src/core/compact.rs#L39-67).
+[`compact.rs`](./src/compact.rs#L38-59).
 
 #### Implementation details
 
