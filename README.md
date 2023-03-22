@@ -32,9 +32,8 @@ Findex is part of Cosmian Cloudproof Encryption.
 ## Getting started
 
 Findex allows to index values by keywords. These values can be locations (UIDs
-in an encrypted database, URLs etc.) or other keywords. This allows creating
-graphs of keywords as described in the section [Two indexing
-strategies](#two-indexing-strategies).
+in an encrypted database, URLs etc.) or other keywords (see section [Two
+indexing strategies](#two-indexing-strategies)).
 
 Findex delegates to the user the implementation of *callbacks* to manipulate
 the indexes. This makes Findex compatible with any database technology since
@@ -187,7 +186,7 @@ where:
 
 **Example**:
 - if an index contains 1000 keywords, the size of the Entry Table is 140KB. If
-  each keyword indexes an only value (i.e. `V(w_i) = 1` for each `w_i`), the
+  each keyword indexes an only value (i.e. $V(w_i) = 1$ for each $w_i$), the
   size of the Chain Table is 146KB.
 - adding a new keyword in the indexes increases the Entry Table size of 140B.
 - indexing up to 5 new values for a given keyword increases the Chain Table
