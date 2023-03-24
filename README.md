@@ -163,7 +163,7 @@ L_{entry~table} = (L_{uid} + C_e + L_{K_{w_i}} + L_{H_{w_i}} + L_{uid}) \cdot N
   indexed by this keyword) the size of the Chain Table is given by (in bytes):
 ```math
 L_{chain~table} = \left(L_{uid} + C_e + 1 + B * (1 + L_{block})\right) \sum\limits_{i~\in~[1,N]}\left\lceil \frac{V(w_i)}{B}\right\rceil
-                = 146 \sum\limits_{i~\in~[1;N]}\left\lceil \frac{V(w_i)}{B}\right\rceil
+                = 146 \sum\limits_{i~\in~[1;N]}\left\lceil \frac{V(w_i)}{5}\right\rceil
 ```
 where:
 - the length of an UID: $L_{uid} = 32~\textnormal{bytes}$
@@ -176,34 +176,105 @@ where:
 ### Two indexing strategies
 
 Naive (locations are indexed for all possible slices):
-
 - `mar` -> {locations}
 - `mart` -> {locations}
 - `marti` -> {locations}
 - `martin` -> {locations}
 - `martine` -> {locations}
 
-Graph:
+Mixed:
+- `mar` -> `martine`
+- `mart` -> `martine`
+- `marti` -> `martine`
+- `martin` -> `martine`
+- `martine` -> {locations}
 
+Graph:
 - `mar` -> `mart`
 - `mart` -> `marti`
 - `marti` -> `martin`
 - `martin` -> `martine`
 - `martine` -> {locations}
 
-Disadvantage of graphs: more interactions between client and server: 4 average
-compared to 1 for the naive solution.
+More client/server interactions are needed for the graph solution: the depth of
+the graph (4 in this example) compared to 1 for the naive solution and 2 for
+the mixed solution.
 
-Advantage of graphs: optimal storage of the locations info since they are not
-repeated in the chain table.
+In the other hand, the graph solution optimizes the size of the Chain Table.
 
-| Avg locations | #records graphs | #records naive | ratio | size (kb) graphs | size (kb) naive | ratio |
-|---------------|-----------------|----------------|-------|------------------|-----------------|-------|
-| 1             | 86018           | 86018          | 1.00  | 5605             | 5704            | 1.01  |
-| 2             | 105966          | 172036         | 1.62  | 6994             | 11745           | 1.68  |
-| 3             | 125914          | 258054         | 2.04  | 8344             | 17618           | 2.11  |
-| 4             | 145862          | 244072         | 2.35  | 9694             | 23491           | 2.42  |
-| 5             | 165810          | 430090         | 2.59  | 11044            | 29364           | 2.65  |
+<table>
+	<tr>
+		<th rowspan=2>Avg locations</th>
+		<th colspan=3>#records</th>
+		<th colspan=3>size (in KB)</th>
+		<th colspan=2>ratio</th>
+	</tr>
+	<tr>
+		<th>naive</th>
+		<th>mixt</th>
+		<th>graph</th>
+		<th>naive</th>
+		<th>mixed</th>
+		<th>graph</th>
+		<th>mixed / naive</th>
+		<th>graph / naive</th>
+	</tr>
+	<tr>
+		<td>1</td>
+		<td>49016</td>
+		<td>53058</td>
+		<td>49316</td>
+		<td>6988</td>
+		<td>7564</td>
+		<td>7031</td>
+		<td>1.08</td>
+		<td>1.01</td>
+	</tr>
+	<tr>
+		<td>2</td>
+		<td>58253</td>
+		<td>57347</td>
+		<td>53526</td>
+		<td>8305</td>
+		<td>8176</td>
+		<td>7631</td>
+		<td>0.98</td>
+		<td>0.92</td>
+	</tr>
+	<tr>
+		<td>3</td>
+		<td>71455</td>
+		<td>61817</td>
+		<td>57949</td>
+		<td>10187</td>
+		<td>8813</td>
+		<td>8262</td>
+		<td>0.87</td>
+		<td>0.81</td>
+	</tr>
+	<tr>
+		<td>4</td>
+		<td>80692</td>
+		<td>66671</td>
+		<td>62785</td>
+		<td>11504</td>
+		<td>9505</td>
+		<td>8951</td>
+		<td>0.83</td>
+		<td>0.78</td>
+	</tr>
+	<tr>
+		<td>5</td>
+		<td>86048</td>
+		<td>72676</td>
+		<td>69014</td>
+		<td>12268</td>
+		<td>10362</td>
+		<td>9839</td>
+		<td>0.84</td>
+		<td>0.80</td>
+	</tr>
+</table>
 
 ### Benchmarks
 
