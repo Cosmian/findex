@@ -82,7 +82,7 @@ pub trait FindexSearch<
         //
         // Query the Entry Table for these UIDs
         //
-        let entry_table = EntryTable::decrypt::<BLOCK_LENGTH, DEM_KEY_LENGTH, DemScheme>(
+        let entry_table = EntryTable::decrypt::<DEM_KEY_LENGTH, DemScheme>(
             &k_value,
             &self
                 .fetch_entry_table(&entry_table_uid_map.keys().cloned().collect())

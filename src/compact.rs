@@ -91,10 +91,8 @@ pub trait FindexCompact<
         // `chain_table_uids_to_remove`) and send them to the callback to update the
         // database.
         let mut chain_table_adds = EncryptedTable::default();
-        let mut entry_table = EntryTable::decrypt::<BLOCK_LENGTH, DEM_KEY_LENGTH, DemScheme>(
-            &k_value,
-            &encrypted_entry_table,
-        )?;
+        let mut entry_table =
+            EntryTable::decrypt::<DEM_KEY_LENGTH, DemScheme>(&k_value, &encrypted_entry_table)?;
         // Entry Table items indexing empty chains should be removed.
         let mut entry_table_uids_to_drop = Vec::new();
 
@@ -232,8 +230,7 @@ pub trait FindexCompact<
         // Call the callback
         self.update_lines(
             chain_table_uids_to_remove,
-            entry_table
-                .encrypt::<BLOCK_LENGTH, DEM_KEY_LENGTH, DemScheme>(&new_k_value, &mut rng)?,
+            entry_table.encrypt::<DEM_KEY_LENGTH, DemScheme>(&new_k_value, &mut rng)?,
             chain_table_adds,
         )?;
 

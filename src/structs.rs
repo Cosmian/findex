@@ -61,6 +61,9 @@ impl Keyword {
     }
 }
 
+/// Type of a keyword hash.
+pub type KeywordHash = [u8; Keyword::HASH_LENGTH];
+
 #[derive(Copy, Clone, Debug, Hash, PartialEq, Eq)]
 pub enum BlockType {
     Addition,
