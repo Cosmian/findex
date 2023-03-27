@@ -20,7 +20,7 @@ use crate::{
     chain_table::{ChainTable, ChainTableValue, KwiChainUids},
     error::CoreError as Error,
     keys::KeyCache,
-    structs::{BlockType, EncryptedTable, IndexedValue, Label, Uid},
+    structs::{BlockType, EncryptedTable, IndexedValue, KeywordHash, Label, Uid},
     KeyingMaterial, Keyword, CHAIN_TABLE_KEY_DERIVATION_INFO,
 };
 
@@ -159,11 +159,7 @@ impl<const UID_LENGTH: usize, const KWI_LENGTH: usize> EntryTableValue<UID_LENGT
     ///
     /// - `k_value` : `𝐾_value`
     /// - `rng`     : random number generator
-    pub(crate) fn encrypt<
-        const BLOCK_LENGTH: usize,
-        const DEM_KEY_LENGTH: usize,
-        DemScheme: Dem<DEM_KEY_LENGTH>,
-    >(
+    pub(crate) fn encrypt<const DEM_KEY_LENGTH: usize, DemScheme: Dem<DEM_KEY_LENGTH>>(
         &self,
         k_value: &DemScheme::Key,
         rng: &mut impl CryptoRngCore,
@@ -179,11 +175,7 @@ impl<const UID_LENGTH: usize, const KWI_LENGTH: usize> EntryTableValue<UID_LENGT
     ///
     /// - `k_value`     : `𝐾_value`
     /// - `ciphertext`  : encrypted entry table value
-    pub(crate) fn decrypt<
-        const BLOCK_LENGTH: usize,
-        const DEM_KEY_LENGTH: usize,
-        DemScheme: Dem<DEM_KEY_LENGTH>,
-    >(
+    pub(crate) fn decrypt<const DEM_KEY_LENGTH: usize, DemScheme: Dem<DEM_KEY_LENGTH>>(
         k_value: &DemScheme::Key,
         ciphertext: &[u8],
     ) -> Result<Self, Error> {
@@ -308,18 +300,13 @@ impl<const UID_LENGTH: usize, const KWI_LENGTH: usize> EntryTable<UID_LENGTH, KW
     ///
     /// - `k_value`                 : DEM key
     /// - `encrypted_entry_table`   : encrypted Entry Table
-    pub fn decrypt<
-        const BLOCK_LENGTH: usize,
-        const DEM_KEY_LENGTH: usize,
-        DemScheme: Dem<DEM_KEY_LENGTH>,
-    >(
+    pub fn decrypt<const DEM_KEY_LENGTH: usize, DemScheme: Dem<DEM_KEY_LENGTH>>(
         k_value: &DemScheme::Key,
         encrypted_entry_table: &EncryptedTable<UID_LENGTH>,
     ) -> Result<Self, Error> {
         let mut entry_table = Self::with_capacity(encrypted_entry_table.len());
         for (k, v) in encrypted_entry_table.iter() {
             let decrypted_value = EntryTableValue::<UID_LENGTH, KWI_LENGTH>::decrypt::<
-                BLOCK_LENGTH,
                 DEM_KEY_LENGTH,
                 DemScheme,
             >(k_value, v)
@@ -344,11 +331,7 @@ impl<const UID_LENGTH: usize, const KWI_LENGTH: usize> EntryTable<UID_LENGTH, KW
     ///
     /// - `k_value` : DEM key
     /// - `rng`     : random number generator
-    pub fn encrypt<
-        const BLOCK_LENGTH: usize,
-        const DEM_KEY_LENGTH: usize,
-        DemScheme: Dem<DEM_KEY_LENGTH>,
-    >(
+    pub fn encrypt<const DEM_KEY_LENGTH: usize, DemScheme: Dem<DEM_KEY_LENGTH>>(
         &self,
         k_value: &DemScheme::Key,
         rng: &mut impl CryptoRngCore,
@@ -357,11 +340,9 @@ impl<const UID_LENGTH: usize, const KWI_LENGTH: usize> EntryTable<UID_LENGTH, KW
         for (k, v) in self.iter() {
             encrypted_entry_table.insert(
                 k.clone(),
-                EntryTableValue::<UID_LENGTH, KWI_LENGTH>::encrypt::<
-                    BLOCK_LENGTH,
-                    DEM_KEY_LENGTH,
-                    DemScheme,
-                >(v, k_value, rng)?,
+                EntryTableValue::<UID_LENGTH, KWI_LENGTH>::encrypt::<DEM_KEY_LENGTH, DemScheme>(
+                    v, k_value, rng,
+                )?,
             );
         }
         Ok(encrypted_entry_table)
@@ -436,20 +417,23 @@ impl<const UID_LENGTH: usize, const KWI_LENGTH: usize> EntryTable<UID_LENGTH, KW
     >(
         &mut self,
         rng: &mut impl CryptoRngCore,
-        new_chain_elements: &HashMap<Keyword, HashMap<IndexedValue, BlockType>>,
-        keyword_to_entry_table_uid: &HashMap<Keyword, Uid<UID_LENGTH>>,
+        new_chain_elements: &HashMap<KeywordHash, HashMap<IndexedValue, BlockType>>,
+        keyword_to_entry_table_uid: &HashMap<KeywordHash, Uid<UID_LENGTH>>,
     ) -> Result<HashMap<Uid<UID_LENGTH>, EncryptedTable<UID_LENGTH>>, Error> {
         // Cache the KMAC and DEM keys
         let mut key_cache = KeyCache::with_capacity(keyword_to_entry_table_uid.len());
 
         let mut chain_table_additions = HashMap::with_capacity(new_chain_elements.len());
-        for (keyword, indexed_values) in new_chain_elements {
+        for (keyword_hash, indexed_values) in new_chain_elements {
             // Get the corresponding Entry Table UID from the cache.
-            let entry_table_uid = keyword_to_entry_table_uid.get(keyword).ok_or_else(|| {
-                Error::CryptoError(format!(
-                    "No entry in Entry Table UID cache for keyword '{keyword:?}'"
-                ))
-            })?;
+            let entry_table_uid =
+                keyword_to_entry_table_uid
+                    .get(keyword_hash)
+                    .ok_or_else(|| {
+                        Error::CryptoError(format!(
+                            "No entry in Entry Table UID cache for keyword '{keyword_hash:?}'"
+                        ))
+                    })?;
 
             // It is only possible to insert new entries in the Chain Table.
             let new_chain_table_entries = chain_table_additions
@@ -472,7 +456,7 @@ impl<const UID_LENGTH: usize, const KWI_LENGTH: usize> EntryTable<UID_LENGTH, KW
                 .or_insert_with(|| {
                     EntryTableValue::new::<CHAIN_TABLE_WIDTH, BLOCK_LENGTH, KMAC_KEY_LENGTH, KmacKey>(
                         rng,
-                        keyword.hash(),
+                        *keyword_hash,
                     )
                 });
 
@@ -529,16 +513,12 @@ mod tests {
         >(&mut rng, keyword.hash());
 
         let c = entry_table_value
-            .encrypt::<BLOCK_LENGTH, { Aes256GcmCrypto::KEY_LENGTH }, Aes256GcmCrypto>(
-                &k_value, &mut rng,
-            )
+            .encrypt::<{ Aes256GcmCrypto::KEY_LENGTH }, Aes256GcmCrypto>(&k_value, &mut rng)
             .unwrap();
 
-        let res = EntryTableValue::decrypt::<
-            BLOCK_LENGTH,
-            { Aes256GcmCrypto::KEY_LENGTH },
-            Aes256GcmCrypto,
-        >(&k_value, &c)
+        let res = EntryTableValue::decrypt::<{ Aes256GcmCrypto::KEY_LENGTH }, Aes256GcmCrypto>(
+            &k_value, &c,
+        )
         .unwrap();
 
         assert_eq!(entry_table_value, res);

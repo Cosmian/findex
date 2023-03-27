@@ -14,7 +14,9 @@ use crate::{
     error::{CallbackError, Error},
     keys::KeyingMaterial,
     parameters::check_parameter_constraints,
-    structs::{BlockType, EncryptedTable, IndexedValue, Keyword, Label, Uid, UpsertData},
+    structs::{
+        BlockType, EncryptedTable, IndexedValue, Keyword, KeywordHash, Label, Uid, UpsertData,
+    },
     FindexCallbacks, ENTRY_TABLE_KEY_DERIVATION_INFO,
 };
 
@@ -62,12 +64,12 @@ pub trait FindexUpsert<
 
         // Revert the `HashMap`.
         let mut new_chain_elements =
-            HashMap::<Keyword, HashMap<IndexedValue, BlockType>>::default();
+            HashMap::<KeywordHash, HashMap<IndexedValue, BlockType>>::default();
 
         for (indexed_value, keywords) in additions {
             for keyword in keywords {
                 new_chain_elements
-                    .entry(keyword)
+                    .entry(keyword.hash())
                     .or_default()
                     .insert(indexed_value.clone(), BlockType::Addition);
             }
@@ -78,7 +80,7 @@ pub trait FindexUpsert<
         for (indexed_value, keywords) in deletions {
             for keyword in keywords {
                 new_chain_elements
-                    .entry(keyword)
+                    .entry(keyword.hash())
                     .or_default()
                     .insert(indexed_value.clone(), BlockType::Deletion);
             }
@@ -88,29 +90,24 @@ pub trait FindexUpsert<
         let k_uid: KmacKey = master_key.derive_kmac_key(ENTRY_TABLE_KEY_DERIVATION_INFO);
         let k_value = master_key.derive_dem_key(ENTRY_TABLE_KEY_DERIVATION_INFO);
 
-        let keyword_to_entry_table_uid = new_chain_elements
+        let keyword_hash_to_entry_table_uid = new_chain_elements
             .keys()
-            .map(|keyword| {
+            .map(|keyword_hash| {
                 (
-                    keyword.clone(),
-                    EntryTable::<UID_LENGTH, KWI_LENGTH>::generate_uid(
-                        &k_uid,
-                        &keyword.hash(),
-                        label,
-                    ),
+                    *keyword_hash,
+                    EntryTable::<UID_LENGTH, KWI_LENGTH>::generate_uid(&k_uid, keyword_hash, label),
                 )
             })
             .collect::<HashMap<_, _>>();
 
         // Query the Entry Table for these UIDs.
         let mut encrypted_entry_table = self
-            .fetch_entry_table(&keyword_to_entry_table_uid.values().cloned().collect())
+            .fetch_entry_table(&keyword_hash_to_entry_table_uid.values().cloned().collect())
             .await?;
 
         while !new_chain_elements.is_empty() {
             // Decrypt the Entry Table once and for all.
             let mut entry_table = EntryTable::<UID_LENGTH, KWI_LENGTH>::decrypt::<
-                BLOCK_LENGTH,
                 DEM_KEY_LENGTH,
                 DemScheme,
             >(&k_value, &encrypted_entry_table)?;
@@ -126,7 +123,7 @@ pub trait FindexUpsert<
             >(
                 &mut rng,
                 &new_chain_elements,
-                &keyword_to_entry_table_uid,
+                &keyword_hash_to_entry_table_uid,
             )?;
 
             // Finally write new indexes in database. Get the new values of the Entry Table
@@ -134,13 +131,12 @@ pub trait FindexUpsert<
             encrypted_entry_table = self
                 .write_indexes(
                     encrypted_entry_table,
-                    entry_table
-                        .encrypt::<BLOCK_LENGTH, DEM_KEY_LENGTH, DemScheme>(&k_value, &mut rng)?,
+                    entry_table.encrypt::<DEM_KEY_LENGTH, DemScheme>(&k_value, &mut rng)?,
                     chain_table_additions,
                 )
                 .await?;
 
-            for (keyword, uid) in &keyword_to_entry_table_uid {
+            for (keyword, uid) in &keyword_hash_to_entry_table_uid {
                 // Remove chains that have successfully been upserted.
                 if !encrypted_entry_table.contains_key(uid) {
                     new_chain_elements.remove_entry(keyword);
