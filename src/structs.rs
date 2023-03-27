@@ -1,7 +1,7 @@
 //! This module defines all useful structures used by Findex.
 
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     fmt::Debug,
     ops::{Deref, DerefMut},
     vec::Vec,
@@ -61,132 +61,119 @@ impl Keyword {
     }
 }
 
+#[derive(Copy, Clone, Debug, Hash, PartialEq, Eq)]
+pub enum BlockType {
+    Addition,
+    Deletion,
+}
+
+#[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
+pub enum BlockPrefix {
+    NonTerminating,
+    Terminating { length: u8 },
+    Padding,
+}
+
+impl From<BlockPrefix> for u8 {
+    fn from(value: BlockPrefix) -> Self {
+        match value {
+            BlockPrefix::NonTerminating => u8::MAX,
+            BlockPrefix::Terminating { length } => length,
+            BlockPrefix::Padding => 0,
+        }
+    }
+}
+
+impl From<u8> for BlockPrefix {
+    fn from(value: u8) -> Self {
+        match value {
+            0 => Self::Padding,
+            u8::MAX => Self::NonTerminating,
+            length => Self::Terminating { length },
+        }
+    }
+}
+
 /// A `Block` defines a fixed-size block of bytes.
 ///
-/// It is used to store variable length values in the Chain Table. It allows
-/// padding lines to an equal size which avoids leaking information.
+/// It is used to store variable length values in the Chain Table by fixed-sized
+/// chunks. It allows padding lines to an equal size which avoids leaking
+/// information.
 ///
 /// A value can be represented by several blocks. The first blocks representing
-/// a value are full, i.e. no padding is necessary. The first byte is set to
-/// `LENGTH`. The last block representing a value may not be full. It is
-/// padded with 0s. The first byte is used to write the size of the data stored
-/// in this block.
+/// a value are full. The first byte is set to `u8::MAX`. The last block
+/// representing a value may not be full. It is padded with 0s. The first byte
+/// is used to write the size of the data stored in this block. The special
+/// prefix value `0` means the block contains no data.
 ///
 /// +-------------------------+--------------------------+
-/// |        1 byte           | `BLOCK_LENGTH` - 1 bytes |
+/// |        1 byte           |      `BLOCK_LENGTH`      |
 /// +-------------------------+--------------------------+
-/// |         `LENGTH`        |                          |
+/// |      `0` or `u8::MAX`   |                          |
 /// |            or           |       padded data        |
 /// | number of bytes written |                          |
 /// +-------------------------+--------------------------+
 ///
-/// The corollary is that the size of a block shall not be greater than 255
-/// (`u8::MAX`). This is enough in practice because bigger blocks imply more
-/// wasted space for small values (a small value would be padded to `LENGTH -
-/// 1`).
+/// The corollary is that the length of a block shall not be greater than 254
+/// (`u8::MAX - 1`); this is enough because bigger blocks imply more wasted
+/// space for small values (a small value would be padded to `LENGTH` bytes).
 #[must_use]
-#[derive(Clone, Debug, Hash, PartialEq, Eq)]
-pub struct Block<const LENGTH: usize>(pub(crate) [u8; LENGTH]);
+#[derive(Copy, Clone, Debug, Hash, PartialEq, Eq)]
+pub struct Block<const LENGTH: usize> {
+    pub(crate) block_type: BlockType,
+    pub(crate) prefix: BlockPrefix,
+    pub(crate) data: [u8; LENGTH],
+}
 
-impl_byte_array!(Block);
+/// A block length should be a valid `u8` to allow writing in one byte, and the
+/// value `u8::MAX` is reserved to indicate a non-terminating block.
+const MAX_BLOCK_LENGTH: usize = (u8::MAX - 1) as usize;
 
 impl<const LENGTH: usize> Block<LENGTH> {
+    /// This checks that the `BLOCK_LENGTH` does not exceed the
+    /// `MAX_BLOCK_LENGTH`.
+    pub const CHECK_LENGTH: () = assert!(
+        LENGTH <= MAX_BLOCK_LENGTH,
+        "`BLOCK_LENGTH` should be *not* be greater than 254",
+    );
+
     /// Creates a new `Block` from the given bytes. Terminating blocks are
     /// prepended with the number of bytes written and padded with 0s.
     /// Non-terminating blocks are prepended with `LENGTH`.
     ///
+    /// - `block_type`      : addition or deletion
     /// - `bytes`           : bytes to store in the block
     /// - `is_terminating`  : true if the block is the last block of a value
-    pub fn new(bytes: &[u8], is_terminating: bool) -> Result<Self, Error> {
-        if LENGTH > u8::MAX as usize {
-            return Err(Error::CryptoError(format!(
-                "Blocks cannot be of size {LENGTH}"
+    pub fn new(block_type: BlockType, prefix: BlockPrefix, bytes: &[u8]) -> Result<Self, Error> {
+        if LENGTH < bytes.len() {
+            return Err(crate::Error::CryptoError(format!(
+                "blocks can't hold more than {LENGTH} bytes ({} given)",
+                bytes.len()
             )));
         }
-        // The first byte of a block is used to write the size of the data stored inside
-        // this block.
-        if bytes.len() > LENGTH - 1 {
-            return Err(Error::CryptoError(format!(
-                "Cannot create a block holding more than {} block",
-                LENGTH - 1
-            )));
-        }
-        // The default pads the entire block with 0s.
-        let mut block = Self::default();
-        if is_terminating {
-            block[0] = bytes.len() as u8;
-        } else {
-            // No block can contain `LENGTH` bytes.
-            block[0] = LENGTH as u8;
-        }
-        for (i, b) in bytes.iter().enumerate() {
-            block[i + 1] = *b;
-        }
-        Ok(block)
+        let mut data = [0; LENGTH];
+        data[..bytes.len()].copy_from_slice(bytes);
+        Ok(Self {
+            block_type,
+            prefix,
+            data,
+        })
     }
 
-    /// Unpads the byte vectors contained in the given list of `Block`.
-    ///
-    /// - `blocks`  : list of blocks to unpad
-    pub fn unpad(blocks: &[Self]) -> Result<Vec<Vec<u8>>, Error> {
-        let mut blocks = blocks;
-        let mut res = Vec::new();
-        while !blocks.is_empty() {
-            // At least `LENGTH - 1` bytes will be read
-            let mut bytes = Vec::with_capacity(LENGTH - 1);
-            while blocks.len() > 1 && blocks[0][0] == LENGTH as u8 {
-                bytes.extend_from_slice(&blocks[0][1..]);
-                blocks = &blocks[1..];
-            }
-            let length = blocks[0][0] as usize;
-            if length == LENGTH {
-                return Err(Error::CryptoError(
-                    "Last block given is a non-terminating block.".to_string(),
-                ));
-            }
-            bytes.extend_from_slice(&blocks[0][1..=length]);
-            blocks = &blocks[1..];
-            res.push(bytes);
-        }
-        Ok(res)
+    /// Returns `true` if this block is an addition, and `false` if it is a
+    /// deletion.
+    pub fn is_addition(&self) -> bool {
+        self.block_type == BlockType::Addition
     }
 
-    /// Pads the given bytes into blocks. Uses the first byte to differentiate
-    /// terminating blocks:
-    ///
-    /// - non-terminating blocks are prefixed by `LENGTH`;
-    /// - terminating blocks are prefixed by the actual length written.
-    ///
-    /// # Parameters
-    ///
-    /// - `bytes`   : bytes to be padded in to a `Block`
-    pub fn pad(mut bytes: &[u8]) -> Result<Vec<Self>, Error> {
-        // Number of blocks needed.
-        let mut partition_size = bytes.len() / (LENGTH - 1);
-        if bytes.len() % (LENGTH - 1) != 0 {
-            partition_size += 1;
+    /// Generates a new padding block.
+    pub const fn padding_block() -> Self {
+        Self {
+            // A deletion is ignored when computing the flag.
+            block_type: BlockType::Deletion,
+            prefix: BlockPrefix::Padding,
+            data: [0; LENGTH],
         }
-
-        let mut blocks = Vec::with_capacity(partition_size);
-        while bytes.len() > LENGTH - 1 {
-            // this is a non-terminating block
-            blocks.push(Self::new(&bytes[..LENGTH - 1], false)?);
-            bytes = &bytes[LENGTH - 1..];
-        }
-        blocks.push(Self::new(bytes, true)?);
-
-        Ok(blocks)
-    }
-
-    /// Generates a new empty block.
-    pub const fn new_empty_block() -> Self {
-        Self([0; LENGTH])
-    }
-}
-
-impl<const BLOCK_LENGTH: usize> Default for Block<BLOCK_LENGTH> {
-    fn default() -> Self {
-        Self::new_empty_block()
     }
 }
 
@@ -233,6 +220,99 @@ impl IndexedValue {
                 b
             }
         }
+    }
+
+    /// Extracts `IndexedValue`s from the given `Block`s.
+    ///
+    /// Reads the `Block`s *in order* until a non-terminating `Block` is found.
+    /// Converts the `Block`s read into an `IndexedValue` and adds it to the
+    /// results if the `Block`s read were additions. Otherwise removes it from
+    /// the results.
+    ///
+    /// Repeats this process until all the given `Block`s are read.
+    ///
+    /// # Parameters
+    ///
+    /// - `blocks`  : list of `Block`s to read from
+    pub fn from_blocks<'a, const BLOCK_LENGTH: usize>(
+        blocks: impl IntoIterator<Item = &'a Block<BLOCK_LENGTH>>,
+    ) -> Result<HashSet<Self>, Error> {
+        let mut blocks = blocks.into_iter();
+
+        // There is no simple way to know the number of `IndexedValue`s beforehand.
+        let mut indexed_values = HashSet::new();
+
+        while let Some(mut block) = blocks.next() {
+            let block_type = block.block_type;
+            let mut byte_vector = Vec::with_capacity(BLOCK_LENGTH);
+
+            // Read blocks until a terminating block is encountered.
+            while block.prefix == BlockPrefix::NonTerminating {
+                byte_vector.extend(block.data);
+                block = blocks.next().ok_or(Error::CryptoError(
+                    "last block is a non-terminating block".to_string(),
+                ))?;
+                if block.block_type != block_type {
+                    return Err(crate::Error::CryptoError(
+                        "mixed block types for a single byte vector".to_string(),
+                    ));
+                }
+            }
+
+            // This block is terminating the byte vector.
+            let length = <u8>::from(block.prefix) as usize;
+            if length != 0 {
+                // This block is not padding.
+                byte_vector.extend(&block.data[..length]);
+                let value = Self::try_from_bytes(&byte_vector)?;
+                if BlockType::Addition == block_type {
+                    indexed_values.insert(value);
+                } else {
+                    indexed_values.remove(&value);
+                }
+            }
+        }
+
+        Ok(indexed_values)
+    }
+
+    /// Pads the given `IndexedValue` into blocks of `BLOCK_LENGTH` bytes. The
+    /// last chunk is padded with `0`s if needed.
+    ///
+    /// # Parameters
+    ///
+    /// - `block_type`  : a block can be an addition or a deletion
+    pub fn to_blocks<const BLOCK_LENGTH: usize>(
+        &self,
+        block_type: BlockType,
+    ) -> Result<Vec<Block<BLOCK_LENGTH>>, Error> {
+        // TODO (TBZ): implement this conversion without copy.
+        let bytes = self.to_vec();
+
+        let mut n_blocks = bytes.len() / BLOCK_LENGTH;
+        if bytes.len() % BLOCK_LENGTH != 0 {
+            n_blocks += 1;
+        }
+
+        let mut blocks = Vec::with_capacity(n_blocks);
+        let mut pos = 0;
+        while bytes.len() - pos > BLOCK_LENGTH {
+            blocks.push(Block::new(
+                block_type,
+                BlockPrefix::NonTerminating,
+                &bytes[pos..pos + BLOCK_LENGTH],
+            )?);
+            pos += BLOCK_LENGTH;
+        }
+        blocks.push(Block::new(
+            block_type,
+            BlockPrefix::Terminating {
+                length: <u8>::try_from(bytes.len() - pos)?,
+            },
+            &bytes[pos..],
+        )?);
+
+        Ok(blocks)
     }
 
     /// Returns `true` if the [`IndexedValue`] is a [`Location`].
@@ -544,51 +624,44 @@ impl<const UID_LENGTH: usize> Serializable for UpsertData<UID_LENGTH> {
 
 #[cfg(test)]
 mod tests {
-    use crate::structs::Block;
+    use super::*;
 
     #[test]
     fn test_padding() {
         const BLOCK_LENGTH: usize = 3;
-        // Pad vector with remaining bytes.
-        let bytes = vec![1, 2, 3, 4, 5];
-        let blocks = Block::<BLOCK_LENGTH>::pad(&bytes).unwrap();
-        assert_eq!(blocks.len(), 3);
-        assert_eq!(
-            blocks,
-            vec![
-                Block::from([3, 1, 2]),
-                Block::from([3, 3, 4]),
-                Block([1, 5, 0])
-            ]
-        );
+        const N_ADDITIONS: usize = 5;
 
-        let res = Block::<BLOCK_LENGTH>::unpad(&blocks).unwrap();
+        let mut blocks = Vec::<Block<BLOCK_LENGTH>>::new();
+
+        // Add a value that does not fit in a single block.
+        let long_indexed_value =
+            IndexedValue::from(Location::from(vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10]));
+        blocks.extend(&long_indexed_value.to_blocks(BlockType::Addition).unwrap());
+
+        // Try padding some small values.
+        for i in 0..N_ADDITIONS {
+            let indexed_value = IndexedValue::from(Location::from(vec![i as u8]));
+            blocks.extend(&indexed_value.to_blocks(BlockType::Addition).unwrap());
+        }
+
+        // Assert unpadding the resulting blocks leads to the correct result.
+        let res = IndexedValue::from_blocks(blocks.iter()).unwrap();
+        assert_eq!(res.len(), N_ADDITIONS + 1);
+        assert!(res.contains(&long_indexed_value));
+        for i in 0..N_ADDITIONS {
+            assert!(res.contains(&IndexedValue::from(Location::from(vec![i as u8]))));
+        }
+
+        // Try deleting some values.
+        blocks.extend(&long_indexed_value.to_blocks(BlockType::Deletion).unwrap());
+        for i in 1..N_ADDITIONS {
+            let indexed_value = IndexedValue::from(Location::from(vec![i as u8]));
+            blocks.extend(indexed_value.to_blocks(BlockType::Deletion).unwrap());
+        }
+
+        // Assert unpadding the resulting blocks leads to the correct result.
+        let res = IndexedValue::from_blocks(blocks.iter()).unwrap();
         assert_eq!(res.len(), 1);
-        assert_eq!(res[0], bytes);
-
-        // Pad vector without remaining byte.
-        let bytes = vec![1, 2, 3, 4];
-        let blocks = Block::<BLOCK_LENGTH>::pad(&bytes).unwrap();
-        assert_eq!(blocks.len(), 2);
-        assert_eq!(
-            blocks,
-            vec![Block::from([3, 1, 2]), Block::from([2, 3, 4]),]
-        );
-
-        let res = Block::<BLOCK_LENGTH>::unpad(&blocks).unwrap();
-        assert_eq!(res.len(), 1);
-        assert_eq!(res[0], bytes);
-
-        // Pad vector in one big block
-        const BLOCK_LENGTH_2: usize = 32;
-        let bytes = vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
-        let mut blocks = Block::<BLOCK_LENGTH_2>::pad(&bytes).unwrap();
-        assert_eq!(blocks.len(), 1);
-        // Append another big block containing the same vector.
-        blocks.push(blocks[0].clone());
-        let res = Block::<BLOCK_LENGTH_2>::unpad(&blocks).unwrap();
-        assert_eq!(res.len(), 2);
-        assert_eq!(res[0], bytes);
-        assert_eq!(res[1], bytes);
+        assert!(res.contains(&IndexedValue::from(Location::from(vec![0]))));
     }
 }

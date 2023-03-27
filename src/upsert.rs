@@ -13,7 +13,8 @@ use crate::{
     entry_table::EntryTable,
     error::{CallbackError, Error},
     keys::KeyingMaterial,
-    structs::{EncryptedTable, IndexedValue, Keyword, Label, Uid, UpsertData},
+    parameters::check_parameter_constraints,
+    structs::{BlockType, EncryptedTable, IndexedValue, Keyword, Label, Uid, UpsertData},
     FindexCallbacks, ENTRY_TABLE_KEY_DERIVATION_INFO,
 };
 
@@ -21,7 +22,7 @@ use crate::{
 pub trait FindexUpsert<
     const UID_LENGTH: usize,
     const BLOCK_LENGTH: usize,
-    const TABLE_WIDTH: usize,
+    const CHAIN_TABLE_WIDTH: usize,
     const MASTER_KEY_LENGTH: usize,
     const KWI_LENGTH: usize,
     const KMAC_KEY_LENGTH: usize,
@@ -31,32 +32,55 @@ pub trait FindexUpsert<
     CustomError: std::error::Error + CallbackError,
 >: FindexCallbacks<CustomError, UID_LENGTH>
 {
-    /// Index the given values for the given keywords. After upserting, any
-    /// search for such a keyword will result in finding (at least) the
-    /// corresponding value.
+    /// Index the given added values for the given keywords. Desindex the given
+    /// deleted values for the given keywords.
+    ///
+    /// After upserting, searching for a keyword with added values will result
+    /// in finding (at least) these values. Searching for a keyword with deleted
+    /// values will not result in finding these values.
+    ///
+    /// If a value is indexed for a keyword and desindexed for the same keyword
+    /// in the same upsert operation, the deletion takes precendence over
+    /// the addition.
     ///
     /// # Parameters
     ///
-    /// - `new_chain_elements`  : values to index by keywords
-    /// - `master_key`          : Findex master key
-    /// - `label`               : additional public information used for hashing
-    ///   Entry Table UIDs
+    /// - `additions`   : keywords to index values for
+    /// - `deletions`   : keywords to desindex values for
+    /// - `master_key`  : Findex master key
+    /// - `label`       : additional public information used for hashing Entry
+    ///   Table UIDs
     async fn upsert(
         &mut self,
-        indexed_value_to_keywords: HashMap<IndexedValue, HashSet<Keyword>>,
+        additions: HashMap<IndexedValue, HashSet<Keyword>>,
+        deletions: HashMap<IndexedValue, HashSet<Keyword>>,
         master_key: &KeyingMaterial<MASTER_KEY_LENGTH>,
         label: &Label,
     ) -> Result<(), Error<CustomError>> {
+        check_parameter_constraints::<CHAIN_TABLE_WIDTH, BLOCK_LENGTH>();
         let mut rng = CsRng::from_entropy();
 
         // Revert the `HashMap`.
-        let mut new_chain_elements = HashMap::<Keyword, HashSet<IndexedValue>>::default();
-        for (indexed_value, keywords) in indexed_value_to_keywords {
+        let mut new_chain_elements =
+            HashMap::<Keyword, HashMap<IndexedValue, BlockType>>::default();
+
+        for (indexed_value, keywords) in additions {
             for keyword in keywords {
                 new_chain_elements
                     .entry(keyword)
                     .or_default()
-                    .insert(indexed_value.clone());
+                    .insert(indexed_value.clone(), BlockType::Addition);
+            }
+        }
+
+        // Adding and deleting the same indexed value for the same keyword only performs
+        // the deletion.
+        for (indexed_value, keywords) in deletions {
+            for keyword in keywords {
+                new_chain_elements
+                    .entry(keyword)
+                    .or_default()
+                    .insert(indexed_value.clone(), BlockType::Deletion);
             }
         }
 
@@ -64,8 +88,7 @@ pub trait FindexUpsert<
         let k_uid: KmacKey = master_key.derive_kmac_key(ENTRY_TABLE_KEY_DERIVATION_INFO);
         let k_value = master_key.derive_dem_key(ENTRY_TABLE_KEY_DERIVATION_INFO);
 
-        // Get the list of keywords to upsert with their associated Entry Table UID.
-        let entry_table_uid_cache = new_chain_elements
+        let keyword_to_entry_table_uid = new_chain_elements
             .keys()
             .map(|keyword| {
                 (
@@ -81,7 +104,7 @@ pub trait FindexUpsert<
 
         // Query the Entry Table for these UIDs.
         let mut encrypted_entry_table = self
-            .fetch_entry_table(&entry_table_uid_cache.values().cloned().collect())
+            .fetch_entry_table(&keyword_to_entry_table_uid.values().cloned().collect())
             .await?;
 
         while !new_chain_elements.is_empty() {
@@ -94,8 +117,8 @@ pub trait FindexUpsert<
 
             // Upsert keywords locally.
             let chain_table_additions = entry_table.upsert::<
+                CHAIN_TABLE_WIDTH,
                 BLOCK_LENGTH,
-                TABLE_WIDTH,
                 KMAC_KEY_LENGTH,
                 DEM_KEY_LENGTH,
                 KmacKey,
@@ -103,7 +126,7 @@ pub trait FindexUpsert<
             >(
                 &mut rng,
                 &new_chain_elements,
-                &entry_table_uid_cache,
+                &keyword_to_entry_table_uid,
             )?;
 
             // Finally write new indexes in database. Get the new values of the Entry Table
@@ -117,7 +140,7 @@ pub trait FindexUpsert<
                 )
                 .await?;
 
-            for (keyword, uid) in &entry_table_uid_cache {
+            for (keyword, uid) in &keyword_to_entry_table_uid {
                 // Remove chains that have successfully been upserted.
                 if !encrypted_entry_table.contains_key(uid) {
                     new_chain_elements.remove_entry(keyword);

@@ -1,6 +1,3 @@
-#![allow(incomplete_features)]
-#![feature(async_fn_in_trait)]
-
 #[cfg(feature = "in_memory")]
 use std::collections::{HashMap, HashSet};
 
@@ -62,9 +59,14 @@ fn main() {
 
         let mut findex = FindexInMemory::default();
 
-        for _ in 0..100 {
-            block_on(findex.upsert(indexed_value_to_keywords.clone(), &master_key, &label))
-                .unwrap();
+        for _ in 0..100000 {
+            block_on(findex.upsert(
+                indexed_value_to_keywords.clone(),
+                HashMap::new(),
+                &master_key,
+                &label,
+            ))
+            .unwrap();
         }
     }
 }

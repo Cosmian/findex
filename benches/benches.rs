@@ -56,7 +56,7 @@ fn bench_search(c: &mut Criterion) {
     // Prepare indexes to be search
     //
     let mut findex = FindexInMemory::default();
-    block_on(findex.upsert(locations_and_words, &master_key, &label)).expect("msg");
+    block_on(findex.upsert(locations_and_words, HashMap::new(), &master_key, &label)).expect("msg");
 
     println!("Entry Table length: {}", findex.entry_table_len());
     println!("Entry Table size: {}", findex.entry_table_size());
@@ -168,7 +168,12 @@ fn bench_upsert(c: &mut Criterion) {
     group.bench_function("Indexing 20 keywords", |b| {
         b.to_async(FuturesExecutor).iter(|| async {
             FindexInMemory::default()
-                .upsert(locations_and_words.clone(), &master_key, &label)
+                .upsert(
+                    locations_and_words.clone(),
+                    HashMap::new(),
+                    &master_key,
+                    &label,
+                )
                 .await
                 .expect("upsert failed");
         });
@@ -177,7 +182,12 @@ fn bench_upsert(c: &mut Criterion) {
     group.bench_function("Indexing 200 keywords", |b| {
         b.to_async(FuturesExecutor).iter(|| async {
             FindexInMemory::default()
-                .upsert(locations_and_words.clone(), &master_key, &label)
+                .upsert(
+                    locations_and_words.clone(),
+                    HashMap::new(),
+                    &master_key,
+                    &label,
+                )
                 .await
                 .expect("upsert failed");
         });
@@ -186,7 +196,12 @@ fn bench_upsert(c: &mut Criterion) {
     group.bench_function("Indexing 2000 keywords", |b| {
         b.to_async(FuturesExecutor).iter(|| async {
             FindexInMemory::default()
-                .upsert(locations_and_words.clone(), &master_key, &label)
+                .upsert(
+                    locations_and_words.clone(),
+                    HashMap::new(),
+                    &master_key,
+                    &label,
+                )
                 .await
                 .expect("upsert failed");
         });
