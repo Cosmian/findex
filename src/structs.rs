@@ -571,6 +571,12 @@ impl<const UID_LENGTH: usize> Deref for UpsertData<UID_LENGTH> {
     }
 }
 
+impl<const UID_LENGTH: usize> DerefMut for UpsertData<UID_LENGTH> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
+
 impl<const UID_LENGTH: usize> IntoIterator for UpsertData<UID_LENGTH> {
     type IntoIter = <<Self as Deref>::Target as IntoIterator>::IntoIter;
     type Item = (Uid<UID_LENGTH>, (Option<Vec<u8>>, Vec<u8>));

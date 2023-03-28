@@ -33,6 +33,7 @@ mod compact;
 mod entry_table;
 mod error;
 mod keys;
+mod live_compact;
 mod search;
 mod structs;
 mod upsert;

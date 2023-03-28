@@ -119,8 +119,8 @@ pub trait FindexSearch<
             .noisy_fetch_chains(&kwi_chain_table_uids, fetch_chains_batch_size)
             .await?;
 
-        // Convert the block of the given chains into indexed values.
-        let mut res = HashMap::<Keyword, HashSet<IndexedValue>>::new();
+        // Convert the blocks of the given chains into indexed values.
+        let mut res = HashMap::new();
         for (kwi, chain) in chains {
             let keyword = *reversed_map.get(&kwi).ok_or_else(|| {
                 Error::<CustomError>::CryptoError("Missing Kwi in reversed map.".to_string())
