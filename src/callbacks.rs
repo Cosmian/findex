@@ -159,4 +159,10 @@ pub trait FindexCallbacks<Error: std::error::Error + CallbackError, const UID_LE
         &self,
         locations: &HashSet<Location>,
     ) -> Result<HashSet<Location>, Error>;
+
+    /// Returns all locations that point to existing data.
+    fn filter_removed_locations(
+        &self,
+        locations: &HashSet<Location>,
+    ) -> Result<HashSet<Location>, Error>;
 }

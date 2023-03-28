@@ -194,6 +194,17 @@ impl<const UID_LENGTH: usize> FindexCallbacks<ExampleError, UID_LENGTH>
         Ok(self.removed_locations.iter().cloned().collect())
     }
 
+    fn filter_removed_locations(
+        &self,
+        locations: &HashSet<Location>,
+    ) -> Result<HashSet<Location>, ExampleError> {
+        Ok(locations
+            .iter()
+            .filter(|location| self.removed_locations.contains(location))
+            .cloned()
+            .collect())
+    }
+
     async fn fetch_all_entry_table_uids(&self) -> Result<HashSet<Uid<UID_LENGTH>>, ExampleError> {
         let uids: HashSet<Uid<UID_LENGTH>> = self.entry_table.keys().cloned().collect();
         Ok(uids)

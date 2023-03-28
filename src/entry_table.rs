@@ -418,22 +418,21 @@ impl<const UID_LENGTH: usize, const KWI_LENGTH: usize> EntryTable<UID_LENGTH, KW
         &mut self,
         rng: &mut impl CryptoRngCore,
         new_chain_elements: &HashMap<KeywordHash, HashMap<IndexedValue, BlockType>>,
-        keyword_to_entry_table_uid: &HashMap<KeywordHash, Uid<UID_LENGTH>>,
+        keyword_hash_to_entry_table_uid: &HashMap<KeywordHash, Uid<UID_LENGTH>>,
     ) -> Result<HashMap<Uid<UID_LENGTH>, EncryptedTable<UID_LENGTH>>, Error> {
         // Cache the KMAC and DEM keys
-        let mut key_cache = KeyCache::with_capacity(keyword_to_entry_table_uid.len());
+        let mut key_cache = KeyCache::with_capacity(keyword_hash_to_entry_table_uid.len());
 
         let mut chain_table_additions = HashMap::with_capacity(new_chain_elements.len());
         for (keyword_hash, indexed_values) in new_chain_elements {
             // Get the corresponding Entry Table UID from the cache.
-            let entry_table_uid =
-                keyword_to_entry_table_uid
-                    .get(keyword_hash)
-                    .ok_or_else(|| {
-                        Error::CryptoError(format!(
-                            "No entry in Entry Table UID cache for keyword '{keyword_hash:?}'"
-                        ))
-                    })?;
+            let entry_table_uid = keyword_hash_to_entry_table_uid
+                .get(keyword_hash)
+                .ok_or_else(|| {
+                    Error::CryptoError(format!(
+                        "No entry in Entry Table UID cache for keyword '{keyword_hash:?}'"
+                    ))
+                })?;
 
             // It is only possible to insert new entries in the Chain Table.
             let new_chain_table_entries = chain_table_additions
