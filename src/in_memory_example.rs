@@ -6,9 +6,11 @@ use std::{
 use cosmian_crypto_core::{reexport::rand_core::SeedableRng, CsRng};
 use rand::Rng;
 
+#[cfg(feature = "live_compact")]
+use crate::parameters::*;
 use crate::{
-    parameters::UID_LENGTH, EncryptedTable, FindexCallbacks, FindexCompact, FindexSearch,
-    FindexUpsert, IndexedValue, Keyword, Location, Uid, UpsertData,
+    live_compact::FindexLiveCompact, parameters::UID_LENGTH, EncryptedTable, FindexCallbacks,
+    FindexCompact, FindexSearch, FindexUpsert, IndexedValue, Keyword, Location, Uid, UpsertData,
 };
 
 #[derive(Debug)]
@@ -216,3 +218,22 @@ impl_findex_trait!(FindexSearch, FindexInMemory<UID_LENGTH>, ExampleError);
 impl_findex_trait!(FindexUpsert, FindexInMemory<UID_LENGTH>, ExampleError);
 
 impl_findex_trait!(FindexCompact, FindexInMemory<UID_LENGTH>, ExampleError);
+
+#[cfg(feature = "live_compact")]
+impl
+    FindexLiveCompact<
+        UID_LENGTH,
+        BLOCK_LENGTH,
+        CHAIN_TABLE_WIDTH,
+        MASTER_KEY_LENGTH,
+        KWI_LENGTH,
+        KMAC_KEY_LENGTH,
+        DEM_KEY_LENGTH,
+        KmacKey,
+        DemScheme,
+        ExampleError,
+    > for FindexInMemory<UID_LENGTH>
+{
+    const BATCH_SIZE: usize = 10;
+    const NOISE_RATIO: f64 = 1f64;
+}

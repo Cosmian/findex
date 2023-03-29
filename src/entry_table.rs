@@ -425,22 +425,23 @@ impl<const UID_LENGTH: usize, const KWI_LENGTH: usize> EntryTable<UID_LENGTH, KW
 
         let mut chain_table_additions = HashMap::with_capacity(new_chain_elements.len());
         for (keyword_hash, indexed_values) in new_chain_elements {
-            // Get the corresponding Entry Table UID from the cache.
-            let entry_table_uid = keyword_hash_to_entry_table_uid
-                .get(keyword_hash)
-                .ok_or_else(|| {
-                    Error::CryptoError(format!(
-                        "No entry in Entry Table UID cache for keyword '{keyword_hash:?}'"
-                    ))
-                })?;
+            if !indexed_values.is_empty() {
+                // Get the corresponding Entry Table UID from the cache.
+                let entry_table_uid = keyword_hash_to_entry_table_uid
+                    .get(keyword_hash)
+                    .ok_or_else(|| {
+                        Error::CryptoError(format!(
+                            "No entry in Entry Table UID cache for keyword '{keyword_hash:?}'"
+                        ))
+                    })?;
 
-            // It is only possible to insert new entries in the Chain Table.
-            let new_chain_table_entries = chain_table_additions
-                .entry(entry_table_uid.clone())
-                .or_default();
+                // It is only possible to insert new entries in the Chain Table.
+                let new_chain_table_entries = chain_table_additions
+                    .entry(entry_table_uid.clone())
+                    .or_default();
 
-            // Prepare the corresponding Entry Table value.
-            let entry_table_value = self
+                // Prepare the corresponding Entry Table value.
+                let entry_table_value = self
                 .entry(entry_table_uid.clone())
                 .and_modify(|entry_table_value| {
                     // A chain is already indexed for this `Keyword`. Start a new line at the tip of
@@ -459,13 +460,13 @@ impl<const UID_LENGTH: usize, const KWI_LENGTH: usize> EntryTable<UID_LENGTH, KW
                     )
                 });
 
-            // Compute `Kwi_uid` if it has not already been computed.
-            let (kwi_uid, kwi_value) = key_cache
-                .get_entry_or_insert(&entry_table_value.kwi, CHAIN_TABLE_KEY_DERIVATION_INFO);
+                // Compute `Kwi_uid` if it has not already been computed.
+                let (kwi_uid, kwi_value) = key_cache
+                    .get_entry_or_insert(&entry_table_value.kwi, CHAIN_TABLE_KEY_DERIVATION_INFO);
 
-            // Add new indexed values to the chain.
-            for (indexed_value, block_type) in indexed_values {
-                entry_table_value.upsert_indexed_value::<
+                // Add new indexed values to the chain.
+                for (indexed_value, block_type) in indexed_values {
+                    entry_table_value.upsert_indexed_value::<
                     CHAIN_TABLE_WIDTH,
                     BLOCK_LENGTH,
                     KMAC_KEY_LENGTH,
@@ -473,6 +474,7 @@ impl<const UID_LENGTH: usize, const KWI_LENGTH: usize> EntryTable<UID_LENGTH, KW
                     KmacKey,
                     DemScheme
                 >(*block_type, indexed_value, kwi_uid, kwi_value, new_chain_table_entries, rng)?;
+                }
             }
         }
 

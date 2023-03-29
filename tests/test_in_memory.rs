@@ -713,3 +713,101 @@ async fn test_graph_compacting() {
         check_search_result(&res, &robert_keyword, &robert_doe_location);
     }
 }
+
+#[cfg(feature = "live_compact")]
+#[actix_rt::test]
+async fn test_live_compacting() {
+    use cosmian_findex::FindexLiveCompact;
+
+    let mut rng = CsRng::from_entropy();
+
+    let label = Label::random(&mut rng);
+    let master_key = KeyingMaterial::new(&mut rng);
+
+    let mut findex = FindexInMemory::default();
+
+    // Direct location robert doe.
+    let robert_doe_location = Location::from("robert doe DB location");
+    let mut indexed_value_to_keywords = HashMap::new();
+    indexed_value_to_keywords.insert(
+        IndexedValue::Location(robert_doe_location.clone()),
+        hashset_keywords(&["robert", "doe"]),
+    );
+
+    for _ in 0..100 {
+        // Add some keywords.
+        findex
+            .upsert(
+                indexed_value_to_keywords.clone(),
+                HashMap::new(),
+                &master_key,
+                &label,
+            )
+            .await
+            .unwrap();
+
+        // Remove them.
+        findex
+            .upsert(
+                HashMap::new(),
+                indexed_value_to_keywords.clone(),
+                &master_key,
+                &label,
+            )
+            .await
+            .unwrap();
+    }
+
+    // Add some keywords.
+    findex
+        .upsert(
+            indexed_value_to_keywords.clone(),
+            HashMap::new(),
+            &master_key,
+            &label,
+        )
+        .await
+        .unwrap();
+
+    let robert_keyword = Keyword::from("robert");
+    let doe_keyword = Keyword::from("doe");
+
+    // search robert
+    let robert_search = findex
+        .search(
+            &HashSet::from_iter(vec![robert_keyword.clone()]),
+            &master_key,
+            &label,
+            usize::MAX,
+            0,
+            SECURE_FETCH_CHAINS_BATCH_SIZE,
+            0,
+        )
+        .await
+        .unwrap();
+    check_search_result(&robert_search, &robert_keyword, &robert_doe_location);
+
+    // search doe
+    let doe_search = findex
+        .search(
+            &HashSet::from_iter(vec![doe_keyword.clone()]),
+            &master_key,
+            &label,
+            usize::MAX,
+            0,
+            SECURE_FETCH_CHAINS_BATCH_SIZE,
+            0,
+        )
+        .await
+        .unwrap();
+    check_search_result(&doe_search, &doe_keyword, &robert_doe_location);
+
+    // Compact enough times to be sure all entries have been compacted.
+    for _ in 0..10 {
+        findex.live_compact(&master_key, 5).await.unwrap();
+    }
+
+    // After compaction, there should be no more indexed values.
+    assert_eq!(findex.entry_table_len(), 0);
+    assert_eq!(findex.chain_table_len(), 0);
+}
