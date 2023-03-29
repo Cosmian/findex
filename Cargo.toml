@@ -26,6 +26,7 @@ name = "benches"
 
 [features]
 in_memory = []
+live_compact = []
 
 [dependencies]
 async-recursion = "1.0.0"

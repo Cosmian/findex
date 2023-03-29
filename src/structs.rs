@@ -551,15 +551,21 @@ impl<const UID_LENGTH: usize> UpsertData<UID_LENGTH> {
         old_table: &EncryptedTable<UID_LENGTH>,
         new_table: EncryptedTable<UID_LENGTH>,
     ) -> Self {
-        Self(
-            new_table
-                .into_iter()
-                .map(|(uid, new_value)| {
-                    let old_value = old_table.get(&uid).map(Vec::to_owned);
-                    (uid, (old_value, new_value))
-                })
-                .collect(),
-        )
+        let mut res: <Self as Deref>::Target = old_table
+            .iter()
+            .filter_map(|(uid, old_value)| {
+                if new_table.get(uid).is_none() {
+                    Some((uid.clone(), (Some(old_value.clone()), Vec::new())))
+                } else {
+                    None
+                }
+            })
+            .collect();
+        res.extend(new_table.into_iter().map(|(uid, new_value)| {
+            let old_value = old_table.get(&uid).map(Vec::to_owned);
+            (uid, (old_value, new_value))
+        }));
+        Self(res)
     }
 }
 
