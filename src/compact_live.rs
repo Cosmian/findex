@@ -171,8 +171,6 @@ pub trait FindexLiveCompact<
             EntryTable::decrypt::<DEM_KEY_LENGTH, DemScheme>(k_value, encrypted_entry_table)?;
 
         // Unchain all Entry Table UIDs.
-        // TODO (TBZ): check if this cannot return a
-        // `HashMap<Uid<UID_LENGTH>, HashSet<Uid<UID_LENGTH>>>`
         let kwi_chain_table_uids = noisy_entry_table.unchain::<
             CHAIN_TABLE_WIDTH,
             BLOCK_LENGTH,
@@ -214,8 +212,6 @@ pub trait FindexLiveCompact<
                         "no matching Kwi in `kwi_chain_table_uids` ({:?})",
                         entry_table_value.kwi
                     )))?;
-            // TODO (TBZ): use the same trick everywhere to avoid allocating (do not consume the
-            // map of the chains to allow producing an iterator on references).
             let blocks = chain
                 .iter()
                 .flat_map(|(_, chain_table_value)| chain_table_value.as_blocks());
