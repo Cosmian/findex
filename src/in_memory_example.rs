@@ -7,10 +7,10 @@ use cosmian_crypto_core::{reexport::rand_core::SeedableRng, CsRng};
 use rand::Rng;
 
 #[cfg(feature = "live_compact")]
-use crate::parameters::*;
+use crate::{live_compact::FindexLiveCompact, parameters::*};
 use crate::{
-    live_compact::FindexLiveCompact, parameters::UID_LENGTH, EncryptedTable, FindexCallbacks,
-    FindexCompact, FindexSearch, FindexUpsert, IndexedValue, Keyword, Location, Uid, UpsertData,
+    parameters::UID_LENGTH, EncryptedTable, FindexCallbacks, FindexCompact, FindexSearch,
+    FindexUpsert, IndexedValue, Keyword, Location, Uid, UpsertData,
 };
 
 #[derive(Debug)]

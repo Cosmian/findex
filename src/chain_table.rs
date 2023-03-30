@@ -203,6 +203,14 @@ impl<const UID_LENGTH: usize, const TABLE_WIDTH: usize, const BLOCK_LENGTH: usiz
     }
 }
 
+impl<const UID_LENGTH: usize, const TABLE_WIDTH: usize, const BLOCK_LENGTH: usize> Default
+    for ChainTable<UID_LENGTH, TABLE_WIDTH, BLOCK_LENGTH>
+{
+    fn default() -> Self {
+        Self(Default::default())
+    }
+}
+
 impl<const UID_LENGTH: usize, const TABLE_WIDTH: usize, const BLOCK_LENGTH: usize> Deref
     for ChainTable<UID_LENGTH, TABLE_WIDTH, BLOCK_LENGTH>
 {

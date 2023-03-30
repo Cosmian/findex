@@ -19,7 +19,6 @@ use cosmian_crypto_core::{
 use crate::{
     chain_table::{ChainTable, ChainTableValue, KwiChainUids},
     error::CoreError as Error,
-    keys::KeyCache,
     structs::{BlockType, EncryptedTable, IndexedValue, KeywordHash, Label, Uid},
     KeyingMaterial, Keyword, CHAIN_TABLE_KEY_DERIVATION_INFO,
 };
@@ -39,7 +38,7 @@ use crate::{
 #[must_use]
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct EntryTableValue<const UID_LENGTH: usize, const KWI_LENGTH: usize> {
-    pub(crate) chain_table_uid: Uid<UID_LENGTH>,
+    pub(crate) chain_table_uid: Option<Uid<UID_LENGTH>>,
     pub(crate) kwi: KeyingMaterial<KWI_LENGTH>,
     pub(crate) keyword_hash: [u8; Keyword::HASH_LENGTH],
 }
@@ -49,24 +48,13 @@ impl<const UID_LENGTH: usize, const KWI_LENGTH: usize> EntryTableValue<UID_LENGT
     ///
     /// - `rng`             : random number generator
     /// - `keyword_hash`    : hash of the indexing keyword
-    pub(crate) fn new<
-        const CHAIN_TABLE_WITH: usize,
-        const BLOCK_LENGTH: usize,
-        const KMAC_KEY_LENGTH: usize,
-        KmacKey: SymKey<KMAC_KEY_LENGTH>,
-    >(
+    pub(crate) fn new<const CHAIN_TABLE_WITH: usize, const BLOCK_LENGTH: usize>(
         rng: &mut impl CryptoRngCore,
         keyword_hash: [u8; Keyword::HASH_LENGTH],
     ) -> Self {
         let kwi = KeyingMaterial::new(rng);
-        let kwi_uid: KmacKey = kwi.derive_kmac_key(CHAIN_TABLE_KEY_DERIVATION_INFO);
-        let chain_table_uid =
-            ChainTable::<UID_LENGTH, CHAIN_TABLE_WITH, BLOCK_LENGTH>::generate_uid(
-                &kwi_uid,
-                &keyword_hash,
-            );
         Self {
-            chain_table_uid,
+            chain_table_uid: None,
             kwi,
             keyword_hash,
         }
@@ -85,14 +73,23 @@ impl<const UID_LENGTH: usize, const KWI_LENGTH: usize> EntryTableValue<UID_LENGT
         &mut self,
         kwi_uid: &KmacKey,
     ) -> &Uid<UID_LENGTH> {
-        self.chain_table_uid =
-            ChainTable::<UID_LENGTH, CHAIN_TABLE_WITH, BLOCK_LENGTH>::generate_uid(
+        let new_uid = match &self.chain_table_uid {
+            Some(old_uid) => {
+                ChainTable::<UID_LENGTH, CHAIN_TABLE_WITH, BLOCK_LENGTH>::generate_uid(
+                    kwi_uid, old_uid,
+                )
+            }
+            None => ChainTable::<UID_LENGTH, CHAIN_TABLE_WITH, BLOCK_LENGTH>::generate_uid(
                 kwi_uid,
-                &self.chain_table_uid,
-            );
-        &self.chain_table_uid
+                &self.keyword_hash,
+            ),
+        };
+
+        self.chain_table_uid = Some(new_uid);
+        self.chain_table_uid.as_ref().unwrap()
     }
 
+    ///// TODO (TBZ): document better
     /// Adds the given `IndexedValue` to the indexed chain. Updates this Entry
     /// Table value and its chain in the given encrypted Chain Table.
     ///
@@ -107,51 +104,54 @@ impl<const UID_LENGTH: usize, const KWI_LENGTH: usize> EntryTableValue<UID_LENGT
         const CHAIN_TABLE_WIDTH: usize,
         const BLOCK_LENGTH: usize,
         const KMAC_KEY_LENGTH: usize,
-        const DEM_KEY_LENGTH: usize,
         KmacKey: SymKey<KMAC_KEY_LENGTH>,
-        DemScheme: Dem<DEM_KEY_LENGTH>,
     >(
         &mut self,
         insertion_type: BlockType,
         indexed_value: &IndexedValue,
-        // TODO (TBZ): this should be an `Option` (it can be recomputed from the Entry Table
-        // value).
         kwi_uid: &KmacKey,
-        // TODO (TBZ): this should be an `Option` (it can be recomputed from the Entry Table
-        // value).
-        kwi_value: &DemScheme::Key,
-        chain_table: &mut EncryptedTable<UID_LENGTH>,
-        rng: &mut impl CryptoRngCore,
+        chain_table: &mut ChainTable<UID_LENGTH, CHAIN_TABLE_WIDTH, BLOCK_LENGTH>,
     ) -> Result<(), Error> {
-        let mut chain_table_value =
-            if let Some(encrypted_chain_table_value) = chain_table.get(&self.chain_table_uid) {
-                ChainTableValue::<CHAIN_TABLE_WIDTH, BLOCK_LENGTH>::decrypt::<
-                    DEM_KEY_LENGTH,
-                    DemScheme,
-                >(kwi_value, encrypted_chain_table_value)?
-            } else {
-                // This the first time a value is indexed for this `Keyword`.
-                ChainTableValue::default()
-            };
+        // Blocks to add to the Chain Table.
+        let new_blocks = indexed_value.to_blocks(insertion_type)?;
+        let mut index = 0;
 
-        for block in indexed_value.to_blocks(insertion_type)? {
-            if chain_table_value.as_blocks().len() >= CHAIN_TABLE_WIDTH {
-                // Encrypt and insert the current value in the Chain Table.
-                let encrypted_chain_table_value =
-                    chain_table_value.encrypt::<DEM_KEY_LENGTH, DemScheme>(kwi_value, rng)?;
-                chain_table.insert(self.chain_table_uid.clone(), encrypted_chain_table_value);
-                // Start a new line in the chain.
-                self.next_chain_table_uid::<CHAIN_TABLE_WIDTH, BLOCK_LENGTH, KMAC_KEY_LENGTH, KmacKey>(kwi_uid);
-                chain_table_value = ChainTableValue::default();
+        // Fill the last Chain Table line if it is given.
+        if let Some(chain_table_uid) = &self.chain_table_uid {
+            if let Some(chain_table_value) = chain_table.get_mut(chain_table_uid) {
+                // Number of blocks to add to the last Chain Table line.
+                // It cannot be greater than:
+                // - the remaining slots in the line;
+                // - the remaining number of blocks.
+                let n_additions = (CHAIN_TABLE_WIDTH - chain_table_value.as_blocks().len())
+                    .min(new_blocks.len() - index);
+                for _ in 0..n_additions {
+                    chain_table_value.try_push(new_blocks[index])?;
+                    index += 1;
+                }
             }
-            // There is still room for a new `Block`.
-            chain_table_value.try_push(block)?;
         }
 
-        // Encrypt and insert the value in the Chain Table.
-        let encrypted_chain_table_value =
-            chain_table_value.encrypt::<DEM_KEY_LENGTH, DemScheme>(kwi_value, rng)?;
-        chain_table.insert(self.chain_table_uid.clone(), encrypted_chain_table_value);
+        // Add remaining blocks to new lines until exhaustion.
+        while index < new_blocks.len() {
+            let n_additions = CHAIN_TABLE_WIDTH.min(new_blocks.len() - index);
+            let new_chain_uid = self
+                .next_chain_table_uid::<CHAIN_TABLE_WIDTH, BLOCK_LENGTH, KMAC_KEY_LENGTH, KmacKey>(
+                    kwi_uid,
+                );
+            let mut new_chain_value = ChainTableValue::default();
+            for _ in 0..n_additions {
+                new_chain_value.try_push(new_blocks[index])?;
+                index += 1;
+            }
+            let old_value = chain_table.insert(new_chain_uid.clone(), new_chain_value);
+            if old_value.is_some() {
+                return Err(Error::CryptoError(format!(
+                    "conflit when inserting Chain Table value for UID {new_chain_uid:?}"
+                )));
+            }
+        }
+
         Ok(())
     }
 
@@ -165,7 +165,10 @@ impl<const UID_LENGTH: usize, const KWI_LENGTH: usize> EntryTableValue<UID_LENGT
         rng: &mut impl CryptoRngCore,
     ) -> Result<Vec<u8>, Error> {
         let mut ser = Serializer::new();
-        ser.write_array(&self.chain_table_uid)?;
+        let chain_table_uid = self.chain_table_uid.as_ref().ok_or(Error::CryptoError(
+            "no Chain Table UID in Entry Table value".to_string(),
+        ))?;
+        ser.write_array(chain_table_uid)?;
         ser.write_array(&self.kwi)?;
         ser.write_array(&self.keyword_hash)?;
         DemScheme::encrypt(rng, k_value, &ser.finalize(), None).map_err(Error::from)
@@ -185,7 +188,7 @@ impl<const UID_LENGTH: usize, const KWI_LENGTH: usize> EntryTableValue<UID_LENGT
         let kwi = de.read_array::<KWI_LENGTH>()?;
         let keyword_hash = de.read_array::<{ Keyword::HASH_LENGTH }>()?;
         Ok(Self {
-            chain_table_uid: chain_table_uid.into(),
+            chain_table_uid: Some(chain_table_uid.into()),
             kwi: kwi.into(),
             keyword_hash,
         })
@@ -219,6 +222,10 @@ impl<const UID_LENGTH: usize, const KWI_LENGTH: usize> EntryTableValue<UID_LENGT
         max_results: usize,
         kwi_chain_table_uids: &mut KwiChainUids<UID_LENGTH, KWI_LENGTH>,
     ) {
+        if self.chain_table_uid.is_none() {
+            return;
+        }
+
         let kwi_uid: KmacKey = self.kwi.derive_kmac_key(CHAIN_TABLE_KEY_DERIVATION_INFO);
 
         let entry = kwi_chain_table_uids
@@ -237,7 +244,7 @@ impl<const UID_LENGTH: usize, const KWI_LENGTH: usize> EntryTableValue<UID_LENGT
             entry.push(current_chain_table_uid.clone());
 
             // return if we found the UID stored in the Entry Table value
-            if current_chain_table_uid == self.chain_table_uid {
+            if Some(&current_chain_table_uid) == self.chain_table_uid.as_ref() {
                 break;
             }
 
@@ -399,14 +406,18 @@ impl<const UID_LENGTH: usize, const KWI_LENGTH: usize> EntryTable<UID_LENGTH, KW
     }
 
     /// Indexes the given values for the given keywords in this Entry Table.
+    ///
+    /// Creates new Entry Table lines for UIDs (derived from the keywords) that
+    /// do not already exist. Creates the new encrypted lines to add to the
+    /// Chain Table in order to index the given values.
+    ///
     /// Returns a map of the upserted Entry Table items to their associated
     /// chain.
     ///
     /// # Parameters
     ///
     /// - `rng`                 : random number generator
-    /// - `new_entries`         : map values to their indexing keywords
-    /// - `keywords_to_upsert`  : map keywords to their derived Entry Table UID
+    /// - `new_chain_elements`  : map values to their indexing keywords
     pub fn upsert<
         const CHAIN_TABLE_WIDTH: usize,
         const BLOCK_LENGTH: usize,
@@ -417,65 +428,53 @@ impl<const UID_LENGTH: usize, const KWI_LENGTH: usize> EntryTable<UID_LENGTH, KW
     >(
         &mut self,
         rng: &mut impl CryptoRngCore,
-        new_chain_elements: &HashMap<KeywordHash, HashMap<IndexedValue, BlockType>>,
-        keyword_hash_to_entry_table_uid: &HashMap<KeywordHash, Uid<UID_LENGTH>>,
+        new_chain_elements: &HashMap<
+            Uid<UID_LENGTH>,
+            (KeywordHash, HashMap<IndexedValue, BlockType>),
+        >,
     ) -> Result<HashMap<Uid<UID_LENGTH>, EncryptedTable<UID_LENGTH>>, Error> {
-        // Cache the KMAC and DEM keys
-        let mut key_cache = KeyCache::with_capacity(keyword_hash_to_entry_table_uid.len());
-
         let mut chain_table_additions = HashMap::with_capacity(new_chain_elements.len());
-        for (keyword_hash, indexed_values) in new_chain_elements {
-            if !indexed_values.is_empty() {
-                // Get the corresponding Entry Table UID from the cache.
-                let entry_table_uid = keyword_hash_to_entry_table_uid
-                    .get(keyword_hash)
-                    .ok_or_else(|| {
-                        Error::CryptoError(format!(
-                            "No entry in Entry Table UID cache for keyword '{keyword_hash:?}'"
-                        ))
-                    })?;
+        for (entry_table_uid, (keyword_hash, indexed_values)) in new_chain_elements {
+            if indexed_values.is_empty() {
+                // Do not modify the Entry Table if there is no value to index.
+                continue;
+            }
 
-                // It is only possible to insert new entries in the Chain Table.
-                let new_chain_table_entries = chain_table_additions
-                    .entry(entry_table_uid.clone())
-                    .or_default();
+            let entry_table_value = self.entry(entry_table_uid.clone()).or_insert_with(|| {
+                EntryTableValue::new::<CHAIN_TABLE_WIDTH, BLOCK_LENGTH>(rng, *keyword_hash)
+            });
 
-                // Prepare the corresponding Entry Table value.
-                let entry_table_value = self
-                .entry(entry_table_uid.clone())
-                .and_modify(|entry_table_value| {
-                    // A chain is already indexed for this `Keyword`. Start a new line at the tip of
-                    // the existing chain.
-                    let (kwi_uid, _) = key_cache.get_entry_or_insert(
-                        &entry_table_value.kwi,
-                        CHAIN_TABLE_KEY_DERIVATION_INFO,
-                    );
-                    entry_table_value
-                        .next_chain_table_uid::<CHAIN_TABLE_WIDTH, BLOCK_LENGTH, KMAC_KEY_LENGTH, KmacKey>(kwi_uid);
-                })
-                .or_insert_with(|| {
-                    EntryTableValue::new::<CHAIN_TABLE_WIDTH, BLOCK_LENGTH, KMAC_KEY_LENGTH, KmacKey>(
-                        rng,
-                        *keyword_hash,
-                    )
-                });
+            let kwi_uid = entry_table_value
+                .kwi
+                .derive_kmac_key(CHAIN_TABLE_KEY_DERIVATION_INFO);
+            let kwi_value = entry_table_value
+                .kwi
+                .derive_dem_key(CHAIN_TABLE_KEY_DERIVATION_INFO);
 
-                // Compute `Kwi_uid` if it has not already been computed.
-                let (kwi_uid, kwi_value) = key_cache
-                    .get_entry_or_insert(&entry_table_value.kwi, CHAIN_TABLE_KEY_DERIVATION_INFO);
+            // It is only possible to insert new entries in the Chain Table. Do not fetch
+            // last Chain Table line for the given keyword but start a new line.
+            let mut new_chain_table_entries = ChainTable::default();
 
-                // Add new indexed values to the chain.
-                for (indexed_value, block_type) in indexed_values {
-                    entry_table_value.upsert_indexed_value::<
+            for (indexed_value, block_type) in indexed_values {
+                entry_table_value.upsert_indexed_value::<
                     CHAIN_TABLE_WIDTH,
                     BLOCK_LENGTH,
                     KMAC_KEY_LENGTH,
-                    DEM_KEY_LENGTH,
                     KmacKey,
-                    DemScheme
-                >(*block_type, indexed_value, kwi_uid, kwi_value, new_chain_table_entries, rng)?;
-                }
+                >(*block_type, indexed_value, &kwi_uid, &mut new_chain_table_entries)?;
             }
+
+            let encrypted_chain_table_additions = new_chain_table_entries
+                .into_iter()
+                .map(|(uid, value)| -> Result<_, _> {
+                    Ok((
+                        uid,
+                        value.encrypt::<DEM_KEY_LENGTH, DemScheme>(&kwi_value, rng)?,
+                    ))
+                })
+                .collect::<Result<_, Error>>()?;
+
+            chain_table_additions.insert(entry_table_uid.clone(), encrypted_chain_table_additions);
         }
 
         Ok(chain_table_additions)
@@ -492,11 +491,7 @@ mod tests {
     };
 
     use super::*;
-    use crate::{
-        parameters::*,
-        structs::{Block, Location},
-        Keyword, ENTRY_TABLE_KEY_DERIVATION_INFO,
-    };
+    use crate::{parameters::*, structs::Location, Keyword, ENTRY_TABLE_KEY_DERIVATION_INFO};
 
     #[test]
     fn test_encryption() {
@@ -506,12 +501,18 @@ mod tests {
 
         let keyword = Keyword::from("Robert".as_bytes());
 
-        let entry_table_value = EntryTableValue::<UID_LENGTH, KWI_LENGTH>::new::<
+        let mut entry_table_value = EntryTableValue::<UID_LENGTH, KWI_LENGTH>::new::<
             CHAIN_TABLE_WIDTH,
             BLOCK_LENGTH,
-            KMAC_KEY_LENGTH,
-            KmacKey,
         >(&mut rng, keyword.hash());
+
+        let kwi_uid = entry_table_value
+            .kwi
+            .derive_kmac_key(CHAIN_TABLE_KEY_DERIVATION_INFO);
+        entry_table_value
+            .next_chain_table_uid::<CHAIN_TABLE_WIDTH, BLOCK_LENGTH, KMAC_KEY_LENGTH, KmacKey>(
+                &kwi_uid,
+            );
 
         let c = entry_table_value
             .encrypt::<{ Aes256GcmCrypto::KEY_LENGTH }, Aes256GcmCrypto>(&k_value, &mut rng)
@@ -533,31 +534,26 @@ mod tests {
         let mut entry_table_value = EntryTableValue::<UID_LENGTH, KWI_LENGTH>::new::<
             CHAIN_TABLE_WIDTH,
             BLOCK_LENGTH,
-            KMAC_KEY_LENGTH,
-            KmacKey,
         >(&mut rng, keyword.hash());
 
         let kwi_uid = entry_table_value
             .kwi
             .derive_kmac_key(CHAIN_TABLE_KEY_DERIVATION_INFO);
-        let kwi_value = entry_table_value
-            .kwi
-            .derive_dem_key(CHAIN_TABLE_KEY_DERIVATION_INFO);
 
         // Upsert TABLE_WIDTH + 1 values.
-        let mut chain_table = EncryptedTable::default();
-        for i in 0..=CHAIN_TABLE_WIDTH {
+        let mut chain_table = ChainTable::default();
+        for i in 0..(CHAIN_TABLE_WIDTH + 1) {
             let location = Location::from(format!("Robert's location nb {i}").as_bytes());
             let indexed_value = IndexedValue::from(location);
 
-            entry_table_value.upsert_indexed_value::<
-                CHAIN_TABLE_WIDTH,
-                BLOCK_LENGTH,
-                KMAC_KEY_LENGTH,
-                {Aes256GcmCrypto::KEY_LENGTH},
-                KmacKey,
-                Aes256GcmCrypto
-            >(BlockType::Addition, &indexed_value, &kwi_uid, &kwi_value, &mut chain_table, &mut rng).unwrap();
+            entry_table_value
+                .upsert_indexed_value::<CHAIN_TABLE_WIDTH, BLOCK_LENGTH, KMAC_KEY_LENGTH, KmacKey>(
+                    BlockType::Addition,
+                    &indexed_value,
+                    &kwi_uid,
+                    &mut chain_table,
+                )
+                .unwrap();
         }
 
         // Recover Chain Table UIDs associated to the Entry Table value.
@@ -574,19 +570,11 @@ mod tests {
         assert_eq!(kwi_chain_table_uids.len(), 1);
 
         // Recover the indexed values from the Chain Table blocks.
-        let blocks: Vec<Block<BLOCK_LENGTH>> = kwi_chain_table_uids[&entry_table_value.kwi]
+        let blocks = kwi_chain_table_uids[&entry_table_value.kwi]
             .iter()
             .filter_map(|uid| chain_table.get(uid))
-            .flat_map(|encrypted_chain_table_value| {
-                ChainTableValue::<CHAIN_TABLE_WIDTH, BLOCK_LENGTH>::decrypt::<
-                    { Aes256GcmCrypto::KEY_LENGTH },
-                    Aes256GcmCrypto,
-                >(&kwi_value, encrypted_chain_table_value)
-                .unwrap()
-                .into_blocks()
-            })
-            .collect();
-        let indexed_values = IndexedValue::from_blocks(blocks.iter()).unwrap();
+            .flat_map(|chain_table_value| chain_table_value.as_blocks());
+        let indexed_values = IndexedValue::from_blocks(blocks).unwrap();
 
         // Assert the correct indexed values have been recovered.
         assert_eq!(indexed_values.len(), CHAIN_TABLE_WIDTH + 1);
@@ -600,14 +588,14 @@ mod tests {
         for i in 1..=CHAIN_TABLE_WIDTH {
             let location = Location::from(format!("Robert's location nb {i}").as_bytes());
             let indexed_value = IndexedValue::from(location);
-            entry_table_value.upsert_indexed_value::<
-                CHAIN_TABLE_WIDTH,
-                BLOCK_LENGTH,
-                KMAC_KEY_LENGTH,
-                {Aes256GcmCrypto::KEY_LENGTH},
-                KmacKey,
-                Aes256GcmCrypto
-            >(BlockType::Deletion, &indexed_value, &kwi_uid, &kwi_value, &mut chain_table, &mut rng).unwrap();
+            entry_table_value
+                .upsert_indexed_value::<CHAIN_TABLE_WIDTH, BLOCK_LENGTH, KMAC_KEY_LENGTH, KmacKey>(
+                    BlockType::Deletion,
+                    &indexed_value,
+                    &kwi_uid,
+                    &mut chain_table,
+                )
+                .unwrap();
         }
 
         // Recover Chain Table UIDs associated to the Entry Table value.
@@ -624,19 +612,11 @@ mod tests {
         assert_eq!(kwi_chain_table_uids.len(), 1);
 
         // Recover the indexed values from the Chain Table blocks.
-        let blocks: Vec<Block<BLOCK_LENGTH>> = kwi_chain_table_uids[&entry_table_value.kwi]
+        let blocks = kwi_chain_table_uids[&entry_table_value.kwi]
             .iter()
             .filter_map(|uid| chain_table.get(uid))
-            .flat_map(|encrypted_chain_table_value| {
-                ChainTableValue::<CHAIN_TABLE_WIDTH, BLOCK_LENGTH>::decrypt::<
-                    { Aes256GcmCrypto::KEY_LENGTH },
-                    Aes256GcmCrypto,
-                >(&kwi_value, encrypted_chain_table_value)
-                .unwrap()
-                .into_blocks()
-            })
-            .collect();
-        let indexed_values = IndexedValue::from_blocks(blocks.iter()).unwrap();
+            .flat_map(|chain_table_value| chain_table_value.as_blocks());
+        let indexed_values = IndexedValue::from_blocks(blocks).unwrap();
 
         // Assert the correct indexed values have been recovered.
         assert_eq!(indexed_values.len(), 1);
@@ -661,26 +641,21 @@ mod tests {
         let mut entry_table_value = EntryTableValue::<UID_LENGTH, KWI_LENGTH>::new::<
             CHAIN_TABLE_WIDTH,
             BLOCK_LENGTH,
-            KMAC_KEY_LENGTH,
-            KmacKey,
         >(&mut rng, long_keyword.hash());
 
         let kwi_uid = entry_table_value
             .kwi
             .derive_kmac_key(CHAIN_TABLE_KEY_DERIVATION_INFO);
-        let kwi_value = entry_table_value
-            .kwi
-            .derive_dem_key(CHAIN_TABLE_KEY_DERIVATION_INFO);
 
-        let mut chain_table = EncryptedTable::default();
-        entry_table_value.upsert_indexed_value::<
-            CHAIN_TABLE_WIDTH,
-            BLOCK_LENGTH,
-            KMAC_KEY_LENGTH,
-            {Aes256GcmCrypto::KEY_LENGTH},
-            KmacKey,
-            Aes256GcmCrypto
-        >(BlockType::Addition, &long_location, &kwi_uid, &kwi_value, &mut chain_table, &mut rng).unwrap();
+        let mut chain_table = ChainTable::default();
+        entry_table_value
+            .upsert_indexed_value::<CHAIN_TABLE_WIDTH, BLOCK_LENGTH, KMAC_KEY_LENGTH, KmacKey>(
+                BlockType::Addition,
+                &long_location,
+                &kwi_uid,
+                &mut chain_table,
+            )
+            .unwrap();
 
         let mut kwi_chain_table_uids = KwiChainUids::default();
         entry_table_value.unchain::<
@@ -696,20 +671,12 @@ mod tests {
         assert_eq!(kwi_chain_table_uids.len(), 1);
 
         // Recover the indexed values from the chain.
-        let blocks: Vec<Block<BLOCK_LENGTH>> = kwi_chain_table_uids[&entry_table_value.kwi]
+        let blocks = kwi_chain_table_uids[&entry_table_value.kwi]
             .iter()
             .filter_map(|uid| chain_table.get(uid))
-            .flat_map(|encrypted_chain_table_value| {
-                ChainTableValue::<CHAIN_TABLE_WIDTH, BLOCK_LENGTH>::decrypt::<
-                    { Aes256GcmCrypto::KEY_LENGTH },
-                    Aes256GcmCrypto,
-                >(&kwi_value, encrypted_chain_table_value)
-                .unwrap()
-                .into_blocks()
-            })
-            .collect();
+            .flat_map(|chain_table_value| chain_table_value.as_blocks());
 
-        let indexed_values = IndexedValue::from_blocks(blocks.iter()).unwrap();
+        let indexed_values = IndexedValue::from_blocks(blocks).unwrap();
 
         assert_eq!(indexed_values.len(), 1);
 
