@@ -151,7 +151,7 @@ pub trait FindexCompact<
         // calling for one location batch for one word to add noise and prevent
         // the database the size of the chains for each keywords.
         //
-        let removed_locations = self.filter_removed_locations(
+        let removed_locations = self.list_removed_locations(
             &reindexed_chain_values
                 .values()
                 .flat_map(|chain| chain.iter().filter_map(IndexedValue::get_location))
@@ -237,7 +237,6 @@ pub trait FindexCompact<
         entry_table.retain(|uid, _| !entry_table_uids_to_drop.contains(uid));
         entry_table.refresh_uids::<KMAC_KEY_LENGTH, KmacKey>(&new_k_uid, label);
 
-        // Call the callback
         self.update_lines(
             chain_table_uids_to_remove,
             entry_table.encrypt::<DEM_KEY_LENGTH, DemScheme>(&new_k_value, &mut rng)?,

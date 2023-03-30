@@ -165,10 +165,11 @@ impl<const UID_LENGTH: usize, const KWI_LENGTH: usize> EntryTableValue<UID_LENGT
         rng: &mut impl CryptoRngCore,
     ) -> Result<Vec<u8>, Error> {
         let mut ser = Serializer::new();
-        let chain_table_uid = self.chain_table_uid.as_ref().ok_or(Error::CryptoError(
-            "no Chain Table UID in Entry Table value".to_string(),
-        ))?;
-        ser.write_array(chain_table_uid)?;
+        if let Some(chain_table_uid) = &self.chain_table_uid {
+            ser.write_array(chain_table_uid)?;
+        } else {
+            ser.write_array(&[0; UID_LENGTH])?;
+        }
         ser.write_array(&self.kwi)?;
         ser.write_array(&self.keyword_hash)?;
         DemScheme::encrypt(rng, k_value, &ser.finalize(), None).map_err(Error::from)
@@ -184,11 +185,19 @@ impl<const UID_LENGTH: usize, const KWI_LENGTH: usize> EntryTableValue<UID_LENGT
     ) -> Result<Self, Error> {
         let bytes = DemScheme::decrypt(k_value, ciphertext, None)?;
         let mut de = Deserializer::new(&bytes);
+
         let chain_table_uid = de.read_array::<UID_LENGTH>()?;
         let kwi = de.read_array::<KWI_LENGTH>()?;
         let keyword_hash = de.read_array::<{ Keyword::HASH_LENGTH }>()?;
+
+        let chain_table_uid = if [0; UID_LENGTH] == chain_table_uid {
+            None
+        } else {
+            Some(chain_table_uid.into())
+        };
+
         Ok(Self {
-            chain_table_uid: Some(chain_table_uid.into()),
+            chain_table_uid,
             kwi: kwi.into(),
             keyword_hash,
         })
@@ -222,15 +231,15 @@ impl<const UID_LENGTH: usize, const KWI_LENGTH: usize> EntryTableValue<UID_LENGT
         max_results: usize,
         kwi_chain_table_uids: &mut KwiChainUids<UID_LENGTH, KWI_LENGTH>,
     ) {
+        let entry = kwi_chain_table_uids
+            .entry(self.kwi.clone())
+            .or_insert_with(Vec::new);
+
         if self.chain_table_uid.is_none() {
             return;
         }
 
         let kwi_uid: KmacKey = self.kwi.derive_kmac_key(CHAIN_TABLE_KEY_DERIVATION_INFO);
-
-        let entry = kwi_chain_table_uids
-            .entry(self.kwi.clone())
-            .or_insert_with(Vec::new);
 
         // derive the Chain Table UID
         let mut current_chain_table_uid =
@@ -435,11 +444,6 @@ impl<const UID_LENGTH: usize, const KWI_LENGTH: usize> EntryTable<UID_LENGTH, KW
     ) -> Result<HashMap<Uid<UID_LENGTH>, EncryptedTable<UID_LENGTH>>, Error> {
         let mut chain_table_additions = HashMap::with_capacity(new_chain_elements.len());
         for (entry_table_uid, (keyword_hash, indexed_values)) in new_chain_elements {
-            if indexed_values.is_empty() {
-                // Do not modify the Entry Table if there is no value to index.
-                continue;
-            }
-
             let entry_table_value = self.entry(entry_table_uid.clone()).or_insert_with(|| {
                 EntryTableValue::new::<CHAIN_TABLE_WIDTH, BLOCK_LENGTH>(rng, *keyword_hash)
             });
@@ -505,6 +509,17 @@ mod tests {
             CHAIN_TABLE_WIDTH,
             BLOCK_LENGTH,
         >(&mut rng, keyword.hash());
+
+        let c = entry_table_value
+            .encrypt::<{ Aes256GcmCrypto::KEY_LENGTH }, Aes256GcmCrypto>(&k_value, &mut rng)
+            .unwrap();
+
+        let res = EntryTableValue::decrypt::<{ Aes256GcmCrypto::KEY_LENGTH }, Aes256GcmCrypto>(
+            &k_value, &c,
+        )
+        .unwrap();
+
+        assert_eq!(entry_table_value, res);
 
         let kwi_uid = entry_table_value
             .kwi
