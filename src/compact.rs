@@ -138,12 +138,11 @@ pub trait FindexCompact<
 
         // Get the values stored in the reindexed chains.
         let mut reindexed_chain_values = HashMap::with_capacity(chains_to_reindex.len());
-        for (kwi, chain) in chains_to_reindex {
+        for (kwi, chain) in &chains_to_reindex {
             let blocks = chain
-                .into_iter()
-                .flat_map(|(_, chain_value)| chain_value.into_blocks())
-                .collect::<Vec<_>>();
-            reindexed_chain_values.insert(kwi.clone(), IndexedValue::from_blocks(blocks.iter())?);
+                .iter()
+                .flat_map(|(_, chain_value)| chain_value.as_blocks());
+            reindexed_chain_values.insert(kwi.clone(), IndexedValue::from_blocks(blocks)?);
         }
 
         //

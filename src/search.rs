@@ -121,15 +121,14 @@ pub trait FindexSearch<
 
         // Convert the blocks of the given chains into indexed values.
         let mut res = HashMap::new();
-        for (kwi, chain) in chains {
-            let keyword = *reversed_map.get(&kwi).ok_or_else(|| {
+        for (kwi, chain) in &chains {
+            let keyword = *reversed_map.get(kwi).ok_or_else(|| {
                 Error::<CustomError>::CryptoError("Missing Kwi in reversed map.".to_string())
             })?;
             let blocks = chain
-                .into_iter()
-                .flat_map(|(_, chain_table_value)| chain_table_value.into_blocks())
-                .collect::<Vec<_>>();
-            res.insert(keyword.clone(), IndexedValue::from_blocks(blocks.iter())?);
+                .iter()
+                .flat_map(|(_, chain_table_value)| chain_table_value.as_blocks());
+            res.insert(keyword.clone(), IndexedValue::from_blocks(blocks)?);
         }
         Ok(res)
     }

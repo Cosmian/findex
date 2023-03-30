@@ -800,13 +800,35 @@ async fn test_live_compacting() {
     check_search_result(&doe_search, &doe_keyword, &robert_doe_location);
 
     // Compact enough times to be sure all entries have been compacted.
-    for _ in 0..100 {
-        findex.live_compact(&master_key, 80).await.unwrap();
+    for _ in 0..10 {
+        findex.live_compact(&master_key, 8).await.unwrap();
     }
 
     // After compaction, there should still be two entries in the Entry Table.
     assert_eq!(findex.entry_table_len(), 2);
     // But deletions should have been simplified (only two locations indexed per
     // chain -> one line per chain -> 2 lines)
+    assert_eq!(findex.chain_table_len(), 2);
+
+    for _ in 0..100 {
+        // Add some keywords.
+        findex
+            .upsert(
+                indexed_value_to_keywords.clone(),
+                HashMap::new(),
+                &master_key,
+                &label,
+            )
+            .await
+            .unwrap();
+    }
+    assert_eq!(findex.entry_table_len(), 2);
+    assert_eq!(findex.chain_table_len(), 202);
+
+    // Compact enough times to be sure all entries have been compacted.
+    for _ in 0..10 {
+        findex.live_compact(&master_key, 8).await.unwrap();
+    }
+    assert_eq!(findex.entry_table_len(), 2);
     assert_eq!(findex.chain_table_len(), 2);
 }
