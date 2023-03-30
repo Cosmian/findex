@@ -1,12 +1,10 @@
 ---
-name: Benches on demand
+name: Benches (self-hosted)
 
-# on: push
 on: [workflow_dispatch, pull_request]
 
 jobs:
   bench:
-    uses: Cosmian/reusable_workflows/.github/workflows/cargo-bench.yml@develop
-    with:
-      toolchain: nightly-2022-10-28
-      force: true
+    runs-on: self-hosted
+    steps:
+      run: cargo bench --all-features
