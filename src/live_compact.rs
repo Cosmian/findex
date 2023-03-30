@@ -15,6 +15,51 @@ use crate::{
     KeyingMaterial, Location, Uid, UpsertData, ENTRY_TABLE_KEY_DERIVATION_INFO,
 };
 
+/// Live compact trait allows for compacting chains associated to a set of Entry
+/// Table UIDs without interrupting the service.
+///
+/// The compaction of a chain removes duplicated entries, simplifies deletions
+/// (removes all addition of the deleted keyword up to the deletion and removes
+/// the deletion) and write remaining values in a compact way in the Chain Table
+/// (only the last line of the chain may have padding blocks).
+///
+/// The following gives an example of the effect of a compact operation on an
+/// Entry Table line and its associated chain.
+///
+/// The Entry Table line:
+///
+/// | UID | -> | H(w) | K_w | UID_5 |
+///
+/// becomes:
+///
+/// | UID | -> | H(w) | K_w' | UID_1' |
+///
+/// and the old chain (values are chosen arbitrarily in the aim to illustrate
+/// different properties and `L1` ... `L4` are the locations indexed for the
+/// keyword `w`):
+///
+/// | UID_1 | -> Enc(K_w, | L1 (Add) | L2 (Add) |  Padding |)
+/// | UID_2 | -> Enc(K_w, | L2 (Add) |  Padding |  Padding |)
+/// | UID_3 | -> Enc(K_w, | L1 (Del) | L3 (Add) | L4 (Add) |)
+/// | UID_4 | -> Enc(K_w, | L2 (Del) |  Padding |  Padding |)
+/// | UID_5 | -> Enc(K_w, | L2 (Add) | L3 (Add) | L4 (Add) |)
+///
+/// becomes:
+///
+/// | UID_1' | -> Enc(K_w', | L2 (Add) | L3 (Add) | L4 (Add) |)
+///
+/// The following operations have been applied:
+/// - a new random ephemeral key `K_w'` is drawn;
+/// - the new last chain UID is stored in the Entry Table entry;
+/// - chain UIDs are generated anew (random-like);
+/// - chain values are encrypted under the new ephemeral key;
+/// - `L1` is removed since the last occurrence in the chain is a deletion;
+/// - `L2` kept since the last occurrence is an addition, the deletion is
+///   removed;
+/// - `L3` and `L4` are kept since they have not been deleted but only one
+///   occurrence is kept.
+///
+/// *NOTE*: the order of the locations in the compacted chain is not guaranteed.
 pub trait FindexLiveCompact<
     const UID_LENGTH: usize,
     const BLOCK_LENGTH: usize,
