@@ -295,7 +295,7 @@ pub trait FindexLiveCompact<
                         }
                     };
                 }
-                compacted_chains.insert(entry_table_value.keyword_hash, compacted_chain);
+                compacted_chains.insert(uid.clone(), (entry_table_value.keyword_hash, compacted_chain));
                 cache.insert(entry_table_value.keyword_hash, uid.clone());
             }
         }
@@ -309,7 +309,7 @@ pub trait FindexLiveCompact<
             DEM_KEY_LENGTH,
             KmacKey,
             DemScheme
-        >(rng, &compacted_chains, &cache)?;
+        >(rng, &compacted_chains)?;
 
         println!("Noisy compacted Entry Table: {noisy_entry_table:?}");
 
