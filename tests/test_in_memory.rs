@@ -8,7 +8,7 @@ use std::{
 use cosmian_crypto_core::{reexport::rand_core::SeedableRng, CsRng};
 use cosmian_findex::{
     in_memory_example::{ExampleError, FindexInMemory},
-    parameters::{SECURE_FETCH_CHAINS_BATCH_SIZE, UID_LENGTH},
+    parameters::*,
     Error, FindexCallbacks, FindexCompact, FindexSearch, FindexUpsert, IndexedValue,
     KeyingMaterial, Keyword, Label, Location,
 };
@@ -720,11 +720,10 @@ async fn test_live_compacting() {
     use cosmian_findex::FindexLiveCompact;
 
     let mut rng = CsRng::from_entropy();
+    let mut findex = FindexInMemory::default();
 
     let label = Label::random(&mut rng);
     let master_key = KeyingMaterial::new(&mut rng);
-
-    let mut findex = FindexInMemory::default();
 
     // Direct location robert doe.
     let robert_doe_location = Location::from("robert doe DB location");
@@ -757,7 +756,6 @@ async fn test_live_compacting() {
             .await
             .unwrap();
     }
-
     // Add some keywords.
     findex
         .upsert(
@@ -769,10 +767,10 @@ async fn test_live_compacting() {
         .await
         .unwrap();
 
+    // Check keywords have been correctly insterted.
     let robert_keyword = Keyword::from("robert");
     let doe_keyword = Keyword::from("doe");
-
-    // search robert
+    // Search Robert.
     let robert_search = findex
         .search(
             &HashSet::from_iter(vec![robert_keyword.clone()]),
@@ -786,8 +784,7 @@ async fn test_live_compacting() {
         .await
         .unwrap();
     check_search_result(&robert_search, &robert_keyword, &robert_doe_location);
-
-    // search doe
+    // Search Doe.
     let doe_search = findex
         .search(
             &HashSet::from_iter(vec![doe_keyword.clone()]),
@@ -803,11 +800,13 @@ async fn test_live_compacting() {
     check_search_result(&doe_search, &doe_keyword, &robert_doe_location);
 
     // Compact enough times to be sure all entries have been compacted.
-    for _ in 0..10 {
-        findex.live_compact(&master_key, 5).await.unwrap();
+    for _ in 0..100 {
+        findex.live_compact(&master_key, 80).await.unwrap();
     }
 
-    // After compaction, there should be no more indexed values.
-    assert_eq!(findex.entry_table_len(), 0);
-    assert_eq!(findex.chain_table_len(), 0);
+    // After compaction, there should still be two entries in the Entry Table.
+    assert_eq!(findex.entry_table_len(), 2);
+    // But deletions should have been simplified (only two locations indexed per
+    // chain -> one line per chain -> 2 lines)
+    assert_eq!(findex.chain_table_len(), 2);
 }

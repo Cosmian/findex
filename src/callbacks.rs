@@ -146,7 +146,7 @@ pub trait FindexCallbacks<Error: std::error::Error + CallbackError, const UID_LE
         new_chain_table_items: EncryptedTable<UID_LENGTH>,
     ) -> Result<(), Error>;
 
-    /// Returns all locations among the ones given that do not exist anymore.
+    /// Returns all locations that point to existing data.
     ///
     /// **NOTE**: this callback does not call the index database since indexed
     /// locations can be anything in Findex (DB UID, path, other ID...). It may
@@ -160,9 +160,14 @@ pub trait FindexCallbacks<Error: std::error::Error + CallbackError, const UID_LE
         locations: &HashSet<Location>,
     ) -> Result<HashSet<Location>, Error>;
 
+    #[cfg(feature = "live_compact")]
     /// Returns all locations that point to existing data.
     fn filter_removed_locations(
         &self,
         locations: &HashSet<Location>,
     ) -> Result<HashSet<Location>, Error>;
+
+    #[cfg(feature = "live_compact")]
+    /// Delete the Chain Table lines with the given UIDs.
+    async fn delete_chain(&mut self, uids: &HashSet<Uid<UID_LENGTH>>) -> Result<(), Error>;
 }

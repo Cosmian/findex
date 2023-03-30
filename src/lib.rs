@@ -40,17 +40,17 @@ mod upsert;
 pub mod parameters;
 
 #[cfg(feature = "live_compact")]
-mod live_compact;
+mod compact_live;
 
 #[cfg(feature = "in_memory")]
 pub mod in_memory_example;
 
 pub use callbacks::FindexCallbacks;
 pub use compact::FindexCompact;
+#[cfg(feature = "live_compact")]
+pub use compact_live::FindexLiveCompact;
 pub use error::{CallbackError, CoreError, Error};
 pub use keys::KeyingMaterial;
-#[cfg(feature = "live_compact")]
-pub use live_compact::FindexLiveCompact;
 pub use search::FindexSearch;
 pub use structs::{EncryptedTable, IndexedValue, Keyword, Label, Location, Uid, UpsertData};
 pub use upsert::FindexUpsert;

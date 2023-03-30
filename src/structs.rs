@@ -17,8 +17,6 @@ use crate::error::CoreError as Error;
 
 /// The labels are used to provide additional public information to the hash
 /// algorithm when generating Entry Table UIDs.
-//
-// TODO (TBZ): Should the label size be at least 32-bytes?
 #[must_use]
 #[derive(Clone, Debug)]
 pub struct Label(Vec<u8>);

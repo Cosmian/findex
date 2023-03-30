@@ -191,7 +191,7 @@ pub trait FindexLiveCompact<
                     kwi_chain_table_uids
                         .get(&v.kwi)
                         .ok_or(Error::<CustomError>::CryptoError(format!(
-                            "No matching Kwi in `kwi_chain_table_uids` ({:?})",
+                            "no matching Kwi in `kwi_chain_table_uids` ({:?})",
                             v.kwi
                         )))?
                         .clone(),
@@ -211,7 +211,7 @@ pub trait FindexLiveCompact<
                 chains
                     .get(&entry_table_value.kwi)
                     .ok_or(Error::<CustomError>::CryptoError(format!(
-                        "No matching Kwi in `kwi_chain_table_uids` ({:?})",
+                        "no matching Kwi in `kwi_chain_table_uids` ({:?})",
                         entry_table_value.kwi
                     )))?;
             // TODO (TBZ): use the same trick everywhere to avoid allocating (do not consume the
@@ -402,6 +402,8 @@ pub trait FindexLiveCompact<
                     .flatten()
                     .cloned(),
             );
+
+            self.delete_chain(&chains_to_delete).await?;
         }
 
         Ok(())
