@@ -15,6 +15,9 @@ use crate::{
     KeyingMaterial, Location, Uid, UpsertData, ENTRY_TABLE_KEY_DERIVATION_INFO,
 };
 
+/// [Euler's constant](https://wikipedia.org/wiki/Euler_constant)
+const GAMMA: f64 = 0.577;
+
 /// Live compact trait allows for compacting chains associated to a set of Entry
 /// Table UIDs without interrupting the service.
 ///
@@ -120,9 +123,17 @@ pub trait FindexLiveCompact<
 
         let uids = self.fetch_all_entry_table_uids().await?;
 
-        // TODO (TBZ): find which probability is associated to this formula.
+        // The esperance of the number of UIDs to draw in order to recompact the
+        // full Entry Table after `num_reindexing_before_full_set` operations:
+        //
+        // n_compact = (n / T) * (log(n) + gamma) + O(1/(T * n))
+        //
+        // with `n = entry_table_length`, `T = num_reindexing_before_full_set`
+        // and `gamma` is the Euler's constant.
+        //
+        // See the [coupon collector's problem](https://wikipedia.org/wiki/Coupon_collector's_problem).
         let entry_table_length = uids.len() as f64;
-        let n_compact = ((entry_table_length * (entry_table_length.log2() + 0.58))
+        let n_compact = ((entry_table_length * (entry_table_length.log2() + GAMMA))
             / f64::from(num_reindexing_before_full_set))
         .ceil() as usize;
 
