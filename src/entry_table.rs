@@ -312,6 +312,17 @@ impl<const UID_LENGTH: usize, const KWI_LENGTH: usize> DerefMut
     }
 }
 
+impl<const UID_LENGTH: usize, const KWI_LENGTH: usize> IntoIterator
+    for EntryTable<UID_LENGTH, KWI_LENGTH>
+{
+    type IntoIter = <<Self as Deref>::Target as IntoIterator>::IntoIter;
+    type Item = <<Self as Deref>::Target as IntoIterator>::Item;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.into_iter()
+    }
+}
+
 impl<const UID_LENGTH: usize, const KWI_LENGTH: usize> EntryTable<UID_LENGTH, KWI_LENGTH> {
     /// Creates a new Entry Table with the given capacity.
     pub fn with_capacity(capacity: usize) -> Self {

@@ -10,7 +10,7 @@ use cosmian_crypto_core::{
 
 use crate::{
     entry_table::{EntryTable, EntryTableValue},
-    structs::BlockType,
+    structs::{BlockType, ChainData},
     CallbackError, EncryptedTable, Error, FindexCallbacks, FindexCompact, IndexedValue,
     KeyingMaterial, Location, Uid, UpsertData, ENTRY_TABLE_KEY_DERIVATION_INFO,
 };
@@ -183,14 +183,13 @@ pub trait FindexLiveCompact<
         k_value: &DemScheme::Key,
         encrypted_entry_table: &EncryptedTable<UID_LENGTH>,
     ) -> Result<
-        (
-            HashMap<Uid<UID_LENGTH>, Vec<Uid<UID_LENGTH>>>,
-            HashMap<Uid<UID_LENGTH>, HashSet<IndexedValue>>,
-        ),
+        ChainData<UID_LENGTH>,
         Error<CustomError>,
     > {
         let entry_table: EntryTable<UID_LENGTH, KWI_LENGTH> =
             EntryTable::decrypt::<DEM_KEY_LENGTH, DemScheme>(k_value, encrypted_entry_table)?;
+
+        let mut chains = ChainData::with_capacity(entry_table.len());
 
         // Unchain all Entry Table UIDs.
         let kwi_chain_table_uids = entry_table.unchain::<
@@ -203,21 +202,17 @@ pub trait FindexLiveCompact<
         >(entry_table.keys(), usize::MAX);
 
         // Associate Entry Table UIDs to Chain Table UIDs.
-        let chains = entry_table
-            .iter()
-            .map(|(uid, v)| {
-                Ok((
-                    uid.clone(),
-                    kwi_chain_table_uids
-                        .get(&v.kwi)
-                        .ok_or(Error::<CustomError>::CryptoError(format!(
-                            "no matching Kwi in `kwi_chain_table_uids` ({:?})",
-                            v.kwi
-                        )))?
-                        .clone(),
-                ))
-            })
-            .collect::<Result<HashMap<_, _>, Error<_>>>()?;
+        for (uid, v) in  entry_table.iter() {
+            chains.chain_uids.insert(
+                uid.clone(),
+                kwi_chain_table_uids
+                .get(&v.kwi)
+                .ok_or(Error::<CustomError>::CryptoError(format!(
+                    "no matching Kwi in `kwi_chain_table_uids` ({:?})",
+                    v.kwi
+                )))?.clone(),
+            );
+        }
 
         // Fetch the Chain Table for the chain UIDs.
         let chain_values = self
@@ -225,23 +220,22 @@ pub trait FindexLiveCompact<
             .await?;
 
         // Convert the blocks of the given chains into indexed values.
-        let mut noisy_indexed_values = HashMap::new();
-        for (entry_table_uid, entry_table_value) in entry_table.iter() {
+        for (entry_table_uid, entry_table_value) in entry_table.into_iter() {
             let chain =
                 chain_values
                     .get(&entry_table_value.kwi)
                     .ok_or(Error::<CustomError>::CryptoError(format!(
-                        "no matching Kwi in `kwi_chain_table_uids` ({:?})",
+                        "no chain found for the `Kwi`: {:?}",
                         entry_table_value.kwi
                     )))?;
             let blocks = chain
                 .iter()
                 .flat_map(|(_, chain_table_value)| chain_table_value.as_blocks());
-            noisy_indexed_values
-                .insert(entry_table_uid.clone(), IndexedValue::from_blocks(blocks)?);
+            chains.chain_values
+                .insert(entry_table_uid, IndexedValue::from_blocks(blocks)?);
         }
 
-        Ok((chains, noisy_indexed_values))
+        Ok(chains)
     }
 
     /// Updates noisy Entry Table entries and compacts chains associated to
@@ -346,7 +340,7 @@ pub trait FindexLiveCompact<
             .await?;
 
         // Fetch chain data (noisy).
-        let (noisy_chain_uids, noisy_chain_values) = self
+        let chains = self
             .fetch_chain_data(
                 k_value,
                 &noisy_encrypted_entry_table,
@@ -354,7 +348,7 @@ pub trait FindexLiveCompact<
             .await?;
 
         // Select remaining locations (noisy).
-        let noisy_locations: HashSet<Location> = noisy_chain_values
+        let noisy_locations: HashSet<Location> = chains.chain_values
             .iter()
             .flat_map(|(_, values)| values)
             .filter_map(|value| value.get_location())
@@ -371,7 +365,7 @@ pub trait FindexLiveCompact<
                 noise,
                 &noisy_remaining_locations,
                 &noisy_encrypted_entry_table,
-                &noisy_chain_values,
+                &chains.chain_values,
             )?;
 
             // Insert all recompacted chains first.
@@ -406,7 +400,7 @@ pub trait FindexLiveCompact<
 
             chains_to_delete.extend(
                 // - old chains corresponding to successful upserts
-                noisy_chain_uids
+                chains.chain_uids
                     .iter()
                     .filter_map(|(uid, chain)| {
                         if !noisy_encrypted_entry_table.contains_key(uid) && !noise.contains(uid) {
