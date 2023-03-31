@@ -252,7 +252,7 @@ impl<const UID_LENGTH: usize, const KWI_LENGTH: usize> EntryTableValue<UID_LENGT
             // add the new Chain Table UID to the map
             entry.push(current_chain_table_uid.clone());
 
-            // return if we found the UID stored in the Entry Table value
+            // Return if we found the UID stored in the Entry Table value.
             if Some(&current_chain_table_uid) == self.chain_table_uid.as_ref() {
                 break;
             }
