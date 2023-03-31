@@ -90,10 +90,6 @@ impl<const TABLE_WIDTH: usize, const BLOCK_LENGTH: usize>
         &self.blocks[..self.length]
     }
 
-    pub fn into_blocks(self) -> [Block<BLOCK_LENGTH>; TABLE_WIDTH] {
-        self.blocks
-    }
-
     /// Encrypts the Chain Table value using the given DEM key.
     ///
     /// - `kwi_value`   : DEM key used to encrypt the value
