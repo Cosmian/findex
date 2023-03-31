@@ -35,29 +35,28 @@ use crate::{
 /// | UID | -> | H(w) | K_w' | UID_1' |
 ///
 /// and the old chain (values are chosen arbitrarily in the aim to illustrate
-/// different properties and `L1` ... `L4` are the locations indexed for the
-/// keyword `w`):
+/// different properties and `B1` ... `B4` are the non-padding blocks indexed
+/// for the keyword `w`):
 ///
-/// | UID_1 | -> Enc(K_w, | L1 (Add) | L2 (Add) |  Padding |)
-/// | UID_2 | -> Enc(K_w, | L2 (Add) |  Padding |  Padding |)
-/// | UID_3 | -> Enc(K_w, | L1 (Del) | L3 (Add) | L4 (Add) |)
-/// | UID_4 | -> Enc(K_w, | L2 (Del) |  Padding |  Padding |)
-/// | UID_5 | -> Enc(K_w, | L2 (Add) | L3 (Add) | L4 (Add) |)
+/// | UID_1 | -> Enc(K_w, | B1 (Add) | B2 (Add) |  Padding |)
+/// | UID_2 | -> Enc(K_w, | B2 (Add) |  Padding |  Padding |)
+/// | UID_3 | -> Enc(K_w, | B1 (Del) | B3 (Add) | B4 (Add) |)
+/// | UID_4 | -> Enc(K_w, | B2 (Del) |  Padding |  Padding |)
+/// | UID_5 | -> Enc(K_w, | B2 (Add) | B3 (Add) | B4 (Add) |)
 ///
 /// becomes:
 ///
-/// | UID_1' | -> Enc(K_w', | L2 (Add) | L3 (Add) | L4 (Add) |)
+/// | UID_1' | -> Enc(K_w', | B2 (Add) | B3 (Add) | B4 (Add) |)
 ///
 /// The following operations have been applied:
 /// - a new random ephemeral key `K_w'` is drawn;
 /// - the new last chain UID is stored in the Entry Table entry;
 /// - chain UIDs are generated anew (random-like);
 /// - chain values are encrypted under the new ephemeral key;
-/// - `L1` is removed since the last occurrence in the chain is a deletion;
-/// - `L2` kept since the last occurrence is an addition, the deletion is
-///   removed;
-/// - `L3` and `L4` are kept since they have not been deleted but only one
-///   occurrence is kept.
+/// - `B1` is removed since its last occurrence in the chain is a deletion;
+/// - `B2` is kept since its last occurrence is an addition and is simplified
+///   (only one occurrence in the chain);
+/// - `B3` and `B4` are kept since they have not been deleted, and simplified.
 ///
 /// *NOTE*: the order of the locations in the compacted chain is not guaranteed.
 pub trait FindexLiveCompact<
@@ -93,21 +92,35 @@ pub trait FindexLiveCompact<
     /// Number of noisy Entry Table UIDs to compact in a row.
     const BATCH_SIZE: usize;
 
-    /// Selects a set of Entry Table UIDs to reindex and a set of Entry Table
-    /// UIDs used as noise.
+    /// Selects a set of Entry Table UIDs to reindex (target set) and a set of Entry Table UIDs
+    /// used as noise (noise set).
+    ///
+    /// These sets are mutually exclusive and the ratio of the cardinal of the noise set over the
+    /// target set is given by `Self::NOISE_RATIO`.
+    ///
+    /// Returns the noisy taget set (target set + noise set) and the noise set.
+    /// A HashSet is used for the noise set because lookup should be fast.
     ///
     /// # Parameters
     ///
-    /// - `rng`         : secure random number generator
-    /// - `uids`        : set UIDs from which to select UIDs to reindex and noise
-    /// - `n_compact`   : number of UIDs to compact
+    /// - `rng`                             : secure random number generator
+    /// - `num_reindexing_before_full_set`  : number of compact operations need to compact all the
+    /// base
     async fn select_noisy_uids(
         &self,
         rng: &mut impl CryptoRngCore,
         num_reindexing_before_full_set: u32
     ) -> Result<(Vec<Uid<UID_LENGTH>>, HashSet<Uid<UID_LENGTH>>), Error<CustomError>> {
+        if Self::NOISE_RATIO > 1f64 {
+            return Err(Error::CryptoError(format!(
+                "noise ration cannot be greater than 1 ({} given)",
+                Self::NOISE_RATIO
+            )));
+        }
+
         let uids = self.fetch_all_entry_table_uids().await?;
 
+        // TODO (TBZ): find which probability is associated to this formula.
         let entry_table_length = uids.len() as f64;
         let n_compact = ((entry_table_length * (entry_table_length.log2() + 0.58))
             / f64::from(num_reindexing_before_full_set))
@@ -121,22 +134,23 @@ pub trait FindexLiveCompact<
             )));
         }
 
-        // There are:
-        // - `n_compact` UIDs to compact;
-        // - `NOISE_RATIO * n_compact` UIDs for the noise, which is lower than `n_compact`.
-        //
-        // The total is lower than `2 * n_compact`. An upper bound is used to avoid reallocations.
-        let mut noisy_uids_to_compact = Vec::with_capacity(2 * n_compact );
+        // Upper bounds are used for capacity in order to avoid reallocations:
+        // - the number of noise UIDs is lower than `n_compact`;
         let mut noise = HashSet::with_capacity(n_compact);
+        // - the total number of UIDs (target set + noise set) is lower than `2*n_compact`.
+        let mut noisy_uids_to_compact = Vec::with_capacity(2 * n_compact );
 
         // Needed because `uids` is moved in the loop condition.
         let n_uids = uids.len();
+        let n_noise_candidates = n_uids - n_compact;
+        let n_noise = (Self::NOISE_RATIO * n_compact as f64) as usize;
+
         for uid in uids {
             let tmp = rng.next_u32() as usize;
             if tmp % n_uids < n_compact {
                 // Randomly select ~ `n_compact` UIDs.
                 noisy_uids_to_compact.push(uid);
-            } else if tmp % (n_uids - n_compact) < (Self::NOISE_RATIO * n_compact as f64) as usize {
+            } else if tmp % n_noise_candidates < n_noise {
                 // Randomly select ~ `NOISE_RATIO * n_compact` UIDs.
                 noise.insert(uid);
             }
@@ -145,8 +159,7 @@ pub trait FindexLiveCompact<
         Ok((noisy_uids_to_compact, noise))
     }
 
-    /// Fetch all useful information from the Chain Table for the compact
-    /// operation:
+    /// Fetch all useful information for the compact from the Chain Table:
     /// - the map of Entry Table UIDs to Chain Table UIDs
     /// - the map of Entry Table UIDs to indexed values
     ///
@@ -154,7 +167,6 @@ pub trait FindexLiveCompact<
     ///
     /// - `k_value`                 : DEM key used to decrypt the Entry Table
     /// - `encrypted_entry_table`   : encrypted Entry Table
-    /// - `fetch_chains_batch_size` : number of chain UIDs to request at once
     async fn fetch_chain_data(
         &self,
         k_value: &DemScheme::Key,
@@ -166,22 +178,21 @@ pub trait FindexLiveCompact<
         ),
         Error<CustomError>,
     > {
-        // Decrypt entry table.
-        let noisy_entry_table: EntryTable<UID_LENGTH, KWI_LENGTH> =
+        let entry_table: EntryTable<UID_LENGTH, KWI_LENGTH> =
             EntryTable::decrypt::<DEM_KEY_LENGTH, DemScheme>(k_value, encrypted_entry_table)?;
 
         // Unchain all Entry Table UIDs.
-        let kwi_chain_table_uids = noisy_entry_table.unchain::<
+        let kwi_chain_table_uids = entry_table.unchain::<
             CHAIN_TABLE_WIDTH,
             BLOCK_LENGTH,
             KMAC_KEY_LENGTH,
             DEM_KEY_LENGTH,
             KmacKey,
             DemScheme
-        >(noisy_entry_table.keys(), usize::MAX);
+        >(entry_table.keys(), usize::MAX);
 
-        // Associate Entry UIDs to Chain UIDs.
-        let noisy_chains = noisy_entry_table
+        // Associate Entry Table UIDs to Chain Table UIDs.
+        let chains = entry_table
             .iter()
             .map(|(uid, v)| {
                 Ok((
@@ -197,16 +208,16 @@ pub trait FindexLiveCompact<
             })
             .collect::<Result<HashMap<_, _>, Error<_>>>()?;
 
-        // Fetch Chain Table for the given UIDs.
-        let chains = self
+        // Fetch the Chain Table for the chain UIDs.
+        let chain_values = self
             .batch_fetch_chains(&kwi_chain_table_uids)
             .await?;
 
         // Convert the blocks of the given chains into indexed values.
         let mut noisy_indexed_values = HashMap::new();
-        for (entry_table_uid, entry_table_value) in noisy_entry_table.iter() {
+        for (entry_table_uid, entry_table_value) in entry_table.iter() {
             let chain =
-                chains
+                chain_values
                     .get(&entry_table_value.kwi)
                     .ok_or(Error::<CustomError>::CryptoError(format!(
                         "no matching Kwi in `kwi_chain_table_uids` ({:?})",
@@ -219,7 +230,7 @@ pub trait FindexLiveCompact<
                 .insert(entry_table_uid.clone(), IndexedValue::from_blocks(blocks)?);
         }
 
-        Ok((noisy_chains, noisy_indexed_values))
+        Ok((chains, noisy_indexed_values))
     }
 
     /// Updates noisy Entry Table entries and compacts chains associated to
@@ -232,10 +243,11 @@ pub trait FindexLiveCompact<
     /// # Paramaters
     ///
     /// - `rng`                         : secure random number generator
-    /// - `noise`                       : Entry Table UIDs of the noise
+    /// - `k_value`                     : DEM key used to decrypt the Entry Table
+    /// - `noise`                       : Entry Table UIDs used as noise
     /// - `noisy_remaining_locations`   : remaining locations (contains noise)
-    /// - `noisy_chains`                : row data to be compacted (contains
-    ///   noise)
+    /// - `noisy_encrypted_entry_table` : encrypted Entry Table (contains noise)
+    /// - `noisy_chain_values`          : chain values (contains noise)
     fn compact_chains(
         &self,
         rng: &mut impl CryptoRngCore,
@@ -254,10 +266,6 @@ pub trait FindexLiveCompact<
         let mut noisy_entry_table = EntryTable::with_capacity(noisy_chain_values.len());
         let mut compacted_chains = HashMap::with_capacity(noisy_chain_values.len() - noise.len());
         let mut cache = HashMap::with_capacity(noisy_chain_values.len() - noise.len());
-
-        println!("noisy chains: {noisy_chain_values:?}");
-        println!("noise: {noise:?}");
-        println!("remaining locations: {noisy_remaining_locations:?}");
 
         for (uid, encrypted_value) in noisy_encrypted_entry_table.iter() {
             let entry_table_value = EntryTableValue::decrypt::<DEM_KEY_LENGTH, DemScheme>(
@@ -296,8 +304,6 @@ pub trait FindexLiveCompact<
             }
         }
 
-        println!("Recompacted chains: {compacted_chains:?}");
-
         let compacted_chain_table = noisy_entry_table.upsert::<
             CHAIN_TABLE_WIDTH,
             BLOCK_LENGTH,
@@ -307,12 +313,15 @@ pub trait FindexLiveCompact<
             DemScheme
         >(rng, &compacted_chains)?;
 
-        println!("Noisy compacted Entry Table: {noisy_entry_table:?}");
-
         Ok((noisy_entry_table, compacted_chain_table))
     }
 
     /// Live compact the given UIDs.
+    ///
+    /// - `rng`         : secure random number generator
+    /// - `k_value`     : DEM key used to decrypt the Entry Table
+    /// - `noisy_uids`  : UIDs to compact (contains noise)
+    /// - `noise`       : Entry Table UIDs used as noise
     async fn live_compact_uids(
         &mut self,
         rng: &mut impl CryptoRngCore,
@@ -405,18 +414,23 @@ pub trait FindexLiveCompact<
         Ok(())
     }
 
-    /// Live compact algorithm.
+    /// Compacts a random subset of the Entry Table.
     ///
-    /// See notion for an explanation and analysis.
+    /// The size of this subset is such that `num_reindexing_before_full_set` compact operations
+    /// are needed to compact all the Entry Table.
+    ///
+    /// - `master_key`                      : Findex master key
+    /// - `num_reindexing_before_full_set`  : number of compact operations needed to compact all
+    /// the Entry Table
     async fn live_compact(
         &mut self,
-        key: &KeyingMaterial<MASTER_KEY_LENGTH>,
+        master_key: &KeyingMaterial<MASTER_KEY_LENGTH>,
         num_reindexing_before_full_set: u32,
     ) -> Result<(), Error<CustomError>> {
         let mut rng = CsRng::from_entropy();
 
         let k_value =
-            key.derive_dem_key::<DEM_KEY_LENGTH, DemScheme::Key>(ENTRY_TABLE_KEY_DERIVATION_INFO);
+            master_key.derive_dem_key::<DEM_KEY_LENGTH, DemScheme::Key>(ENTRY_TABLE_KEY_DERIVATION_INFO);
 
         let (noisy_entry_table_uids, noise) = self.select_noisy_uids(&mut rng, num_reindexing_before_full_set).await?;
 
