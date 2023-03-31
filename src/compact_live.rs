@@ -113,7 +113,7 @@ pub trait FindexLiveCompact<
     ) -> Result<(Vec<Uid<UID_LENGTH>>, HashSet<Uid<UID_LENGTH>>), Error<CustomError>> {
         if Self::NOISE_RATIO > 1f64 {
             return Err(Error::CryptoError(format!(
-                "noise ration cannot be greater than 1 ({} given)",
+                "noise ratio cannot be greater than 1 ({} given)",
                 Self::NOISE_RATIO
             )));
         }
