@@ -241,7 +241,7 @@ impl<const UID_LENGTH: usize, const KWI_LENGTH: usize> EntryTableValue<UID_LENGT
 
         let kwi_uid: KmacKey = self.kwi.derive_kmac_key(CHAIN_TABLE_KEY_DERIVATION_INFO);
 
-        // derive the Chain Table UID
+        // Derive the Chain Table UID.
         let mut current_chain_table_uid =
             ChainTable::<UID_LENGTH, CHAIN_TABLE_WIDTH, BLOCK_LENGTH>::generate_uid(
                 &kwi_uid,
