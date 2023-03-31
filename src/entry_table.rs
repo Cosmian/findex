@@ -177,7 +177,7 @@ impl<const UID_LENGTH: usize, const KWI_LENGTH: usize> EntryTableValue<UID_LENGT
 
     /// Decrypts an encrypted `EntryTableValue` using the given `𝐾_value`.
     ///
-    /// - `k_value`     : `𝐾_value`
+    /// - `k_value`     : `K_value`
     /// - `ciphertext`  : encrypted entry table value
     pub(crate) fn decrypt<const DEM_KEY_LENGTH: usize, DemScheme: Dem<DEM_KEY_LENGTH>>(
         k_value: &DemScheme::Key,
