@@ -635,6 +635,20 @@ impl<const UID_LENGTH: usize> Serializable for UpsertData<UID_LENGTH> {
     }
 }
 
+pub struct ChainData<const UID_LENGTH: usize> {
+    pub(crate) chain_uids: HashMap<Uid<UID_LENGTH>, Vec<Uid<UID_LENGTH>>>,
+    pub(crate) chain_values: HashMap<Uid<UID_LENGTH>, HashSet<IndexedValue>>,
+}
+
+impl<const UID_LENGTH: usize> ChainData<UID_LENGTH> {
+    pub fn with_capacity(capacity: usize) -> Self {
+        Self {
+            chain_uids: HashMap::with_capacity(capacity),
+            chain_values: HashMap::with_capacity(capacity),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
