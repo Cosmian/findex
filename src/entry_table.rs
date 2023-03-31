@@ -249,7 +249,7 @@ impl<const UID_LENGTH: usize, const KWI_LENGTH: usize> EntryTableValue<UID_LENGT
             );
 
         for _ in 0..max_results {
-            // add the new Chain Table UID to the map
+            // Add the new Chain Table UID to the map.
             entry.push(current_chain_table_uid.clone());
 
             // Return if we found the UID stored in the Entry Table value.
@@ -257,7 +257,7 @@ impl<const UID_LENGTH: usize, const KWI_LENGTH: usize> EntryTableValue<UID_LENGT
                 break;
             }
 
-            // compute the next UID
+            // Compute the next UID.
             current_chain_table_uid =
                 ChainTable::<UID_LENGTH, CHAIN_TABLE_WIDTH, BLOCK_LENGTH>::generate_uid(
                     &kwi_uid,
@@ -267,7 +267,28 @@ impl<const UID_LENGTH: usize, const KWI_LENGTH: usize> EntryTableValue<UID_LENGT
     }
 }
 
-/// Entry Table.
+/// Findex Entry Table.
+///
+/// This is a key value store. The value needs to be encrypted in order to
+/// secure it (cf [`EncryptedTable`](structs::EncryptedTable)).
+///
+/// +-----------+-----------------------------------+
+/// | Key       | Value                             |
+/// +-----------+-------+-------+-------------------+
+/// | UID       | K_wi  | H_wi  | Option<UID_last>  |
+/// +-----------+-------+-------+-------------------+
+///
+/// with:
+/// - `UID_LENGTH` is the length of `UID` and `UID_last`
+/// - `KWI_LENGTH` is the length of `K_wi`
+/// - `K_wi` is the ephemeral key associated to the chain of the keyword `w_i`
+/// - `H_wi` is the hash of the keyword `w_i`; its length is
+///   [`Keyword::HASH_LENGTH`](Keyword::HASH_LENGTH)
+/// - `UID_last` is the UID of the last Chain Table line used to store the chain
+///   of the keyword `w_i`; it is optional in the Entry Table since the line
+///   assocated to a keyword can link to no Chain Table line after a compact
+///   operation deleted all values indexed for this keyword (Entry Table lines
+///   with no `UID_last` are removed during reindexation).
 #[derive(Debug, Default)]
 pub struct EntryTable<const UID_LENGTH: usize, const KWI_LENGTH: usize>(
     HashMap<Uid<UID_LENGTH>, EntryTableValue<UID_LENGTH, KWI_LENGTH>>,
@@ -297,16 +318,15 @@ impl<const UID_LENGTH: usize, const KWI_LENGTH: usize> EntryTable<UID_LENGTH, KW
         Self(HashMap::with_capacity(capacity))
     }
 
-    /// Builds an `EntryTableUid` from the given hash value, symmetric key and
-    /// `Label`. The hash value given *should* be the one of the indexing
-    /// keyword.
+    /// Generates an `EntryTableUid` from the given hash value, KMAC key and
+    /// label. The hash value given *should* be the one of the indexing keyword.
     ///
     /// - `key`             : KMAC key
-    /// - `keyword_hash`    : `Keyword` to hash
-    /// - `label`           : additional information used during the derivation
+    /// - `keyword_hash`    : hash of the `Keyword`
+    /// - `label`           : additional public information
     pub fn generate_uid<const KMAC_KEY_LENGTH: usize, KmacKey: SymKey<KMAC_KEY_LENGTH>>(
         key: &KmacKey,
-        keyword_hash: &[u8; Keyword::HASH_LENGTH],
+        keyword_hash: &KeywordHash,
         label: &Label,
     ) -> Uid<UID_LENGTH> {
         kmac!(UID_LENGTH, key.as_bytes(), keyword_hash, label).into()
