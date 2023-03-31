@@ -138,7 +138,7 @@ pub trait FindexLiveCompact<
         // - the number of noise UIDs is lower than `n_compact`;
         let mut noise = HashSet::with_capacity(n_compact);
         // - the total number of UIDs (target set + noise set) is lower than `2*n_compact`.
-        let mut noisy_uids_to_compact = Vec::with_capacity(2 * n_compact );
+        let mut noisy_uids_to_compact = Vec::with_capacity(2 * n_compact);
 
         // Needed because `uids` is moved in the loop condition.
         let n_uids = uids.len();
