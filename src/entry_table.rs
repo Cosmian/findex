@@ -159,7 +159,7 @@ impl<const UID_LENGTH: usize, const KWI_LENGTH: usize> EntryTableValue<UID_LENGT
 
     /// Encrypts the `EntryTableValue` using the given `𝐾_value`.
     ///
-    /// - `k_value` : `𝐾_value`
+    /// - `k_value` : `K_value`
     /// - `rng`     : random number generator
     pub(crate) fn encrypt<const DEM_KEY_LENGTH: usize, DemScheme: Dem<DEM_KEY_LENGTH>>(
         &self,
