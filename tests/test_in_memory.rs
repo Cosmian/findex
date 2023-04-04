@@ -767,7 +767,7 @@ async fn test_live_compacting() {
         .await
         .unwrap();
 
-    // Check keywords have been correctly insterted.
+    // Check keywords have been correctly inserted.
     let robert_keyword = Keyword::from("robert");
     let doe_keyword = Keyword::from("doe");
     // Search Robert.
