@@ -127,25 +127,21 @@ impl<const UID_LENGTH: usize, const KWI_LENGTH: usize> EntryTableValue<UID_LENGT
                 // - the remaining number of blocks.
                 let n_additions = (CHAIN_TABLE_WIDTH - chain_table_value.as_blocks().len())
                     .min(new_blocks.len() - index);
-                for _ in 0..n_additions {
-                    chain_table_value.try_push(new_blocks[index])?;
-                    index += 1;
-                }
+                chain_table_value.try_pushing_blocks(&new_blocks[index..index + n_additions])?;
+                index += n_additions;
             }
         }
 
         // Add remaining blocks to new lines until exhaustion.
         while index < new_blocks.len() {
-            let n_additions = CHAIN_TABLE_WIDTH.min(new_blocks.len() - index);
             let new_chain_uid = self
                 .next_chain_table_uid::<CHAIN_TABLE_WIDTH, BLOCK_LENGTH, KMAC_KEY_LENGTH, KmacKey>(
                     kwi_uid,
                 );
             let mut new_chain_value = ChainTableValue::default();
-            for _ in 0..n_additions {
-                new_chain_value.try_push(new_blocks[index])?;
-                index += 1;
-            }
+            let n_additions = CHAIN_TABLE_WIDTH.min(new_blocks.len() - index);
+            new_chain_value.try_pushing_blocks(&new_blocks[index..index + n_additions])?;
+            index += n_additions;
             let old_value = chain_table.insert(new_chain_uid.clone(), new_chain_value);
             if old_value.is_some() {
                 return Err(Error::CryptoError(format!(
