@@ -245,7 +245,7 @@ pub trait FindexLiveCompact<
     /// updated `K_wi` and last UID value for the targeted ones, along with
     /// their associated encrypted and compacted Chain Table entries.
     ///
-    /// # Paramaters
+    /// # Parameters
     ///
     /// - `rng`                         : secure random number generator
     /// - `k_value`                     : DEM key used to decrypt the Entry Table
