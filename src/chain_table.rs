@@ -67,21 +67,21 @@ impl<const TABLE_WIDTH: usize, const BLOCK_LENGTH: usize>
         "`CHAIN_TABLE_WIDTH` should *not* be greater than 8",
     );
 
-    /// Push a new addition to the Chain Table value.
+    /// Pushes new blocks to the Chain Table value.
     ///
     /// Pushing an addition sets to 1 the corresponding bit in the flag byte.
     ///
     /// # Parameters
     ///
-    /// - block:    block to add
-    pub fn try_push(&mut self, block: Block<BLOCK_LENGTH>) -> Result<(), Error> {
-        if self.length >= TABLE_WIDTH {
+    /// - blocks:   blocks to add
+    pub fn try_pushing_blocks(&mut self, blocks: &[Block<BLOCK_LENGTH>]) -> Result<(), Error> {
+        if self.length + blocks.len() > TABLE_WIDTH {
             return Err(Error::ConversionError(format!(
                 "cannot store more than {TABLE_WIDTH} blocks inside a `ChainTableValue`"
             )));
         }
-        self.blocks[self.length] = block;
-        self.length += 1;
+        self.blocks[self.length..self.length + blocks.len()].copy_from_slice(blocks);
+        self.length += blocks.len();
         Ok(())
     }
 
@@ -162,11 +162,11 @@ impl<const TABLE_WIDTH: usize, const BLOCK_LENGTH: usize> Serializable
                 } else {
                     BlockType::Deletion
                 };
-                res.try_push(Block {
+                res.try_pushing_blocks(&[Block {
                     block_type,
                     prefix,
                     data,
-                })?;
+                }])?;
             }
         }
         Ok(res)
@@ -304,14 +304,14 @@ mod tests {
         let indexed_value_2 = IndexedValue::from(Location::from("location2".as_bytes()));
         let mut chain_table_value = ChainTableValue::<CHAIN_TABLE_WIDTH, BLOCK_LENGTH>::default();
         for block in indexed_value_1.to_blocks(BlockType::Addition).unwrap() {
-            chain_table_value.try_push(block).unwrap();
+            chain_table_value.try_pushing_blocks(&[block]).unwrap();
         }
         let bytes = chain_table_value.try_to_bytes().unwrap();
         assert_eq!(chain_table_value.length(), bytes.len());
         let res = ChainTableValue::try_from_bytes(&bytes).unwrap();
         assert_eq!(chain_table_value, res);
         for block in indexed_value_2.to_blocks(BlockType::Addition).unwrap() {
-            chain_table_value.try_push(block).unwrap();
+            chain_table_value.try_pushing_blocks(&[block]).unwrap();
         }
         let bytes = chain_table_value.try_to_bytes().unwrap();
         assert_eq!(chain_table_value.length(), bytes.len());
@@ -333,17 +333,17 @@ mod tests {
 
         let mut chain_table_value1 = ChainTableValue::<CHAIN_TABLE_WIDTH, BLOCK_LENGTH>::default();
         for block in indexed_value1.to_blocks(BlockType::Addition).unwrap() {
-            chain_table_value1.try_push(block).unwrap();
+            chain_table_value1.try_pushing_blocks(&[block]).unwrap();
         }
         for block in indexed_value2.to_blocks(BlockType::Deletion).unwrap() {
-            chain_table_value1.try_push(block).unwrap();
+            chain_table_value1.try_pushing_blocks(&[block]).unwrap();
         }
         // The indexed values should be short enough to fit in a single block.
         assert_eq!(chain_table_value1.length, 2);
 
         let mut chain_table_value2 = ChainTableValue::<CHAIN_TABLE_WIDTH, BLOCK_LENGTH>::default();
         for block in indexed_value1.to_blocks(BlockType::Addition).unwrap() {
-            chain_table_value2.try_push(block).unwrap();
+            chain_table_value2.try_pushing_blocks(&[block]).unwrap();
         }
         // The indexed values should be short enough to fit in a single block.
         assert_eq!(chain_table_value2.length, 1);
