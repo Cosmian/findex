@@ -493,6 +493,13 @@ impl<const UID_LENGTH: usize> IntoIterator for EncryptedTable<UID_LENGTH> {
     }
 }
 
+impl<const UID_LENGTH: usize> FromIterator<Self> for EncryptedTable<UID_LENGTH> {
+    fn from_iter<T: IntoIterator<Item = Self>>(iter: T) -> Self {
+        let hashmap = iter.into_iter().flat_map(|v| v.0).collect();
+        Self(hashmap)
+    }
+}
+
 impl<const UID_LENGTH: usize> FromIterator<(Uid<UID_LENGTH>, Vec<u8>)>
     for EncryptedTable<UID_LENGTH>
 {

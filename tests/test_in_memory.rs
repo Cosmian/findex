@@ -135,7 +135,6 @@ async fn test_findex() -> Result<(), Error<ExampleError>> {
             &label,
             usize::MAX,
             0,
-            SECURE_FETCH_CHAINS_BATCH_SIZE,
             0,
         )
         .await?;
@@ -149,7 +148,6 @@ async fn test_findex() -> Result<(), Error<ExampleError>> {
             &Label::random(&mut rng),
             usize::MAX,
             0,
-            SECURE_FETCH_CHAINS_BATCH_SIZE,
             0,
         )
         .await?;
@@ -163,7 +161,6 @@ async fn test_findex() -> Result<(), Error<ExampleError>> {
             &label,
             usize::MAX,
             0,
-            SECURE_FETCH_CHAINS_BATCH_SIZE,
             0,
         )
         .await?;
@@ -179,7 +176,6 @@ async fn test_findex() -> Result<(), Error<ExampleError>> {
             &label,
             usize::MAX,
             0,
-            SECURE_FETCH_CHAINS_BATCH_SIZE,
             0,
         )
         .await?;
@@ -194,7 +190,6 @@ async fn test_findex() -> Result<(), Error<ExampleError>> {
             &label,
             usize::MAX,
             usize::MAX,
-            SECURE_FETCH_CHAINS_BATCH_SIZE,
             0,
         )
         .await?;
@@ -229,7 +224,6 @@ async fn test_findex() -> Result<(), Error<ExampleError>> {
             &label,
             usize::MAX,
             0,
-            SECURE_FETCH_CHAINS_BATCH_SIZE,
             0,
         )
         .await?;
@@ -243,7 +237,6 @@ async fn test_findex() -> Result<(), Error<ExampleError>> {
             &label,
             usize::MAX,
             0,
-            SECURE_FETCH_CHAINS_BATCH_SIZE,
             0,
         )
         .await?;
@@ -257,7 +250,6 @@ async fn test_findex() -> Result<(), Error<ExampleError>> {
             &label,
             usize::MAX,
             0,
-            SECURE_FETCH_CHAINS_BATCH_SIZE,
             0,
         )
         .await?;
@@ -274,7 +266,6 @@ async fn test_findex() -> Result<(), Error<ExampleError>> {
             &label,
             usize::MAX,
             0,
-            SECURE_FETCH_CHAINS_BATCH_SIZE,
             0,
         )
         .await?;
@@ -302,7 +293,6 @@ async fn test_findex() -> Result<(), Error<ExampleError>> {
                 &new_label,
                 usize::MAX,
                 0,
-                SECURE_FETCH_CHAINS_BATCH_SIZE,
                 0,
             )
             .await?;
@@ -326,7 +316,6 @@ async fn test_findex() -> Result<(), Error<ExampleError>> {
             &new_label,
             usize::MAX,
             0,
-            SECURE_FETCH_CHAINS_BATCH_SIZE,
             0,
         )
         .await?;
@@ -341,7 +330,6 @@ async fn test_findex() -> Result<(), Error<ExampleError>> {
             &new_label,
             usize::MAX,
             0,
-            SECURE_FETCH_CHAINS_BATCH_SIZE,
             0,
         )
         .await?;
@@ -356,7 +344,6 @@ async fn test_findex() -> Result<(), Error<ExampleError>> {
             &label,
             usize::MAX,
             0,
-            SECURE_FETCH_CHAINS_BATCH_SIZE,
             0,
         )
         .await?;
@@ -380,7 +367,6 @@ async fn test_findex() -> Result<(), Error<ExampleError>> {
             &new_label,
             usize::MAX,
             0,
-            SECURE_FETCH_CHAINS_BATCH_SIZE,
             0,
         )
         .await?;
@@ -395,7 +381,6 @@ async fn test_findex() -> Result<(), Error<ExampleError>> {
             &label,
             usize::MAX,
             0,
-            SECURE_FETCH_CHAINS_BATCH_SIZE,
             0,
         )
         .await?;
@@ -417,7 +402,6 @@ async fn test_findex() -> Result<(), Error<ExampleError>> {
                 &new_label,
                 usize::MAX,
                 0,
-                SECURE_FETCH_CHAINS_BATCH_SIZE,
                 0,
             )
             .await?;
@@ -443,7 +427,6 @@ async fn test_findex() -> Result<(), Error<ExampleError>> {
             &new_label,
             usize::MAX,
             0,
-            SECURE_FETCH_CHAINS_BATCH_SIZE,
             0,
         )
         .await?;
@@ -568,15 +551,7 @@ async fn test_first_names() -> Result<(), Error<ExampleError>> {
     for s in searches {
         let keywords = HashSet::from_iter(vec![Keyword::from(s.as_str())]);
         let graph_results = graph_findex
-            .search(
-                &keywords,
-                &master_key,
-                &label,
-                usize::MAX,
-                usize::MAX,
-                SECURE_FETCH_CHAINS_BATCH_SIZE,
-                0,
-            )
+            .search(&keywords, &master_key, &label, usize::MAX, usize::MAX, 0)
             .await?;
         assert!(
             !graph_results.is_empty(),
@@ -585,15 +560,7 @@ async fn test_first_names() -> Result<(), Error<ExampleError>> {
         total_results += graph_results.len();
         // naive search
         let naive_results = naive_findex
-            .search(
-                &keywords,
-                &master_key,
-                &label,
-                usize::MAX,
-                usize::MAX,
-                SECURE_FETCH_CHAINS_BATCH_SIZE,
-                0,
-            )
+            .search(&keywords, &master_key, &label, usize::MAX, usize::MAX, 0)
             .await?;
         assert_eq!(
             graph_results.len(),
@@ -662,7 +629,6 @@ async fn test_graph_compacting() {
             &label,
             usize::MAX,
             usize::MAX,
-            SECURE_FETCH_CHAINS_BATCH_SIZE,
             0,
         )
         .await
@@ -704,7 +670,6 @@ async fn test_graph_compacting() {
                 &label,
                 usize::MAX,
                 usize::MAX,
-                SECURE_FETCH_CHAINS_BATCH_SIZE,
                 0,
             )
             .await
@@ -778,7 +743,6 @@ async fn test_live_compacting() {
             &label,
             usize::MAX,
             0,
-            SECURE_FETCH_CHAINS_BATCH_SIZE,
             0,
         )
         .await
@@ -792,7 +756,6 @@ async fn test_live_compacting() {
             &label,
             usize::MAX,
             0,
-            SECURE_FETCH_CHAINS_BATCH_SIZE,
             0,
         )
         .await

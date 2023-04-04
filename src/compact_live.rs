@@ -92,7 +92,7 @@ pub trait FindexLiveCompact<
     /// Ratio of the noise over the real data.
     const NOISE_RATIO: f64;
 
-    /// Number of noisy Entry Table UIDs to compact in a row.
+    /// Number of mixed Entry Table UIDs (target UIDs or noise UIDs) to compact in a row.
     const BATCH_SIZE: usize;
 
     /// Selects a set of Entry Table UIDs to reindex (target set) and a set of Entry Table UIDs
