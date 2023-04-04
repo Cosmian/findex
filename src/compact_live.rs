@@ -101,7 +101,7 @@ pub trait FindexLiveCompact<
     /// These sets are mutually exclusive and the ratio of the cardinal of the noise set over the
     /// target set is given by `Self::NOISE_RATIO`.
     ///
-    /// Returns the noisy taget set (target set + noise set) and the noise set.
+    /// Returns the noisy target set (target set + noise set) and the noise set.
     /// A HashSet is used for the noise set because lookup should be fast.
     ///
     /// # Parameters
