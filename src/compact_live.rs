@@ -369,7 +369,7 @@ pub trait FindexLiveCompact<
                 &chains.chain_values,
             )?;
 
-            // Insert all recompacted chains first.
+            // Insert all recompacted chains.
             self.insert_chain_table(&new_chains.iter().flat_map(|(_, v)| v.clone()).collect()).await?;
 
             // Try upserting the new Entry Table.
