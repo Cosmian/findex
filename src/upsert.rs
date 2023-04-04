@@ -41,9 +41,8 @@ pub trait FindexUpsert<
     /// in finding (at least) these values. Searching for a keyword with deleted
     /// values will not result in finding these values.
     ///
-    /// If a value is indexed for a keyword and desindexed for the same keyword
-    /// in the same upsert operation, the deletion takes precendence over
-    /// the addition.
+    /// Indexing and desindexing the same value for the same keyword in the same
+    /// upsert operation, does nothing.
     ///
     /// # Parameters
     ///
@@ -75,8 +74,7 @@ pub trait FindexUpsert<
                     .insert(indexed_value.clone(), BlockType::Addition);
             }
         }
-        // Adding and deleting the same indexed value for the same keyword only performs
-        // the deletion. Adding deletions after additions only keeps deletions.
+        // Adding deletions after additions only keeps deletions.
         for (indexed_value, keywords) in deletions {
             for keyword in keywords {
                 new_chains
