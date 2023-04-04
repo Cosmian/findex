@@ -1,7 +1,5 @@
 //! Defines generic parameters used in Findex interfaces.
 
-use core::num::NonZeroUsize;
-
 use cosmian_crypto_core::symmetric_crypto::{aes_256_gcm_pure::Aes256GcmCrypto, key::Key};
 
 use crate::{chain_table::ChainTableValue, structs::Block};
@@ -33,8 +31,6 @@ pub type KmacKey = Key<KMAC_KEY_LENGTH>;
 
 /// DEM used in Findex.
 pub type DemScheme = Aes256GcmCrypto;
-
-pub const SECURE_FETCH_CHAINS_BATCH_SIZE: NonZeroUsize = unsafe { NonZeroUsize::new_unchecked(1) };
 
 /// Checks some constraints on constant generics at compile time.
 pub const fn check_parameter_constraints<
