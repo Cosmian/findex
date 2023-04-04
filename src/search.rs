@@ -251,7 +251,7 @@ pub trait FindexSearch<
             // Fetch all chain table values by batch of `batch_size` to increase noise.
             let chain_table_uids_hashset: Vec<_> = chain_table_uids
                 .chunks(batch_size.into())
-                .map(|uids| uids.iter().cloned().collect())
+                .map(|uids| uids.to_vec())
                 .collect();
 
             let mut futures = Vec::with_capacity(chain_table_uids_hashset.len());
