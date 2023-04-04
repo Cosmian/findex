@@ -89,17 +89,19 @@ impl<const UID_LENGTH: usize, const KWI_LENGTH: usize> EntryTableValue<UID_LENGT
         self.chain_table_uid.as_ref().unwrap()
     }
 
-    ///// TODO (TBZ): document better
-    /// Adds the given `IndexedValue` to the indexed chain. Updates this Entry
-    /// Table value and its chain in the given encrypted Chain Table.
+    /// Adds the given `IndexedValue` to the chain indexed by this Entry Table
+    /// value.
+    ///
+    /// - converts the indexed value into [`Block`s](structs::Block)
+    /// - fills the last Chain Table line if it is given
+    /// - create new lines to store all remaining
     ///
     /// # Parameters
     ///
-    /// - `indexed_value`   : `IndexedValue` to add to the Chain Table
+    /// - `insertion_type`  : addition or deletion
+    /// - `indexed_value`   : `IndexedValue` to add to the chain
     /// - `kwi_uid`         : KMAC key used to generate chain UIDs
-    /// - `kwi_value`       : DEM key used to encrypt Chain Table values
-    /// - `chain_table`     : Chain Table to which to upsert the given value
-    /// - `rng`             : random number generator
+    /// - `chain_table`     : Chain Table lines storing the associated chain
     pub fn upsert_indexed_value<
         const CHAIN_TABLE_WIDTH: usize,
         const BLOCK_LENGTH: usize,
