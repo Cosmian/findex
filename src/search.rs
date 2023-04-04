@@ -85,7 +85,7 @@ pub trait FindexSearch<
         let entry_table = EntryTable::decrypt::<DEM_KEY_LENGTH, DemScheme>(
             &k_value,
             &self
-                .fetch_entry_table(&entry_table_uid_map.keys().cloned().collect())
+                .fetch_entry_table(entry_table_uid_map.keys().cloned().collect())
                 .await?,
         )?;
 
@@ -255,7 +255,7 @@ pub trait FindexSearch<
                 .collect();
 
             let mut futures = Vec::with_capacity(chain_table_uids_hashset.len());
-            for uid in &chain_table_uids_hashset {
+            for uid in chain_table_uids_hashset {
                 futures.push(self.fetch_chain_table(uid));
             }
 
