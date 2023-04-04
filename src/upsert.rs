@@ -100,7 +100,7 @@ pub trait FindexUpsert<
 
         // Query the Entry Table for these UIDs.
         let mut encrypted_entry_table = self
-            .fetch_entry_table(&new_chains.keys().cloned().collect())
+            .fetch_entry_table(new_chains.keys().cloned().collect())
             .await?;
 
         while !new_chains.is_empty() {
@@ -158,13 +158,13 @@ pub trait FindexUpsert<
 
         // Try upserting Entry Table modifications. Get the current values of the Entry
         // Table lines that failed to be upserted.
-        let encrypted_entry_table = self.upsert_entry_table(&entry_table_modifications).await?;
+        let encrypted_entry_table = self.upsert_entry_table(entry_table_modifications).await?;
 
         // Insert new Chain Table lines.
         chain_table_additions.retain(|uid, _| !encrypted_entry_table.contains_key(uid));
         let new_chain_table_entries = chain_table_additions.into_values().flatten().collect();
 
-        self.insert_chain_table(&new_chain_table_entries).await?;
+        self.insert_chain_table(new_chain_table_entries).await?;
 
         Ok(encrypted_entry_table)
     }

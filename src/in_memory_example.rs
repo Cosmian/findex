@@ -101,45 +101,43 @@ impl<const UID_LENGTH: usize> FindexCallbacks<ExampleError, UID_LENGTH>
 
     async fn fetch_entry_table(
         &self,
-        entry_table_uids: &HashSet<Uid<UID_LENGTH>>,
+        entry_table_uids: Vec<Uid<UID_LENGTH>>,
     ) -> Result<EncryptedTable<UID_LENGTH>, ExampleError> {
-        let mut entry_table_items = EncryptedTable::default();
-        for keyword_hash in entry_table_uids {
-            if let Some(value) = self.entry_table.get(keyword_hash) {
-                entry_table_items.insert(keyword_hash.clone(), value.clone());
+        let mut items = EncryptedTable::with_capacity(entry_table_uids.len());
+        for uid in entry_table_uids {
+            if let Some(value) = self.entry_table.get(&uid) {
+                items.insert(uid, value.clone());
             }
         }
-        Ok(entry_table_items)
+        Ok(items)
     }
 
     async fn fetch_chain_table(
         &self,
-        chain_uids: &HashSet<Uid<UID_LENGTH>>,
+        chain_table_uids: Vec<Uid<UID_LENGTH>>,
     ) -> Result<EncryptedTable<UID_LENGTH>, ExampleError> {
-        Ok(chain_uids
-            .iter()
-            .filter_map(|uid| {
-                self.chain_table
-                    .get(uid)
-                    .map(|value| (uid.clone(), value.clone()))
-            })
-            .collect::<HashMap<Uid<UID_LENGTH>, Vec<u8>>>()
-            .into())
+        let mut items = EncryptedTable::with_capacity(chain_table_uids.len());
+        for uid in chain_table_uids {
+            if let Some(value) = self.chain_table.get(&uid) {
+                items.insert(uid, value.clone());
+            }
+        }
+        Ok(items)
     }
 
     async fn upsert_entry_table(
         &mut self,
-        modifications: &UpsertData<UID_LENGTH>,
+        modifications: UpsertData<UID_LENGTH>,
     ) -> Result<EncryptedTable<UID_LENGTH>, ExampleError> {
         let mut rng = CsRng::from_entropy();
         let mut rejected = EncryptedTable::default();
         // Simulate insertion failures.
-        for (uid, (old_value, new_value)) in modifications.iter() {
+        for (uid, (old_value, new_value)) in modifications.into_iter() {
             // Reject insert with probability 0.2.
-            if self.entry_table.contains_key(uid) && rng.gen_range(0..5) == 0 {
-                rejected.insert(uid.clone(), old_value.clone().unwrap_or_default());
+            if self.entry_table.contains_key(&uid) && rng.gen_range(0..5) == 0 {
+                rejected.insert(uid, old_value.unwrap_or_default());
             } else {
-                self.entry_table.insert(uid.clone(), new_value.clone());
+                self.entry_table.insert(uid, new_value);
             }
         }
         Ok(rejected)
@@ -147,38 +145,31 @@ impl<const UID_LENGTH: usize> FindexCallbacks<ExampleError, UID_LENGTH>
 
     async fn insert_chain_table(
         &mut self,
-        items: &EncryptedTable<UID_LENGTH>,
+        items: EncryptedTable<UID_LENGTH>,
     ) -> Result<(), ExampleError> {
-        for (uid, value) in items.iter() {
-            if self.chain_table.contains_key(uid) {
+        for (uid, value) in items.into_iter() {
+            if self.chain_table.contains_key(&uid) {
                 return Err(ExampleError(format!(
                     "Conflict in Chain Table for UID: {uid:?}"
                 )));
             }
-            self.chain_table.insert(uid.clone(), value.clone());
+            self.chain_table.insert(uid, value);
         }
         Ok(())
     }
 
     fn update_lines(
         &mut self,
-        chain_table_uids_to_remove: HashSet<Uid<UID_LENGTH>>,
+        chain_table_uids_to_remove: Vec<Uid<UID_LENGTH>>,
         new_encrypted_entry_table_items: EncryptedTable<UID_LENGTH>,
         new_encrypted_chain_table_items: EncryptedTable<UID_LENGTH>,
     ) -> Result<(), ExampleError> {
-        self.entry_table = EncryptedTable::default();
+        self.entry_table = new_encrypted_entry_table_items;
 
-        for new_encrypted_entry_table_item in new_encrypted_entry_table_items.iter() {
-            self.entry_table.insert(
-                new_encrypted_entry_table_item.0.clone(),
-                new_encrypted_entry_table_item.1.clone(),
-            );
-        }
-
-        for new_encrypted_chain_table_item in new_encrypted_chain_table_items.iter() {
+        for new_encrypted_chain_table_item in new_encrypted_chain_table_items.into_iter() {
             self.chain_table.insert(
-                new_encrypted_chain_table_item.0.clone(),
-                new_encrypted_chain_table_item.1.clone(),
+                new_encrypted_chain_table_item.0,
+                new_encrypted_chain_table_item.1,
             );
         }
 
@@ -189,30 +180,26 @@ impl<const UID_LENGTH: usize> FindexCallbacks<ExampleError, UID_LENGTH>
         Ok(())
     }
 
-    fn list_removed_locations(
-        &self,
-        _: &HashSet<Location>,
-    ) -> Result<HashSet<Location>, ExampleError> {
+    fn list_removed_locations(&self, _: Vec<Location>) -> Result<HashSet<Location>, ExampleError> {
         Ok(self.removed_locations.iter().cloned().collect())
     }
 
     fn filter_removed_locations(
         &self,
-        locations: &HashSet<Location>,
+        locations: Vec<Location>,
     ) -> Result<HashSet<Location>, ExampleError> {
         Ok(locations
-            .iter()
+            .into_iter()
             .filter(|location| !self.removed_locations.contains(location))
-            .cloned()
             .collect())
     }
 
-    async fn fetch_all_entry_table_uids(&self) -> Result<HashSet<Uid<UID_LENGTH>>, ExampleError> {
-        let uids: HashSet<Uid<UID_LENGTH>> = self.entry_table.keys().cloned().collect();
+    async fn fetch_all_entry_table_uids(&self) -> Result<Vec<Uid<UID_LENGTH>>, ExampleError> {
+        let uids = self.entry_table.keys().cloned().collect();
         Ok(uids)
     }
 
-    async fn delete_chain(&mut self, uids: &HashSet<Uid<UID_LENGTH>>) -> Result<(), ExampleError> {
+    async fn delete_chain(&mut self, uids: Vec<Uid<UID_LENGTH>>) -> Result<(), ExampleError> {
         self.chain_table.retain(|uid, _| !uids.contains(uid));
         Ok(())
     }

@@ -101,8 +101,8 @@ pub trait FindexLiveCompact<
     /// These sets are mutually exclusive and the ratio of the cardinal of the noise set over the
     /// target set is given by `Self::NOISE_RATIO`.
     ///
-    /// Returns the mixt set (target set + noise set) and the noise set. A HashSet is used for the
-    /// noise set to allow fast lookups and a list is used for the mixed set to avoid hashing.
+    /// Returns the target set and the noise set. A HashSet is used for the noise set to allow fast
+    /// lookups and a list is used for the target set to avoid hashing.
     ///
     /// # Parameters
     ///
@@ -110,12 +110,15 @@ pub trait FindexLiveCompact<
     /// - `entry_table_uids`                : Entry Table uids
     /// - `num_reindexing_before_full_set`  : number of compact operations need to compact all the
     /// base
-    async fn select_uids_with_noise<'a>(
+    async fn select_uids_with_noise(
         &self,
         rng: &mut impl CryptoRngCore,
-        entry_table_uids: &'a HashSet<Uid<UID_LENGTH>>,
         num_reindexing_before_full_set: u32
-    ) -> Result<(Vec<&'a Uid<UID_LENGTH>>, HashSet<&'a Uid<UID_LENGTH>>), Error<CustomError>> {
+    ) -> Result<(Vec<Uid<UID_LENGTH>>, HashSet<Uid<UID_LENGTH>>), Error<CustomError>> {
+
+        let entry_table_uids = self.fetch_all_entry_table_uids().await?;
+
+
         if Self::NOISE_RATIO > 1f64 {
             return Err(Error::CryptoError(format!(
                 "noise ratio cannot be greater than 1 ({} given)",
@@ -163,7 +166,7 @@ pub trait FindexLiveCompact<
                 mixed_uids.push(uid);
             } else if tmp % n_noise_candidates < n_noise {
                 // Randomly select ~ `NOISE_RATIO * n_compact` noise UIDs.
-                noise_uids.insert(uid);
+                noise_uids.insert(uid.clone());
                 mixed_uids.push(uid);
             }
         }
@@ -258,7 +261,7 @@ pub trait FindexLiveCompact<
         &self,
         rng: &mut impl CryptoRngCore,
         k_value: &DemScheme::Key,
-        noise: &HashSet<&Uid<UID_LENGTH>>,
+        noise: &HashSet<Uid<UID_LENGTH>>,
         noisy_remaining_locations: &HashSet<Location>,
         noisy_encrypted_entry_table: &EncryptedTable<UID_LENGTH>,
         noisy_chain_values: &HashMap<Uid<UID_LENGTH>, HashSet<IndexedValue>>,
@@ -332,8 +335,8 @@ pub trait FindexLiveCompact<
         &mut self,
         rng: &mut impl CryptoRngCore,
         k_value: &DemScheme::Key,
-        mixed_uids: &HashSet<Uid<UID_LENGTH>>,
-        noise_uids: &HashSet<&Uid<UID_LENGTH>>,
+        mixed_uids: Vec<Uid<UID_LENGTH>>,
+        noise_uids: &HashSet<Uid<UID_LENGTH>>,
     ) -> Result<(), Error<CustomError>> {
         // Fetch both target and noise values from the Entry Table.
         let mut encrypted_entry_table = self
@@ -349,13 +352,13 @@ pub trait FindexLiveCompact<
             .await?;
 
         // Select remaining locations in both target and noise chains.
-        let noisy_locations: HashSet<Location> = chains.chain_values
+        let noisy_locations = chains.chain_values
             .iter()
             .flat_map(|(_, values)| values)
             .filter_map(|value| value.get_location())
             .cloned()
             .collect();
-        let noisy_remaining_locations = self.filter_removed_locations(&noisy_locations)?;
+        let noisy_remaining_locations = self.filter_removed_locations(noisy_locations)?;
 
         // All fetched Entry Table entries need to be modified.
         while !encrypted_entry_table.is_empty() {
@@ -370,19 +373,20 @@ pub trait FindexLiveCompact<
             )?;
 
             // Insert all recompacted chains.
-            self.insert_chain_table(&new_chains.iter().flat_map(|(_, v)| v.clone()).collect()).await?;
+            self.insert_chain_table(new_chains.iter().flat_map(|(_, v)| v.clone()).collect()).await?;
 
             // Try upserting the new Entry Table.
             let upsert_data = UpsertData::new(
                 &encrypted_entry_table,
                 noisy_entry_table.encrypt::<DEM_KEY_LENGTH, DemScheme>(k_value, rng)?,
             );
+            let n_upsert = upsert_data.len();
 
             // These are failures to upsert.
-            encrypted_entry_table = self.upsert_entry_table(&upsert_data).await?;
+            encrypted_entry_table = self.upsert_entry_table(upsert_data).await?;
 
             // Delete unused chains (at least one chain value per entry line):
-            let mut chains_to_delete = HashSet::with_capacity(upsert_data.len());
+            let mut chains_to_delete = Vec::with_capacity(n_upsert);
 
             // - new chains corresponding to unsuccessful upserts
             for (uid, chain) in new_chains {
@@ -407,7 +411,7 @@ pub trait FindexLiveCompact<
                 chains_to_delete.extend(chain);
             }
 
-            self.delete_chain(&chains_to_delete).await?;
+            self.delete_chain(chains_to_delete).await?;
         }
 
         Ok(())
@@ -432,17 +436,14 @@ pub trait FindexLiveCompact<
             DemScheme::Key
         >(ENTRY_TABLE_KEY_DERIVATION_INFO);
 
-        let uids = self.fetch_all_entry_table_uids().await?;
-
         let (mixed_uids, noise_uids) =
-            self.select_uids_with_noise(&mut rng, &uids, num_reindexing_before_full_set).await?;
+            self.select_uids_with_noise(&mut rng, num_reindexing_before_full_set).await?;
 
-        // Process all mixt (target + noise) UIDs by batch.
-        for uids_to_compact in mixed_uids.chunks(Self::BATCH_SIZE) {
+        for batch in mixed_uids.chunks(Self::BATCH_SIZE) {
             self.live_compact_uids(
                 &mut rng,
                 &k_value,
-                &uids_to_compact.iter().copied().cloned().collect(),
+                batch.to_vec(),
                 &noise_uids,
             ).await?;
         }
