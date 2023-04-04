@@ -174,7 +174,7 @@ pub trait FindexLiveCompact<
     /// - the map of Entry Table UIDs to Chain Table UIDs
     /// - the map of Entry Table UIDs to indexed values
     ///
-    /// # Paramters
+    /// # Parameters
     ///
     /// - `k_value`                 : DEM key used to decrypt the Entry Table
     /// - `encrypted_entry_table`   : encrypted Entry Table
