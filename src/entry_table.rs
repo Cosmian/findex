@@ -17,7 +17,7 @@ use cosmian_crypto_core::{
 };
 
 use crate::{
-    chain_table::{ChainTable, ChainTableValue, KwiChainUids},
+    chain_table::{ChainTable, ChainTableValue},
     error::CoreError as Error,
     structs::{BlockType, EncryptedTable, IndexedValue, KeywordHash, Label, Uid},
     KeyingMaterial, Keyword, CHAIN_TABLE_KEY_DERIVATION_INFO,
@@ -226,42 +226,26 @@ impl<const UID_LENGTH: usize, const KWI_LENGTH: usize> EntryTableValue<UID_LENGT
         DemScheme: Dem<DEM_KEY_LENGTH>,
     >(
         &self,
-        max_results: usize,
-        kwi_chain_table_uids: &mut KwiChainUids<UID_LENGTH, KWI_LENGTH>,
-    ) {
-        let entry = kwi_chain_table_uids
-            .entry(self.kwi.clone())
-            .or_insert_with(Vec::new);
+        kwi_uid: &KmacKey,
+        max_uid_per_chain: usize,
+    ) -> Vec<Uid<UID_LENGTH>> {
+        let mut chain = Vec::new();
 
-        if self.chain_table_uid.is_none() {
-            return;
-        }
-
-        let kwi_uid: KmacKey = self.kwi.derive_kmac_key(CHAIN_TABLE_KEY_DERIVATION_INFO);
-
-        // Derive the Chain Table UID.
-        let mut current_chain_table_uid =
-            ChainTable::<UID_LENGTH, CHAIN_TABLE_WIDTH, BLOCK_LENGTH>::generate_uid(
-                &kwi_uid,
-                &self.keyword_hash,
-            );
-
-        for _ in 0..max_results {
-            // Add the new Chain Table UID to the map.
-            entry.push(current_chain_table_uid.clone());
-
-            // Return if we found the UID stored in the Entry Table value.
-            if Some(&current_chain_table_uid) == self.chain_table_uid.as_ref() {
-                break;
-            }
-
-            // Compute the next UID.
-            current_chain_table_uid =
+        while chain.len() < max_uid_per_chain && chain.last() != self.chain_table_uid.as_ref() {
+            // Derive the next UID.
+            chain.push(if let Some(last_uid) = chain.last() {
                 ChainTable::<UID_LENGTH, CHAIN_TABLE_WIDTH, BLOCK_LENGTH>::generate_uid(
-                    &kwi_uid,
-                    &current_chain_table_uid,
-                );
+                    kwi_uid, last_uid,
+                )
+            } else {
+                ChainTable::<UID_LENGTH, CHAIN_TABLE_WIDTH, BLOCK_LENGTH>::generate_uid(
+                    kwi_uid,
+                    &self.keyword_hash,
+                )
+            });
         }
+
+        chain
     }
 }
 
@@ -393,36 +377,6 @@ impl<const UID_LENGTH: usize, const KWI_LENGTH: usize> EntryTable<UID_LENGTH, KW
         Ok(encrypted_entry_table)
     }
 
-    /// Unchains the entries of this Entry Table with the given UIDs.
-    ///
-    /// - `uids`                : UIDs of the Entry Table entries to unchain
-    /// - `max_results_per_uid` : maximum number of Chain Table UIDs to compute
-    ///   per entry
-    pub fn unchain<
-        'a,
-        const CHAIN_TABLE_WITH: usize,
-        const BLOCK_LENGTH: usize,
-        const KMAC_KEY_LENGTH: usize,
-        const DEM_KEY_LENGTH: usize,
-        KmacKey: SymKey<KMAC_KEY_LENGTH>,
-        DemScheme: Dem<DEM_KEY_LENGTH>,
-    >(
-        &self,
-        uids: impl Iterator<Item = &'a Uid<UID_LENGTH>>,
-        max_results_per_uid: usize,
-    ) -> KwiChainUids<UID_LENGTH, KWI_LENGTH> {
-        let mut kwi_chain_table_uids = KwiChainUids::default();
-        for entry_table_uid in uids {
-            if let Some(value) = self.get(entry_table_uid) {
-                value.unchain::<CHAIN_TABLE_WITH, BLOCK_LENGTH, KMAC_KEY_LENGTH, DEM_KEY_LENGTH, KmacKey, DemScheme>(
-                    max_results_per_uid,
-                    &mut kwi_chain_table_uids,
-                );
-            }
-        }
-        kwi_chain_table_uids
-    }
-
     /// Refreshes the UIDs of the Entry Table using the given KMAC key and
     /// label.
     ///
@@ -524,7 +478,10 @@ mod tests {
     };
 
     use super::*;
-    use crate::{parameters::*, structs::Location, Keyword, ENTRY_TABLE_KEY_DERIVATION_INFO};
+    use crate::{
+        chain_table::KwiChainUids, parameters::*, structs::Location, Keyword,
+        ENTRY_TABLE_KEY_DERIVATION_INFO,
+    };
 
     #[test]
     fn test_encryption() {
@@ -601,20 +558,21 @@ mod tests {
         }
 
         // Recover Chain Table UIDs associated to the Entry Table value.
-        let mut kwi_chain_table_uids = KwiChainUids::default();
-        entry_table_value.unchain::<
+        let k_uid = entry_table_value
+            .kwi
+            .derive_kmac_key(CHAIN_TABLE_KEY_DERIVATION_INFO);
+
+        let chain = entry_table_value.unchain::<
             CHAIN_TABLE_WIDTH,
             BLOCK_LENGTH,
             KMAC_KEY_LENGTH,
             {Aes256GcmCrypto::KEY_LENGTH},
             KmacKey,
             Aes256GcmCrypto
-        >(usize::MAX, &mut kwi_chain_table_uids);
-
-        assert_eq!(kwi_chain_table_uids.len(), 1);
+        >(&k_uid, usize::MAX);
 
         // Recover the indexed values from the Chain Table blocks.
-        let blocks = kwi_chain_table_uids[&entry_table_value.kwi]
+        let blocks = chain
             .iter()
             .filter_map(|uid| chain_table.get(uid))
             .flat_map(|chain_table_value| chain_table_value.as_blocks());
@@ -643,20 +601,17 @@ mod tests {
         }
 
         // Recover Chain Table UIDs associated to the Entry Table value.
-        let mut kwi_chain_table_uids = KwiChainUids::default();
-        entry_table_value.unchain::<
+        let chain = entry_table_value.unchain::<
             CHAIN_TABLE_WIDTH,
             BLOCK_LENGTH,
             KMAC_KEY_LENGTH,
             {Aes256GcmCrypto::KEY_LENGTH},
             KmacKey,
             Aes256GcmCrypto
-        >(usize::MAX, &mut kwi_chain_table_uids);
-
-        assert_eq!(kwi_chain_table_uids.len(), 1);
+        >(&k_uid, usize::MAX);
 
         // Recover the indexed values from the Chain Table blocks.
-        let blocks = kwi_chain_table_uids[&entry_table_value.kwi]
+        let blocks = chain
             .iter()
             .filter_map(|uid| chain_table.get(uid))
             .flat_map(|chain_table_value| chain_table_value.as_blocks());
@@ -702,14 +657,20 @@ mod tests {
             .unwrap();
 
         let mut kwi_chain_table_uids = KwiChainUids::default();
-        entry_table_value.unchain::<
-            CHAIN_TABLE_WIDTH,
-            BLOCK_LENGTH,
-            KMAC_KEY_LENGTH,
-            {Aes256GcmCrypto::KEY_LENGTH},
-            KmacKey,
-            Aes256GcmCrypto
-        >(usize::MAX, &mut kwi_chain_table_uids);
+        let k_uid = entry_table_value
+            .kwi
+            .derive_kmac_key(CHAIN_TABLE_KEY_DERIVATION_INFO);
+
+        kwi_chain_table_uids.insert(entry_table_value.kwi.clone(),
+            entry_table_value.unchain::<
+                    CHAIN_TABLE_WIDTH,
+                    BLOCK_LENGTH,
+                    KMAC_KEY_LENGTH,
+                    {Aes256GcmCrypto::KEY_LENGTH},
+                    KmacKey,
+                    Aes256GcmCrypto
+                >(&k_uid, usize::MAX)
+        );
 
         // Only one keyword is indexed.
         assert_eq!(kwi_chain_table_uids.len(), 1);

@@ -11,7 +11,7 @@ use rand::seq::IteratorRandom;
 
 use crate::{
     callbacks::FetchChains,
-    chain_table::ChainTable,
+    chain_table::{ChainTable, KwiChainUids},
     entry_table::{EntryTable, EntryTableValue},
     error::CallbackError,
     parameters::check_parameter_constraints,
@@ -124,11 +124,25 @@ pub trait FindexCompact<
             .collect::<Vec<_>>();
 
         // Unchain the Entry Table entries to be reindexed.
-        let kwi_chain_table_uids = entry_table
-            .unchain::<CHAIN_TABLE_WIDTH, BLOCK_LENGTH, KMAC_KEY_LENGTH, DEM_KEY_LENGTH, KmacKey, DemScheme>(
-                entry_table_items_to_reindex.iter(),
-                usize::MAX,
-            );
+        let kwi_chain_table_uids: KwiChainUids<UID_LENGTH, KWI_LENGTH> = entry_table
+            .iter()
+            .filter_map(|(uid, value)| {
+                if entry_table_items_to_reindex.contains(uid) {
+                    let k_uid = value.kwi.derive_kmac_key(CHAIN_TABLE_KEY_DERIVATION_INFO);
+                    let chain = value.unchain::<
+                            CHAIN_TABLE_WIDTH,
+                            BLOCK_LENGTH,
+                            KMAC_KEY_LENGTH,
+                            DEM_KEY_LENGTH,
+                            KmacKey,
+                            DemScheme
+                        >(&k_uid, usize::MAX);
+                    Some((value.kwi.clone(), chain))
+                } else {
+                    None
+                }
+            })
+            .collect();
 
         //
         // Batch fetch chains from the Chain Table. It's better for performances and

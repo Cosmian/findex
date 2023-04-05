@@ -263,22 +263,33 @@ impl<const UID_LENGTH: usize, const KEY_LENGTH: usize> DerefMut
     }
 }
 
+impl<const KEY_LENGTH: usize, const UID_LENGTH: usize> IntoIterator
+    for KwiChainUids<UID_LENGTH, KEY_LENGTH>
+{
+    type IntoIter = <<Self as Deref>::Target as IntoIterator>::IntoIter;
+    type Item = (KeyingMaterial<KEY_LENGTH>, Vec<Uid<UID_LENGTH>>);
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.into_iter()
+    }
+}
+
+impl<const KEY_LENGTH: usize, const UID_LENGTH: usize>
+    FromIterator<(KeyingMaterial<KEY_LENGTH>, Vec<Uid<UID_LENGTH>>)>
+    for KwiChainUids<UID_LENGTH, KEY_LENGTH>
+{
+    fn from_iter<T: IntoIterator<Item = (KeyingMaterial<KEY_LENGTH>, Vec<Uid<UID_LENGTH>>)>>(
+        iter: T,
+    ) -> Self {
+        Self(iter.into_iter().collect())
+    }
+}
+
 impl<const KEY_LENGTH: usize, const UID_LENGTH: usize> Default
     for KwiChainUids<UID_LENGTH, KEY_LENGTH>
 {
     fn default() -> Self {
         Self(HashMap::default())
-    }
-}
-
-impl<const UID_LENGTH: usize, const KEY_LENGTH: usize> IntoIterator
-    for KwiChainUids<UID_LENGTH, KEY_LENGTH>
-{
-    type IntoIter = <<Self as Deref>::Target as IntoIterator>::IntoIter;
-    type Item = <<Self as Deref>::Target as IntoIterator>::Item;
-
-    fn into_iter(self) -> Self::IntoIter {
-        self.0.into_iter()
     }
 }
 

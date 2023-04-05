@@ -7,11 +7,12 @@ use cosmian_crypto_core::symmetric_crypto::{Dem, SymKey};
 
 use crate::{
     callbacks::{FetchChains, FindexCallbacks},
+    chain_table::KwiChainUids,
     entry_table::EntryTable,
     error::CallbackError,
     parameters::check_parameter_constraints,
     structs::{IndexedValue, Keyword, Label, Location},
-    Error, KeyingMaterial, ENTRY_TABLE_KEY_DERIVATION_INFO,
+    Error, KeyingMaterial, CHAIN_TABLE_KEY_DERIVATION_INFO, ENTRY_TABLE_KEY_DERIVATION_INFO,
 };
 
 /// Trait implementing the search functionality of Findex.
@@ -70,7 +71,7 @@ pub trait FindexSearch<
         //
         // Derive Entry Table UIDs from keywords
         //
-        let entry_table_uid_map = keywords
+        let mut entry_table_uid_map = keywords
             .iter()
             .map(|keyword| {
                 (
@@ -94,27 +95,27 @@ pub trait FindexSearch<
                 .await?,
         )?;
 
-        // Build the reversed map `Kwi <-> keyword`.
-        let reversed_map = entry_table
-            .iter()
-            .map(|(uid, value)| -> Result<_, _> {
-                let keyword = entry_table_uid_map.get(uid).ok_or_else(|| {
-                    Error::<CustomError>::CryptoError(format!(
-                        "Could not find keyword associated to UID {uid:?}."
-                    ))
-                })?;
-                Ok((&value.kwi, *keyword))
-            })
-            .collect::<Result<HashMap<_, _>, Error<_>>>()?;
-
-        //
-        // Get all the corresponding Chain Table UIDs
-        //
-        let kwi_chain_table_uids = entry_table
-            .unchain::<CHAIN_TABLE_WIDTH, BLOCK_LENGTH, KMAC_KEY_LENGTH, DEM_KEY_LENGTH, KmacKey, DemScheme>(
-                entry_table_uid_map.keys(),
-                max_results_per_keyword,
-            );
+        // Unchain all Entry Table value.
+        let mut kwi_chain_table_uids = KwiChainUids::with_capacity(entry_table.len());
+        let mut kwi_to_keyword = HashMap::with_capacity(entry_table.len());
+        for (uid, value) in entry_table.into_iter() {
+            let keyword = entry_table_uid_map.remove(&uid).ok_or_else(|| {
+                Error::<CustomError>::CryptoError(format!(
+                    "Could not find keyword associated to UID {uid:?}."
+                ))
+            })?;
+            kwi_to_keyword.insert(value.kwi.clone(), keyword);
+            let k_uid = value.kwi.derive_kmac_key(CHAIN_TABLE_KEY_DERIVATION_INFO);
+            let chain = value.unchain::<
+                            CHAIN_TABLE_WIDTH,
+                            BLOCK_LENGTH,
+                            KMAC_KEY_LENGTH,
+                            DEM_KEY_LENGTH,
+                            KmacKey,
+                            DemScheme
+                        >(&k_uid, max_results_per_keyword);
+            kwi_chain_table_uids.insert(value.kwi, chain);
+        }
 
         //
         // Query the Chain Table for these UIDs to recover the associated
@@ -123,9 +124,9 @@ pub trait FindexSearch<
         let chains = self.fetch_chains(kwi_chain_table_uids).await?;
 
         // Convert the blocks of the given chains into indexed values.
-        let mut res = HashMap::new();
+        let mut res = HashMap::with_capacity(chains.len());
         for (kwi, chain) in &chains {
-            let keyword = *reversed_map.get(kwi).ok_or_else(|| {
+            let keyword = kwi_to_keyword.remove(kwi).ok_or_else(|| {
                 Error::<CustomError>::CryptoError("Missing Kwi in reversed map.".to_string())
             })?;
             let blocks = chain
