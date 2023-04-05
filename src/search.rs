@@ -18,7 +18,7 @@ use crate::{
 };
 
 /// Number of Entry Table UIDs to fetch in a row.
-const BATCH_SIZE: usize = 1;
+const BATCH_SIZE: usize = 100;
 
 /// Trait implementing the search functionality of Findex.
 pub trait FindexSearch<
