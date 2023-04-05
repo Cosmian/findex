@@ -241,7 +241,6 @@ pub trait FindexSearch<
         let chain_table_uids = kwi_chain_table_uids
             .values()
             .flatten()
-            .cloned()
             .collect::<HashSet<_>>();
 
         let mut futures = Vec::with_capacity(chain_table_uids.len() / BATCH_SIZE + 1);
@@ -250,9 +249,11 @@ pub trait FindexSearch<
 
         while !is_empty {
             match chain_table_uids.next_chunk::<BATCH_SIZE>() {
-                Ok(batch) => futures.push(self.fetch_chain_table(batch.to_vec())),
+                Ok(batch) => {
+                    futures.push(self.fetch_chain_table(batch.into_iter().cloned().collect()))
+                }
                 Err(batch) => {
-                    futures.push(self.fetch_chain_table(batch.collect()));
+                    futures.push(self.fetch_chain_table(batch.cloned().collect()));
                     is_empty = true;
                 }
             }
