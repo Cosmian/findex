@@ -1,6 +1,6 @@
 //! This module defines the `FindexCompact` trait.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use cosmian_crypto_core::{
     reexport::rand_core::SeedableRng,
@@ -113,11 +113,25 @@ pub trait FindexCompact<
             .collect::<Vec<_>>();
 
         // Unchain the Entry Table entries to be reindexed.
-        let kwi_chain_table_uids = entry_table
-            .unchain::<CHAIN_TABLE_WIDTH, BLOCK_LENGTH, KMAC_KEY_LENGTH, DEM_KEY_LENGTH, KmacKey, DemScheme>(
-                entry_table_items_to_reindex.iter(),
-                usize::MAX,
-            );
+        let kwi_chain_table_uids: KwiChainUids<UID_LENGTH, KWI_LENGTH> = entry_table
+            .iter()
+            .filter_map(|(uid, value)| {
+                if entry_table_items_to_reindex.contains(uid) {
+                    let k_uid = value.kwi.derive_kmac_key(CHAIN_TABLE_KEY_DERIVATION_INFO);
+                    let chain = value.unchain::<
+                            CHAIN_TABLE_WIDTH,
+                            BLOCK_LENGTH,
+                            KMAC_KEY_LENGTH,
+                            DEM_KEY_LENGTH,
+                            KmacKey,
+                            DemScheme
+                        >(&k_uid, usize::MAX);
+                    Some((value.kwi.clone(), chain))
+                } else {
+                    None
+                }
+            })
+            .collect();
 
         //
         // Batch fetch chains from the Chain Table. It's better for performances and
@@ -125,7 +139,7 @@ pub trait FindexCompact<
         // Table lines are linked to the requested UIDs since the Entry Table was fetch
         // entirely and a random portion of it is being compacted.
         //
-        let chains_to_reindex = self.batch_fetch_chains(&kwi_chain_table_uids).await?;
+        let chains_to_reindex = self.batch_fetch_chains(kwi_chain_table_uids).await?;
 
         //
         // Remove all reindexed Chain Table items. Chains are recomputed entirely.
@@ -253,7 +267,7 @@ pub trait FindexCompact<
     /// - `kwi_chain_table_uids`    : maps `Kwi`s to chains
     async fn batch_fetch_chains(
         &self,
-        kwi_chain_table_uids: &KwiChainUids<UID_LENGTH, KWI_LENGTH>,
+        kwi_chain_table_uids: KwiChainUids<UID_LENGTH, KWI_LENGTH>,
     ) -> Result<
         HashMap<
             KeyingMaterial<KWI_LENGTH>,
@@ -264,10 +278,17 @@ pub trait FindexCompact<
         >,
         Error<CustomError>,
     > {
-        let chain_table_uids = kwi_chain_table_uids.values().flatten().cloned().collect();
+        // Collect to a `HashSet` in order to randomize chains.
+        let chain_table_uids = kwi_chain_table_uids
+            .values()
+            .flatten()
+            .cloned()
+            .collect::<HashSet<_>>();
 
         // Batch fetch the server.
-        let encrypted_chain_table_items = self.fetch_chain_table(chain_table_uids).await?;
+        let encrypted_chain_table_items = self
+            .fetch_chain_table(chain_table_uids.into_iter().collect())
+            .await?;
 
         // Reconsitute the chains.
         let mut chains = HashMap::with_capacity(kwi_chain_table_uids.len());
