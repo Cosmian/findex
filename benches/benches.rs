@@ -61,7 +61,7 @@ fn bench_search(c: &mut Criterion) {
         let keywords = prepare_keywords(n_keywords);
         group.bench_function(format!("Searching {n_keywords} keyword(s)"), |b| {
             b.iter(|| {
-                block_on(findex.search(&keywords, &master_key, &label, usize::MAX, usize::MAX, 0))
+                block_on(findex.search(&master_key, &label, &keywords, usize::MAX, usize::MAX))
                     .expect("search failed");
             });
         });
