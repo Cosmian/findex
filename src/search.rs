@@ -42,35 +42,30 @@ pub trait FindexSearch<
     ///
     /// # Parameters
     ///
-    /// - `keywords`                : keywords to search
-    /// - `master_key`              : user secret key
-    /// - `label`                   : public label
-    /// - `max_results_per_keyword` : maximum number of results to return per
-    ///   keyword
-    async fn non_recursive_search(
+    /// - `k_uid`               : KMAC key used to generate Entry Table UIDs
+    /// - `k_value`             : DEM key used to decrypt the Entry Table
+    /// - `label`               : public label
+    /// - `keywords`            : keywords to search
+    /// - `max_uid_per_chain`   : maximum number of UID per chain
+    async fn core_search(
         &mut self,
-        keywords: &HashSet<Keyword>,
-        master_key: &KeyingMaterial<MASTER_KEY_LENGTH>,
+        k_uid: &KmacKey,
+        k_value: &DemScheme::Key,
         label: &Label,
-        max_results_per_keyword: usize,
+        keywords: &HashSet<Keyword>,
+        max_uid_per_chain: usize,
     ) -> Result<HashMap<Keyword, HashSet<IndexedValue>>, Error<CustomError>> {
         if keywords.is_empty() {
             return Ok(HashMap::new());
         }
 
-        // Derive DEM and KMAC keys
-        let k_uid: KmacKey = master_key.derive_kmac_key(ENTRY_TABLE_KEY_DERIVATION_INFO);
-        let k_value = master_key.derive_dem_key(ENTRY_TABLE_KEY_DERIVATION_INFO);
-
-        //
-        // Derive Entry Table UIDs from keywords
-        //
+        // Derive Entry Table UIDs from keywords.
         let mut entry_table_uid_map = keywords
             .iter()
             .map(|keyword| {
                 (
                     EntryTable::<UID_LENGTH, KWI_LENGTH>::generate_uid(
-                        &k_uid,
+                        k_uid,
                         &keyword.hash(),
                         label,
                     ),
@@ -79,17 +74,15 @@ pub trait FindexSearch<
             })
             .collect::<HashMap<_, _>>();
 
-        //
-        // Query the Entry Table for these UIDs
-        //
+        // Query the Entry Table for these UIDs.
         let entry_table = EntryTable::decrypt::<DEM_KEY_LENGTH, DemScheme>(
-            &k_value,
+            k_value,
             &self
-                .fetch_entry_table(entry_table_uid_map.keys().cloned().collect())
+                .fetch_entry_table(entry_table_uid_map.keys().copied().collect())
                 .await?,
         )?;
 
-        // Unchain all Entry Table value.
+        // Unchain all Entry Table values.
         let mut kwi_chain_table_uids = KwiChainUids::with_capacity(entry_table.len());
         let mut kwi_to_keyword = HashMap::with_capacity(entry_table.len());
         for (uid, value) in entry_table.into_iter() {
@@ -107,14 +100,11 @@ pub trait FindexSearch<
                             DEM_KEY_LENGTH,
                             KmacKey,
                             DemScheme
-                        >(&k_uid, max_results_per_keyword);
+                        >(&k_uid, max_uid_per_chain);
             kwi_chain_table_uids.insert(value.kwi, chain);
         }
 
-        //
-        // Query the Chain Table for these UIDs to recover the associated
-        // chain values.
-        //
+        // Fetch the chain values.
         let chains = self
             .noisy_fetch_chains::<BATCH_SIZE>(kwi_chain_table_uids)
             .await?;
@@ -149,67 +139,125 @@ pub trait FindexSearch<
     /// - `current_depth`           : current depth reached by the recursion
     #[async_recursion(?Send)]
     #[allow(clippy::too_many_arguments)]
-    async fn search(
+    async fn recursive_search(
         &mut self,
-        keywords: &HashSet<Keyword>,
-        master_key: &KeyingMaterial<MASTER_KEY_LENGTH>,
+        k_uid: &KmacKey,
+        k_value: &DemScheme::Key,
         label: &Label,
-        max_results_per_keyword: usize,
+        keywords: &HashSet<Keyword>,
+        graph: &mut HashMap<Keyword, HashSet<IndexedValue>>,
         max_depth: usize,
         current_depth: usize,
-    ) -> Result<HashMap<Keyword, HashSet<Location>>, Error<CustomError>> {
-        check_parameter_constraints::<CHAIN_TABLE_WIDTH, BLOCK_LENGTH>();
-        // Get indexed values associated to the given keywords
-        let res = self
-            .non_recursive_search(keywords, master_key, label, max_results_per_keyword)
+        max_uid_per_chain: usize,
+    ) -> Result<(), Error<CustomError>> {
+        let current_results = self
+            .core_search(k_uid, k_value, label, keywords, max_uid_per_chain)
             .await?;
 
-        // Send current results (Location and NextKeyword) to the callback.
-        let continue_recursion = self.progress(&res).await?;
+        let continue_recursion = self.progress(&current_results).await?;
 
-        // Sort indexed values into keywords and locations.
-        let mut keyword_map = HashMap::new();
-        let mut results = HashMap::new();
-        for (keyword, indexed_values) in res {
-            let results_entry: &mut HashSet<Location> = results.entry(keyword.clone()).or_default();
-            for value in indexed_values {
-                match value {
-                    IndexedValue::Location(_) => {
-                        results_entry.insert(value.try_into().unwrap());
-                    }
-                    IndexedValue::NextKeyword(next_keyword) => {
-                        keyword_map.insert(next_keyword, keyword.clone());
-                    }
-                };
+        let mut next_keywords = HashSet::with_capacity(current_results.len());
+        for (keyword, indexed_values) in current_results {
+            if continue_recursion && current_depth != max_depth {
+                // Mark unknown keywords to be searched in the next recursion.
+                next_keywords.extend(
+                    indexed_values
+                        .iter()
+                        .filter_map(|value| value.get_keyword())
+                        .filter(|next_keyword| !graph.contains_key(next_keyword))
+                        .cloned(),
+                );
+                // Add all indexed values to the results.
+                graph.insert(keyword, indexed_values);
+            } else {
+                // Do not add the next keyword to the results.
+                graph.insert(
+                    keyword,
+                    indexed_values
+                        .into_iter()
+                        .filter(|value| value.is_location())
+                        .collect(),
+                );
             }
         }
 
-        // Stop recursion if `progress_callback` returned false or all branches have
-        // been explored or max depth is reached
-        if continue_recursion && !(keyword_map.is_empty() || current_depth == max_depth) {
-            // Add results from the next recursion.
-            for (keyword, indexed_values) in self
-                .search(
-                    &keyword_map.keys().cloned().collect(),
-                    master_key,
-                    label,
-                    max_results_per_keyword,
-                    max_depth,
-                    current_depth + 1,
-                )
-                .await?
-            {
-                let prev_keyword = keyword_map.get(&keyword).ok_or_else(|| {
-                    Error::<CustomError>::CryptoError(
-                        "Could not find previous keyword in cache.".to_string(),
-                    )
-                })?;
-                let entry = results.entry(prev_keyword.clone()).or_default();
-                entry.extend(indexed_values);
-            }
+        // Recurse if some keywords still need to be searched. An empty `next_keyword`
+        // set means that there is no more keywords to search, that the user interrupted
+        // the search or that the recursion has reached the maximum depth allowed.
+        if !next_keywords.is_empty() {
+            self.recursive_search(
+                k_uid,
+                k_value,
+                label,
+                &next_keywords,
+                graph,
+                max_depth,
+                current_depth + 1,
+                max_uid_per_chain,
+            )
+            .await?;
+        }
+
+        Ok(())
+    }
+
+    async fn search(
+        &mut self,
+        master_key: &KeyingMaterial<MASTER_KEY_LENGTH>,
+        label: &Label,
+        keywords: &HashSet<Keyword>,
+        max_depth: usize,
+        max_uid_per_chain: usize,
+    ) -> Result<HashMap<Keyword, HashSet<Location>>, Error<CustomError>> {
+        check_parameter_constraints::<CHAIN_TABLE_WIDTH, BLOCK_LENGTH>();
+
+        let k_uid = master_key.derive_kmac_key(ENTRY_TABLE_KEY_DERIVATION_INFO);
+        let k_value = master_key.derive_dem_key(ENTRY_TABLE_KEY_DERIVATION_INFO);
+
+        // Search Findex to build the keyword graph.
+        let mut graph = HashMap::with_capacity(keywords.len());
+        self.recursive_search(
+            &k_uid,
+            &k_value,
+            label,
+            keywords,
+            &mut graph,
+            max_depth,
+            0,
+            max_uid_per_chain,
+        )
+        .await?;
+
+        // Walk the graph to get the results.
+        let mut results = HashMap::with_capacity(keywords.len());
+        for keyword in keywords {
+            results.insert(keyword.clone(), self.walk_graph_from(keyword, &graph)?);
         }
 
         Ok(results)
+    }
+
+    fn walk_graph_from(
+        &self,
+        keyword: &Keyword,
+        graph: &HashMap<Keyword, HashSet<IndexedValue>>,
+    ) -> Result<HashSet<Location>, Error<CustomError>> {
+        if let Some(keyord_results) = graph.get(keyword) {
+            let mut locations = HashSet::with_capacity(keyord_results.len());
+            for indexed_value in keyord_results {
+                match indexed_value {
+                    IndexedValue::Location(location) => {
+                        locations.insert(location.clone());
+                    }
+                    IndexedValue::NextKeyword(next_keyword) => {
+                        locations.extend(self.walk_graph_from(next_keyword, graph)?);
+                    }
+                }
+            }
+            Ok(locations)
+        } else {
+            Ok(HashSet::new())
+        }
     }
 
     /// Fetches the values of the given chains from the Chain Table by batch of

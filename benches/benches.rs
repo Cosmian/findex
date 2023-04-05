@@ -71,7 +71,7 @@ fn bench_search(c: &mut Criterion) {
         b.to_async(FuturesExecutor).iter(|| async {
             findex
                 .clone()
-                .search(&bulk_words, &master_key, &label, usize::MAX, usize::MAX, 0)
+                .search(&master_key, &label, &bulk_words, usize::MAX, usize::MAX)
                 .await
                 .expect("search failed");
         });
@@ -85,7 +85,7 @@ fn bench_search(c: &mut Criterion) {
         b.to_async(FuturesExecutor).iter(|| async {
             findex
                 .clone()
-                .search(&keywords, &master_key, &label, usize::MAX, usize::MAX, 0)
+                .search(&master_key, &label, &keywords, usize::MAX, usize::MAX)
                 .await
                 .expect("search failed");
         });
@@ -99,7 +99,7 @@ fn bench_search(c: &mut Criterion) {
         b.to_async(FuturesExecutor).iter(|| async {
             findex
                 .clone()
-                .search(&keywords, &master_key, &label, usize::MAX, usize::MAX, 0)
+                .search(&master_key, &label, &keywords, usize::MAX, usize::MAX)
                 .await
                 .expect("search failed");
         });
@@ -113,7 +113,7 @@ fn bench_search(c: &mut Criterion) {
         b.to_async(FuturesExecutor).iter(|| async {
             findex
                 .clone()
-                .search(&keywords, &master_key, &label, usize::MAX, usize::MAX, 0)
+                .search(&master_key, &label, &keywords, usize::MAX, usize::MAX)
                 .await
                 .expect("search failed");
         });

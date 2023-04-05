@@ -15,6 +15,8 @@ use cosmian_findex::{
 use rand::Rng;
 
 const MIN_KEYWORD_LENGTH: usize = 3;
+const MAX_DEPTH: usize = 100;
+const MAX_UID_PER_CHAIN: usize = usize::MAX;
 
 /// Converts the given strings as a `HashSet` of Keywords.
 ///
@@ -130,12 +132,11 @@ async fn test_findex() -> Result<(), Error<ExampleError>> {
     // search robert
     let robert_search = findex
         .search(
-            &HashSet::from_iter(vec![robert_keyword.clone()]),
             &master_key,
             &label,
+            &HashSet::from_iter(vec![robert_keyword.clone()]),
             usize::MAX,
-            0,
-            0,
+            usize::MAX,
         )
         .await?;
     check_search_result(&robert_search, &robert_keyword, &robert_doe_location);
@@ -143,54 +144,48 @@ async fn test_findex() -> Result<(), Error<ExampleError>> {
     // cannot find robert with wrong label
     let robert_search = findex
         .search(
-            &HashSet::from_iter(vec![robert_keyword.clone()]),
             &master_key,
             &Label::random(&mut rng),
-            usize::MAX,
-            0,
-            0,
+            &HashSet::from_iter(vec![robert_keyword.clone()]),
+            MAX_DEPTH,
+            MAX_UID_PER_CHAIN,
         )
         .await?;
-    assert_eq!(0, robert_search.len());
+    assert_eq!(robert_search.get(&robert_keyword), Some(&HashSet::new()));
 
     // search doe
     let doe_search = findex
         .search(
-            &HashSet::from_iter(vec![doe_keyword.clone()]),
             &master_key,
             &label,
-            usize::MAX,
-            0,
-            0,
+            &HashSet::from_iter(vec![doe_keyword.clone()]),
+            MAX_DEPTH,
+            MAX_UID_PER_CHAIN,
         )
         .await?;
     check_search_result(&doe_search, &doe_keyword, &robert_doe_location);
     check_search_result(&doe_search, &doe_keyword, &john_doe_location);
 
     // search rob without graph search
-    findex.set_check_progress_callback_next_keyword(true);
     let rob_search = findex
         .search(
-            &HashSet::from_iter(vec![rob_keyword.clone()]),
             &master_key,
             &label,
-            usize::MAX,
-            0,
-            0,
+            &HashSet::from_iter(vec![rob_keyword.clone()]),
+            MAX_DEPTH,
+            MAX_UID_PER_CHAIN,
         )
         .await?;
-    findex.set_check_progress_callback_next_keyword(false);
     check_search_result(&rob_search, &rob_keyword, &rob_location);
 
     // search rob with graph search
     let rob_search = findex
         .search(
-            &HashSet::from_iter(vec![rob_keyword.clone()]),
             &master_key,
             &label,
-            usize::MAX,
-            usize::MAX,
-            0,
+            &HashSet::from_iter(vec![rob_keyword.clone()]),
+            MAX_DEPTH,
+            MAX_UID_PER_CHAIN,
         )
         .await?;
     check_search_result(&rob_search, &rob_keyword, &robert_doe_location);
@@ -219,12 +214,11 @@ async fn test_findex() -> Result<(), Error<ExampleError>> {
     let jane_keyword = Keyword::from("jane");
     let jane_search = findex
         .search(
-            &HashSet::from_iter(vec![jane_keyword.clone()]),
             &master_key,
             &label,
-            usize::MAX,
-            0,
-            0,
+            &HashSet::from_iter(vec![jane_keyword.clone()]),
+            MAX_DEPTH,
+            MAX_UID_PER_CHAIN,
         )
         .await?;
     check_search_result(&jane_search, &jane_keyword, &jane_doe_location);
@@ -232,12 +226,11 @@ async fn test_findex() -> Result<(), Error<ExampleError>> {
     // search robert (no change)
     let robert_search = findex
         .search(
-            &HashSet::from_iter(vec![robert_keyword.clone()]),
             &master_key,
             &label,
-            usize::MAX,
-            0,
-            0,
+            &HashSet::from_iter(vec![robert_keyword.clone()]),
+            MAX_DEPTH,
+            MAX_UID_PER_CHAIN,
         )
         .await?;
     check_search_result(&robert_search, &robert_keyword, &robert_doe_location);
@@ -245,12 +238,11 @@ async fn test_findex() -> Result<(), Error<ExampleError>> {
     // search doe (jane added)
     let doe_search = findex
         .search(
-            &HashSet::from_iter(vec![doe_keyword.clone()]),
             &master_key,
             &label,
-            usize::MAX,
-            0,
-            0,
+            &HashSet::from_iter(vec![doe_keyword.clone()]),
+            MAX_DEPTH,
+            MAX_UID_PER_CHAIN,
         )
         .await?;
     check_search_result(&doe_search, &doe_keyword, &jane_doe_location);
@@ -258,18 +250,15 @@ async fn test_findex() -> Result<(), Error<ExampleError>> {
     check_search_result(&doe_search, &doe_keyword, &john_doe_location);
 
     // search rob (no change)
-    findex.set_check_progress_callback_next_keyword(true);
     let rob_search = findex
         .search(
-            &HashSet::from_iter(vec![rob_keyword.clone()]),
             &master_key,
             &label,
-            usize::MAX,
-            0,
-            0,
+            &HashSet::from_iter(vec![rob_keyword.clone()]),
+            MAX_DEPTH,
+            MAX_UID_PER_CHAIN,
         )
         .await?;
-    findex.set_check_progress_callback_next_keyword(false);
     check_search_result(&rob_search, &rob_keyword, &rob_location);
 
     let mut new_label = Label::random(&mut rng);
@@ -288,12 +277,11 @@ async fn test_findex() -> Result<(), Error<ExampleError>> {
         // search doe
         let doe_search = findex
             .search(
-                &HashSet::from_iter(vec![doe_keyword.clone()]),
                 &master_key,
                 &new_label,
-                usize::MAX,
-                0,
-                0,
+                &HashSet::from_iter(vec![doe_keyword.clone()]),
+                MAX_DEPTH,
+                MAX_UID_PER_CHAIN,
             )
             .await?;
         check_search_result(&doe_search, &doe_keyword, &robert_doe_location);
@@ -302,6 +290,7 @@ async fn test_findex() -> Result<(), Error<ExampleError>> {
     }
 
     findex.remove_location(jane_doe_location);
+
     let new_master_key = KeyingMaterial::new(&mut rng);
     findex
         .compact(1, &master_key, &new_master_key, &new_label)
@@ -311,26 +300,24 @@ async fn test_findex() -> Result<(), Error<ExampleError>> {
     // search jane
     let jane_search = findex
         .search(
-            &HashSet::from_iter(vec![jane_keyword.clone()]),
             &master_key,
             &new_label,
-            usize::MAX,
-            0,
-            0,
+            &HashSet::from_iter(vec![jane_keyword.clone()]),
+            MAX_DEPTH,
+            MAX_UID_PER_CHAIN,
         )
         .await?;
     // Jane is not indexed anymore.
-    assert_eq!(jane_search.get(&jane_keyword), None);
+    assert_eq!(jane_search.get(&jane_keyword), Some(&HashSet::new()));
 
     // search doe (jane removed)
     let doe_search = findex
         .search(
-            &HashSet::from_iter(vec![doe_keyword.clone()]),
             &master_key,
             &new_label,
-            usize::MAX,
-            0,
-            0,
+            &HashSet::from_iter(vec![doe_keyword.clone()]),
+            MAX_DEPTH,
+            MAX_UID_PER_CHAIN,
         )
         .await?;
     check_search_result(&doe_search, &doe_keyword, &robert_doe_location);
@@ -339,15 +326,14 @@ async fn test_findex() -> Result<(), Error<ExampleError>> {
     // Cannot search doe with the old label
     let doe_search = findex
         .search(
-            &HashSet::from_iter(vec![doe_keyword.clone()]),
             &master_key,
             &label,
-            usize::MAX,
-            0,
-            0,
+            &HashSet::from_iter(vec![doe_keyword.clone()]),
+            MAX_DEPTH,
+            MAX_UID_PER_CHAIN,
         )
         .await?;
-    assert_eq!(0, doe_search.len());
+    assert_eq!(doe_search.get(&doe_keyword), Some(&HashSet::new()));
 
     for i in 1..=100 {
         println!("Compacting {i}/100");
@@ -362,12 +348,11 @@ async fn test_findex() -> Result<(), Error<ExampleError>> {
     // search doe (jane removed)
     let doe_search = findex
         .search(
-            &HashSet::from_iter(vec![doe_keyword.clone()]),
             &master_key,
             &new_label,
-            usize::MAX,
-            0,
-            0,
+            &HashSet::from_iter(vec![doe_keyword.clone()]),
+            MAX_DEPTH,
+            MAX_UID_PER_CHAIN,
         )
         .await?;
     check_search_result(&doe_search, &doe_keyword, &robert_doe_location);
@@ -376,15 +361,14 @@ async fn test_findex() -> Result<(), Error<ExampleError>> {
     // Cannot search doe with the old label
     let doe_search = findex
         .search(
-            &hashset_keywords(&["doe"]),
             &master_key,
             &label,
-            usize::MAX,
-            0,
-            0,
+            &HashSet::from_iter([doe_keyword.clone()]),
+            MAX_DEPTH,
+            MAX_UID_PER_CHAIN,
         )
         .await?;
-    assert_eq!(0, doe_search.len());
+    assert_eq!(doe_search.get(&doe_keyword), Some(&HashSet::new()));
 
     for i in 1..100 {
         new_label = Label::random(&mut rng);
@@ -397,12 +381,11 @@ async fn test_findex() -> Result<(), Error<ExampleError>> {
         // search doe (jane removed)
         let doe_search = findex
             .search(
-                &HashSet::from_iter(vec![doe_keyword.clone()]),
                 &master_key,
                 &new_label,
-                usize::MAX,
-                0,
-                0,
+                &HashSet::from_iter(vec![doe_keyword.clone()]),
+                MAX_DEPTH,
+                MAX_UID_PER_CHAIN,
             )
             .await?;
         check_search_result(&doe_search, &doe_keyword, &robert_doe_location);
@@ -422,17 +405,16 @@ async fn test_findex() -> Result<(), Error<ExampleError>> {
     // Assert John Doe cannot be found by searching for Doe.
     let doe_search = findex
         .search(
-            &HashSet::from_iter(vec![doe_keyword.clone()]),
             &master_key,
             &new_label,
-            usize::MAX,
-            0,
-            0,
+            &HashSet::from_iter(vec![doe_keyword.clone()]),
+            MAX_DEPTH,
+            MAX_UID_PER_CHAIN,
         )
         .await?;
+    check_search_result(&doe_search, &doe_keyword, &robert_doe_location);
     let doe_search = doe_search.get(&doe_keyword).unwrap();
     assert!(!doe_search.contains(&john_doe_location));
-
     Ok(())
 }
 
@@ -551,7 +533,7 @@ async fn test_first_names() -> Result<(), Error<ExampleError>> {
     for s in searches {
         let keywords = HashSet::from_iter(vec![Keyword::from(s.as_str())]);
         let graph_results = graph_findex
-            .search(&keywords, &master_key, &label, usize::MAX, usize::MAX, 0)
+            .search(&master_key, &label, &keywords, MAX_DEPTH, MAX_UID_PER_CHAIN)
             .await?;
         assert!(
             !graph_results.is_empty(),
@@ -560,7 +542,7 @@ async fn test_first_names() -> Result<(), Error<ExampleError>> {
         total_results += graph_results.len();
         // naive search
         let naive_results = naive_findex
-            .search(&keywords, &master_key, &label, usize::MAX, usize::MAX, 0)
+            .search(&master_key, &label, &keywords, MAX_DEPTH, MAX_UID_PER_CHAIN)
             .await?;
         assert_eq!(
             graph_results.len(),
@@ -583,27 +565,28 @@ async fn test_graph_compacting() {
     let mut findex = FindexInMemory::default();
     let mut indexed_value_to_keywords = HashMap::new();
 
-    // location robert doe
+    let rob_keyword = Keyword::from(b"rob".to_vec());
+    let doe_keyword = Keyword::from(b"doe".to_vec());
+    let john_keyword = Keyword::from(b"john".to_vec());
+    let robert_keyword = Keyword::from(b"robert".to_vec());
+    let john_doe_location = Location::from("john doe DB location");
     let robert_doe_location = Location::from("robert doe DB location");
+
     indexed_value_to_keywords.insert(
         IndexedValue::Location(robert_doe_location.clone()),
-        hashset_keywords(&["robert", "doe"]),
+        HashSet::from_iter([robert_keyword.clone(), doe_keyword.clone()]),
     );
-
-    // location john doe
-    let john_doe_location = Location::from("john doe DB location");
     indexed_value_to_keywords.insert(
         IndexedValue::Location(john_doe_location.clone()),
-        hashset_keywords(&["john", "doe"]),
+        HashSet::from_iter([john_keyword.clone(), doe_keyword]),
     );
-
     add_keyword_graph(
-        &Keyword::from("john"),
+        &john_keyword,
         MIN_KEYWORD_LENGTH,
         &mut indexed_value_to_keywords,
     );
     add_keyword_graph(
-        &Keyword::from("robert"),
+        &robert_keyword,
         MIN_KEYWORD_LENGTH,
         &mut indexed_value_to_keywords,
     );
@@ -621,20 +604,18 @@ async fn test_graph_compacting() {
         .unwrap();
 
     // Search for "rob"
-    let robert_keyword = Keyword::from(b"rob".to_vec());
     let res = findex
         .search(
-            &HashSet::from_iter(vec![robert_keyword.clone()]),
             &master_key,
             &label,
-            usize::MAX,
-            usize::MAX,
-            0,
+            &HashSet::from_iter([rob_keyword.clone()]),
+            MAX_DEPTH,
+            MAX_UID_PER_CHAIN,
         )
         .await
         .unwrap();
     assert_eq!(res.len(), 1);
-    check_search_result(&res, &robert_keyword, &robert_doe_location);
+    check_search_result(&res, &rob_keyword, &robert_doe_location);
 
     println!("Length of the Entry Table: {}", findex.entry_table_len());
     println!("Length of the Chain Table: {}", findex.chain_table_len());
@@ -665,17 +646,16 @@ async fn test_graph_compacting() {
         // Search for "rob"
         let res = findex
             .search(
-                &HashSet::from_iter(vec![robert_keyword.clone()]),
                 &master_key,
                 &label,
-                usize::MAX,
-                usize::MAX,
-                0,
+                &HashSet::from_iter(vec![rob_keyword.clone()]),
+                MAX_DEPTH,
+                MAX_UID_PER_CHAIN,
             )
             .await
             .unwrap();
         assert_eq!(res.len(), 1);
-        check_search_result(&res, &robert_keyword, &robert_doe_location);
+        check_search_result(&res, &rob_keyword, &robert_doe_location);
     }
 }
 
@@ -690,12 +670,15 @@ async fn test_live_compacting() {
     let label = Label::random(&mut rng);
     let master_key = KeyingMaterial::new(&mut rng);
 
-    // Direct location robert doe.
+    let doe_keyword = Keyword::from(b"doe".to_vec());
+    let robert_keyword = Keyword::from(b"robert".to_vec());
     let robert_doe_location = Location::from("robert doe DB location");
+
+    // Direct location robert doe.
     let mut indexed_value_to_keywords = HashMap::new();
     indexed_value_to_keywords.insert(
         IndexedValue::Location(robert_doe_location.clone()),
-        hashset_keywords(&["robert", "doe"]),
+        HashSet::from_iter([robert_keyword.clone(), doe_keyword.clone()]),
     );
 
     for _ in 0..100 {
@@ -721,6 +704,7 @@ async fn test_live_compacting() {
             .await
             .unwrap();
     }
+
     // Add some keywords.
     findex
         .upsert(
@@ -732,31 +716,28 @@ async fn test_live_compacting() {
         .await
         .unwrap();
 
-    // Check keywords have been correctly inserted.
-    let robert_keyword = Keyword::from("robert");
-    let doe_keyword = Keyword::from("doe");
     // Search Robert.
     let robert_search = findex
         .search(
-            &HashSet::from_iter(vec![robert_keyword.clone()]),
             &master_key,
             &label,
-            usize::MAX,
-            0,
-            0,
+            &HashSet::from_iter([robert_keyword.clone()]),
+            MAX_DEPTH,
+            MAX_UID_PER_CHAIN,
         )
         .await
         .unwrap();
+
     check_search_result(&robert_search, &robert_keyword, &robert_doe_location);
+
     // Search Doe.
     let doe_search = findex
         .search(
-            &HashSet::from_iter(vec![doe_keyword.clone()]),
             &master_key,
             &label,
-            usize::MAX,
-            0,
-            0,
+            &HashSet::from_iter([doe_keyword.clone()]),
+            MAX_DEPTH,
+            MAX_UID_PER_CHAIN,
         )
         .await
         .unwrap();
