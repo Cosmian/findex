@@ -255,7 +255,7 @@ pub trait FindexCompact<
                 .collect::<Result<EncryptedTable<UID_LENGTH>, Error<CustomError>>>()?;
 
             chain_table_adds.extend(encrypted_new_chains);
-            entry_table.insert(entry_table_uid.clone(), new_entry_table_value);
+            entry_table.insert(entry_table_uid, new_entry_table_value);
         }
 
         entry_table.retain(|uid, _| !entry_table_uids_to_drop.contains(uid));
