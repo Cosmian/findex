@@ -142,7 +142,7 @@ impl<const UID_LENGTH: usize, const KWI_LENGTH: usize> EntryTableValue<UID_LENGT
             let n_additions = CHAIN_TABLE_WIDTH.min(new_blocks.len() - index);
             new_chain_value.try_pushing_blocks(&new_blocks[index..index + n_additions])?;
             index += n_additions;
-            let old_value = chain_table.insert(new_chain_uid.clone(), new_chain_value);
+            let old_value = chain_table.insert(*new_chain_uid, new_chain_value);
             if old_value.is_some() {
                 return Err(Error::CryptoError(format!(
                     "conflit when inserting Chain Table value for UID {new_chain_uid:?}"
@@ -351,7 +351,7 @@ impl<const UID_LENGTH: usize, const KWI_LENGTH: usize> EntryTable<UID_LENGTH, KW
                 ))
             })?;
 
-            entry_table.insert(k.clone(), decrypted_value);
+            entry_table.insert(*k, decrypted_value);
         }
         Ok(entry_table)
     }
@@ -368,7 +368,7 @@ impl<const UID_LENGTH: usize, const KWI_LENGTH: usize> EntryTable<UID_LENGTH, KW
         let mut encrypted_entry_table = EncryptedTable::with_capacity(self.len());
         for (k, v) in self.iter() {
             encrypted_entry_table.insert(
-                k.clone(),
+                *k,
                 EntryTableValue::<UID_LENGTH, KWI_LENGTH>::encrypt::<DEM_KEY_LENGTH, DemScheme>(
                     v, k_value, rng,
                 )?,
@@ -427,7 +427,7 @@ impl<const UID_LENGTH: usize, const KWI_LENGTH: usize> EntryTable<UID_LENGTH, KW
     ) -> Result<HashMap<Uid<UID_LENGTH>, EncryptedTable<UID_LENGTH>>, Error> {
         let mut chain_table_additions = HashMap::with_capacity(new_chain_elements.len());
         for (entry_table_uid, (keyword_hash, indexed_values)) in new_chain_elements {
-            let entry_table_value = self.entry(entry_table_uid.clone()).or_insert_with(|| {
+            let entry_table_value = self.entry(*entry_table_uid).or_insert_with(|| {
                 EntryTableValue::new::<CHAIN_TABLE_WIDTH, BLOCK_LENGTH>(rng, *keyword_hash)
             });
 
@@ -461,7 +461,7 @@ impl<const UID_LENGTH: usize, const KWI_LENGTH: usize> EntryTable<UID_LENGTH, KW
                 })
                 .collect::<Result<_, Error>>()?;
 
-            chain_table_additions.insert(entry_table_uid.clone(), encrypted_chain_table_additions);
+            chain_table_additions.insert(*entry_table_uid, encrypted_chain_table_additions);
         }
 
         Ok(chain_table_additions)

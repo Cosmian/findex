@@ -244,7 +244,7 @@ pub trait FindexCompact<
                 .collect::<Result<EncryptedTable<UID_LENGTH>, Error<CustomError>>>()?;
 
             chain_table_adds.extend(encrypted_new_chains);
-            entry_table.insert(entry_table_uid.clone(), new_entry_table_value);
+            entry_table.insert(entry_table_uid, new_entry_table_value);
         }
 
         entry_table.retain(|uid, _| !entry_table_uids_to_drop.contains(uid));
@@ -304,7 +304,7 @@ pub trait FindexCompact<
                 // Use a vector not to shuffle the chain. This is important because indexed
                 // values can be divided in blocks that span several lines in the chain.
                 chain.push((
-                    uid.clone(),
+                    *uid,
                     ChainTableValue::<CHAIN_TABLE_WIDTH, BLOCK_LENGTH>::decrypt::<
                         DEM_KEY_LENGTH,
                         DemScheme,
