@@ -776,3 +776,154 @@ async fn test_live_compacting() {
     assert_eq!(findex.entry_table_len(), 2);
     assert_eq!(findex.chain_table_len(), 2);
 }
+
+#[actix_rt::test]
+async fn test_search_cyclic_graph() {
+    let mut rng = CsRng::from_entropy();
+    let mut findex = FindexInMemory::default();
+
+    let label = Label::random(&mut rng);
+    let master_key = KeyingMaterial::new(&mut rng);
+
+    // Build the following cyclic index:
+    //
+    // a -> b -> c -> d -> h
+    //      ^         |
+    //      |         v
+    // i -> g <- f <- e
+    //
+    // The results should be:
+    //
+    // {
+    //      a: {L_b, L_c, L_d, L_h, L_e, L_f, L_g},
+    //      i: {L_g, L_b, L_c, L_d, L_h, L_e, L_f}
+    //  }
+    //
+    let a_keyword = Keyword::from(b"a".to_vec());
+    let b_keyword = Keyword::from(b"b".to_vec());
+    let c_keyword = Keyword::from(b"c".to_vec());
+    let d_keyword = Keyword::from(b"d".to_vec());
+    let e_keyword = Keyword::from(b"e".to_vec());
+    let f_keyword = Keyword::from(b"f".to_vec());
+    let g_keyword = Keyword::from(b"g".to_vec());
+    let h_keyword = Keyword::from(b"h".to_vec());
+    let i_keyword = Keyword::from(b"i".to_vec());
+
+    let l_a = Location::from(b"location a".to_vec());
+    let l_b = Location::from(b"location b".to_vec());
+    let l_c = Location::from(b"location c".to_vec());
+    let l_d = Location::from(b"location d".to_vec());
+    let l_e = Location::from(b"location e".to_vec());
+    let l_f = Location::from(b"location f".to_vec());
+    let l_g = Location::from(b"location g".to_vec());
+    let l_h = Location::from(b"location h".to_vec());
+    let l_i = Location::from(b"location i".to_vec());
+
+    // Direct location robert doe.
+    let mut cyclic_graph = HashMap::new();
+
+    // Add locations
+    cyclic_graph.insert(
+        IndexedValue::from(l_a.clone()),
+        HashSet::from_iter([a_keyword.clone()]),
+    );
+    cyclic_graph.insert(
+        IndexedValue::from(l_b.clone()),
+        HashSet::from_iter([b_keyword.clone()]),
+    );
+    cyclic_graph.insert(
+        IndexedValue::from(l_c.clone()),
+        HashSet::from_iter([c_keyword.clone()]),
+    );
+    cyclic_graph.insert(
+        IndexedValue::from(l_d.clone()),
+        HashSet::from_iter([d_keyword.clone()]),
+    );
+    cyclic_graph.insert(
+        IndexedValue::from(l_e.clone()),
+        HashSet::from_iter([e_keyword.clone()]),
+    );
+    cyclic_graph.insert(
+        IndexedValue::from(l_f.clone()),
+        HashSet::from_iter([f_keyword.clone()]),
+    );
+    cyclic_graph.insert(
+        IndexedValue::from(l_g.clone()),
+        HashSet::from_iter([g_keyword.clone()]),
+    );
+    cyclic_graph.insert(
+        IndexedValue::from(l_h.clone()),
+        HashSet::from_iter([h_keyword.clone()]),
+    );
+    cyclic_graph.insert(
+        IndexedValue::from(l_i.clone()),
+        HashSet::from_iter([i_keyword.clone()]),
+    );
+
+    // Add keyword graph
+    cyclic_graph.insert(
+        IndexedValue::from(b_keyword.clone()),
+        HashSet::from_iter([a_keyword.clone(), g_keyword.clone()]),
+    );
+    cyclic_graph.insert(
+        IndexedValue::from(c_keyword.clone()),
+        HashSet::from_iter([b_keyword.clone()]),
+    );
+    cyclic_graph.insert(
+        IndexedValue::from(d_keyword.clone()),
+        HashSet::from_iter([c_keyword.clone()]),
+    );
+    cyclic_graph.insert(
+        IndexedValue::from(e_keyword.clone()),
+        HashSet::from_iter([d_keyword.clone()]),
+    );
+    cyclic_graph.insert(
+        IndexedValue::from(f_keyword.clone()),
+        HashSet::from_iter([e_keyword.clone()]),
+    );
+    cyclic_graph.insert(
+        IndexedValue::from(g_keyword.clone()),
+        HashSet::from_iter([f_keyword.clone(), i_keyword.clone()]),
+    );
+    cyclic_graph.insert(
+        IndexedValue::from(h_keyword.clone()),
+        HashSet::from_iter([d_keyword.clone()]),
+    );
+
+    // Upsert the graph.
+    findex
+        .upsert(cyclic_graph, HashMap::new(), &master_key, &label)
+        .await
+        .unwrap();
+
+    let res = findex
+        .search(
+            &master_key,
+            &label,
+            &HashSet::from_iter([a_keyword.clone(), i_keyword.clone()]),
+            MAX_DEPTH,
+            MAX_UID_PER_CHAIN,
+        )
+        .await
+        .unwrap();
+
+    let res_a = res.get(&a_keyword).unwrap();
+    assert!(res_a.contains(&l_a));
+    assert!(res_a.contains(&l_b));
+    assert!(res_a.contains(&l_c));
+    assert!(res_a.contains(&l_d));
+    assert!(res_a.contains(&l_e));
+    assert!(res_a.contains(&l_f));
+    assert!(res_a.contains(&l_g));
+    assert!(res_a.contains(&l_h));
+
+    let res_i = res.get(&i_keyword).unwrap();
+    assert!(res_i.contains(&l_i));
+    assert!(res_i.contains(&l_b));
+    assert!(res_i.contains(&l_c));
+    assert!(res_i.contains(&l_d));
+    assert!(res_i.contains(&l_e));
+    assert!(res_i.contains(&l_f));
+    assert!(res_i.contains(&l_g));
+    assert!(res_i.contains(&l_h));
+}
