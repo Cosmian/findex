@@ -54,10 +54,6 @@ impl Keyword {
         hasher.finalize(&mut bytes);
         bytes
     }
-
-    pub fn try_into_utf8_string(self) -> Result<String, Error> {
-        String::from_utf8(self.0).map_err(|e| Error::ConversionError(e.to_string()))
-    }
 }
 
 /// Type of a keyword hash.
