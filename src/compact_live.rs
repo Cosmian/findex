@@ -380,13 +380,12 @@ pub trait FindexLiveCompact<
                 &encrypted_entry_table,
                 noisy_entry_table.encrypt::<DEM_KEY_LENGTH, DemScheme>(k_value, rng)?,
             );
-            let n_upsert = upsert_data.len();
+
+            // Delete unused chains (at least one chain value per entry line):
+            let mut chains_to_delete = Vec::with_capacity(upsert_data.len());
 
             // These are failures to upsert.
             encrypted_entry_table = self.upsert_entry_table(upsert_data).await?;
-
-            // Delete unused chains (at least one chain value per entry line):
-            let mut chains_to_delete = Vec::with_capacity(n_upsert);
 
             // - new chains corresponding to unsuccessful upserts
             for (uid, chain) in new_chains {

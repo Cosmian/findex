@@ -132,7 +132,7 @@ impl<const UID_LENGTH: usize> FindexCallbacks<ExampleError, UID_LENGTH>
         let mut rng = CsRng::from_entropy();
         let mut rejected = EncryptedTable::default();
         // Simulate insertion failures.
-        for (uid, (old_value, new_value)) in modifications.into_iter() {
+        for (uid, (old_value, new_value)) in modifications {
             // Reject insert with probability 0.2.
             if self.entry_table.contains_key(&uid) && rng.gen_range(0..5) == 0 {
                 rejected.insert(uid, old_value.unwrap_or_default());
@@ -147,7 +147,7 @@ impl<const UID_LENGTH: usize> FindexCallbacks<ExampleError, UID_LENGTH>
         &mut self,
         items: EncryptedTable<UID_LENGTH>,
     ) -> Result<(), ExampleError> {
-        for (uid, value) in items.into_iter() {
+        for (uid, value) in items {
             if self.chain_table.contains_key(&uid) {
                 return Err(ExampleError(format!(
                     "Conflict in Chain Table for UID: {uid:?}"
@@ -166,7 +166,7 @@ impl<const UID_LENGTH: usize> FindexCallbacks<ExampleError, UID_LENGTH>
     ) -> Result<(), ExampleError> {
         self.entry_table = new_encrypted_entry_table_items;
 
-        for new_encrypted_chain_table_item in new_encrypted_chain_table_items.into_iter() {
+        for new_encrypted_chain_table_item in new_encrypted_chain_table_items {
             self.chain_table.insert(
                 new_encrypted_chain_table_item.0,
                 new_encrypted_chain_table_item.1,
