@@ -124,23 +124,32 @@ pub trait FindexSearch<
                 .flat_map(|(_, chain_table_value)| chain_table_value.as_blocks());
             res.insert(keyword.clone(), IndexedValue::from_blocks(blocks)?);
         }
+
         Ok(res)
     }
 
-    /// Recursively searches Findex indexes for locations indexed by the given
-    /// keywords.
+    /// Recursively searches Findex to build the graph of the given keywords.
     ///
-    /// *Note*: `current_depth` is usually 0 when called outside this function.
+    /// For given recursion level:
+    /// - search Findex for the given keywords
+    /// - add these keywords with their indexed locations to the known graph
+    /// - if the maximum recursion level is reached or a user interruption is
+    ///   received through the `progress` callback, ignore the next keywords;
+    ///   otherwise add them to the results of the associated keyword in the
+    ///   graph and mark the unknown keywords for the next recursion
+    /// - if there are some new keywords to search, call this function with
+    ///   these new keywords as input
     ///
     /// # Parameters
     ///
-    /// - `keywords`                : keywords to search using Findex
-    /// - `master_key`              : user secret key
-    /// - `label`                   : public label used for hashing
-    /// - `max_results_per_keyword` : maximum number of results to fetch per
-    ///   keyword
-    /// - `max_depth`               : maximum recursion level allowed
-    /// - `current_depth`           : current depth reached by the recursion
+    /// - `k_uid`               : KMAC key used to generate Entry Table UIDs
+    /// - `k_value`             : DEM key used to decrypt the Entry Table
+    /// - `label`               : public label used for hashing
+    /// - `keywords`            : keywords to search using Findex
+    /// - `graph`               : known keyword graph
+    /// - `max_depth`           : maximum recursion level allowed
+    /// - `current_depth`       : current depth reached by the recursion
+    /// - `max_uid_per_chain`   : maximum number of UIDs to compute per keyword
     #[async_recursion(?Send)]
     #[allow(clippy::too_many_arguments)]
     async fn recursive_search(
@@ -205,6 +214,16 @@ pub trait FindexSearch<
         Ok(())
     }
 
+    /// Searches for the `Location`s indexed by the given `Keyword`s. This is
+    /// the entry point of the Findex search.
+    ///
+    /// # Parameters
+    ///
+    /// - `master_key`          : Findex master key
+    /// - `label`               : public label
+    /// - `keywords`            : keywords to search
+    /// - `max_depth`           : maximum recursion depth allowed
+    /// - `max_uid_per_chain`   : maximum number of UIDs to compute per chain
     async fn search(
         &mut self,
         master_key: &KeyingMaterial<MASTER_KEY_LENGTH>,
@@ -235,17 +254,33 @@ pub trait FindexSearch<
         // Walk the graph to get the results.
         let mut results = HashMap::with_capacity(keywords.len());
         for keyword in keywords {
-            results.insert(keyword.clone(), self.walk_graph_from(keyword, &graph)?);
+            results.insert(
+                keyword.clone(),
+                self.walk_graph_from(keyword, &graph, &mut HashSet::new())?,
+            );
         }
 
         Ok(results)
     }
 
-    fn walk_graph_from(
+    /// Retrives the `Location`s stored in the given graph for the the given
+    /// `Keyword`.
+    ///
+    /// When a `NextWord` is found among the results and it has not been walked
+    /// through yet, appends the results of the recursion on this `NextWord`.
+    ///
+    /// # Parameters
+    ///
+    /// - `keyword`     : starting point of the walk
+    /// - `graph`       : keyword graph containing the Findex results
+    /// - `ancestors`   : keywords that have already been walked through
+    fn walk_graph_from<'a>(
         &self,
-        keyword: &Keyword,
-        graph: &HashMap<Keyword, HashSet<IndexedValue>>,
+        keyword: &'a Keyword,
+        graph: &'a HashMap<Keyword, HashSet<IndexedValue>>,
+        ancestors: &mut HashSet<&'a Keyword>,
     ) -> Result<HashSet<Location>, Error<CustomError>> {
+        ancestors.insert(keyword);
         if let Some(keyord_results) = graph.get(keyword) {
             let mut locations = HashSet::with_capacity(keyord_results.len());
             for indexed_value in keyord_results {
@@ -254,7 +289,13 @@ pub trait FindexSearch<
                         locations.insert(location.clone());
                     }
                     IndexedValue::NextKeyword(next_keyword) => {
-                        locations.extend(self.walk_graph_from(next_keyword, graph)?);
+                        if !ancestors.contains(next_keyword) {
+                            locations.extend(self.walk_graph_from(
+                                next_keyword,
+                                graph,
+                                ancestors,
+                            )?);
+                        }
                     }
                 }
             }
