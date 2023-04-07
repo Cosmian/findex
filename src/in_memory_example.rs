@@ -82,6 +82,11 @@ impl<const UID_LENGTH: usize> FindexCallbacks<ExampleError, UID_LENGTH>
         Ok(true)
     }
 
+    async fn fetch_all_entry_table_uids(&self) -> Result<HashSet<Uid<UID_LENGTH>>, ExampleError> {
+        let uids = self.entry_table.keys().cloned().collect();
+        Ok(uids)
+    }
+
     async fn fetch_entry_table(
         &self,
         entry_table_uids: HashSet<Uid<UID_LENGTH>>,
@@ -170,6 +175,7 @@ impl<const UID_LENGTH: usize> FindexCallbacks<ExampleError, UID_LENGTH>
         Ok(self.removed_locations.iter().cloned().collect())
     }
 
+    #[cfg(feature = "live_compact")]
     fn filter_removed_locations(
         &self,
         locations: HashSet<Location>,
@@ -180,11 +186,7 @@ impl<const UID_LENGTH: usize> FindexCallbacks<ExampleError, UID_LENGTH>
             .collect())
     }
 
-    async fn fetch_all_entry_table_uids(&self) -> Result<HashSet<Uid<UID_LENGTH>>, ExampleError> {
-        let uids = self.entry_table.keys().cloned().collect();
-        Ok(uids)
-    }
-
+    #[cfg(feature = "live_compact")]
     async fn delete_chain(&mut self, uids: HashSet<Uid<UID_LENGTH>>) -> Result<(), ExampleError> {
         self.chain_table.retain(|uid, _| !uids.contains(uid));
         Ok(())
