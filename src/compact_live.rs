@@ -196,7 +196,7 @@ pub trait FindexLiveCompact<
         let mut chains = ChainData::with_capacity(entry_table.len());
 
         // Unchain all Entry Table UIDs.
-        let mut kwi_chain_table_uids = entry_table.unchain::<
+        let kwi_chain_table_uids = entry_table.unchain::<
             CHAIN_TABLE_WIDTH,
             BLOCK_LENGTH,
             KMAC_KEY_LENGTH,
@@ -205,23 +205,24 @@ pub trait FindexLiveCompact<
             DemScheme
         >(entry_table.keys(), usize::MAX);
 
-        // Fetch the Chain Table values for the chain UIDs.
-        let chain_values = self
-            .batch_fetch_chains(&kwi_chain_table_uids)
-            .await?;
-
         // Associate Entry Table UIDs to Chain Table UIDs.
         for (uid, v) in  entry_table.iter() {
             chains.chain_uids.insert(
                 uid.clone(),
                 kwi_chain_table_uids
-                .remove(&v.kwi)
+                .get(&v.kwi)
                 .ok_or(Error::<CustomError>::CryptoError(format!(
                     "no matching Kwi in `kwi_chain_table_uids` ({:?})",
                     v.kwi
-                )))?,
+                )))?.to_vec(),
             );
         }
+
+        // Fetch the Chain Table values for the chain UIDs.
+        let chain_values = self
+            .fetch_chains(kwi_chain_table_uids)
+            .await?;
+
 
         // Convert the blocks of the given chains into indexed values.
         for (entry_table_uid, entry_table_value) in entry_table.into_iter() {

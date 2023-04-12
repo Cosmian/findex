@@ -271,6 +271,17 @@ impl<const KEY_LENGTH: usize, const UID_LENGTH: usize> Default
     }
 }
 
+impl<const UID_LENGTH: usize, const KEY_LENGTH: usize> IntoIterator
+    for KwiChainUids<UID_LENGTH, KEY_LENGTH>
+{
+    type IntoIter = <<Self as Deref>::Target as IntoIterator>::IntoIter;
+    type Item = <<Self as Deref>::Target as IntoIterator>::Item;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.into_iter()
+    }
+}
+
 impl<const UID_LENGTH: usize, const KEY_LENGTH: usize> KwiChainUids<UID_LENGTH, KEY_LENGTH> {
     /// Creates a `KwiChainUids` with the given `capacity`.
     ///
