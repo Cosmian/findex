@@ -134,7 +134,7 @@ pub trait FindexCompact<
             .values()
             .flat_map(|chain| chain.iter().map(|(k, _)| k))
             .cloned()
-            .collect::<Vec<_>>();
+            .collect();
 
         // Get the values stored in the reindexed chains.
         let mut reindexed_chain_values = HashMap::with_capacity(chains_to_reindex.len());

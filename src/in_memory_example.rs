@@ -101,7 +101,7 @@ impl<const UID_LENGTH: usize> FindexCallbacks<ExampleError, UID_LENGTH>
 
     async fn fetch_entry_table(
         &self,
-        entry_table_uids: Vec<Uid<UID_LENGTH>>,
+        entry_table_uids: HashSet<Uid<UID_LENGTH>>,
     ) -> Result<EncryptedTable<UID_LENGTH>, ExampleError> {
         let mut items = EncryptedTable::with_capacity(entry_table_uids.len());
         for uid in entry_table_uids {
@@ -114,7 +114,7 @@ impl<const UID_LENGTH: usize> FindexCallbacks<ExampleError, UID_LENGTH>
 
     async fn fetch_chain_table(
         &self,
-        chain_table_uids: Vec<Uid<UID_LENGTH>>,
+        chain_table_uids: HashSet<Uid<UID_LENGTH>>,
     ) -> Result<EncryptedTable<UID_LENGTH>, ExampleError> {
         let mut items = EncryptedTable::with_capacity(chain_table_uids.len());
         for uid in chain_table_uids {
@@ -160,7 +160,7 @@ impl<const UID_LENGTH: usize> FindexCallbacks<ExampleError, UID_LENGTH>
 
     fn update_lines(
         &mut self,
-        chain_table_uids_to_remove: Vec<Uid<UID_LENGTH>>,
+        chain_table_uids_to_remove: HashSet<Uid<UID_LENGTH>>,
         new_encrypted_entry_table_items: EncryptedTable<UID_LENGTH>,
         new_encrypted_chain_table_items: EncryptedTable<UID_LENGTH>,
     ) -> Result<(), ExampleError> {
@@ -180,13 +180,16 @@ impl<const UID_LENGTH: usize> FindexCallbacks<ExampleError, UID_LENGTH>
         Ok(())
     }
 
-    fn list_removed_locations(&self, _: Vec<Location>) -> Result<HashSet<Location>, ExampleError> {
+    fn list_removed_locations(
+        &self,
+        _: HashSet<Location>,
+    ) -> Result<HashSet<Location>, ExampleError> {
         Ok(self.removed_locations.iter().cloned().collect())
     }
 
     fn filter_removed_locations(
         &self,
-        locations: Vec<Location>,
+        locations: HashSet<Location>,
     ) -> Result<HashSet<Location>, ExampleError> {
         Ok(locations
             .into_iter()
@@ -194,12 +197,12 @@ impl<const UID_LENGTH: usize> FindexCallbacks<ExampleError, UID_LENGTH>
             .collect())
     }
 
-    async fn fetch_all_entry_table_uids(&self) -> Result<Vec<Uid<UID_LENGTH>>, ExampleError> {
+    async fn fetch_all_entry_table_uids(&self) -> Result<HashSet<Uid<UID_LENGTH>>, ExampleError> {
         let uids = self.entry_table.keys().cloned().collect();
         Ok(uids)
     }
 
-    async fn delete_chain(&mut self, uids: Vec<Uid<UID_LENGTH>>) -> Result<(), ExampleError> {
+    async fn delete_chain(&mut self, uids: HashSet<Uid<UID_LENGTH>>) -> Result<(), ExampleError> {
         self.chain_table.retain(|uid, _| !uids.contains(uid));
         Ok(())
     }

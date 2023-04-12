@@ -335,7 +335,7 @@ pub trait FindexLiveCompact<
         &mut self,
         rng: &mut impl CryptoRngCore,
         k_value: &DemScheme::Key,
-        mixed_uids: Vec<Uid<UID_LENGTH>>,
+        mixed_uids: HashSet<Uid<UID_LENGTH>>,
         noise_uids: &HashSet<Uid<UID_LENGTH>>,
     ) -> Result<(), Error<CustomError>> {
         // Fetch both target and noise values from the Entry Table.
@@ -382,7 +382,7 @@ pub trait FindexLiveCompact<
             );
 
             // Delete unused chains (at least one chain value per entry line):
-            let mut chains_to_delete = Vec::with_capacity(upsert_data.len());
+            let mut chains_to_delete = HashSet::with_capacity(upsert_data.len());
 
             // These are failures to upsert.
             encrypted_entry_table = self.upsert_entry_table(upsert_data).await?;
@@ -442,7 +442,7 @@ pub trait FindexLiveCompact<
             self.live_compact_uids(
                 &mut rng,
                 &k_value,
-                batch.to_vec(),
+                batch.iter().cloned().collect(),
                 &noise_uids,
             ).await?;
         }
