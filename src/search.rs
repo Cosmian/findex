@@ -250,7 +250,7 @@ pub trait FindexSearch<
 
         while !is_empty {
             match chain_table_uids.next_chunk::<BATCH_SIZE>() {
-                Ok(batch) => futures.push(self.fetch_chain_table(batch.to_vec())),
+                Ok(batch) => futures.push(self.fetch_chain_table(batch.into_iter().collect())),
                 Err(batch) => {
                     futures.push(self.fetch_chain_table(batch.collect()));
                     is_empty = true;
@@ -258,6 +258,7 @@ pub trait FindexSearch<
             }
         }
 
+        // Collect results from all calls into a single encrypted table.
         let mut encrypted_items: EncryptedTable<UID_LENGTH> =
             join_all(futures).await.into_iter().flatten().collect();
 
