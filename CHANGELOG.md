@@ -8,6 +8,7 @@ All notable changes to this project will be documented in this file.
 
 - deletions in upsert
 - format of the Chain Table (block length is now 16)
+- take ownership of the data in callbacks
 
 ### Added
 

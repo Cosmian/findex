@@ -1,6 +1,6 @@
 //! This module defines the `FindexCompact` trait.
 
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 
 use cosmian_crypto_core::{
     reexport::rand_core::SeedableRng,
@@ -85,7 +85,7 @@ pub trait FindexCompact<
         // We need to fetch all the Entry Table to re-encrypt it.
         // First, fetch all UIds of the Entry table
         let all_uids = self.fetch_all_entry_table_uids().await?;
-        let encrypted_entry_table = self.fetch_entry_table(&all_uids).await?;
+        let encrypted_entry_table = self.fetch_entry_table(all_uids).await?;
 
         // The goal of this function is to build these two data sets (along with
         // `chain_table_uids_to_remove`) and send them to the callback to update the
@@ -134,7 +134,7 @@ pub trait FindexCompact<
             .values()
             .flat_map(|chain| chain.iter().map(|(k, _)| k))
             .cloned()
-            .collect::<HashSet<_>>();
+            .collect();
 
         // Get the values stored in the reindexed chains.
         let mut reindexed_chain_values = HashMap::with_capacity(chains_to_reindex.len());
@@ -151,7 +151,7 @@ pub trait FindexCompact<
         // the database the size of the chains for each keywords.
         //
         let removed_locations = self.list_removed_locations(
-            &reindexed_chain_values
+            reindexed_chain_values
                 .values()
                 .flat_map(|chain| chain.iter().filter_map(IndexedValue::get_location))
                 .cloned()
@@ -264,14 +264,10 @@ pub trait FindexCompact<
         >,
         Error<CustomError>,
     > {
-        let chain_table_uids = kwi_chain_table_uids
-            .values()
-            .flatten()
-            .cloned()
-            .collect::<HashSet<_>>();
+        let chain_table_uids = kwi_chain_table_uids.values().flatten().cloned().collect();
 
         // Batch fetch the server.
-        let encrypted_chain_table_items = self.fetch_chain_table(&chain_table_uids).await?;
+        let encrypted_chain_table_items = self.fetch_chain_table(chain_table_uids).await?;
 
         // Reconsitute the chains.
         let mut chains = HashMap::with_capacity(kwi_chain_table_uids.len());

@@ -211,7 +211,7 @@ In the other hand, the graph solution optimizes the size of the Chain Table.
 	</tr>
 	<tr>
 		<th>naive</th>
-		<th>mixt</th>
+		<th>mixed</th>
 		<th>graph</th>
 		<th>naive</th>
 		<th>mixed</th>

@@ -33,7 +33,7 @@ pub trait FindexCallbacks<Error: std::error::Error + CallbackError, const UID_LE
     ///   Table
     async fn fetch_entry_table(
         &self,
-        entry_table_uids: &HashSet<Uid<UID_LENGTH>>,
+        entry_table_uids: HashSet<Uid<UID_LENGTH>>,
     ) -> Result<EncryptedTable<UID_LENGTH>, Error>;
 
     /// Fetch the lines with the given UIDs from the Chain Table. The returned
@@ -52,7 +52,7 @@ pub trait FindexCallbacks<Error: std::error::Error + CallbackError, const UID_LE
     ///   Table
     async fn fetch_chain_table(
         &self,
-        chain_table_uids: &HashSet<Uid<UID_LENGTH>>,
+        chain_table_uids: HashSet<Uid<UID_LENGTH>>,
     ) -> Result<EncryptedTable<UID_LENGTH>, Error>;
 
     /// Upserts lines in the Entry Table. The input data maps each Entry Table
@@ -75,7 +75,7 @@ pub trait FindexCallbacks<Error: std::error::Error + CallbackError, const UID_LE
     /// - `items`   : entries to be upserted
     async fn upsert_entry_table(
         &mut self,
-        items: &UpsertData<UID_LENGTH>,
+        items: UpsertData<UID_LENGTH>,
     ) -> Result<EncryptedTable<UID_LENGTH>, Error>;
 
     /// Inserts the given lines into the Chain Table.
@@ -88,8 +88,7 @@ pub trait FindexCallbacks<Error: std::error::Error + CallbackError, const UID_LE
     /// # Parameters
     ///
     /// - `items`   : items to be inserted
-    async fn insert_chain_table(&mut self, items: &EncryptedTable<UID_LENGTH>)
-    -> Result<(), Error>;
+    async fn insert_chain_table(&mut self, items: EncryptedTable<UID_LENGTH>) -> Result<(), Error>;
 
     /// Updates the indexes with the given data.
     ///
@@ -157,17 +156,17 @@ pub trait FindexCallbacks<Error: std::error::Error + CallbackError, const UID_LE
     /// - `locations`   : locations queried
     fn list_removed_locations(
         &self,
-        locations: &HashSet<Location>,
+        locations: HashSet<Location>,
     ) -> Result<HashSet<Location>, Error>;
 
     #[cfg(feature = "live_compact")]
     /// Returns all locations that point to existing data.
     fn filter_removed_locations(
         &self,
-        locations: &HashSet<Location>,
+        locations: HashSet<Location>,
     ) -> Result<HashSet<Location>, Error>;
 
     #[cfg(feature = "live_compact")]
     /// Delete the Chain Table lines with the given UIDs.
-    async fn delete_chain(&mut self, uids: &HashSet<Uid<UID_LENGTH>>) -> Result<(), Error>;
+    async fn delete_chain(&mut self, uids: HashSet<Uid<UID_LENGTH>>) -> Result<(), Error>;
 }
