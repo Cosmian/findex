@@ -1,8 +1,6 @@
 //! This module defines the structures and methods dedicated to key generation.
 //! In Findex, DEM is used to encrypt values and KMAC is used to derive UIDs.
 
-use std::collections::HashMap;
-
 use cosmian_crypto_core::{
     bytes_ser_de::{Deserializer, Serializable, Serializer},
     kdf,
@@ -66,47 +64,3 @@ impl<const LENGTH: usize> Drop for KeyingMaterial<LENGTH> {
 }
 
 impl<const LENGTH: usize> ZeroizeOnDrop for KeyingMaterial<LENGTH> {}
-
-/// Cache mapping keying materials to their derived KMAC and DEM keys.
-pub struct KeyCache<
-    const MATERIAL_LENGTH: usize,
-    const KMAC_KEY_LENGTH: usize,
-    const DEM_KEY_LENGTH: usize,
-    KmacKey: SymKey<KMAC_KEY_LENGTH>,
-    DemKey: SymKey<DEM_KEY_LENGTH>,
->(HashMap<KeyingMaterial<MATERIAL_LENGTH>, (KmacKey, DemKey)>);
-
-impl<
-    const MATERIAL_LENGTH: usize,
-    const KMAC_KEY_LENGTH: usize,
-    const DEM_KEY_LENGTH: usize,
-    KmacKey: SymKey<KMAC_KEY_LENGTH>,
-    DemKey: SymKey<DEM_KEY_LENGTH>,
-> KeyCache<MATERIAL_LENGTH, KMAC_KEY_LENGTH, DEM_KEY_LENGTH, KmacKey, DemKey>
-{
-    pub(crate) fn with_capacity(capacity: usize) -> Self {
-        Self(HashMap::with_capacity(capacity))
-    }
-
-    /// Gets the entry corresponding to the given keying material. Creates it if
-    /// needed.
-    ///
-    /// - `keying_material` : keying material
-    /// - `info`            : information used to derive the keys
-    pub(crate) fn get_entry_or_insert(
-        &mut self,
-        keying_material: &KeyingMaterial<MATERIAL_LENGTH>,
-        info: &[u8],
-    ) -> &mut (KmacKey, DemKey) {
-        if !self.0.contains_key(keying_material) {
-            self.0.insert(
-                keying_material.clone(),
-                (
-                    keying_material.derive_kmac_key(info),
-                    keying_material.derive_dem_key(info),
-                ),
-            );
-        }
-        self.0.get_mut(keying_material).unwrap()
-    }
-}

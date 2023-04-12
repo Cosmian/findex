@@ -6,6 +6,8 @@ use std::{
 use cosmian_crypto_core::{reexport::rand_core::SeedableRng, CsRng};
 use rand::Rng;
 
+#[cfg(feature = "live_compact")]
+use crate::{compact_live::FindexLiveCompact, parameters::*};
 use crate::{
     parameters::UID_LENGTH, EncryptedTable, FindexCallbacks, FindexCompact, FindexSearch,
     FindexUpsert, IndexedValue, Keyword, Location, Uid, UpsertData,
@@ -194,9 +196,25 @@ impl<const UID_LENGTH: usize> FindexCallbacks<ExampleError, UID_LENGTH>
         Ok(self.removed_locations.iter().cloned().collect())
     }
 
+    fn filter_removed_locations(
+        &self,
+        locations: &HashSet<Location>,
+    ) -> Result<HashSet<Location>, ExampleError> {
+        Ok(locations
+            .iter()
+            .filter(|location| !self.removed_locations.contains(location))
+            .cloned()
+            .collect())
+    }
+
     async fn fetch_all_entry_table_uids(&self) -> Result<HashSet<Uid<UID_LENGTH>>, ExampleError> {
         let uids: HashSet<Uid<UID_LENGTH>> = self.entry_table.keys().cloned().collect();
         Ok(uids)
+    }
+
+    async fn delete_chain(&mut self, uids: &HashSet<Uid<UID_LENGTH>>) -> Result<(), ExampleError> {
+        self.chain_table.retain(|uid, _| !uids.contains(uid));
+        Ok(())
     }
 }
 
@@ -205,3 +223,22 @@ impl_findex_trait!(FindexSearch, FindexInMemory<UID_LENGTH>, ExampleError);
 impl_findex_trait!(FindexUpsert, FindexInMemory<UID_LENGTH>, ExampleError);
 
 impl_findex_trait!(FindexCompact, FindexInMemory<UID_LENGTH>, ExampleError);
+
+#[cfg(feature = "live_compact")]
+impl
+    FindexLiveCompact<
+        UID_LENGTH,
+        BLOCK_LENGTH,
+        CHAIN_TABLE_WIDTH,
+        MASTER_KEY_LENGTH,
+        KWI_LENGTH,
+        KMAC_KEY_LENGTH,
+        DEM_KEY_LENGTH,
+        KmacKey,
+        DemScheme,
+        ExampleError,
+    > for FindexInMemory<UID_LENGTH>
+{
+    const BATCH_SIZE: usize = 10;
+    const NOISE_RATIO: f64 = 0.5;
+}

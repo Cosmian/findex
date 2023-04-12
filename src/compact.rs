@@ -10,7 +10,7 @@ use cosmian_crypto_core::{
 use rand::seq::IteratorRandom;
 
 use crate::{
-    chain_table::{ChainTableValue, KwiChainUids},
+    chain_table::{ChainTable, ChainTableValue, KwiChainUids},
     entry_table::{EntryTable, EntryTableValue},
     error::CallbackError,
     parameters::check_parameter_constraints,
@@ -90,11 +90,10 @@ pub trait FindexCompact<
         // The goal of this function is to build these two data sets (along with
         // `chain_table_uids_to_remove`) and send them to the callback to update the
         // database.
+        let mut entry_table =
+            EntryTable::decrypt::<DEM_KEY_LENGTH, DemScheme>(&k_value, &encrypted_entry_table)?;
         let mut chain_table_adds = EncryptedTable::default();
-        let mut entry_table = EntryTable::decrypt::<BLOCK_LENGTH, DEM_KEY_LENGTH, DemScheme>(
-            &k_value,
-            &encrypted_entry_table,
-        )?;
+
         // Entry Table items indexing empty chains should be removed.
         let mut entry_table_uids_to_drop = Vec::new();
 
@@ -139,12 +138,11 @@ pub trait FindexCompact<
 
         // Get the values stored in the reindexed chains.
         let mut reindexed_chain_values = HashMap::with_capacity(chains_to_reindex.len());
-        for (kwi, chain) in chains_to_reindex {
+        for (kwi, chain) in &chains_to_reindex {
             let blocks = chain
-                .into_iter()
-                .flat_map(|(_, chain_value)| chain_value.into_blocks())
-                .collect::<Vec<_>>();
-            reindexed_chain_values.insert(kwi.clone(), IndexedValue::from_blocks(blocks.iter())?);
+                .iter()
+                .flat_map(|(_, chain_value)| chain_value.as_blocks());
+            reindexed_chain_values.insert(kwi.clone(), IndexedValue::from_blocks(blocks)?);
         }
 
         //
@@ -199,8 +197,6 @@ pub trait FindexCompact<
             let mut new_entry_table_value = EntryTableValue::<UID_LENGTH, KWI_LENGTH>::new::<
                 CHAIN_TABLE_WIDTH,
                 BLOCK_LENGTH,
-                KMAC_KEY_LENGTH,
-                KmacKey,
             >(&mut rng, entry_table_value.keyword_hash);
 
             // Derive the new keys.
@@ -211,29 +207,38 @@ pub trait FindexCompact<
                 .kwi
                 .derive_dem_key(CHAIN_TABLE_KEY_DERIVATION_INFO);
 
+            let mut new_chains = ChainTable::default();
+
             // Upsert each remaining location in the Chain Table.
             for remaining_location in remaining_indexed_values_for_this_keyword {
-                new_entry_table_value.upsert_indexed_value::<CHAIN_TABLE_WIDTH, BLOCK_LENGTH, KMAC_KEY_LENGTH, DEM_KEY_LENGTH, KmacKey, DemScheme>(
+                new_entry_table_value.upsert_indexed_value::<CHAIN_TABLE_WIDTH, BLOCK_LENGTH, KMAC_KEY_LENGTH, KmacKey>(
                     BlockType::Addition,
                     &remaining_location,
                     &kwi_uid,
-                    &kwi_value,
-                    &mut chain_table_adds,
-                    &mut rng,
+                    &mut new_chains,
                 )?;
             }
 
+            let encrypted_new_chains = new_chains
+                .into_iter()
+                .map(|(uid, value)| -> Result<_, _> {
+                    Ok((
+                        uid,
+                        value.encrypt::<DEM_KEY_LENGTH, DemScheme>(&kwi_value, &mut rng)?,
+                    ))
+                })
+                .collect::<Result<EncryptedTable<UID_LENGTH>, Error<CustomError>>>()?;
+
+            chain_table_adds.extend(encrypted_new_chains);
             entry_table.insert(entry_table_uid.clone(), new_entry_table_value);
         }
 
         entry_table.retain(|uid, _| !entry_table_uids_to_drop.contains(uid));
         entry_table.refresh_uids::<KMAC_KEY_LENGTH, KmacKey>(&new_k_uid, label);
 
-        // Call the callback
         self.update_lines(
             chain_table_uids_to_remove,
-            entry_table
-                .encrypt::<BLOCK_LENGTH, DEM_KEY_LENGTH, DemScheme>(&new_k_value, &mut rng)?,
+            entry_table.encrypt::<DEM_KEY_LENGTH, DemScheme>(&new_k_value, &mut rng)?,
             chain_table_adds,
         )?;
 

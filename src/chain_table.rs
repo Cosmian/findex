@@ -90,10 +90,6 @@ impl<const TABLE_WIDTH: usize, const BLOCK_LENGTH: usize>
         &self.blocks[..self.length]
     }
 
-    pub fn into_blocks(self) -> [Block<BLOCK_LENGTH>; TABLE_WIDTH] {
-        self.blocks
-    }
-
     /// Encrypts the Chain Table value using the given DEM key.
     ///
     /// - `kwi_value`   : DEM key used to encrypt the value
@@ -200,6 +196,14 @@ impl<const UID_LENGTH: usize, const TABLE_WIDTH: usize, const BLOCK_LENGTH: usiz
             CHAIN_TABLE_KEY_DERIVATION_INFO
         )
         .into()
+    }
+}
+
+impl<const UID_LENGTH: usize, const TABLE_WIDTH: usize, const BLOCK_LENGTH: usize> Default
+    for ChainTable<UID_LENGTH, TABLE_WIDTH, BLOCK_LENGTH>
+{
+    fn default() -> Self {
+        Self(Default::default())
     }
 }
 

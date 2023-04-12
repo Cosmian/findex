@@ -9,6 +9,10 @@ All notable changes to this project will be documented in this file.
 - deletions in upsert
 - format of the Chain Table (block length is now 16)
 
+### Added
+
+- add live compact functionality
+
 ## [3.1.0] - 2023-03-03
 
 ### Added

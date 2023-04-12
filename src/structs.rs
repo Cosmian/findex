@@ -1,7 +1,7 @@
 //! This module defines all useful structures used by Findex.
 
 use std::{
-    collections::{HashMap, HashSet},
+    collections::{hash_map::IntoKeys, HashMap, HashSet},
     fmt::Debug,
     ops::{Deref, DerefMut},
     vec::Vec,
@@ -17,8 +17,6 @@ use crate::error::CoreError as Error;
 
 /// The labels are used to provide additional public information to the hash
 /// algorithm when generating Entry Table UIDs.
-//
-// TODO (TBZ): Should the label size be at least 32-bytes?
 #[must_use]
 #[derive(Clone, Debug)]
 pub struct Label(Vec<u8>);
@@ -60,6 +58,9 @@ impl Keyword {
         bytes
     }
 }
+
+/// Type of a keyword hash.
+pub type KeywordHash = [u8; Keyword::HASH_LENGTH];
 
 #[derive(Copy, Clone, Debug, Hash, PartialEq, Eq)]
 pub enum BlockType {
@@ -449,6 +450,10 @@ impl<const UID_LENGTH: usize> EncryptedTable<UID_LENGTH> {
     pub fn with_capacity(capacity: usize) -> Self {
         Self(HashMap::with_capacity(capacity))
     }
+
+    pub fn into_keys(self) -> IntoKeys<Uid<UID_LENGTH>, Vec<u8>> {
+        self.0.into_keys()
+    }
 }
 
 impl<const UID_LENGTH: usize> Deref for EncryptedTable<UID_LENGTH> {
@@ -530,17 +535,27 @@ impl<const UID_LENGTH: usize> Serializable for EncryptedTable<UID_LENGTH> {
     }
 }
 
-/// Data format used for upsert operations. It contains for each UID upserted
-/// the old value (optiona) and the new value:
+/// Data format used for upsert operations.
+///
+/// It contains for each upserted UID the old value (optional) and the new
+/// value:
 ///
 /// UID <-> (`OLD_VALUE`, `NEW_VALUE`)
+///
+/// Successful upsert operations replace the old value with the new value on
+/// lines with the given UIDs. An upsert operation fails if the old value passed
+/// does not correspond to the actual value stored (an old value set to `None`
+/// corresponds to the value of a line that does not exist yet).
+///
+/// **Warning**: upsert operations should be *atomic* in order to guarantee
+/// their correctness.
 #[must_use]
 pub struct UpsertData<const UID_LENGTH: usize>(
     HashMap<Uid<UID_LENGTH>, (Option<Vec<u8>>, Vec<u8>)>,
 );
 
 impl<const UID_LENGTH: usize> UpsertData<UID_LENGTH> {
-    /// Build the upsert data from the old and new table.
+    /// Build the upsert data from the old and new tables.
     ///
     /// - `old_table`   : previous state of the table
     /// - `new_table`   : new state of the table
@@ -548,15 +563,21 @@ impl<const UID_LENGTH: usize> UpsertData<UID_LENGTH> {
         old_table: &EncryptedTable<UID_LENGTH>,
         new_table: EncryptedTable<UID_LENGTH>,
     ) -> Self {
-        Self(
-            new_table
-                .into_iter()
-                .map(|(uid, new_value)| {
-                    let old_value = old_table.get(&uid).map(Vec::to_owned);
-                    (uid, (old_value, new_value))
-                })
-                .collect(),
-        )
+        let mut res: <Self as Deref>::Target = old_table
+            .iter()
+            .filter_map(|(uid, old_value)| {
+                if new_table.get(uid).is_none() {
+                    Some((uid.clone(), (Some(old_value.clone()), Vec::new())))
+                } else {
+                    None
+                }
+            })
+            .collect();
+        res.extend(new_table.into_iter().map(|(uid, new_value)| {
+            let old_value = old_table.get(&uid).map(Vec::to_owned);
+            (uid, (old_value, new_value))
+        }));
+        Self(res)
     }
 }
 
@@ -565,6 +586,12 @@ impl<const UID_LENGTH: usize> Deref for UpsertData<UID_LENGTH> {
 
     fn deref(&self) -> &Self::Target {
         &self.0
+    }
+}
+
+impl<const UID_LENGTH: usize> DerefMut for UpsertData<UID_LENGTH> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
     }
 }
 
@@ -619,6 +646,22 @@ impl<const UID_LENGTH: usize> Serializable for UpsertData<UID_LENGTH> {
             res.insert(uid, (old_value, new_value));
         }
         Ok(Self(res))
+    }
+}
+
+#[cfg(feature = "live_compact")]
+pub struct ChainData<const UID_LENGTH: usize> {
+    pub(crate) chain_uids: HashMap<Uid<UID_LENGTH>, Vec<Uid<UID_LENGTH>>>,
+    pub(crate) chain_values: HashMap<Uid<UID_LENGTH>, HashSet<IndexedValue>>,
+}
+
+#[cfg(feature = "live_compact")]
+impl<const UID_LENGTH: usize> ChainData<UID_LENGTH> {
+    pub fn with_capacity(capacity: usize) -> Self {
+        Self {
+            chain_uids: HashMap::with_capacity(capacity),
+            chain_values: HashMap::with_capacity(capacity),
+        }
     }
 }
 

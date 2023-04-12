@@ -15,15 +15,15 @@ This is a benchmark comparison report.
 
 ### search
 
-|        | `Searching 1 word`          | `Searching 10 words`           | `Searching 100 words`          | `Searching 1000 words`           |
-|:-------|:----------------------------|:-------------------------------|:-------------------------------|:-------------------------------- |
-|        | `3.55 ms` (✅ **1.00x**)     | `3.76 ms` (✅ **1.06x slower**) | `4.43 ms` (❌ *1.25x slower*)   | `14.23 ms` (❌ *4.00x slower*)    |
+|        | `Searching 1 keyword(s)`          | `Searching 10 keyword(s)`          | `Searching 100 keyword(s)`          | `Searching 1000 keyword(s)`           |
+|:-------|:----------------------------------|:-----------------------------------|:------------------------------------|:------------------------------------- |
+|        | `10.04 us` (✅ **1.00x**)          | `90.87 us` (❌ *9.05x slower*)      | `891.55 us` (❌ *88.83x slower*)     | `9.39 ms` (❌ *935.72x slower*)        |
 
 ### upsert
 
-|        | `Indexing 20 keywords`          | `Indexing 200 keywords`          | `Indexing 2000 keywords`           |
-|:-------|:--------------------------------|:---------------------------------|:---------------------------------- |
-|        | `214.79 us` (✅ **1.00x**)       | `2.07 ms` (❌ *9.63x slower*)     | `21.45 ms` (❌ *99.85x slower*)     |
+|        | `Upserting 10 keyword(s)`          | `Upserting 100 keyword(s)`          | `Upserting 1000 keyword(s)`           |
+|:-------|:-----------------------------------|:------------------------------------|:------------------------------------- |
+|        | `185.01 us` (✅ **1.00x**)          | `1.82 ms` (❌ *9.84x slower*)        | `18.72 ms` (❌ *101.16x slower*)       |
 
 ---
 Made with [criterion-table](https://github.com/nu11ptr/criterion-table)

@@ -8,7 +8,7 @@ use std::{
 use cosmian_crypto_core::{reexport::rand_core::SeedableRng, CsRng};
 use cosmian_findex::{
     in_memory_example::{ExampleError, FindexInMemory},
-    parameters::{SECURE_FETCH_CHAINS_BATCH_SIZE, UID_LENGTH},
+    parameters::*,
     Error, FindexCallbacks, FindexCompact, FindexSearch, FindexUpsert, IndexedValue,
     KeyingMaterial, Keyword, Label, Location,
 };
@@ -712,4 +712,123 @@ async fn test_graph_compacting() {
         assert_eq!(res.len(), 1);
         check_search_result(&res, &robert_keyword, &robert_doe_location);
     }
+}
+
+#[cfg(feature = "live_compact")]
+#[actix_rt::test]
+async fn test_live_compacting() {
+    use cosmian_findex::FindexLiveCompact;
+
+    let mut rng = CsRng::from_entropy();
+    let mut findex = FindexInMemory::default();
+
+    let label = Label::random(&mut rng);
+    let master_key = KeyingMaterial::new(&mut rng);
+
+    // Direct location robert doe.
+    let robert_doe_location = Location::from("robert doe DB location");
+    let mut indexed_value_to_keywords = HashMap::new();
+    indexed_value_to_keywords.insert(
+        IndexedValue::Location(robert_doe_location.clone()),
+        hashset_keywords(&["robert", "doe"]),
+    );
+
+    for _ in 0..100 {
+        // Add some keywords.
+        findex
+            .upsert(
+                indexed_value_to_keywords.clone(),
+                HashMap::new(),
+                &master_key,
+                &label,
+            )
+            .await
+            .unwrap();
+
+        // Remove them.
+        findex
+            .upsert(
+                HashMap::new(),
+                indexed_value_to_keywords.clone(),
+                &master_key,
+                &label,
+            )
+            .await
+            .unwrap();
+    }
+    // Add some keywords.
+    findex
+        .upsert(
+            indexed_value_to_keywords.clone(),
+            HashMap::new(),
+            &master_key,
+            &label,
+        )
+        .await
+        .unwrap();
+
+    // Check keywords have been correctly inserted.
+    let robert_keyword = Keyword::from("robert");
+    let doe_keyword = Keyword::from("doe");
+    // Search Robert.
+    let robert_search = findex
+        .search(
+            &HashSet::from_iter(vec![robert_keyword.clone()]),
+            &master_key,
+            &label,
+            usize::MAX,
+            0,
+            SECURE_FETCH_CHAINS_BATCH_SIZE,
+            0,
+        )
+        .await
+        .unwrap();
+    check_search_result(&robert_search, &robert_keyword, &robert_doe_location);
+    // Search Doe.
+    let doe_search = findex
+        .search(
+            &HashSet::from_iter(vec![doe_keyword.clone()]),
+            &master_key,
+            &label,
+            usize::MAX,
+            0,
+            SECURE_FETCH_CHAINS_BATCH_SIZE,
+            0,
+        )
+        .await
+        .unwrap();
+    check_search_result(&doe_search, &doe_keyword, &robert_doe_location);
+
+    // Compact enough times to be sure all entries have been compacted.
+    for _ in 0..10 {
+        findex.live_compact(&master_key, 8).await.unwrap();
+    }
+
+    // After compaction, there should still be two entries in the Entry Table.
+    assert_eq!(findex.entry_table_len(), 2);
+    // But deletions should have been simplified (only two locations indexed per
+    // chain -> one line per chain -> 2 lines)
+    assert_eq!(findex.chain_table_len(), 2);
+
+    for _ in 0..100 {
+        // Add some keywords.
+        findex
+            .upsert(
+                indexed_value_to_keywords.clone(),
+                HashMap::new(),
+                &master_key,
+                &label,
+            )
+            .await
+            .unwrap();
+    }
+    assert_eq!(findex.entry_table_len(), 2);
+    assert_eq!(findex.chain_table_len(), 202);
+
+    // Compact enough times to be sure all entries have been compacted.
+    for _ in 0..10 {
+        findex.live_compact(&master_key, 8).await.unwrap();
+    }
+    assert_eq!(findex.entry_table_len(), 2);
+    assert_eq!(findex.chain_table_len(), 2);
 }
