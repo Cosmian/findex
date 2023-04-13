@@ -10,11 +10,12 @@ use cosmian_crypto_core::{
 use rand::seq::IteratorRandom;
 
 use crate::{
-    chain_table::{ChainTable, ChainTableValue, KwiChainUids},
+    callbacks::FetchChains,
+    chain_table::ChainTable,
     entry_table::{EntryTable, EntryTableValue},
     error::CallbackError,
     parameters::check_parameter_constraints,
-    structs::{BlockType, EncryptedTable, IndexedValue, Label, Uid},
+    structs::{BlockType, EncryptedTable, IndexedValue, Label},
     Error, FindexCallbacks, KeyingMaterial, CHAIN_TABLE_KEY_DERIVATION_INFO,
     ENTRY_TABLE_KEY_DERIVATION_INFO,
 };
@@ -33,7 +34,17 @@ pub trait FindexCompact<
     KmacKey: SymKey<KMAC_KEY_LENGTH>,
     DemScheme: Dem<DEM_KEY_LENGTH>,
     CustomError: std::error::Error + CallbackError,
->: FindexCallbacks<CustomError, UID_LENGTH>
+>:
+    FindexCallbacks<CustomError, UID_LENGTH>
+    + FetchChains<
+        UID_LENGTH,
+        BLOCK_LENGTH,
+        CHAIN_TABLE_WIDTH,
+        KWI_LENGTH,
+        DEM_KEY_LENGTH,
+        DemScheme,
+        CustomError,
+    >
 {
     /// Replaces all the Index Entry Table UIDs and values. New UIDs are derived
     /// using the given label and the KMAC key derived from the new master key.
@@ -125,7 +136,7 @@ pub trait FindexCompact<
         // Table lines are linked to the requested UIDs since the Entry Table was fetch
         // entirely and a random portion of it is being compacted.
         //
-        let chains_to_reindex = self.batch_fetch_chains(&kwi_chain_table_uids).await?;
+        let chains_to_reindex = self.fetch_chains(kwi_chain_table_uids).await?;
 
         //
         // Remove all reindexed Chain Table items. Chains are recomputed entirely.
@@ -243,56 +254,5 @@ pub trait FindexCompact<
         )?;
 
         Ok(())
-    }
-
-    /// Batch fetches the Chain Table values of the given chain UIDs.
-    ///
-    /// **WARNING**: there is no guarantee the server cannot link the Chain
-    /// Table request to a previous Entry Table request.
-    ///
-    /// - `kwi_chain_table_uids`    : maps `Kwi`s to chains
-    async fn batch_fetch_chains(
-        &self,
-        kwi_chain_table_uids: &KwiChainUids<UID_LENGTH, KWI_LENGTH>,
-    ) -> Result<
-        HashMap<
-            KeyingMaterial<KWI_LENGTH>,
-            Vec<(
-                Uid<UID_LENGTH>,
-                ChainTableValue<CHAIN_TABLE_WIDTH, BLOCK_LENGTH>,
-            )>,
-        >,
-        Error<CustomError>,
-    > {
-        let chain_table_uids = kwi_chain_table_uids.values().flatten().cloned().collect();
-
-        // Batch fetch the server.
-        let encrypted_chain_table_items = self.fetch_chain_table(chain_table_uids).await?;
-
-        // Reconsitute the chains.
-        let mut chains = HashMap::with_capacity(kwi_chain_table_uids.len());
-        for (kwi, chain_table_uids) in kwi_chain_table_uids.iter() {
-            let kwi_value = kwi.derive_dem_key(CHAIN_TABLE_KEY_DERIVATION_INFO);
-            let mut chain = Vec::with_capacity(chain_table_uids.len());
-            for uid in chain_table_uids {
-                let encrypted_item = encrypted_chain_table_items.get(uid).ok_or_else(|| {
-                    Error::<CustomError>::CryptoError(format!(
-                        "Chain UID does not exist in Chain Table: {uid:?}",
-                    ))
-                })?;
-                // Use a vector not to shuffle the chain. This is important because indexed
-                // values can be divided in blocks that span several lines in the chain.
-                chain.push((
-                    uid.clone(),
-                    ChainTableValue::<CHAIN_TABLE_WIDTH, BLOCK_LENGTH>::decrypt::<
-                        DEM_KEY_LENGTH,
-                        DemScheme,
-                    >(&kwi_value, encrypted_item)?,
-                ));
-            }
-            chains.insert(kwi.clone(), chain);
-        }
-
-        Ok(chains)
     }
 }

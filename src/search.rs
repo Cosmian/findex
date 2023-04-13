@@ -1,22 +1,17 @@
 //! This modules defines the `FindexSearch` trait.
 
-use std::{
-    collections::{HashMap, HashSet},
-    num::NonZeroUsize,
-};
+use std::collections::{HashMap, HashSet};
 
 use async_recursion::async_recursion;
 use cosmian_crypto_core::symmetric_crypto::{Dem, SymKey};
-use futures::future::join_all;
 
 use crate::{
-    callbacks::FindexCallbacks,
-    chain_table::{ChainTableValue, KwiChainUids},
+    callbacks::{FetchChains, FindexCallbacks},
     entry_table::EntryTable,
     error::CallbackError,
     parameters::check_parameter_constraints,
-    structs::{IndexedValue, Keyword, Label, Location, Uid},
-    Error, KeyingMaterial, CHAIN_TABLE_KEY_DERIVATION_INFO, ENTRY_TABLE_KEY_DERIVATION_INFO,
+    structs::{IndexedValue, Keyword, Label, Location},
+    Error, KeyingMaterial, ENTRY_TABLE_KEY_DERIVATION_INFO,
 };
 
 /// Trait implementing the search functionality of Findex.
@@ -31,7 +26,18 @@ pub trait FindexSearch<
     KmacKey: SymKey<KMAC_KEY_LENGTH>,
     DemScheme: Dem<DEM_KEY_LENGTH>,
     CustomError: std::error::Error + CallbackError,
->: Sized + FindexCallbacks<CustomError, UID_LENGTH>
+>:
+    Sized
+    + FindexCallbacks<CustomError, UID_LENGTH>
+    + FetchChains<
+        UID_LENGTH,
+        BLOCK_LENGTH,
+        CHAIN_TABLE_WIDTH,
+        KWI_LENGTH,
+        DEM_KEY_LENGTH,
+        DemScheme,
+        CustomError,
+    >
 {
     /// Searches for a set of keywords, returning the corresponding indexed
     /// values.
@@ -52,7 +58,6 @@ pub trait FindexSearch<
         master_key: &KeyingMaterial<MASTER_KEY_LENGTH>,
         label: &Label,
         max_results_per_keyword: usize,
-        fetch_chains_batch_size: NonZeroUsize,
     ) -> Result<HashMap<Keyword, HashSet<IndexedValue>>, Error<CustomError>> {
         if keywords.is_empty() {
             return Ok(HashMap::new());
@@ -115,9 +120,7 @@ pub trait FindexSearch<
         // Query the Chain Table for these UIDs to recover the associated
         // chain values.
         //
-        let chains = self
-            .noisy_fetch_chains(&kwi_chain_table_uids, fetch_chains_batch_size)
-            .await?;
+        let chains = self.fetch_chains(kwi_chain_table_uids).await?;
 
         // Convert the blocks of the given chains into indexed values.
         let mut res = HashMap::new();
@@ -156,19 +159,12 @@ pub trait FindexSearch<
         label: &Label,
         max_results_per_keyword: usize,
         max_depth: usize,
-        fetch_chains_batch_size: NonZeroUsize,
         current_depth: usize,
     ) -> Result<HashMap<Keyword, HashSet<Location>>, Error<CustomError>> {
         check_parameter_constraints::<CHAIN_TABLE_WIDTH, BLOCK_LENGTH>();
         // Get indexed values associated to the given keywords
         let res = self
-            .non_recursive_search(
-                keywords,
-                master_key,
-                label,
-                max_results_per_keyword,
-                fetch_chains_batch_size,
-            )
+            .non_recursive_search(keywords, master_key, label, max_results_per_keyword)
             .await?;
 
         // Send current results (Location and NextKeyword) to the callback.
@@ -202,7 +198,6 @@ pub trait FindexSearch<
                     label,
                     max_results_per_keyword,
                     max_depth,
-                    fetch_chains_batch_size,
                     current_depth + 1,
                 )
                 .await?
@@ -218,76 +213,5 @@ pub trait FindexSearch<
         }
 
         Ok(results)
-    }
-
-    /// Fetches the values of the given chains from the Chain Table with noise.
-    ///
-    /// Security is based on the noisiness of the process under the assumption
-    /// that several requests are performed in parallel. Requests to the Chain
-    /// Table are done UID per UID. This makes it more difficult for the server
-    /// to link a given Chain Table UID request with a previously received
-    /// Entry Table UID request.
-    ///
-    /// - `kwi_chain_table_uids`    : Maps `Kwi`s to sets of Chain Table UIDs
-    async fn noisy_fetch_chains(
-        &self,
-        kwi_chain_table_uids: &KwiChainUids<UID_LENGTH, KWI_LENGTH>,
-        batch_size: NonZeroUsize,
-    ) -> Result<
-        HashMap<
-            KeyingMaterial<KWI_LENGTH>,
-            Vec<(
-                Uid<UID_LENGTH>,
-                ChainTableValue<CHAIN_TABLE_WIDTH, BLOCK_LENGTH>,
-            )>,
-        >,
-        Error<CustomError>,
-    > {
-        let mut chains = HashMap::with_capacity(kwi_chain_table_uids.len());
-        for (kwi, chain_table_uids) in kwi_chain_table_uids.iter() {
-            let kwi_value: DemScheme::Key = kwi.derive_dem_key(CHAIN_TABLE_KEY_DERIVATION_INFO);
-            let mut chain = Vec::with_capacity(chain_table_uids.len());
-
-            // Fetch all chain table values by batch of `batch_size` to increase noise.
-            let chain_table_uids_hashset: Vec<_> = chain_table_uids
-                .chunks(batch_size.into())
-                .map(|uids| uids.iter().cloned().collect())
-                .collect();
-
-            let mut futures = Vec::with_capacity(chain_table_uids_hashset.len());
-            for uid in chain_table_uids_hashset {
-                futures.push(self.fetch_chain_table(uid));
-            }
-
-            let encrypted_items = join_all(futures).await;
-
-            for encrypted_item in encrypted_items {
-                // Use a vector not to shuffle the chain. This is important because indexed
-                // values can be divided in blocks that span several lines in the chain.
-                for (uid, value) in encrypted_item? {
-                    let decrypted_value =
-                        ChainTableValue::<CHAIN_TABLE_WIDTH, BLOCK_LENGTH>::decrypt::<
-                            DEM_KEY_LENGTH,
-                            DemScheme,
-                        >(&kwi_value, &value)
-                        .map_err(|_| {
-                            Error::<CustomError>::CryptoError(format!(
-                                "fail to decrypt one of the `value` returned by the fetch chains \
-                                 callback (uid was '{uid:?}', value was {})",
-                                if value.is_empty() {
-                                    "empty".to_owned()
-                                } else {
-                                    format!("'{value:?}'")
-                                },
-                            ))
-                        })?;
-
-                    chain.push((uid, decrypted_value));
-                }
-            }
-            chains.insert(kwi.clone(), chain);
-        }
-
-        Ok(chains)
     }
 }

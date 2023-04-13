@@ -5,8 +5,8 @@ use std::collections::{HashMap, HashSet};
 
 use cosmian_crypto_core::CsRng;
 use cosmian_findex::{
-    in_memory_example::FindexInMemory, parameters::SECURE_FETCH_CHAINS_BATCH_SIZE, FindexSearch,
-    FindexUpsert, IndexedValue, KeyingMaterial, Keyword, Label, Location,
+    in_memory_example::FindexInMemory, FindexSearch, FindexUpsert, IndexedValue, KeyingMaterial,
+    Keyword, Label, Location,
 };
 use criterion::{criterion_group, criterion_main, Criterion};
 use futures::executor::block_on;
@@ -61,16 +61,8 @@ fn bench_search(c: &mut Criterion) {
         let keywords = prepare_keywords(n_keywords);
         group.bench_function(format!("Searching {n_keywords} keyword(s)"), |b| {
             b.iter(|| {
-                block_on(findex.search(
-                    &keywords,
-                    &master_key,
-                    &label,
-                    usize::MAX,
-                    usize::MAX,
-                    SECURE_FETCH_CHAINS_BATCH_SIZE,
-                    0,
-                ))
-                .expect("search failed");
+                block_on(findex.search(&keywords, &master_key, &label, usize::MAX, usize::MAX, 0))
+                    .expect("search failed");
             });
         });
     }

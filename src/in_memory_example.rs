@@ -6,12 +6,12 @@ use std::{
 use cosmian_crypto_core::{reexport::rand_core::SeedableRng, CsRng};
 use rand::Rng;
 
+use crate::{
+    callbacks::FetchChains, parameters::UID_LENGTH, EncryptedTable, FindexCallbacks, FindexCompact,
+    FindexSearch, FindexUpsert, IndexedValue, Keyword, Location, Uid, UpsertData,
+};
 #[cfg(feature = "live_compact")]
 use crate::{compact_live::FindexLiveCompact, parameters::*};
-use crate::{
-    parameters::UID_LENGTH, EncryptedTable, FindexCallbacks, FindexCompact, FindexSearch,
-    FindexUpsert, IndexedValue, Keyword, Location, Uid, UpsertData,
-};
 
 #[derive(Debug)]
 pub struct ExampleError(String);
@@ -206,6 +206,19 @@ impl<const UID_LENGTH: usize> FindexCallbacks<ExampleError, UID_LENGTH>
         self.chain_table.retain(|uid, _| !uids.contains(uid));
         Ok(())
     }
+}
+
+impl
+    FetchChains<
+        UID_LENGTH,
+        BLOCK_LENGTH,
+        CHAIN_TABLE_WIDTH,
+        KWI_LENGTH,
+        DEM_KEY_LENGTH,
+        DemScheme,
+        ExampleError,
+    > for FindexInMemory<UID_LENGTH>
+{
 }
 
 impl_findex_trait!(FindexSearch, FindexInMemory<UID_LENGTH>, ExampleError);
