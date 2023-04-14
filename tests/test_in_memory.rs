@@ -79,6 +79,102 @@ fn check_search_result(
     assert!(results.contains(location));
 }
 
+/// Checks the `progress` callback works: the results returned by the callback
+/// for a `rob` search should contain the `NextWord` pointing to `robert` as
+/// result for the `rob` keyword or the `robert` location as result for the
+/// `robert` keyword.
+#[actix_rt::test]
+async fn test_progress_callack() -> Result<(), Error<ExampleError>> {
+    let mut rng = CsRng::from_entropy();
+    let label = Label::random(&mut rng);
+    let master_key = KeyingMaterial::new(&mut rng);
+
+    let mut indexed_value_to_keywords = HashMap::new();
+    // direct location robert doe
+    let robert_location = Location::from("robert");
+    indexed_value_to_keywords.insert(
+        IndexedValue::Location(robert_location.clone()),
+        hashset_keywords(&["robert", "doe"]),
+    );
+    // direct location for rob
+    let rob_location = Location::from("rob");
+    indexed_value_to_keywords.insert(
+        IndexedValue::Location(rob_location.clone()),
+        hashset_keywords(&["rob"]),
+    );
+    // indirection to robert
+    indexed_value_to_keywords.insert(
+        IndexedValue::NextKeyword(Keyword::from("robert")),
+        hashset_keywords(&["rob"]),
+    );
+
+    let mut findex = FindexInMemory::default();
+    findex
+        .upsert(
+            indexed_value_to_keywords,
+            HashMap::new(),
+            &master_key,
+            &label,
+        )
+        .await?;
+
+    let robert_keyword = Keyword::from("robert");
+    let rob_keyword = Keyword::from("rob");
+
+    // search robert
+    let robert_search = findex
+        .search(
+            &master_key,
+            &label,
+            &HashSet::from_iter([robert_keyword.clone()]),
+            usize::MAX,
+            usize::MAX,
+        )
+        .await?;
+    check_search_result(&robert_search, &robert_keyword, &robert_location);
+
+    // cannot find robert with wrong label
+    let robert_search = findex
+        .search(
+            &master_key,
+            &Label::random(&mut rng),
+            &HashSet::from_iter([robert_keyword.clone()]),
+            MAX_DEPTH,
+            MAX_UID_PER_CHAIN,
+        )
+        .await?;
+    assert_eq!(robert_search.get(&robert_keyword), Some(&HashSet::new()));
+
+    // search rob without graph search
+    let rob_search = findex
+        .search(
+            &master_key,
+            &label,
+            &HashSet::from_iter([rob_keyword.clone()]),
+            1,
+            MAX_UID_PER_CHAIN,
+        )
+        .await?;
+    check_search_result(&rob_search, &rob_keyword, &rob_location);
+
+    // search rob with graph search
+    findex.check_progress_callback_next_keyword = true;
+    let rob_search = findex
+        .search(
+            &master_key,
+            &label,
+            &HashSet::from_iter([rob_keyword.clone()]),
+            MAX_DEPTH,
+            MAX_UID_PER_CHAIN,
+        )
+        .await?;
+    findex.check_progress_callback_next_keyword = false;
+    check_search_result(&rob_search, &rob_keyword, &robert_location);
+    check_search_result(&rob_search, &rob_keyword, &rob_location);
+
+    Ok(())
+}
+
 #[actix_rt::test]
 async fn test_findex() -> Result<(), Error<ExampleError>> {
     let mut rng = CsRng::from_entropy();
@@ -188,6 +284,7 @@ async fn test_findex() -> Result<(), Error<ExampleError>> {
             MAX_UID_PER_CHAIN,
         )
         .await?;
+    findex.check_progress_callback_next_keyword = false;
     check_search_result(&rob_search, &rob_keyword, &robert_doe_location);
     check_search_result(&rob_search, &rob_keyword, &rob_location);
 

@@ -31,6 +31,7 @@ pub struct FindexInMemory<const UID_LENGTH: usize> {
     entry_table: EncryptedTable<UID_LENGTH>,
     chain_table: EncryptedTable<UID_LENGTH>,
     removed_locations: HashSet<Location>,
+    pub check_progress_callback_next_keyword: bool,
 }
 
 impl<const UID_LENGTH: usize> FindexInMemory<UID_LENGTH> {
@@ -76,8 +77,21 @@ impl<const UID_LENGTH: usize> FindexCallbacks<ExampleError, UID_LENGTH>
 {
     async fn progress(
         &self,
-        _results: &HashMap<Keyword, HashSet<IndexedValue>>,
+        results: &HashMap<Keyword, HashSet<IndexedValue>>,
     ) -> Result<bool, ExampleError> {
+        if self.check_progress_callback_next_keyword {
+            let rob_keyword = Keyword::from("rob");
+            let robert_keyword = Keyword::from("robert");
+            if let Some(results) = results.get(&rob_keyword) {
+                assert!(results.contains(&IndexedValue::NextKeyword(Keyword::from("robert"))));
+            } else if let Some(results) = results.get(&robert_keyword) {
+                assert!(results.contains(&IndexedValue::Location(Location::from("robert"))));
+            } else {
+                return Err(ExampleError(
+                    "Cannot find keyword 'rob' nor 'robert' in search results".to_string(),
+                ));
+            }
+        }
         // do not stop recursion.
         Ok(true)
     }
