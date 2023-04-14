@@ -302,7 +302,7 @@ async fn test_findex() -> Result<(), Error<ExampleError>> {
         .search(
             &master_key,
             &new_label,
-            &HashSet::from_iter(vec![jane_keyword.clone()]),
+            &HashSet::from_iter([jane_keyword.clone()]),
             MAX_DEPTH,
             MAX_UID_PER_CHAIN,
         )
@@ -315,7 +315,7 @@ async fn test_findex() -> Result<(), Error<ExampleError>> {
         .search(
             &master_key,
             &new_label,
-            &HashSet::from_iter(vec![doe_keyword.clone()]),
+            &HashSet::from_iter([doe_keyword.clone()]),
             MAX_DEPTH,
             MAX_UID_PER_CHAIN,
         )
@@ -328,7 +328,7 @@ async fn test_findex() -> Result<(), Error<ExampleError>> {
         .search(
             &master_key,
             &label,
-            &HashSet::from_iter(vec![doe_keyword.clone()]),
+            &HashSet::from_iter([doe_keyword.clone()]),
             MAX_DEPTH,
             MAX_UID_PER_CHAIN,
         )
@@ -350,7 +350,7 @@ async fn test_findex() -> Result<(), Error<ExampleError>> {
         .search(
             &master_key,
             &new_label,
-            &HashSet::from_iter(vec![doe_keyword.clone()]),
+            &HashSet::from_iter([doe_keyword.clone()]),
             MAX_DEPTH,
             MAX_UID_PER_CHAIN,
         )
@@ -383,7 +383,7 @@ async fn test_findex() -> Result<(), Error<ExampleError>> {
             .search(
                 &master_key,
                 &new_label,
-                &HashSet::from_iter(vec![doe_keyword.clone()]),
+                &HashSet::from_iter([doe_keyword.clone()]),
                 MAX_DEPTH,
                 MAX_UID_PER_CHAIN,
             )
@@ -396,7 +396,7 @@ async fn test_findex() -> Result<(), Error<ExampleError>> {
     let mut deletions = HashMap::new();
     deletions.insert(
         IndexedValue::from(john_doe_location.clone()),
-        HashSet::from_iter(vec![doe_keyword.clone()]),
+        HashSet::from_iter([doe_keyword.clone()]),
     );
     findex
         .upsert(HashMap::new(), deletions, &master_key, &new_label)
@@ -407,7 +407,7 @@ async fn test_findex() -> Result<(), Error<ExampleError>> {
         .search(
             &master_key,
             &new_label,
-            &HashSet::from_iter(vec![doe_keyword.clone()]),
+            &HashSet::from_iter([doe_keyword.clone()]),
             MAX_DEPTH,
             MAX_UID_PER_CHAIN,
         )
@@ -463,7 +463,7 @@ async fn test_first_names() -> Result<(), Error<ExampleError>> {
         for i in 0..NUM_LOCATIONS {
             map.insert(
                 IndexedValue::Location(Location::from(format!("{first_name}_{i}").as_bytes())),
-                HashSet::from_iter(vec![Keyword::from("france"), Keyword::from(first_name)]),
+                HashSet::from_iter([Keyword::from("france"), Keyword::from(first_name)]),
             );
             add_keyword_graph(&Keyword::from(first_name), MIN_KEYWORD_LENGTH, &mut map);
         }
@@ -531,7 +531,7 @@ async fn test_first_names() -> Result<(), Error<ExampleError>> {
     let mut total_results = 0_usize;
     let num_searches = searches.len();
     for s in searches {
-        let keywords = HashSet::from_iter(vec![Keyword::from(s.as_str())]);
+        let keywords = HashSet::from_iter([Keyword::from(s.as_str())]);
         let graph_results = graph_findex
             .search(&master_key, &label, &keywords, MAX_DEPTH, MAX_UID_PER_CHAIN)
             .await?;

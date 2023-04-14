@@ -201,22 +201,19 @@ impl<const UID_LENGTH: usize, const KWI_LENGTH: usize> EntryTableValue<UID_LENGT
         })
     }
 
-    /// Gets all UIDs of the chain indexed by this Entry Table value.
+    /// Computes the UIDs of the chain associated with this Entry Table value.
     ///
     /// The first UID is derived from the hash of the indexing keyword stored in
     /// the Entry Table value. Subsequent UIDs are derived from the previous UID
     /// in the chain.
     ///
-    /// Stops when the derived UID matches the one stored in the Entry Table
-    /// value or the `max_results_per_keyword` has been reached.
-    ///
-    /// Inserts the couple `(𝐾_{𝑤_𝑖}, ChainTableUid)` to the given map in-place.
+    /// Stops when the derived UID matches the one stored in this Entry Table
+    /// value or `max_uid_per_chain` UIDs have been derived.
     ///
     /// # Parameters
     ///
-    /// - `max_results`             : maximum number of results to fetch
-    /// - `kwi_chain_table_uids`    : (output) maps the `𝐾_{𝑤_𝑖}` with the Chain
-    ///   Table UIDs
+    /// - `kwi_uid`             : KMAC key used to derive UIDs of the w_i chain
+    /// - `max_uid_per_chain`   : maximum number of results to fetch
     pub(crate) fn unchain<
         const CHAIN_TABLE_WIDTH: usize,
         const BLOCK_LENGTH: usize,

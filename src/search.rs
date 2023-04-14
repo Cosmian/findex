@@ -128,7 +128,8 @@ pub trait FindexSearch<
         Ok(res)
     }
 
-    /// Recursively searches Findex indexes to build the graph of the given keywords.
+    /// Recursively searches Findex indexes to build the graph of the given
+    /// keywords.
     ///
     /// For given recursion level:
     /// - search Findex for the given keywords
@@ -237,7 +238,7 @@ pub trait FindexSearch<
         let k_uid = master_key.derive_kmac_key(ENTRY_TABLE_KEY_DERIVATION_INFO);
         let k_value = master_key.derive_dem_key(ENTRY_TABLE_KEY_DERIVATION_INFO);
 
-        // Search Findex to build the keyword graph.
+        // Search Findex indexes to build the keyword graph.
         let mut graph = HashMap::with_capacity(keywords.len());
         self.recursive_search(
             &k_uid,
@@ -281,9 +282,9 @@ pub trait FindexSearch<
         ancestors: &mut HashSet<&'a Keyword>,
     ) -> Result<HashSet<Location>, Error<CustomError>> {
         ancestors.insert(keyword);
-        if let Some(keyord_results) = graph.get(keyword) {
-            let mut locations = HashSet::with_capacity(keyord_results.len());
-            for indexed_value in keyord_results {
+        if let Some(keyword_results) = graph.get(keyword) {
+            let mut locations = HashSet::with_capacity(keyword_results.len());
+            for indexed_value in keyword_results {
                 match indexed_value {
                     IndexedValue::Location(location) => {
                         locations.insert(location.clone());
