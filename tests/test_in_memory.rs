@@ -146,7 +146,7 @@ async fn test_findex() -> Result<(), Error<ExampleError>> {
         .search(
             &master_key,
             &Label::random(&mut rng),
-            &HashSet::from_iter(vec![robert_keyword.clone()]),
+            &HashSet::from_iter([robert_keyword.clone()]),
             MAX_DEPTH,
             MAX_UID_PER_CHAIN,
         )
@@ -158,7 +158,7 @@ async fn test_findex() -> Result<(), Error<ExampleError>> {
         .search(
             &master_key,
             &label,
-            &HashSet::from_iter(vec![doe_keyword.clone()]),
+            &HashSet::from_iter([doe_keyword.clone()]),
             MAX_DEPTH,
             MAX_UID_PER_CHAIN,
         )
@@ -171,7 +171,7 @@ async fn test_findex() -> Result<(), Error<ExampleError>> {
         .search(
             &master_key,
             &label,
-            &HashSet::from_iter(vec![rob_keyword.clone()]),
+            &HashSet::from_iter([rob_keyword.clone()]),
             MAX_DEPTH,
             MAX_UID_PER_CHAIN,
         )
@@ -183,7 +183,7 @@ async fn test_findex() -> Result<(), Error<ExampleError>> {
         .search(
             &master_key,
             &label,
-            &HashSet::from_iter(vec![rob_keyword.clone()]),
+            &HashSet::from_iter([rob_keyword.clone()]),
             MAX_DEPTH,
             MAX_UID_PER_CHAIN,
         )
@@ -228,7 +228,7 @@ async fn test_findex() -> Result<(), Error<ExampleError>> {
         .search(
             &master_key,
             &label,
-            &HashSet::from_iter(vec![robert_keyword.clone()]),
+            &HashSet::from_iter([robert_keyword.clone()]),
             MAX_DEPTH,
             MAX_UID_PER_CHAIN,
         )
@@ -240,7 +240,7 @@ async fn test_findex() -> Result<(), Error<ExampleError>> {
         .search(
             &master_key,
             &label,
-            &HashSet::from_iter(vec![doe_keyword.clone()]),
+            &HashSet::from_iter([doe_keyword.clone()]),
             MAX_DEPTH,
             MAX_UID_PER_CHAIN,
         )
