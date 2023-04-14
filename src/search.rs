@@ -128,7 +128,7 @@ pub trait FindexSearch<
         Ok(res)
     }
 
-    /// Recursively searches Findex to build the graph of the given keywords.
+    /// Recursively searches Findex indexes to build the graph of the given keywords.
     ///
     /// For given recursion level:
     /// - search Findex for the given keywords
