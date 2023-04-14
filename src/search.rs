@@ -263,7 +263,7 @@ pub trait FindexSearch<
         Ok(results)
     }
 
-    /// Retrives the `Location`s stored in the given graph for the the given
+    /// Retrives the `Location`s stored in the given graph for the given
     /// `Keyword`.
     ///
     /// When a `NextWord` is found among the results and it has not been walked
