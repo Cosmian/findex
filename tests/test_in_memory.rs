@@ -134,7 +134,7 @@ async fn test_findex() -> Result<(), Error<ExampleError>> {
         .search(
             &master_key,
             &label,
-            &HashSet::from_iter(vec![robert_keyword.clone()]),
+            &HashSet::from_iter([robert_keyword.clone()]),
             usize::MAX,
             usize::MAX,
         )
