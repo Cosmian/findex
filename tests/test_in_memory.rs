@@ -216,7 +216,7 @@ async fn test_findex() -> Result<(), Error<ExampleError>> {
         .search(
             &master_key,
             &label,
-            &HashSet::from_iter(vec![jane_keyword.clone()]),
+            &HashSet::from_iter([jane_keyword.clone()]),
             MAX_DEPTH,
             MAX_UID_PER_CHAIN,
         )
