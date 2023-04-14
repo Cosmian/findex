@@ -279,7 +279,7 @@ async fn test_findex() -> Result<(), Error<ExampleError>> {
             .search(
                 &master_key,
                 &new_label,
-                &HashSet::from_iter(vec![doe_keyword.clone()]),
+                &HashSet::from_iter([doe_keyword.clone()]),
                 MAX_DEPTH,
                 MAX_UID_PER_CHAIN,
             )
