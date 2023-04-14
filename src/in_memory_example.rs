@@ -31,7 +31,7 @@ pub struct FindexInMemory<const UID_LENGTH: usize> {
     entry_table: EncryptedTable<UID_LENGTH>,
     chain_table: EncryptedTable<UID_LENGTH>,
     removed_locations: HashSet<Location>,
-    check_progress_callback_next_keyword: bool,
+    pub check_progress_callback_next_keyword: bool,
 }
 
 impl<const UID_LENGTH: usize> FindexInMemory<UID_LENGTH> {
@@ -70,10 +70,6 @@ impl<const UID_LENGTH: usize> FindexInMemory<UID_LENGTH> {
     pub fn remove_location(&mut self, location: Location) {
         self.removed_locations.insert(location);
     }
-
-    pub fn set_check_progress_callback_next_keyword(&mut self, value: bool) {
-        self.check_progress_callback_next_keyword = value;
-    }
 }
 
 impl<const UID_LENGTH: usize> FindexCallbacks<ExampleError, UID_LENGTH>
@@ -84,19 +80,25 @@ impl<const UID_LENGTH: usize> FindexCallbacks<ExampleError, UID_LENGTH>
         results: &HashMap<Keyword, HashSet<IndexedValue>>,
     ) -> Result<bool, ExampleError> {
         if self.check_progress_callback_next_keyword {
-            let keyword = &Keyword::from("rob");
-            let results = results
-                .get(keyword)
-                .ok_or_else(|| {
-                    ExampleError(format!(
-                        "Cannot find keyword {keyword:?} in search results {results:?}"
-                    ))
-                })
-                .unwrap();
-            assert!(results.contains(&IndexedValue::NextKeyword(Keyword::from("robert"))));
+            let rob_keyword = Keyword::from("rob");
+            let robert_keyword = Keyword::from("robert");
+            if let Some(results) = results.get(&rob_keyword) {
+                assert!(results.contains(&IndexedValue::NextKeyword(Keyword::from("robert"))));
+            } else if let Some(results) = results.get(&robert_keyword) {
+                assert!(results.contains(&IndexedValue::Location(Location::from("robert"))));
+            } else {
+                return Err(ExampleError(
+                    "Cannot find keyword 'rob' nor 'robert' in search results".to_string(),
+                ));
+            }
         }
         // do not stop recursion.
         Ok(true)
+    }
+
+    async fn fetch_all_entry_table_uids(&self) -> Result<HashSet<Uid<UID_LENGTH>>, ExampleError> {
+        let uids = self.entry_table.keys().cloned().collect();
+        Ok(uids)
     }
 
     async fn fetch_entry_table(
@@ -187,6 +189,7 @@ impl<const UID_LENGTH: usize> FindexCallbacks<ExampleError, UID_LENGTH>
         Ok(self.removed_locations.iter().cloned().collect())
     }
 
+    #[cfg(feature = "live_compact")]
     fn filter_removed_locations(
         &self,
         locations: HashSet<Location>,
@@ -197,11 +200,7 @@ impl<const UID_LENGTH: usize> FindexCallbacks<ExampleError, UID_LENGTH>
             .collect())
     }
 
-    async fn fetch_all_entry_table_uids(&self) -> Result<HashSet<Uid<UID_LENGTH>>, ExampleError> {
-        let uids = self.entry_table.keys().cloned().collect();
-        Ok(uids)
-    }
-
+    #[cfg(feature = "live_compact")]
     async fn delete_chain(&mut self, uids: HashSet<Uid<UID_LENGTH>>) -> Result<(), ExampleError> {
         self.chain_table.retain(|uid, _| !uids.contains(uid));
         Ok(())

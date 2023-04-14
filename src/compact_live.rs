@@ -9,10 +9,12 @@ use cosmian_crypto_core::{
 };
 
 use crate::{
+    chain_table::KwiChainUids,
     entry_table::{EntryTable, EntryTableValue},
     structs::{BlockType, ChainData},
     CallbackError, EncryptedTable, Error, FindexCallbacks, FindexCompact, IndexedValue,
-    KeyingMaterial, Location, Uid, UpsertData, ENTRY_TABLE_KEY_DERIVATION_INFO,
+    KeyingMaterial, Location, Uid, UpsertData, CHAIN_TABLE_KEY_DERIVATION_INFO,
+    ENTRY_TABLE_KEY_DERIVATION_INFO,
 };
 
 /// [Euler's constant](https://wikipedia.org/wiki/Euler_constant).
@@ -166,7 +168,7 @@ pub trait FindexLiveCompact<
                 mixed_uids.push(uid);
             } else if tmp % n_noise_candidates < n_noise {
                 // Randomly select ~ `NOISE_RATIO * n_compact` noise UIDs.
-                noise_uids.insert(uid.clone());
+                noise_uids.insert(uid);
                 mixed_uids.push(uid);
             }
         }
@@ -196,19 +198,25 @@ pub trait FindexLiveCompact<
         let mut chains = ChainData::with_capacity(entry_table.len());
 
         // Unchain all Entry Table UIDs.
-        let kwi_chain_table_uids = entry_table.unchain::<
-            CHAIN_TABLE_WIDTH,
-            BLOCK_LENGTH,
-            KMAC_KEY_LENGTH,
-            DEM_KEY_LENGTH,
-            KmacKey,
-            DemScheme
-        >(entry_table.keys(), usize::MAX);
+        let kwi_chain_table_uids: KwiChainUids<UID_LENGTH, KWI_LENGTH> = entry_table.iter().map(|(_, value)| {
+            let k_uid = value.kwi.derive_kmac_key(CHAIN_TABLE_KEY_DERIVATION_INFO);
+            (
+                value.kwi.clone(),
+                value.unchain::<
+                        CHAIN_TABLE_WIDTH,
+                        BLOCK_LENGTH,
+                        KMAC_KEY_LENGTH,
+                        DEM_KEY_LENGTH,
+                        KmacKey,
+                        DemScheme
+                    >(&k_uid, usize::MAX)
+            )
+        }).collect();
 
         // Associate Entry Table UIDs to Chain Table UIDs.
         for (uid, v) in  entry_table.iter() {
             chains.chain_uids.insert(
-                uid.clone(),
+                *uid,
                 kwi_chain_table_uids
                 .get(&v.kwi)
                 .ok_or(Error::<CustomError>::CryptoError(format!(
@@ -222,7 +230,6 @@ pub trait FindexLiveCompact<
         let chain_values = self
             .fetch_chains(kwi_chain_table_uids)
             .await?;
-
 
         // Convert the blocks of the given chains into indexed values.
         for (entry_table_uid, entry_table_value) in entry_table.into_iter() {
@@ -284,7 +291,7 @@ pub trait FindexLiveCompact<
             )?;
             if noise.contains(uid) {
                 // Noise entries are simply re-encrypted.
-                noisy_entry_table.insert(uid.clone(), entry_table_value);
+                noisy_entry_table.insert(*uid, entry_table_value);
             } else {
                 // Compact chains associated to the other entries.
                 let chain = noisy_chain_values.get(uid).ok_or(Error::<CustomError>::CryptoError("No matching UID in chains.".to_string()))?;
@@ -309,8 +316,8 @@ pub trait FindexLiveCompact<
                         }
                     };
                 }
-                compacted_chains.insert(uid.clone(), (entry_table_value.keyword_hash, compacted_chain));
-                cache.insert(entry_table_value.keyword_hash, uid.clone());
+                compacted_chains.insert(*uid, (entry_table_value.keyword_hash, compacted_chain));
+                cache.insert(entry_table_value.keyword_hash, *uid);
             }
         }
 
@@ -401,7 +408,7 @@ pub trait FindexLiveCompact<
             let mut old_chains_to_remove = Vec::with_capacity(chains.chain_uids.len());
             for uid in chains.chain_uids.keys() {
                 if !encrypted_entry_table.contains_key(uid) && !noise_uids.contains(uid) {
-                    old_chains_to_remove.push(uid.clone());
+                    old_chains_to_remove.push(*uid);
                 }
             }
             for uid in old_chains_to_remove {

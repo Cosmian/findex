@@ -52,9 +52,6 @@ impl Keyword {
         hasher.update(self);
         let mut bytes = [0; Self::HASH_LENGTH];
         hasher.finalize(&mut bytes);
-        for (i, byte) in bytes.into_iter().enumerate() {
-            bytes[i] = byte;
-        }
         bytes
     }
 }
@@ -435,7 +432,7 @@ impl Serializable for IndexedValue {
 
 /// Index tables UID type.
 #[must_use]
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Uid<const LENGTH: usize>([u8; LENGTH]);
 
 impl_byte_array!(Uid);
@@ -574,7 +571,7 @@ impl<const UID_LENGTH: usize> UpsertData<UID_LENGTH> {
             .iter()
             .filter_map(|(uid, old_value)| {
                 if new_table.get(uid).is_none() {
-                    Some((uid.clone(), (Some(old_value.clone()), Vec::new())))
+                    Some((*uid, (Some(old_value.clone()), Vec::new())))
                 } else {
                     None
                 }
