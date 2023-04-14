@@ -648,7 +648,7 @@ async fn test_graph_compacting() {
             .search(
                 &master_key,
                 &label,
-                &HashSet::from_iter(vec![rob_keyword.clone()]),
+                &HashSet::from_iter([rob_keyword.clone()]),
                 MAX_DEPTH,
                 MAX_UID_PER_CHAIN,
             )
