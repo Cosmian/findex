@@ -386,7 +386,7 @@ pub trait FindexLiveCompact<
             // Try upserting the new Entry Table.
             let upsert_data = UpsertData::new(
                 &encrypted_entry_table,
-                noisy_entry_table.encrypt::<DEM_KEY_LENGTH, DemScheme>(k_value, rng)?,
+                noisy_entry_table.encrypt::<DEM_KEY_LENGTH, DemScheme>(rng, k_value, )?,
             );
 
             // Delete unused chains (at least one chain value per entry line):

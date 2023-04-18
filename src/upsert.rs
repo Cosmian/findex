@@ -46,17 +46,17 @@ pub trait FindexUpsert<
     ///
     /// # Parameters
     ///
-    /// - `additions`   : keywords to index values for
-    /// - `deletions`   : keywords to desindex values for
     /// - `master_key`  : Findex master key
     /// - `label`       : additional public information used for hashing Entry
     ///   Table UIDs
+    /// - `additions`   : keywords to index values for
+    /// - `deletions`   : keywords to desindex values for
     async fn upsert(
         &mut self,
-        additions: HashMap<IndexedValue, HashSet<Keyword>>,
-        deletions: HashMap<IndexedValue, HashSet<Keyword>>,
         master_key: &KeyingMaterial<MASTER_KEY_LENGTH>,
         label: &Label,
+        additions: HashMap<IndexedValue, HashSet<Keyword>>,
+        deletions: HashMap<IndexedValue, HashSet<Keyword>>,
     ) -> Result<(), Error<CustomError>> {
         check_parameter_constraints::<CHAIN_TABLE_WIDTH, BLOCK_LENGTH>();
 
@@ -128,7 +128,7 @@ pub trait FindexUpsert<
             encrypted_entry_table = self
                 .write_indexes(
                     encrypted_entry_table,
-                    entry_table.encrypt::<DEM_KEY_LENGTH, DemScheme>(&k_value, &mut rng)?,
+                    entry_table.encrypt::<DEM_KEY_LENGTH, DemScheme>(&mut rng, &k_value)?,
                     chain_table_additions,
                 )
                 .await?;

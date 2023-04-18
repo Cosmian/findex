@@ -59,10 +59,10 @@ fn main() {
 
     for _ in 0..100000 {
         block_on(findex.upsert(
-            indexed_value_to_keywords.clone(),
-            HashMap::new(),
             &master_key,
             &label,
+            indexed_value_to_keywords.clone(),
+            HashMap::new(),
         ))
         .unwrap();
     }
