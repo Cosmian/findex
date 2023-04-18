@@ -92,12 +92,12 @@ impl<const TABLE_WIDTH: usize, const BLOCK_LENGTH: usize>
 
     /// Encrypts the Chain Table value using the given DEM key.
     ///
-    /// - `kwi_value`   : DEM key used to encrypt the value
     /// - `rng`         : random number generator
+    /// - `kwi_value`   : DEM key used to encrypt the value
     pub fn encrypt<const KEY_LENGTH: usize, DEM: Dem<KEY_LENGTH>>(
         &self,
-        kwi_value: &DEM::Key,
         rng: &mut impl CryptoRngCore,
+        kwi_value: &DEM::Key,
     ) -> Result<Vec<u8>, Error> {
         let bytes = self.try_to_bytes()?;
         DEM::encrypt(rng, kwi_value, &bytes, None).map_err(Error::from)
@@ -371,10 +371,10 @@ mod tests {
         assert_eq!(chain_table_value2.length, 1);
 
         let c1 = chain_table_value1
-            .encrypt::<{ Aes256GcmCrypto::KEY_LENGTH }, Aes256GcmCrypto>(&kwi_value, &mut rng)
+            .encrypt::<{ Aes256GcmCrypto::KEY_LENGTH }, Aes256GcmCrypto>(&mut rng, &kwi_value)
             .unwrap();
         let c2 = chain_table_value2
-            .encrypt::<{ Aes256GcmCrypto::KEY_LENGTH }, Aes256GcmCrypto>(&kwi_value, &mut rng)
+            .encrypt::<{ Aes256GcmCrypto::KEY_LENGTH }, Aes256GcmCrypto>(&mut rng, &kwi_value)
             .unwrap();
 
         let res1 = ChainTableValue::decrypt::<{ Aes256GcmCrypto::KEY_LENGTH }, Aes256GcmCrypto>(

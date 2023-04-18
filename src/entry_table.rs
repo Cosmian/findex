@@ -109,9 +109,9 @@ impl<const UID_LENGTH: usize, const KWI_LENGTH: usize> EntryTableValue<UID_LENGT
         KmacKey: SymKey<KMAC_KEY_LENGTH>,
     >(
         &mut self,
+        kwi_uid: &KmacKey,
         insertion_type: BlockType,
         indexed_value: &IndexedValue,
-        kwi_uid: &KmacKey,
         chain_table: &mut ChainTable<UID_LENGTH, CHAIN_TABLE_WIDTH, BLOCK_LENGTH>,
     ) -> Result<(), Error> {
         // Blocks to add to the Chain Table.
@@ -155,12 +155,12 @@ impl<const UID_LENGTH: usize, const KWI_LENGTH: usize> EntryTableValue<UID_LENGT
 
     /// Encrypts the `EntryTableValue` using the given `𝐾_value`.
     ///
-    /// - `k_value` : `K_value`
     /// - `rng`     : random number generator
+    /// - `k_value` : `K_value`
     pub(crate) fn encrypt<const DEM_KEY_LENGTH: usize, DemScheme: Dem<DEM_KEY_LENGTH>>(
         &self,
-        k_value: &DemScheme::Key,
         rng: &mut impl CryptoRngCore,
+        k_value: &DemScheme::Key,
     ) -> Result<Vec<u8>, Error> {
         let mut ser = Serializer::new();
         if let Some(chain_table_uid) = &self.chain_table_uid {
@@ -355,21 +355,16 @@ impl<const UID_LENGTH: usize, const KWI_LENGTH: usize> EntryTable<UID_LENGTH, KW
 
     /// Encrypts the Entry Table using the given `K_value`.
     ///
-    /// - `k_value` : DEM key
     /// - `rng`     : random number generator
+    /// - `k_value` : DEM key
     pub fn encrypt<const DEM_KEY_LENGTH: usize, DemScheme: Dem<DEM_KEY_LENGTH>>(
         &self,
-        k_value: &DemScheme::Key,
         rng: &mut impl CryptoRngCore,
+        k_value: &DemScheme::Key,
     ) -> Result<EncryptedTable<UID_LENGTH>, Error> {
         let mut encrypted_entry_table = EncryptedTable::with_capacity(self.len());
         for (k, v) in self.iter() {
-            encrypted_entry_table.insert(
-                *k,
-                EntryTableValue::<UID_LENGTH, KWI_LENGTH>::encrypt::<DEM_KEY_LENGTH, DemScheme>(
-                    v, k_value, rng,
-                )?,
-            );
+            encrypted_entry_table.insert(*k, v.encrypt::<DEM_KEY_LENGTH, DemScheme>(rng, k_value)?);
         }
         Ok(encrypted_entry_table)
     }
@@ -445,7 +440,7 @@ impl<const UID_LENGTH: usize, const KWI_LENGTH: usize> EntryTable<UID_LENGTH, KW
                     BLOCK_LENGTH,
                     KMAC_KEY_LENGTH,
                     KmacKey,
-                >(*block_type, indexed_value, &kwi_uid, &mut new_chain_table_entries)?;
+                >(&kwi_uid, *block_type, indexed_value, &mut new_chain_table_entries)?;
             }
 
             let encrypted_chain_table_additions = new_chain_table_entries
@@ -453,7 +448,7 @@ impl<const UID_LENGTH: usize, const KWI_LENGTH: usize> EntryTable<UID_LENGTH, KW
                 .map(|(uid, value)| -> Result<_, _> {
                     Ok((
                         uid,
-                        value.encrypt::<DEM_KEY_LENGTH, DemScheme>(&kwi_value, rng)?,
+                        value.encrypt::<DEM_KEY_LENGTH, DemScheme>(rng, &kwi_value)?,
                     ))
                 })
                 .collect::<Result<_, Error>>()?;
@@ -494,7 +489,7 @@ mod tests {
         >(&mut rng, keyword.hash());
 
         let c = entry_table_value
-            .encrypt::<{ Aes256GcmCrypto::KEY_LENGTH }, Aes256GcmCrypto>(&k_value, &mut rng)
+            .encrypt::<{ Aes256GcmCrypto::KEY_LENGTH }, Aes256GcmCrypto>(&mut rng, &k_value)
             .unwrap();
 
         let res = EntryTableValue::decrypt::<{ Aes256GcmCrypto::KEY_LENGTH }, Aes256GcmCrypto>(
@@ -513,7 +508,7 @@ mod tests {
             );
 
         let c = entry_table_value
-            .encrypt::<{ Aes256GcmCrypto::KEY_LENGTH }, Aes256GcmCrypto>(&k_value, &mut rng)
+            .encrypt::<{ Aes256GcmCrypto::KEY_LENGTH }, Aes256GcmCrypto>(&mut rng, &k_value)
             .unwrap();
 
         let res = EntryTableValue::decrypt::<{ Aes256GcmCrypto::KEY_LENGTH }, Aes256GcmCrypto>(
@@ -546,9 +541,9 @@ mod tests {
 
             entry_table_value
                 .upsert_indexed_value::<CHAIN_TABLE_WIDTH, BLOCK_LENGTH, KMAC_KEY_LENGTH, KmacKey>(
+                    &kwi_uid,
                     BlockType::Addition,
                     &indexed_value,
-                    &kwi_uid,
                     &mut chain_table,
                 )
                 .unwrap();
@@ -589,9 +584,9 @@ mod tests {
             let indexed_value = IndexedValue::from(location);
             entry_table_value
                 .upsert_indexed_value::<CHAIN_TABLE_WIDTH, BLOCK_LENGTH, KMAC_KEY_LENGTH, KmacKey>(
+                    &kwi_uid,
                     BlockType::Deletion,
                     &indexed_value,
-                    &kwi_uid,
                     &mut chain_table,
                 )
                 .unwrap();
@@ -646,9 +641,9 @@ mod tests {
         let mut chain_table = ChainTable::default();
         entry_table_value
             .upsert_indexed_value::<CHAIN_TABLE_WIDTH, BLOCK_LENGTH, KMAC_KEY_LENGTH, KmacKey>(
+                &kwi_uid,
                 BlockType::Addition,
                 &long_location,
-                &kwi_uid,
                 &mut chain_table,
             )
             .unwrap();

@@ -57,23 +57,23 @@ pub trait FindexCompact<
     /// derived for the chain and values are re-encrypted using a DEM key
     /// derived from the new keying material.
     ///
-    /// - `num_reindexing_before_full_set`  : average number of calls to compact
-    ///   needed to recompute all of the Chain Table.
     /// - `master_key`                      : master key used to generate the
     ///   current index
     /// - `new_master_key`                  : master key used to generate the
     ///   new index
     /// - `label`                           : label used to generate the new
     ///   index
+    /// - `num_reindexing_before_full_set`  : average number of calls to compact
+    ///   needed to recompute all of the Chain Table.
     ///
     /// **WARNING**: the compact operation *cannot* be done concurrently with
     /// upsert operations. This could result in corrupted indexes.
     async fn compact(
         &mut self,
-        num_reindexing_before_full_set: u32,
         master_key: &KeyingMaterial<MASTER_KEY_LENGTH>,
         new_master_key: &KeyingMaterial<MASTER_KEY_LENGTH>,
         label: &Label,
+        num_reindexing_before_full_set: u32,
     ) -> Result<(), Error<CustomError>> {
         check_parameter_constraints::<CHAIN_TABLE_WIDTH, BLOCK_LENGTH>();
         if num_reindexing_before_full_set == 0 {
@@ -237,9 +237,9 @@ pub trait FindexCompact<
             // Upsert each remaining location in the Chain Table.
             for remaining_location in remaining_indexed_values_for_this_keyword {
                 new_entry_table_value.upsert_indexed_value::<CHAIN_TABLE_WIDTH, BLOCK_LENGTH, KMAC_KEY_LENGTH, KmacKey>(
+                    &kwi_uid,
                     BlockType::Addition,
                     &remaining_location,
-                    &kwi_uid,
                     &mut new_chains,
                 )?;
             }
@@ -249,7 +249,7 @@ pub trait FindexCompact<
                 .map(|(uid, value)| -> Result<_, _> {
                     Ok((
                         uid,
-                        value.encrypt::<DEM_KEY_LENGTH, DemScheme>(&kwi_value, &mut rng)?,
+                        value.encrypt::<DEM_KEY_LENGTH, DemScheme>(&mut rng, &kwi_value)?,
                     ))
                 })
                 .collect::<Result<EncryptedTable<UID_LENGTH>, Error<CustomError>>>()?;
@@ -263,7 +263,7 @@ pub trait FindexCompact<
 
         self.update_lines(
             chain_table_uids_to_remove,
-            entry_table.encrypt::<DEM_KEY_LENGTH, DemScheme>(&new_k_value, &mut rng)?,
+            entry_table.encrypt::<DEM_KEY_LENGTH, DemScheme>(&mut rng, &new_k_value)?,
             chain_table_adds,
         )?;
 

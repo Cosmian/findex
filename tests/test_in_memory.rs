@@ -111,10 +111,10 @@ async fn test_progress_callack() -> Result<(), Error<ExampleError>> {
     let mut findex = FindexInMemory::default();
     findex
         .upsert(
-            indexed_value_to_keywords,
-            HashMap::new(),
             &master_key,
             &label,
+            indexed_value_to_keywords,
+            HashMap::new(),
         )
         .await?;
 
@@ -214,10 +214,10 @@ async fn test_findex() -> Result<(), Error<ExampleError>> {
     let mut findex = FindexInMemory::default();
     findex
         .upsert(
-            indexed_value_to_keywords,
-            HashMap::new(),
             &master_key,
             &label,
+            indexed_value_to_keywords,
+            HashMap::new(),
         )
         .await?;
 
@@ -300,10 +300,10 @@ async fn test_findex() -> Result<(), Error<ExampleError>> {
     );
     findex
         .upsert(
-            indexed_value_to_keywords,
-            HashMap::new(),
             &master_key,
             &label,
+            indexed_value_to_keywords,
+            HashMap::new(),
         )
         .await?;
 
@@ -367,7 +367,7 @@ async fn test_findex() -> Result<(), Error<ExampleError>> {
         new_label = Label::random(&mut rng);
         let new_master_key = KeyingMaterial::new(&mut rng);
         findex
-            .compact(i, &master_key, &new_master_key, &new_label)
+            .compact(&master_key, &new_master_key, &new_label, i)
             .await?;
         master_key = new_master_key;
 
@@ -390,7 +390,7 @@ async fn test_findex() -> Result<(), Error<ExampleError>> {
 
     let new_master_key = KeyingMaterial::new(&mut rng);
     findex
-        .compact(1, &master_key, &new_master_key, &new_label)
+        .compact(&master_key, &new_master_key, &new_label, 1)
         .await?;
     master_key = new_master_key;
 
@@ -437,7 +437,7 @@ async fn test_findex() -> Result<(), Error<ExampleError>> {
         new_label = Label::random(&mut rng);
         let new_master_key = KeyingMaterial::new(&mut rng);
         findex
-            .compact(i, &master_key, &new_master_key, &new_label)
+            .compact(&master_key, &new_master_key, &new_label, i)
             .await?;
         master_key = new_master_key;
     }
@@ -471,7 +471,7 @@ async fn test_findex() -> Result<(), Error<ExampleError>> {
         new_label = Label::random(&mut rng);
         let new_master_key = KeyingMaterial::new(&mut rng);
         findex
-            .compact(i, &master_key, &new_master_key, &new_label)
+            .compact(&master_key, &new_master_key, &new_label, i)
             .await?;
         master_key = new_master_key;
 
@@ -496,7 +496,7 @@ async fn test_findex() -> Result<(), Error<ExampleError>> {
         HashSet::from_iter([doe_keyword.clone()]),
     );
     findex
-        .upsert(HashMap::new(), deletions, &master_key, &new_label)
+        .upsert(&master_key, &new_label, HashMap::new(), deletions)
         .await?;
 
     // Assert John Doe cannot be found by searching for Doe.
@@ -566,7 +566,7 @@ async fn test_first_names() -> Result<(), Error<ExampleError>> {
         }
 
         graph_findex
-            .upsert(map, HashMap::new(), &master_key, &label)
+            .upsert(&master_key, &label, map, HashMap::new())
             .await?;
 
         // naive Findex
@@ -591,7 +591,7 @@ async fn test_first_names() -> Result<(), Error<ExampleError>> {
             map_naive.insert(iv, keywords.clone());
         }
         naive_findex
-            .upsert(map_naive, HashMap::new(), &master_key, &label)
+            .upsert(&master_key, &label, map_naive, HashMap::new())
             .await?;
 
         if first_names_number % 1000 == 0 {
@@ -692,10 +692,10 @@ async fn test_graph_compacting() {
     let mut label = Label::random(&mut rng);
     findex
         .upsert(
-            indexed_value_to_keywords,
-            HashMap::new(),
             &master_key,
             &label,
+            indexed_value_to_keywords,
+            HashMap::new(),
         )
         .await
         .unwrap();
@@ -732,7 +732,7 @@ async fn test_graph_compacting() {
         label = Label::random(&mut rng);
         let new_master_key = KeyingMaterial::new(&mut rng);
         findex
-            .compact(i, &master_key, &new_master_key, &label)
+            .compact(&master_key, &new_master_key, &label, i)
             .await
             .unwrap();
         master_key = new_master_key;
@@ -782,10 +782,10 @@ async fn test_live_compacting() {
         // Add some keywords.
         findex
             .upsert(
-                indexed_value_to_keywords.clone(),
-                HashMap::new(),
                 &master_key,
                 &label,
+                indexed_value_to_keywords.clone(),
+                HashMap::new(),
             )
             .await
             .unwrap();
@@ -793,10 +793,10 @@ async fn test_live_compacting() {
         // Remove them.
         findex
             .upsert(
-                HashMap::new(),
-                indexed_value_to_keywords.clone(),
                 &master_key,
                 &label,
+                HashMap::new(),
+                indexed_value_to_keywords.clone(),
             )
             .await
             .unwrap();
@@ -805,10 +805,10 @@ async fn test_live_compacting() {
     // Add some keywords.
     findex
         .upsert(
-            indexed_value_to_keywords.clone(),
-            HashMap::new(),
             &master_key,
             &label,
+            indexed_value_to_keywords.clone(),
+            HashMap::new(),
         )
         .await
         .unwrap();
@@ -855,10 +855,10 @@ async fn test_live_compacting() {
         // Add some keywords.
         findex
             .upsert(
-                indexed_value_to_keywords.clone(),
-                HashMap::new(),
                 &master_key,
                 &label,
+                indexed_value_to_keywords.clone(),
+                HashMap::new(),
             )
             .await
             .unwrap();
@@ -989,7 +989,7 @@ async fn test_search_cyclic_graph() {
 
     // Upsert the graph.
     findex
-        .upsert(cyclic_graph, HashMap::new(), &master_key, &label)
+        .upsert(&master_key, &label, cyclic_graph, HashMap::new())
         .await
         .unwrap();
 

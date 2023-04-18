@@ -49,7 +49,7 @@ fn bench_search(c: &mut Criterion) {
     // Prepare indexes to be search
     //
     let mut findex = FindexInMemory::default();
-    block_on(findex.upsert(locations_and_words, HashMap::new(), &master_key, &label)).expect("msg");
+    block_on(findex.upsert(&master_key, &label, locations_and_words, HashMap::new())).expect("msg");
 
     println!("Entry Table length: {}", findex.entry_table_len());
     println!("Entry Table size: {}", findex.entry_table_size());
@@ -85,10 +85,10 @@ fn bench_upsert(c: &mut Criterion) {
         group.bench_function(format!("Upserting {n_keywords} keyword(s)"), |b| {
             b.iter(|| {
                 block_on(FindexInMemory::default().upsert(
-                    locations_and_words.clone(),
-                    HashMap::new(),
                     &master_key,
                     &label,
+                    locations_and_words.clone(),
+                    HashMap::new(),
                 ))
                 .expect("upsert failed");
             });
