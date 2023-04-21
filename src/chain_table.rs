@@ -242,13 +242,13 @@ impl<const UID_LENGTH: usize, const TABLE_WIDTH: usize, const BLOCK_LENGTH: usiz
 pub struct KwiChainUids<const UID_LENGTH: usize, const KWI_LENGTH: usize>(
     // Use a vector not to shuffle the chain. This is important because indexed
     // values can be divided in blocks that span several lines in the chain.
-    HashMap<KeyingMaterial<KWI_LENGTH>, Vec<Uid<UID_LENGTH>>>,
+    HashMap<(Uid<UID_LENGTH>, KeyingMaterial<KWI_LENGTH>), Vec<Uid<UID_LENGTH>>>,
 );
 
 impl<const UID_LENGTH: usize, const KEY_LENGTH: usize> Deref
     for KwiChainUids<UID_LENGTH, KEY_LENGTH>
 {
-    type Target = HashMap<KeyingMaterial<KEY_LENGTH>, Vec<Uid<UID_LENGTH>>>;
+    type Target = HashMap<(Uid<UID_LENGTH>, KeyingMaterial<KEY_LENGTH>), Vec<Uid<UID_LENGTH>>>;
 
     fn deref(&self) -> &Self::Target {
         &self.0
@@ -267,7 +267,10 @@ impl<const KEY_LENGTH: usize, const UID_LENGTH: usize> IntoIterator
     for KwiChainUids<UID_LENGTH, KEY_LENGTH>
 {
     type IntoIter = <<Self as Deref>::Target as IntoIterator>::IntoIter;
-    type Item = (KeyingMaterial<KEY_LENGTH>, Vec<Uid<UID_LENGTH>>);
+    type Item = (
+        (Uid<UID_LENGTH>, KeyingMaterial<KEY_LENGTH>),
+        Vec<Uid<UID_LENGTH>>,
+    );
 
     fn into_iter(self) -> Self::IntoIter {
         self.0.into_iter()
@@ -275,10 +278,19 @@ impl<const KEY_LENGTH: usize, const UID_LENGTH: usize> IntoIterator
 }
 
 impl<const KEY_LENGTH: usize, const UID_LENGTH: usize>
-    FromIterator<(KeyingMaterial<KEY_LENGTH>, Vec<Uid<UID_LENGTH>>)>
-    for KwiChainUids<UID_LENGTH, KEY_LENGTH>
+    FromIterator<(
+        (Uid<UID_LENGTH>, KeyingMaterial<KEY_LENGTH>),
+        Vec<Uid<UID_LENGTH>>,
+    )> for KwiChainUids<UID_LENGTH, KEY_LENGTH>
 {
-    fn from_iter<T: IntoIterator<Item = (KeyingMaterial<KEY_LENGTH>, Vec<Uid<UID_LENGTH>>)>>(
+    fn from_iter<
+        T: IntoIterator<
+            Item = (
+                (Uid<UID_LENGTH>, KeyingMaterial<KEY_LENGTH>),
+                Vec<Uid<UID_LENGTH>>,
+            ),
+        >,
+    >(
         iter: T,
     ) -> Self {
         Self(iter.into_iter().collect())

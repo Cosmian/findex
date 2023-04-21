@@ -40,11 +40,8 @@ pub trait FindexSearch<
         CustomError,
     >
 {
-    /// Searches for a set of keywords, returning the corresponding indexed
-    /// values.
-    ///
-    /// *Note*: An `IndexedValue` can be either a `Location` or another
-    /// `Keyword`.
+    /// Searches for a set of `Keyword`s, returning the corresponding
+    /// `IndexedValue`s.
     ///
     /// # Parameters
     ///
@@ -80,7 +77,7 @@ pub trait FindexSearch<
             })
             .collect::<HashMap<_, _>>();
 
-        // Query the Entry Table for these UIDs.
+        // Fetch the Entry Table for these UIDs.
         let entry_table = EntryTable::decrypt::<DEM_KEY_LENGTH, DemScheme>(
             k_value,
             &self
@@ -90,14 +87,7 @@ pub trait FindexSearch<
 
         // Unchain all Entry Table values.
         let mut kwi_chain_table_uids = KwiChainUids::with_capacity(entry_table.len());
-        let mut kwi_to_keyword = HashMap::with_capacity(entry_table.len());
-        for (uid, value) in entry_table.into_iter() {
-            let keyword = entry_table_uid_map.remove(&uid).ok_or_else(|| {
-                Error::<CustomError>::CryptoError(format!(
-                    "Could not find keyword associated to UID {uid:?}."
-                ))
-            })?;
-            kwi_to_keyword.insert(value.kwi.clone(), keyword);
+        for (uid, value) in entry_table {
             let k_uid = value.kwi.derive_kmac_key(CHAIN_TABLE_KEY_DERIVATION_INFO);
             let chain = value.unchain::<
                             CHAIN_TABLE_WIDTH,
@@ -107,22 +97,19 @@ pub trait FindexSearch<
                             KmacKey,
                             DemScheme
                         >(&k_uid, max_uid_per_chain);
-            kwi_chain_table_uids.insert(value.kwi, chain);
+            kwi_chain_table_uids.insert((uid, value.kwi), chain);
         }
 
         // Fetch the chain values.
-        let chains = self.fetch_chains(kwi_chain_table_uids).await?;
+        let chains = self.fetch_chain_values(kwi_chain_table_uids).await?;
 
-        // Convert the blocks of the given chains into indexed values.
+        // Associate `IndexedValue`s to their `Keyword`s.
         let mut res = HashMap::with_capacity(chains.len());
-        for (kwi, chain) in &chains {
-            let keyword = kwi_to_keyword.remove(kwi).ok_or_else(|| {
+        for (uid, chain) in chains {
+            let keyword = entry_table_uid_map.remove(&uid).ok_or_else(|| {
                 Error::<CustomError>::CryptoError("Missing Kwi in reversed map.".to_string())
             })?;
-            let blocks = chain
-                .iter()
-                .flat_map(|(_, chain_table_value)| chain_table_value.as_blocks());
-            res.insert(keyword.clone(), IndexedValue::from_blocks(blocks)?);
+            res.insert(keyword.clone(), chain);
         }
 
         Ok(res)

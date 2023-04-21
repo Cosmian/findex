@@ -653,7 +653,7 @@ mod tests {
             .kwi
             .derive_kmac_key(CHAIN_TABLE_KEY_DERIVATION_INFO);
 
-        kwi_chain_table_uids.insert(entry_table_value.kwi.clone(),
+        kwi_chain_table_uids.insert(([0; 32].into(), entry_table_value.kwi.clone()),
             entry_table_value.unchain::<
                     CHAIN_TABLE_WIDTH,
                     BLOCK_LENGTH,
@@ -668,7 +668,7 @@ mod tests {
         assert_eq!(kwi_chain_table_uids.len(), 1);
 
         // Recover the indexed values from the chain.
-        let blocks = kwi_chain_table_uids[&entry_table_value.kwi]
+        let blocks = kwi_chain_table_uids[&(Uid::from([0; 32]), entry_table_value.kwi)]
             .iter()
             .filter_map(|uid| chain_table.get(uid))
             .flat_map(|chain_table_value| chain_table_value.as_blocks());

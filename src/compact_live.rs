@@ -192,16 +192,15 @@ pub trait FindexLiveCompact<
         ChainData<UID_LENGTH>,
         Error<CustomError>,
     > {
-        let entry_table: EntryTable<UID_LENGTH, KWI_LENGTH> =
-            EntryTable::decrypt::<DEM_KEY_LENGTH, DemScheme>(k_value, encrypted_entry_table)?;
+        let entry_table = EntryTable::decrypt::<DEM_KEY_LENGTH, DemScheme>(k_value, encrypted_entry_table)?;
 
         let mut chains = ChainData::with_capacity(entry_table.len());
 
-        // Unchain all Entry Table UIDs.
-        let kwi_chain_table_uids: KwiChainUids<UID_LENGTH, KWI_LENGTH> = entry_table.iter().map(|(_, value)| {
+        // Unchain all Entry Table values.
+        let kwi_chain_table_uids = entry_table.iter().map(|(uid, value)| {
             let k_uid = value.kwi.derive_kmac_key(CHAIN_TABLE_KEY_DERIVATION_INFO);
             (
-                value.kwi.clone(),
+                (*uid, value.kwi.clone()),
                 value.unchain::<
                         CHAIN_TABLE_WIDTH,
                         BLOCK_LENGTH,
@@ -211,14 +210,14 @@ pub trait FindexLiveCompact<
                         DemScheme
                     >(&k_uid, usize::MAX)
             )
-        }).collect();
+        }).collect::<KwiChainUids<UID_LENGTH, KWI_LENGTH>>();
 
         // Associate Entry Table UIDs to Chain Table UIDs.
-        for (uid, v) in  entry_table.iter() {
+        for (uid, v) in  entry_table {
             chains.chain_uids.insert(
-                *uid,
+                uid,
                 kwi_chain_table_uids
-                .get(&v.kwi)
+                .get(&(uid, v.kwi.clone()))
                 .ok_or(Error::<CustomError>::CryptoError(format!(
                     "no matching Kwi in `kwi_chain_table_uids` ({:?})",
                     v.kwi
@@ -226,26 +225,9 @@ pub trait FindexLiveCompact<
             );
         }
 
-        // Fetch the Chain Table values for the chain UIDs.
-        let chain_values = self
-            .fetch_chains(kwi_chain_table_uids)
+        chains.chain_values = self
+            .fetch_chain_values(kwi_chain_table_uids)
             .await?;
-
-        // Convert the blocks of the given chains into indexed values.
-        for (entry_table_uid, entry_table_value) in entry_table.into_iter() {
-            let chain =
-                chain_values
-                    .get(&entry_table_value.kwi)
-                    .ok_or(Error::<CustomError>::CryptoError(format!(
-                        "no chain found for the `Kwi`: {:?}",
-                        entry_table_value.kwi
-                    )))?;
-            let blocks = chain
-                .iter()
-                .flat_map(|(_, chain_table_value)| chain_table_value.as_blocks());
-            chains.chain_values
-                .insert(entry_table_uid, IndexedValue::from_blocks(blocks)?);
-        }
 
         Ok(chains)
     }

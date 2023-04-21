@@ -1,7 +1,5 @@
 //! This module defines the `FindexCompact` trait.
 
-use std::collections::HashMap;
-
 use cosmian_crypto_core::{
     reexport::rand_core::SeedableRng,
     symmetric_crypto::{Dem, SymKey},
@@ -137,7 +135,7 @@ pub trait FindexCompact<
                             KmacKey,
                             DemScheme
                         >(&k_uid, usize::MAX);
-                    Some((value.kwi.clone(), chain))
+                    Some(((*uid, value.kwi.clone()), chain))
                 } else {
                     None
                 }
@@ -145,30 +143,17 @@ pub trait FindexCompact<
             .collect();
 
         //
+        // Remove all reindexed Chain Table items. Chains are recomputed entirely.
+        //
+        let chain_table_uids_to_remove = kwi_chain_table_uids.values().flatten().cloned().collect();
+
+        //
         // Batch fetch chains from the Chain Table. It's better for performances and
         // prevents the database. There is no way for the database to know which Entry
         // Table lines are linked to the requested UIDs since the Entry Table was fetch
         // entirely and a random portion of it is being compacted.
         //
-        let chains_to_reindex = self.fetch_chains(kwi_chain_table_uids).await?;
-
-        //
-        // Remove all reindexed Chain Table items. Chains are recomputed entirely.
-        //
-        let chain_table_uids_to_remove = chains_to_reindex
-            .values()
-            .flat_map(|chain| chain.iter().map(|(k, _)| k))
-            .cloned()
-            .collect();
-
-        // Get the values stored in the reindexed chains.
-        let mut reindexed_chain_values = HashMap::with_capacity(chains_to_reindex.len());
-        for (kwi, chain) in &chains_to_reindex {
-            let blocks = chain
-                .iter()
-                .flat_map(|(_, chain_value)| chain_value.as_blocks());
-            reindexed_chain_values.insert(kwi.clone(), IndexedValue::from_blocks(blocks)?);
-        }
+        let chains_to_reindex = self.fetch_chain_values(kwi_chain_table_uids).await?;
 
         //
         // Call `list_removed_locations` for all words in one pass instead of
@@ -176,7 +161,7 @@ pub trait FindexCompact<
         // the database the size of the chains for each keywords.
         //
         let removed_locations = self.list_removed_locations(
-            reindexed_chain_values
+            chains_to_reindex
                 .values()
                 .flat_map(|chain| chain.iter().filter_map(IndexedValue::get_location))
                 .cloned()
@@ -191,9 +176,8 @@ pub trait FindexCompact<
             })?;
 
             // Select all values indexed by this keyword.
-            let indexed_values_for_this_keyword = reindexed_chain_values
-                .get(&entry_table_value.kwi)
-                .ok_or_else(|| {
+            let indexed_values_for_this_keyword =
+                chains_to_reindex.get(&entry_table_uid).ok_or_else(|| {
                     Error::<CustomError>::CryptoError(format!(
                         "Unknown kwi: {:?}",
                         &entry_table_value.kwi

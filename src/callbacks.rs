@@ -4,8 +4,8 @@ use cosmian_crypto_core::symmetric_crypto::Dem;
 
 use crate::{
     chain_table::{ChainTableValue, KwiChainUids},
-    CallbackError, EncryptedTable, Error, IndexedValue, KeyingMaterial, Keyword, Location, Uid,
-    UpsertData, CHAIN_TABLE_KEY_DERIVATION_INFO,
+    CallbackError, EncryptedTable, Error, IndexedValue, Keyword, Location, Uid, UpsertData,
+    CHAIN_TABLE_KEY_DERIVATION_INFO,
 };
 
 /// Trait implementing all callbacks needed by Findex.
@@ -192,49 +192,41 @@ pub trait FetchChains<
     /// # Parameters
     ///
     /// - `kwi_chain_table_uids`    : Maps `Kwi`s to sets of Chain Table UIDs
-    async fn fetch_chains(
+    async fn fetch_chain_values(
         &self,
         kwi_chain_table_uids: KwiChainUids<UID_LENGTH, KWI_LENGTH>,
-    ) -> Result<
-        HashMap<
-            KeyingMaterial<KWI_LENGTH>,
-            Vec<(
-                Uid<UID_LENGTH>,
-                ChainTableValue<CHAIN_TABLE_WIDTH, BLOCK_LENGTH>,
-            )>,
-        >,
-        Error<CustomError>,
-    > {
+    ) -> Result<HashMap<Uid<UID_LENGTH>, HashSet<IndexedValue>>, Error<CustomError>> {
         // Collect to a `HashSet` to mix UIDs between chains.
         let chain_table_uids = kwi_chain_table_uids.values().flatten().cloned().collect();
 
         let mut encrypted_items = self.fetch_chain_table(chain_table_uids).await?;
 
         let mut res = HashMap::with_capacity(kwi_chain_table_uids.len());
-        for (kwi, chain_table_uids) in kwi_chain_table_uids.into_iter() {
+        for ((entry_table_uid, kwi), chain_table_uids) in kwi_chain_table_uids.into_iter() {
             let kwi_value = kwi.derive_dem_key(CHAIN_TABLE_KEY_DERIVATION_INFO);
 
             // Use a vector not to shuffle the chain. This is important because indexed
             // values can be divided in blocks that span several lines in the chain.
-            let mut chain = Vec::with_capacity(chain_table_uids.len());
-
+            let mut chain = Vec::<ChainTableValue<CHAIN_TABLE_WIDTH, BLOCK_LENGTH>>::with_capacity(
+                chain_table_uids.len(),
+            );
             for uid in chain_table_uids {
-                let (uid, encrypted_value) =
+                let (_, encrypted_value) =
                     encrypted_items
                         .remove_entry(&uid)
                         .ok_or(Error::<CustomError>::CryptoError(format!(
                             "no Chain Table entry with UID '{uid:?}' in fetch result",
                         )))?;
-                chain.push((
-                    uid,
-                    ChainTableValue::decrypt::<DEM_KEY_LENGTH, DemScheme>(
-                        &kwi_value,
-                        &encrypted_value,
-                    )?,
-                ));
+                chain.push(ChainTableValue::decrypt::<DEM_KEY_LENGTH, DemScheme>(
+                    &kwi_value,
+                    &encrypted_value,
+                )?);
             }
 
-            res.insert(kwi, chain);
+            res.insert(
+                entry_table_uid,
+                IndexedValue::from_blocks(chain.iter().flat_map(|value| value.as_blocks()))?,
+            );
         }
 
         Ok(res)
