@@ -9,15 +9,15 @@ on:
 
 jobs:
   cloudproof:
-    uses: Cosmian/reusable_workflows/.github/workflows/cloudproof.yml@main
+    uses: Cosmian/reusable_workflows/.github/workflows/cloudproof.yml@findex_2.0_cover_crypt_8.0
     with:
       project-name: findex
-      toolchain: nightly-2022-10-28
+      toolchain: nightly-2023-03-20
       kms-version: 4.0.1
       regression-filename: sqlite.db
-      branch-java: main
-      branch-js: main
-      branch-flutter: main
-      branch-python: main
+      branch-java: 3_0_3_exception_handling
+      branch-js: findex_batch_keywords_together_in_fetch_chains_callback
+      branch-flutter: callback_exceptions
+      branch-python: python_not_tested
       bench-features: sqlite
     secrets: inherit

@@ -220,7 +220,6 @@ impl<const UID_LENGTH: usize, const KWI_LENGTH: usize> EntryTableValue<UID_LENGT
         const KMAC_KEY_LENGTH: usize,
         const DEM_KEY_LENGTH: usize,
         KmacKey: SymKey<KMAC_KEY_LENGTH>,
-        DemScheme: Dem<DEM_KEY_LENGTH>,
     >(
         &self,
         max_results: usize,
@@ -396,7 +395,6 @@ impl<const UID_LENGTH: usize, const KWI_LENGTH: usize> EntryTable<UID_LENGTH, KW
         const KMAC_KEY_LENGTH: usize,
         const DEM_KEY_LENGTH: usize,
         KmacKey: SymKey<KMAC_KEY_LENGTH>,
-        DemScheme: Dem<DEM_KEY_LENGTH>,
     >(
         &self,
         uids: impl Iterator<Item = &'a Uid<UID_LENGTH>>,
@@ -405,7 +403,7 @@ impl<const UID_LENGTH: usize, const KWI_LENGTH: usize> EntryTable<UID_LENGTH, KW
         let mut kwi_chain_table_uids = KwiChainUids::default();
         for entry_table_uid in uids {
             if let Some(value) = self.get(entry_table_uid) {
-                value.unchain::<BLOCK_LENGTH, KMAC_KEY_LENGTH, DEM_KEY_LENGTH, KmacKey, DemScheme>(
+                value.unchain::<BLOCK_LENGTH, KMAC_KEY_LENGTH, DEM_KEY_LENGTH, KmacKey>(
                     max_results_per_uid,
                     &mut kwi_chain_table_uids,
                 );
@@ -602,7 +600,11 @@ mod tests {
         }
 
         let mut kwi_chain_table_uids = KwiChainUids::default();
-        entry_table_value.unchain::<BLOCK_LENGTH, KMAC_KEY_LENGTH, {Aes256GcmCrypto::KEY_LENGTH}, KmacKey, Aes256GcmCrypto>(usize::MAX, &mut kwi_chain_table_uids);
+        entry_table_value
+            .unchain::<BLOCK_LENGTH, KMAC_KEY_LENGTH, { Aes256GcmCrypto::KEY_LENGTH }, KmacKey>(
+                usize::MAX,
+                &mut kwi_chain_table_uids,
+            );
 
         assert_eq!(kwi_chain_table_uids.len(), 1);
 
@@ -676,7 +678,11 @@ mod tests {
             >(&long_location, &kwi_uid, &kwi_value, &mut chain_table, &mut rng).unwrap();
 
         let mut kwi_chain_table_uids = KwiChainUids::default();
-        entry_table_value.unchain::<BLOCK_LENGTH, KMAC_KEY_LENGTH, {Aes256GcmCrypto::KEY_LENGTH}, KmacKey, Aes256GcmCrypto>(usize::MAX, &mut kwi_chain_table_uids);
+        entry_table_value
+            .unchain::<BLOCK_LENGTH, KMAC_KEY_LENGTH, { Aes256GcmCrypto::KEY_LENGTH }, KmacKey>(
+                usize::MAX,
+                &mut kwi_chain_table_uids,
+            );
 
         // Only one keyword is indexed.
         assert_eq!(kwi_chain_table_uids.len(), 1);
