@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.0.2] - 2023-04-21
+
+**This version follows the 2.0.0 since the 2.0.1 version introduced breaking changes we didn't want to include.**
+
+### Changed
+
+- Batch keywords together when calling the fetch chains callback (prevent doing one fetch chains request by keyword)
+
 ## [2.0.0] - 2023-01-13
 
 ### Changed
