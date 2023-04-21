@@ -26,8 +26,6 @@ wasm_bindgen = [
   "interfaces",
   "js-sys",
   "wasm-bindgen",
-  "wasm-bindgen-test",
-  "web-sys",
   "wasm-bindgen-futures",
   "interfaces",
 ]
@@ -53,12 +51,10 @@ thiserror = "1"
 tiny-keccak = { version = "2.0.2", features = ["kmac"] }
 wasm-bindgen = { version = "0.2", features = ["serde-serialize"], optional = true }
 wasm-bindgen-futures = { version = "0.4", optional = true }
-wasm-bindgen-test = { version = "0.3", optional = true }
-web-sys = { version = "0.3", features = ['Document', 'Element', 'HtmlElement', 'Node', 'Window'], optional = true }
 zeroize = "1.5"
 
 [dev-dependencies]
-actix-rt = "2"
+actix-rt = "2.8"
 criterion = { version = "0.4", features = ["html_reports", "async_futures"], default_features = false }
 
 [[bench]]
