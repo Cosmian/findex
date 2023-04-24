@@ -66,7 +66,7 @@ pub trait FindexSearch<
         }
 
         // Derive Entry Table UIDs from keywords.
-        let mut entry_table_uid_map = keywords
+        let entry_table_uid_map = keywords
             .iter()
             .map(|keyword| {
                 (
@@ -92,12 +92,12 @@ pub trait FindexSearch<
         let mut kwi_chain_table_uids = KwiChainUids::with_capacity(entry_table.len());
         let mut kwi_to_keyword = HashMap::with_capacity(entry_table.len());
         for (uid, value) in entry_table.into_iter() {
-            let keyword = entry_table_uid_map.remove(&uid).ok_or_else(|| {
+            let keyword = entry_table_uid_map.get(&uid).ok_or_else(|| {
                 Error::<CustomError>::CryptoError(format!(
                     "Could not find keyword associated to UID {uid:?}."
                 ))
             })?;
-            kwi_to_keyword.insert(value.kwi.clone(), keyword);
+            kwi_to_keyword.insert(value.kwi.clone(), *keyword);
             let k_uid = value.kwi.derive_kmac_key(CHAIN_TABLE_KEY_DERIVATION_INFO);
             let chain = value.unchain::<
                             CHAIN_TABLE_WIDTH,
@@ -116,13 +116,13 @@ pub trait FindexSearch<
         // Convert the blocks of the given chains into indexed values.
         let mut res = HashMap::with_capacity(chains.len());
         for (kwi, chain) in &chains {
-            let keyword = kwi_to_keyword.remove(kwi).ok_or_else(|| {
+            let keyword = kwi_to_keyword.get(kwi).ok_or_else(|| {
                 Error::<CustomError>::CryptoError("Missing Kwi in reversed map.".to_string())
             })?;
             let blocks = chain
                 .iter()
                 .flat_map(|(_, chain_table_value)| chain_table_value.as_blocks());
-            res.insert(keyword.clone(), IndexedValue::from_blocks(blocks)?);
+            res.insert((*keyword).clone(), IndexedValue::from_blocks(blocks)?);
         }
 
         Ok(res)
