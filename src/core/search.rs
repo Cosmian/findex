@@ -110,7 +110,7 @@ pub trait FindexSearch<
         // Get all the corresponding Chain Table UIDs
         //
         let kwi_chain_table_uids = entry_table
-            .unchain::<BLOCK_LENGTH, KMAC_KEY_LENGTH, DEM_KEY_LENGTH, KmacKey, DemScheme>(
+            .unchain::<BLOCK_LENGTH, KMAC_KEY_LENGTH, DEM_KEY_LENGTH, KmacKey>(
                 entry_table_uid_map.keys(),
                 max_results_per_keyword,
             );

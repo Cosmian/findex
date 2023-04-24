@@ -115,7 +115,7 @@ pub trait FindexCompact<
 
         // Unchain the Entry Table entries to be reindexed.
         let kwi_chain_table_uids = entry_table
-            .unchain::<BLOCK_LENGTH, KMAC_KEY_LENGTH, DEM_KEY_LENGTH, KmacKey, DemScheme>(
+            .unchain::<BLOCK_LENGTH, KMAC_KEY_LENGTH, DEM_KEY_LENGTH, KmacKey>(
                 entry_table_items_to_reindex.iter(),
                 usize::MAX,
             );
