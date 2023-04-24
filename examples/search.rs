@@ -52,7 +52,7 @@ fn main() {
     //
     let keywords = prepare_keywords(1000);
     for _ in 0..1000 {
-        block_on(findex.search(&master_key, &label, &keywords, usize::MAX, usize::MAX))
+        block_on(findex.search(&master_key, &label, keywords.clone(), usize::MAX))
             .expect("search failed");
     }
 }
