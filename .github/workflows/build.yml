@@ -9,13 +9,13 @@ on:
 
 jobs:
   cloudproof:
-    uses: Cosmian/reusable_workflows/.github/workflows/cloudproof.yml@v0.1
+    uses: Cosmian/reusable_workflows/.github/workflows/cloudproof.yml@findex_2.0_cover_crypt_8.0
     with:
       project-name: findex
-      toolchain: nightly-2022-10-28
+      toolchain: nightly-2023-03-20
       kms-version: 4.0.1
       regression-filename: sqlite.db
-      branch-java: main
+      branch-java: callback_exceptions
       branch-js: main
       branch-flutter: main
       branch-python: main
