@@ -18,6 +18,6 @@ jobs:
       branch-java: 3_0_3_exception_handling
       branch-js: findex_batch_keywords_together_in_fetch_chains_callback
       branch-flutter: callback_exceptions
-      branch-python: v2.0.1
+      branch-python: v2.0.0
       bench-features: sqlite
     secrets: inherit
