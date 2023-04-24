@@ -9,7 +9,7 @@ on:
 
 jobs:
   cloudproof:
-    uses: Cosmian/reusable_workflows/.github/workflows/cloudproof.yml@main
+    uses: Cosmian/reusable_workflows/.github/workflows/cloudproof.yml@v0.1
     with:
       project-name: findex
       toolchain: nightly-2022-10-28
