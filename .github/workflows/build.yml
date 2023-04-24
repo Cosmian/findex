@@ -17,7 +17,7 @@ jobs:
       regression-filename: sqlite.db
       branch-java: callback_exceptions
       branch-js: main
-      branch-flutter: main
+      branch-flutter: callback_exceptions
       branch-python: main
       bench-features: sqlite
     secrets: inherit
