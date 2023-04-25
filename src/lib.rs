@@ -44,7 +44,7 @@ mod compact_live;
 #[cfg(feature = "in_memory")]
 pub mod in_memory_example;
 
-pub use callbacks::FindexCallbacks;
+pub use callbacks::{FetchChains, FindexCallbacks};
 pub use compact::FindexCompact;
 #[cfg(feature = "live_compact")]
 pub use compact_live::FindexLiveCompact;
