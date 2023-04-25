@@ -5,7 +5,7 @@ on: push
 
 jobs:
   cargo-lint:
-    uses: Cosmian/reusable_workflows/.github/workflows/cargo-nursery.yml@main
+    uses: Cosmian/reusable_workflows/.github/workflows/cargo-nursery.yml@develop
     with:
       toolchain: nightly-2022-10-28
   cargo-publish:
