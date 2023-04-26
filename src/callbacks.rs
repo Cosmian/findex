@@ -208,7 +208,7 @@ pub trait FetchChains<
         // Collect to a `HashSet` to mix UIDs between chains.
         let chain_table_uids = kwi_chain_table_uids.values().flatten().cloned().collect();
 
-        let mut encrypted_items = self.fetch_chain_table(chain_table_uids).await?;
+        let encrypted_items = self.fetch_chain_table(chain_table_uids).await?;
 
         let mut res = HashMap::with_capacity(kwi_chain_table_uids.len());
         for (kwi, chain_table_uids) in kwi_chain_table_uids.into_iter() {
@@ -219,9 +219,9 @@ pub trait FetchChains<
             let mut chain = Vec::with_capacity(chain_table_uids.len());
 
             for uid in chain_table_uids {
-                let (uid, encrypted_value) =
+                let encrypted_value =
                     encrypted_items
-                        .remove_entry(&uid)
+                        .get(&uid)
                         .ok_or(Error::<CustomError>::CryptoError(format!(
                             "no Chain Table entry with UID '{uid:?}' in fetch result",
                         )))?;
@@ -229,7 +229,7 @@ pub trait FetchChains<
                     uid,
                     ChainTableValue::decrypt::<DEM_KEY_LENGTH, DemScheme>(
                         &kwi_value,
-                        &encrypted_value,
+                        encrypted_value,
                     )?,
                 ));
             }
