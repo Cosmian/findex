@@ -2,7 +2,6 @@
 
 use std::collections::{HashMap, HashSet};
 
-use async_recursion::async_recursion;
 use cosmian_crypto_core::symmetric_crypto::{Dem, SymKey};
 
 use crate::{
@@ -40,11 +39,8 @@ pub trait FindexSearch<
         CustomError,
     >
 {
-    /// Searches for a set of keywords, returning the corresponding indexed
-    /// values.
-    ///
-    /// *Note*: An `IndexedValue` can be either a `Location` or another
-    /// `Keyword`.
+    /// Searches for a set of `Keyword`s, returning the corresponding
+    /// `IndexedValue`s.
     ///
     /// # Parameters
     ///
@@ -61,10 +57,6 @@ pub trait FindexSearch<
         keywords: &HashSet<Keyword>,
         max_uid_per_chain: usize,
     ) -> Result<HashMap<Keyword, HashSet<IndexedValue>>, Error<CustomError>> {
-        if keywords.is_empty() {
-            return Ok(HashMap::new());
-        }
-
         // Derive Entry Table UIDs from keywords.
         let entry_table_uid_map = keywords
             .iter()
@@ -128,91 +120,61 @@ pub trait FindexSearch<
         Ok(res)
     }
 
-    /// Recursively searches Findex indexes to build the graph of the given
+    /// Iteratively searches Findex indexes to build the graphs of the given
     /// keywords.
     ///
-    /// For given recursion level:
-    /// - search Findex for the given keywords
+    /// For a given iteration:
+    /// - search Findex for the targeted keywords
     /// - add these keywords with their indexed locations to the known graph
-    /// - if the maximum recursion level is reached or a user interruption is
-    ///   received through the `progress` callback, ignore the next keywords;
-    ///   otherwise add them to the results of the associated keyword in the
-    ///   graph and mark the unknown keywords for the next recursion
-    /// - if there are some new keywords to search, call this function with
-    ///   these new keywords as input
+    /// - if a user interruption is received through the `progress` callback,
+    ///   ignore the next keywords; otherwise mark them as targets for the next
+    ///   iteration
     ///
     /// # Parameters
     ///
-    /// - `k_uid`               : KMAC key used to generate Entry Table UIDs
-    /// - `k_value`             : DEM key used to decrypt the Entry Table
+    /// - `master_key`          : Findex master secret key
     /// - `label`               : public label used for hashing
     /// - `keywords`            : keywords to search using Findex
-    /// - `graph`               : known keyword graph
-    /// - `max_depth`           : maximum recursion level allowed
-    /// - `current_depth`       : current depth reached by the recursion
     /// - `max_uid_per_chain`   : maximum number of UIDs to compute per keyword
-    #[async_recursion(?Send)]
-    #[allow(clippy::too_many_arguments)]
-    async fn recursive_search(
+    async fn iterative_search(
         &mut self,
-        k_uid: &KmacKey,
-        k_value: &DemScheme::Key,
+        master_key: &KeyingMaterial<MASTER_KEY_LENGTH>,
         label: &Label,
-        keywords: &HashSet<Keyword>,
-        graph: &mut HashMap<Keyword, HashSet<IndexedValue>>,
-        max_depth: usize,
-        current_depth: usize,
+        mut keywords: HashSet<Keyword>,
         max_uid_per_chain: usize,
-    ) -> Result<(), Error<CustomError>> {
-        let current_results = self
-            .core_search(k_uid, k_value, label, keywords, max_uid_per_chain)
-            .await?;
+    ) -> Result<HashMap<Keyword, HashSet<IndexedValue>>, Error<CustomError>> {
+        let k_uid = master_key.derive_kmac_key(ENTRY_TABLE_KEY_DERIVATION_INFO);
+        let k_value = master_key.derive_dem_key(ENTRY_TABLE_KEY_DERIVATION_INFO);
 
-        let continue_recursion = self.progress(&current_results).await?;
+        let mut graph = HashMap::with_capacity(keywords.len());
 
-        let mut next_keywords = HashSet::with_capacity(current_results.len());
-        for (keyword, indexed_values) in current_results {
-            if continue_recursion && current_depth != max_depth {
-                // Mark unknown keywords to be searched in the next recursion.
-                next_keywords.extend(
-                    indexed_values
-                        .iter()
-                        .filter_map(|value| value.get_keyword())
-                        .filter(|next_keyword| !graph.contains_key(next_keyword))
-                        .cloned(),
-                );
-                // Add all indexed values to the results.
-                graph.insert(keyword, indexed_values);
-            } else {
-                // Do not add the next keyword to the results.
-                graph.insert(
-                    keyword,
-                    indexed_values
-                        .into_iter()
-                        .filter(|value| value.is_location())
-                        .collect(),
-                );
+        // Since keywords cannot be requested twice, the number of iterations can only
+        // be smaller than the greatest depth of the searched keyword graphs.
+        while !keywords.is_empty() {
+            let results = self
+                .core_search(&k_uid, &k_value, label, &keywords, max_uid_per_chain)
+                .await?;
+
+            // Return early in case of user interrupt.
+            let is_continue = self.progress(&results).await?;
+
+            if is_continue {
+                keywords = results
+                    .values()
+                    .flat_map(|indexed_values| {
+                        indexed_values
+                            .iter()
+                            .filter_map(|value| value.get_keyword())
+                            .filter(|next_keyword| !graph.contains_key(*next_keyword))
+                            .cloned()
+                    })
+                    .collect();
             }
+
+            graph.extend(results);
         }
 
-        // Recurse if some keywords still need to be searched. An empty `next_keyword`
-        // set means that there is no more keywords to search, that the user interrupted
-        // the search or that the recursion has reached the maximum depth allowed.
-        if !next_keywords.is_empty() {
-            self.recursive_search(
-                k_uid,
-                k_value,
-                label,
-                &next_keywords,
-                graph,
-                max_depth,
-                current_depth + 1,
-                max_uid_per_chain,
-            )
-            .await?;
-        }
-
-        Ok(())
+        Ok(graph)
     }
 
     /// Searches for the `Location`s indexed by the given `Keyword`s. This is
@@ -229,46 +191,32 @@ pub trait FindexSearch<
         &mut self,
         master_key: &KeyingMaterial<MASTER_KEY_LENGTH>,
         label: &Label,
-        keywords: &HashSet<Keyword>,
-        max_depth: usize,
+        keywords: HashSet<Keyword>,
         max_uid_per_chain: usize,
     ) -> Result<HashMap<Keyword, HashSet<Location>>, Error<CustomError>> {
         check_parameter_constraints::<CHAIN_TABLE_WIDTH, BLOCK_LENGTH>();
 
-        let k_uid = master_key.derive_kmac_key(ENTRY_TABLE_KEY_DERIVATION_INFO);
-        let k_value = master_key.derive_dem_key(ENTRY_TABLE_KEY_DERIVATION_INFO);
-
         // Search Findex indexes to build the keyword graph.
-        let mut graph = HashMap::with_capacity(keywords.len());
-        self.recursive_search(
-            &k_uid,
-            &k_value,
-            label,
-            keywords,
-            &mut graph,
-            max_depth,
-            0,
-            max_uid_per_chain,
-        )
-        .await?;
+        let graph = self
+            .iterative_search(master_key, label, keywords.clone(), max_uid_per_chain)
+            .await?;
 
         // Walk the graph to get the results.
-        let mut results = HashMap::with_capacity(keywords.len());
-        for keyword in keywords {
-            results.insert(
-                keyword.clone(),
-                self.walk_graph_from(keyword, &graph, &mut HashSet::new())?,
-            );
-        }
-
-        Ok(results)
+        keywords
+            .into_iter()
+            .map(|keyword| {
+                let keyword_results =
+                    self.walk_graph_from(&keyword, &graph, &mut HashSet::new())?;
+                Ok((keyword, keyword_results))
+            })
+            .collect()
     }
 
     /// Retrives the `Location`s stored in the given graph for the given
     /// `Keyword`.
     ///
-    /// When a `NextWord` is found among the results and it has not been walked
-    /// through yet, appends the results of the recursion on this `NextWord`.
+    /// When a `NextWord` is found among the results, appends the results
+    /// of this `NextWord` from the graph to this keyword.
     ///
     /// # Parameters
     ///
@@ -281,28 +229,33 @@ pub trait FindexSearch<
         graph: &'a HashMap<Keyword, HashSet<IndexedValue>>,
         ancestors: &mut HashSet<&'a Keyword>,
     ) -> Result<HashSet<Location>, Error<CustomError>> {
-        ancestors.insert(keyword);
-        if let Some(keyword_results) = graph.get(keyword) {
-            let mut locations = HashSet::with_capacity(keyword_results.len());
-            for indexed_value in keyword_results {
-                match indexed_value {
-                    IndexedValue::Location(location) => {
-                        locations.insert(location.clone());
-                    }
-                    IndexedValue::NextKeyword(next_keyword) => {
-                        if !ancestors.contains(next_keyword) {
-                            locations.extend(self.walk_graph_from(
-                                next_keyword,
-                                graph,
-                                ancestors,
-                            )?);
-                        }
-                    }
+        // To prevent loop between `NextWord`s, we check if we already
+        // got the locations for this keyword for the base keyword.
+        if ancestors.contains(keyword) {
+            return Ok(HashSet::new());
+        } else {
+            ancestors.insert(keyword);
+        }
+
+        // Early return if this keyword doesn't have any `IndexedValue`
+        // to avoid allocation `with_capacity` below.
+        let keyword_results = match graph.get(keyword) {
+            Some(keyword_results) => keyword_results,
+            None => return Ok(HashSet::new()),
+        };
+
+        let mut locations = HashSet::with_capacity(keyword_results.len());
+        for indexed_value in keyword_results {
+            match indexed_value {
+                IndexedValue::Location(location) => {
+                    locations.insert(location.clone());
+                }
+                IndexedValue::NextKeyword(next_keyword) => {
+                    locations.extend(self.walk_graph_from(next_keyword, graph, ancestors)?);
                 }
             }
-            Ok(locations)
-        } else {
-            Ok(HashSet::new())
         }
+
+        Ok(locations)
     }
 }

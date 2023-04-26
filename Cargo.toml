@@ -29,7 +29,6 @@ in_memory = []
 live_compact = []
 
 [dependencies]
-async-recursion = "1.0.0"
 cosmian_crypto_core = "7.0.0"
 futures = "0.3"
 rand = "0.8"
