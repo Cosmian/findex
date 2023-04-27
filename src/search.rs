@@ -172,6 +172,10 @@ pub trait FindexSearch<
             }
 
             graph.extend(results);
+
+            if !is_continue {
+                break;
+            }
         }
 
         Ok(graph)
@@ -205,57 +209,55 @@ pub trait FindexSearch<
         keywords
             .into_iter()
             .map(|keyword| {
-                let keyword_results =
-                    self.walk_graph_from(&keyword, &graph, &mut HashSet::new())?;
+                let keyword_results = walk_graph_from(&keyword, &graph, &mut HashSet::new());
                 Ok((keyword, keyword_results))
             })
             .collect()
     }
+}
 
-    /// Retrives the `Location`s stored in the given graph for the given
-    /// `Keyword`.
-    ///
-    /// When a `NextWord` is found among the results, appends the results
-    /// of this `NextWord` from the graph to this keyword.
-    ///
-    /// # Parameters
-    ///
-    /// - `keyword`     : starting point of the walk
-    /// - `graph`       : keyword graph containing the Findex results
-    /// - `ancestors`   : keywords that have already been walked through
-    fn walk_graph_from<'a>(
-        &self,
-        keyword: &'a Keyword,
-        graph: &'a HashMap<Keyword, HashSet<IndexedValue>>,
-        ancestors: &mut HashSet<&'a Keyword>,
-    ) -> Result<HashSet<Location>, Error<CustomError>> {
-        // To prevent loop between `NextWord`s, we check if we already
-        // got the locations for this keyword for the base keyword.
-        if ancestors.contains(keyword) {
-            return Ok(HashSet::new());
-        } else {
-            ancestors.insert(keyword);
-        }
+/// Retrives the `Location`s stored in the given graph for the given
+/// `Keyword`.
+///
+/// When a `NextWord` is found among the results, appends the results
+/// of this `NextWord` from the graph to this keyword.
+///
+/// # Parameters
+///
+/// - `keyword`     : starting point of the walk
+/// - `graph`       : keyword graph containing the Findex results
+/// - `ancestors`   : keywords that have already been walked through
+fn walk_graph_from<'a>(
+    keyword: &'a Keyword,
+    graph: &'a HashMap<Keyword, HashSet<IndexedValue>>,
+    ancestors: &mut HashSet<&'a Keyword>,
+) -> HashSet<Location> {
+    // To prevent loop between `NextWord`s, we check if we already
+    // got the locations for this keyword for the base keyword.
+    if ancestors.contains(keyword) {
+        return HashSet::new();
+    } else {
+        ancestors.insert(keyword);
+    }
 
-        // Early return if this keyword doesn't have any `IndexedValue`
-        // to avoid allocation `with_capacity` below.
-        let keyword_results = match graph.get(keyword) {
-            Some(keyword_results) => keyword_results,
-            None => return Ok(HashSet::new()),
-        };
+    // Early return if this keyword doesn't have any `IndexedValue`
+    // to avoid allocation `with_capacity` below.
+    let keyword_results = match graph.get(keyword) {
+        Some(keyword_results) => keyword_results,
+        None => return HashSet::new(),
+    };
 
-        let mut locations = HashSet::with_capacity(keyword_results.len());
-        for indexed_value in keyword_results {
-            match indexed_value {
-                IndexedValue::Location(location) => {
-                    locations.insert(location.clone());
-                }
-                IndexedValue::NextKeyword(next_keyword) => {
-                    locations.extend(self.walk_graph_from(next_keyword, graph, ancestors)?);
-                }
+    let mut locations = HashSet::with_capacity(keyword_results.len());
+    for indexed_value in keyword_results {
+        match indexed_value {
+            IndexedValue::Location(location) => {
+                locations.insert(location.clone());
+            }
+            IndexedValue::NextKeyword(next_keyword) => {
+                locations.extend(walk_graph_from(next_keyword, graph, ancestors));
             }
         }
-
-        Ok(locations)
     }
+
+    locations
 }

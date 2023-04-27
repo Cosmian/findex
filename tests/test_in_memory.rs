@@ -156,6 +156,21 @@ async fn test_progress_callack() -> Result<(), Error<ExampleError>> {
     check_search_result(&rob_search, &rob_keyword, &robert_location);
     check_search_result(&rob_search, &rob_keyword, &rob_location);
 
+    // search rob but cancel search in progress callback
+    findex.progress_callback_cancel = true;
+    let rob_search = findex
+        .search(
+            &master_key,
+            &label,
+            HashSet::from_iter([rob_keyword.clone()]),
+            MAX_UID_PER_CHAIN,
+        )
+        .await?;
+    // check that the result do not contain robert_location (only rob_location)
+    // since we directly stop
+    assert_eq!(1, rob_search.get(&rob_keyword).unwrap().len());
+    check_search_result(&rob_search, &rob_keyword, &rob_location);
+
     Ok(())
 }
 

@@ -32,6 +32,7 @@ pub struct FindexInMemory<const UID_LENGTH: usize> {
     chain_table: EncryptedTable<UID_LENGTH>,
     removed_locations: HashSet<Location>,
     pub check_progress_callback_next_keyword: bool,
+    pub progress_callback_cancel: bool,
 }
 
 impl<const UID_LENGTH: usize> FindexInMemory<UID_LENGTH> {
@@ -92,8 +93,8 @@ impl<const UID_LENGTH: usize> FindexCallbacks<ExampleError, UID_LENGTH>
                 ));
             }
         }
-        // do not stop recursion.
-        Ok(true)
+
+        Ok(!self.progress_callback_cancel)
     }
 
     async fn fetch_all_entry_table_uids(&self) -> Result<HashSet<Uid<UID_LENGTH>>, ExampleError> {
