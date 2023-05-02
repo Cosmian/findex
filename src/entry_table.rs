@@ -226,7 +226,7 @@ impl<const UID_LENGTH: usize, const KWI_LENGTH: usize> EntryTableValue<UID_LENGT
     >(
         &self,
         kwi_uid: &KmacKey,
-    ) -> Vec<Uid<UID_LENGTH>> {
+    ) -> Result<Vec<Uid<UID_LENGTH>>, Error> {
         let mut chain = Vec::new();
 
         while chain.len() < MAX_UID_PER_CHAIN && chain.last() != self.chain_table_uid.as_ref() {
@@ -243,7 +243,14 @@ impl<const UID_LENGTH: usize, const KWI_LENGTH: usize> EntryTableValue<UID_LENGT
             });
         }
 
-        chain
+        if chain.last() == self.chain_table_uid.as_ref() {
+            Ok(chain)
+        } else {
+            Err(Error::CryptoError(
+                "reached the maximum number of UIDs per chain without matching the last UID stored"
+                    .to_string(),
+            ))
+        }
     }
 }
 
@@ -562,7 +569,7 @@ mod tests {
             {Aes256GcmCrypto::KEY_LENGTH},
             KmacKey,
             Aes256GcmCrypto
-        >(&k_uid);
+        >(&k_uid).unwrap();
 
         // Recover the indexed values from the Chain Table blocks.
         let blocks = chain
@@ -601,7 +608,7 @@ mod tests {
             {Aes256GcmCrypto::KEY_LENGTH},
             KmacKey,
             Aes256GcmCrypto
-        >(&k_uid);
+        >(&k_uid).unwrap();
 
         // Recover the indexed values from the Chain Table blocks.
         let blocks = chain
@@ -662,7 +669,7 @@ mod tests {
                     {Aes256GcmCrypto::KEY_LENGTH},
                     KmacKey,
                     Aes256GcmCrypto
-                >(&k_uid)
+                >(&k_uid).unwrap()
         );
 
         // Only one keyword is indexed.

@@ -198,9 +198,9 @@ pub trait FindexLiveCompact<
         let mut chains = ChainData::with_capacity(entry_table.len());
 
         // Unchain all Entry Table UIDs.
-        let kwi_chain_table_uids: KwiChainUids<UID_LENGTH, KWI_LENGTH> = entry_table.iter().map(|(_, value)| {
+        let kwi_chain_table_uids: KwiChainUids<UID_LENGTH, KWI_LENGTH> = entry_table.iter().map(|(_, value)| -> Result<_, _>{
             let k_uid = value.kwi.derive_kmac_key(CHAIN_TABLE_KEY_DERIVATION_INFO);
-            (
+            Ok((
                 value.kwi.clone(),
                 value.unchain::<
                         CHAIN_TABLE_WIDTH,
@@ -209,9 +209,9 @@ pub trait FindexLiveCompact<
                         DEM_KEY_LENGTH,
                         KmacKey,
                         DemScheme
-                    >(&k_uid)
-            )
-        }).collect();
+                    >(&k_uid)?
+            ))
+        }).collect::<Result<_, Error<CustomError>>>()?;
 
         // Associate Entry Table UIDs to Chain Table UIDs.
         for (uid, v) in  entry_table.iter() {

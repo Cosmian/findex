@@ -96,7 +96,7 @@ pub trait FindexSearch<
                             DEM_KEY_LENGTH,
                             KmacKey,
                             DemScheme
-                        >(&k_uid);
+                        >(&k_uid)?;
             kwi_chain_table_uids.insert(value.kwi, chain);
         }
 
