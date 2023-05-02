@@ -23,6 +23,9 @@ use crate::{
     KeyingMaterial, Keyword, CHAIN_TABLE_KEY_DERIVATION_INFO,
 };
 
+/// Maximum number of Chain Table UID associated to a given Entry Table UID.
+const MAX_UID_PER_CHAIN: usize = 1_000_000;
+
 /// A value of the Entry Table.
 ///
 /// All Entry Table values are of equal lengths. They are used to store:
@@ -208,12 +211,11 @@ impl<const UID_LENGTH: usize, const KWI_LENGTH: usize> EntryTableValue<UID_LENGT
     /// in the chain.
     ///
     /// Stops when the derived UID matches the one stored in this Entry Table
-    /// value or `max_uid_per_chain` UIDs have been derived.
+    /// value or `MAX_UID_PER_CHAIN` UIDs have been derived.
     ///
     /// # Parameters
     ///
     /// - `kwi_uid`             : KMAC key used to derive UIDs of the w_i chain
-    /// - `max_uid_per_chain`   : maximum number of results to fetch
     pub(crate) fn unchain<
         const CHAIN_TABLE_WIDTH: usize,
         const BLOCK_LENGTH: usize,
@@ -224,11 +226,10 @@ impl<const UID_LENGTH: usize, const KWI_LENGTH: usize> EntryTableValue<UID_LENGT
     >(
         &self,
         kwi_uid: &KmacKey,
-        max_uid_per_chain: usize,
-    ) -> Vec<Uid<UID_LENGTH>> {
+    ) -> Result<Vec<Uid<UID_LENGTH>>, Error> {
         let mut chain = Vec::new();
 
-        while chain.len() < max_uid_per_chain && chain.last() != self.chain_table_uid.as_ref() {
+        while chain.len() < MAX_UID_PER_CHAIN && chain.last() != self.chain_table_uid.as_ref() {
             // Derive the next UID.
             chain.push(if let Some(last_uid) = chain.last() {
                 ChainTable::<UID_LENGTH, CHAIN_TABLE_WIDTH, BLOCK_LENGTH>::generate_uid(
@@ -242,7 +243,14 @@ impl<const UID_LENGTH: usize, const KWI_LENGTH: usize> EntryTableValue<UID_LENGT
             });
         }
 
-        chain
+        if chain.last() == self.chain_table_uid.as_ref() {
+            Ok(chain)
+        } else {
+            Err(Error::CryptoError(
+                "reached the maximum number of UIDs per chain without matching the last UID stored"
+                    .to_string(),
+            ))
+        }
     }
 }
 
@@ -561,7 +569,7 @@ mod tests {
             {Aes256GcmCrypto::KEY_LENGTH},
             KmacKey,
             Aes256GcmCrypto
-        >(&k_uid, usize::MAX);
+        >(&k_uid).unwrap();
 
         // Recover the indexed values from the Chain Table blocks.
         let blocks = chain
@@ -600,7 +608,7 @@ mod tests {
             {Aes256GcmCrypto::KEY_LENGTH},
             KmacKey,
             Aes256GcmCrypto
-        >(&k_uid, usize::MAX);
+        >(&k_uid).unwrap();
 
         // Recover the indexed values from the Chain Table blocks.
         let blocks = chain
@@ -661,7 +669,7 @@ mod tests {
                     {Aes256GcmCrypto::KEY_LENGTH},
                     KmacKey,
                     Aes256GcmCrypto
-                >(&k_uid, usize::MAX)
+                >(&k_uid).unwrap()
         );
 
         // Only one keyword is indexed.

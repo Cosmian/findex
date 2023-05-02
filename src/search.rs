@@ -48,14 +48,12 @@ pub trait FindexSearch<
     /// - `k_value`             : DEM key used to decrypt the Entry Table
     /// - `label`               : public label
     /// - `keywords`            : keywords to search
-    /// - `max_uid_per_chain`   : maximum number of UID per chain
     async fn core_search(
         &mut self,
         k_uid: &KmacKey,
         k_value: &DemScheme::Key,
         label: &Label,
         keywords: &HashSet<Keyword>,
-        max_uid_per_chain: usize,
     ) -> Result<HashMap<Keyword, HashSet<IndexedValue>>, Error<CustomError>> {
         // Derive Entry Table UIDs from keywords.
         let entry_table_uid_map = keywords
@@ -98,7 +96,7 @@ pub trait FindexSearch<
                             DEM_KEY_LENGTH,
                             KmacKey,
                             DemScheme
-                        >(&k_uid, max_uid_per_chain);
+                        >(&k_uid)?;
             kwi_chain_table_uids.insert(value.kwi, chain);
         }
 
@@ -135,13 +133,11 @@ pub trait FindexSearch<
     /// - `master_key`          : Findex master secret key
     /// - `label`               : public label used for hashing
     /// - `keywords`            : keywords to search using Findex
-    /// - `max_uid_per_chain`   : maximum number of UIDs to compute per keyword
     async fn iterative_search(
         &mut self,
         master_key: &KeyingMaterial<MASTER_KEY_LENGTH>,
         label: &Label,
         mut keywords: HashSet<Keyword>,
-        max_uid_per_chain: usize,
     ) -> Result<HashMap<Keyword, HashSet<IndexedValue>>, Error<CustomError>> {
         let k_uid = master_key.derive_kmac_key(ENTRY_TABLE_KEY_DERIVATION_INFO);
         let k_value = master_key.derive_dem_key(ENTRY_TABLE_KEY_DERIVATION_INFO);
@@ -151,15 +147,13 @@ pub trait FindexSearch<
         // Since keywords cannot be requested twice, the number of iterations can only
         // be smaller than the greatest depth of the searched keyword graphs.
         while !keywords.is_empty() {
-            let results = self
-                .core_search(&k_uid, &k_value, label, &keywords, max_uid_per_chain)
-                .await?;
+            let results = self.core_search(&k_uid, &k_value, label, &keywords).await?;
 
             // Return early in case of user interrupt.
             let is_continue = self.progress(&results).await?;
 
-            if is_continue {
-                keywords = results
+            keywords = if is_continue {
+                results
                     .values()
                     .flat_map(|indexed_values| {
                         indexed_values
@@ -168,14 +162,12 @@ pub trait FindexSearch<
                             .filter(|next_keyword| !graph.contains_key(*next_keyword))
                             .cloned()
                     })
-                    .collect();
-            }
+                    .collect()
+            } else {
+                HashSet::new()
+            };
 
             graph.extend(results);
-
-            if !is_continue {
-                break;
-            }
         }
 
         Ok(graph)
@@ -190,19 +182,17 @@ pub trait FindexSearch<
     /// - `label`               : public label
     /// - `keywords`            : keywords to search
     /// - `max_depth`           : maximum recursion depth allowed
-    /// - `max_uid_per_chain`   : maximum number of UIDs to compute per chain
     async fn search(
         &mut self,
         master_key: &KeyingMaterial<MASTER_KEY_LENGTH>,
         label: &Label,
         keywords: HashSet<Keyword>,
-        max_uid_per_chain: usize,
     ) -> Result<HashMap<Keyword, HashSet<Location>>, Error<CustomError>> {
         check_parameter_constraints::<CHAIN_TABLE_WIDTH, BLOCK_LENGTH>();
 
         // Search Findex indexes to build the keyword graph.
         let graph = self
-            .iterative_search(master_key, label, keywords.clone(), max_uid_per_chain)
+            .iterative_search(master_key, label, keywords.clone())
             .await?;
 
         // Walk the graph to get the results.

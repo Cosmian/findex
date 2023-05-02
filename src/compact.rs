@@ -124,25 +124,22 @@ pub trait FindexCompact<
             .collect::<Vec<_>>();
 
         // Unchain the Entry Table entries to be reindexed.
-        let kwi_chain_table_uids: KwiChainUids<UID_LENGTH, KWI_LENGTH> = entry_table
-            .iter()
-            .filter_map(|(uid, value)| {
-                if entry_table_items_to_reindex.contains(uid) {
-                    let k_uid = value.kwi.derive_kmac_key(CHAIN_TABLE_KEY_DERIVATION_INFO);
-                    let chain = value.unchain::<
+        let mut kwi_chain_table_uids =
+            KwiChainUids::<UID_LENGTH, KWI_LENGTH>::with_capacity(entry_table.len());
+        for (uid, value) in entry_table.iter() {
+            if entry_table_items_to_reindex.contains(uid) {
+                let k_uid = value.kwi.derive_kmac_key(CHAIN_TABLE_KEY_DERIVATION_INFO);
+                let chain = value.unchain::<
                             CHAIN_TABLE_WIDTH,
                             BLOCK_LENGTH,
                             KMAC_KEY_LENGTH,
                             DEM_KEY_LENGTH,
                             KmacKey,
                             DemScheme
-                        >(&k_uid, usize::MAX);
-                    Some((value.kwi.clone(), chain))
-                } else {
-                    None
-                }
-            })
-            .collect();
+                        >(&k_uid)?;
+                kwi_chain_table_uids.insert(value.kwi.clone(), chain);
+            }
+        }
 
         //
         // Batch fetch chains from the Chain Table. It's better for performances and
