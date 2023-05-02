@@ -136,7 +136,7 @@ pub trait FindexCompact<
                             DEM_KEY_LENGTH,
                             KmacKey,
                             DemScheme
-                        >(&k_uid, usize::MAX);
+                        >(&k_uid);
                     Some((value.kwi.clone(), chain))
                 } else {
                     None

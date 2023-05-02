@@ -15,7 +15,6 @@ use cosmian_findex::{
 use rand::Rng;
 
 const MIN_KEYWORD_LENGTH: usize = 3;
-const MAX_UID_PER_CHAIN: usize = usize::MAX;
 
 /// Converts the given strings as a `HashSet` of Keywords.
 ///
@@ -126,7 +125,6 @@ async fn test_progress_callack() -> Result<(), Error<ExampleError>> {
             &master_key,
             &label,
             HashSet::from_iter([robert_keyword.clone()]),
-            usize::MAX,
         )
         .await?;
     check_search_result(&robert_search, &robert_keyword, &robert_location);
@@ -137,7 +135,6 @@ async fn test_progress_callack() -> Result<(), Error<ExampleError>> {
             &master_key,
             &Label::random(&mut rng),
             HashSet::from_iter([robert_keyword.clone()]),
-            MAX_UID_PER_CHAIN,
         )
         .await?;
     assert_eq!(robert_search.get(&robert_keyword), Some(&HashSet::new()));
@@ -149,7 +146,6 @@ async fn test_progress_callack() -> Result<(), Error<ExampleError>> {
             &master_key,
             &label,
             HashSet::from_iter([rob_keyword.clone()]),
-            MAX_UID_PER_CHAIN,
         )
         .await?;
     findex.check_progress_callback_next_keyword = false;
@@ -163,7 +159,6 @@ async fn test_progress_callack() -> Result<(), Error<ExampleError>> {
             &master_key,
             &label,
             HashSet::from_iter([rob_keyword.clone()]),
-            MAX_UID_PER_CHAIN,
         )
         .await?;
     // check that the result do not contain robert_location (only rob_location)
@@ -230,7 +225,6 @@ async fn test_findex() -> Result<(), Error<ExampleError>> {
             &master_key,
             &label,
             HashSet::from_iter([robert_keyword.clone()]),
-            usize::MAX,
         )
         .await?;
     check_search_result(&robert_search, &robert_keyword, &robert_doe_location);
@@ -241,7 +235,6 @@ async fn test_findex() -> Result<(), Error<ExampleError>> {
             &master_key,
             &Label::random(&mut rng),
             HashSet::from_iter([robert_keyword.clone()]),
-            MAX_UID_PER_CHAIN,
         )
         .await?;
     assert_eq!(robert_search.get(&robert_keyword), Some(&HashSet::new()));
@@ -252,7 +245,6 @@ async fn test_findex() -> Result<(), Error<ExampleError>> {
             &master_key,
             &label,
             HashSet::from_iter([doe_keyword.clone()]),
-            MAX_UID_PER_CHAIN,
         )
         .await?;
     check_search_result(&doe_search, &doe_keyword, &robert_doe_location);
@@ -264,7 +256,6 @@ async fn test_findex() -> Result<(), Error<ExampleError>> {
             &master_key,
             &label,
             HashSet::from_iter([rob_keyword.clone()]),
-            MAX_UID_PER_CHAIN,
         )
         .await?;
     check_search_result(&rob_search, &rob_keyword, &rob_location);
@@ -275,7 +266,6 @@ async fn test_findex() -> Result<(), Error<ExampleError>> {
             &master_key,
             &label,
             HashSet::from_iter([rob_keyword.clone()]),
-            MAX_UID_PER_CHAIN,
         )
         .await?;
     findex.check_progress_callback_next_keyword = false;
@@ -308,7 +298,6 @@ async fn test_findex() -> Result<(), Error<ExampleError>> {
             &master_key,
             &label,
             HashSet::from_iter([jane_keyword.clone()]),
-            MAX_UID_PER_CHAIN,
         )
         .await?;
     check_search_result(&jane_search, &jane_keyword, &jane_doe_location);
@@ -319,7 +308,6 @@ async fn test_findex() -> Result<(), Error<ExampleError>> {
             &master_key,
             &label,
             HashSet::from_iter([robert_keyword.clone()]),
-            MAX_UID_PER_CHAIN,
         )
         .await?;
     check_search_result(&robert_search, &robert_keyword, &robert_doe_location);
@@ -330,7 +318,6 @@ async fn test_findex() -> Result<(), Error<ExampleError>> {
             &master_key,
             &label,
             HashSet::from_iter([doe_keyword.clone()]),
-            MAX_UID_PER_CHAIN,
         )
         .await?;
     check_search_result(&doe_search, &doe_keyword, &jane_doe_location);
@@ -343,7 +330,6 @@ async fn test_findex() -> Result<(), Error<ExampleError>> {
             &master_key,
             &label,
             HashSet::from_iter([rob_keyword.clone()]),
-            MAX_UID_PER_CHAIN,
         )
         .await?;
     check_search_result(&rob_search, &rob_keyword, &rob_location);
@@ -367,7 +353,6 @@ async fn test_findex() -> Result<(), Error<ExampleError>> {
                 &master_key,
                 &new_label,
                 HashSet::from_iter([doe_keyword.clone()]),
-                MAX_UID_PER_CHAIN,
             )
             .await?;
         check_search_result(&doe_search, &doe_keyword, &robert_doe_location);
@@ -389,7 +374,6 @@ async fn test_findex() -> Result<(), Error<ExampleError>> {
             &master_key,
             &new_label,
             HashSet::from_iter([jane_keyword.clone()]),
-            MAX_UID_PER_CHAIN,
         )
         .await?;
     // Jane is not indexed anymore.
@@ -401,7 +385,6 @@ async fn test_findex() -> Result<(), Error<ExampleError>> {
             &master_key,
             &new_label,
             HashSet::from_iter([doe_keyword.clone()]),
-            MAX_UID_PER_CHAIN,
         )
         .await?;
     check_search_result(&doe_search, &doe_keyword, &robert_doe_location);
@@ -413,7 +396,6 @@ async fn test_findex() -> Result<(), Error<ExampleError>> {
             &master_key,
             &label,
             HashSet::from_iter([doe_keyword.clone()]),
-            MAX_UID_PER_CHAIN,
         )
         .await?;
     assert_eq!(doe_search.get(&doe_keyword), Some(&HashSet::new()));
@@ -434,7 +416,6 @@ async fn test_findex() -> Result<(), Error<ExampleError>> {
             &master_key,
             &new_label,
             HashSet::from_iter([doe_keyword.clone()]),
-            MAX_UID_PER_CHAIN,
         )
         .await?;
     check_search_result(&doe_search, &doe_keyword, &robert_doe_location);
@@ -446,7 +427,6 @@ async fn test_findex() -> Result<(), Error<ExampleError>> {
             &master_key,
             &label,
             HashSet::from_iter([doe_keyword.clone()]),
-            MAX_UID_PER_CHAIN,
         )
         .await?;
     assert_eq!(doe_search.get(&doe_keyword), Some(&HashSet::new()));
@@ -465,7 +445,6 @@ async fn test_findex() -> Result<(), Error<ExampleError>> {
                 &master_key,
                 &new_label,
                 HashSet::from_iter([doe_keyword.clone()]),
-                MAX_UID_PER_CHAIN,
             )
             .await?;
         check_search_result(&doe_search, &doe_keyword, &robert_doe_location);
@@ -488,7 +467,6 @@ async fn test_findex() -> Result<(), Error<ExampleError>> {
             &master_key,
             &new_label,
             HashSet::from_iter([doe_keyword.clone()]),
-            MAX_UID_PER_CHAIN,
         )
         .await?;
     check_search_result(&doe_search, &doe_keyword, &robert_doe_location);
@@ -612,7 +590,7 @@ async fn test_first_names() -> Result<(), Error<ExampleError>> {
     for s in searches {
         let keywords = HashSet::from_iter([Keyword::from(s.as_str())]);
         let graph_results = graph_findex
-            .search(&master_key, &label, keywords.clone(), MAX_UID_PER_CHAIN)
+            .search(&master_key, &label, keywords.clone())
             .await?;
         assert!(
             !graph_results.is_empty(),
@@ -620,9 +598,7 @@ async fn test_first_names() -> Result<(), Error<ExampleError>> {
         );
         total_results += graph_results.len();
         // naive search
-        let naive_results = naive_findex
-            .search(&master_key, &label, keywords, MAX_UID_PER_CHAIN)
-            .await?;
+        let naive_results = naive_findex.search(&master_key, &label, keywords).await?;
         assert_eq!(
             graph_results.len(),
             naive_results.len(),
@@ -688,7 +664,6 @@ async fn test_graph_compacting() {
             &master_key,
             &label,
             HashSet::from_iter([rob_keyword.clone()]),
-            MAX_UID_PER_CHAIN,
         )
         .await
         .unwrap();
@@ -727,7 +702,6 @@ async fn test_graph_compacting() {
                 &master_key,
                 &label,
                 HashSet::from_iter([rob_keyword.clone()]),
-                MAX_UID_PER_CHAIN,
             )
             .await
             .unwrap();
@@ -799,7 +773,6 @@ async fn test_live_compacting() {
             &master_key,
             &label,
             HashSet::from_iter([robert_keyword.clone()]),
-            MAX_UID_PER_CHAIN,
         )
         .await
         .unwrap();
@@ -812,7 +785,6 @@ async fn test_live_compacting() {
             &master_key,
             &label,
             HashSet::from_iter([doe_keyword.clone()]),
-            MAX_UID_PER_CHAIN,
         )
         .await
         .unwrap();
@@ -976,7 +948,6 @@ async fn test_search_cyclic_graph() {
             &master_key,
             &label,
             HashSet::from_iter([a_keyword.clone(), i_keyword.clone()]),
-            MAX_UID_PER_CHAIN,
         )
         .await
         .unwrap();
