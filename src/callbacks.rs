@@ -230,7 +230,18 @@ pub trait FetchChains<
                     ChainTableValue::decrypt::<DEM_KEY_LENGTH, DemScheme>(
                         &kwi_value,
                         encrypted_value,
-                    )?,
+                    )
+                    .map_err(|err| {
+                        Error::<CustomError>::CryptoError(format!(
+                            "fail to decrypt one of the `value` returned by the fetch chains \
+                             callback (uid was '{uid:?}', value was {}, crypto error was '{err}')",
+                            if encrypted_value.is_empty() {
+                                "empty".to_owned()
+                            } else {
+                                format!("'{encrypted_value:?}'")
+                            },
+                        ))
+                    })?,
                 ));
             }
 

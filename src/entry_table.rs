@@ -344,10 +344,10 @@ impl<const UID_LENGTH: usize, const KWI_LENGTH: usize> EntryTable<UID_LENGTH, KW
                 DEM_KEY_LENGTH,
                 DemScheme,
             >(k_value, v)
-            .map_err(|_| {
+            .map_err(|err| {
                 Error::CryptoError(format!(
                     "fail to decrypt one of the `value` returned by the fetch entries callback \
-                     (uid was '{k:?}', value was {})",
+                     (uid was '{k:?}', value was {}, crypto error was '{err}')",
                     if v.is_empty() {
                         "empty".to_owned()
                     } else {
