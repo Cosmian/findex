@@ -14,9 +14,7 @@ use crate::{
     error::{CallbackError, Error},
     keys::KeyingMaterial,
     parameters::check_parameter_constraints,
-    structs::{
-        BlockType, EncryptedTable, IndexedValue, Keyword, KeywordHash, Label, Uid, UpsertData,
-    },
+    structs::{BlockType, EncryptedTable, IndexedValue, Keyword, Label, Uid, UpsertData},
     FindexCallbacks, ENTRY_TABLE_KEY_DERIVATION_INFO,
 };
 
@@ -36,26 +34,22 @@ pub trait FindexUpsert<
 {
     /// Index the given values for the associated keywords.
     ///
-    /// Later searching for such a keyword will result in finding the associated
-    /// value(s).
-    ///
     /// # Parameters
     ///
     /// - `master_key`  : Findex master key
-    /// - `label`       : additional public information used for hashing Entry
-    ///   Table UIDs
-    /// - `additions`   : keywords to index values for
+    /// - `label`       : additional public information used in key hashing
+    /// - `items`       : set of keywords used to index values
     async fn add(
         &mut self,
         master_key: &KeyingMaterial<MASTER_KEY_LENGTH>,
         label: &Label,
-        additions: HashMap<IndexedValue, HashSet<Keyword>>,
+        items: HashMap<IndexedValue, HashSet<Keyword>>,
     ) -> Result<(), Error<CustomError>> {
-        let mut new_chains = HashMap::<KeywordHash, HashMap<IndexedValue, BlockType>>::default();
-        for (indexed_value, keywords) in additions {
+        let mut new_chains = HashMap::<Keyword, HashMap<IndexedValue, BlockType>>::default();
+        for (indexed_value, keywords) in items {
             for keyword in keywords {
                 new_chains
-                    .entry(keyword.hash())
+                    .entry(keyword)
                     .or_default()
                     .insert(indexed_value.clone(), BlockType::Addition);
             }
@@ -63,28 +57,24 @@ pub trait FindexUpsert<
         self.upsert(master_key, label, new_chains).await
     }
 
-    /// Removes the given values from the Findex indexes for the associated
-    /// keywords.
-    ///
-    /// Later searching for such a keyword will return no value.
+    /// Removes the given values from the indexes for the associated keywords.
     ///
     /// # Parameters
     ///
     /// - `master_key`  : Findex master key
-    /// - `label`       : additional public information used for hashing Entry
-    ///   Table UIDs
-    /// - `deletions`   : keywords to index values for
+    /// - `label`       : additional public information used in key hashing
+    /// - `items`       : set of keywords used to index values
     async fn remove(
         &mut self,
         master_key: &KeyingMaterial<MASTER_KEY_LENGTH>,
         label: &Label,
-        deletions: HashMap<IndexedValue, HashSet<Keyword>>,
+        items: HashMap<IndexedValue, HashSet<Keyword>>,
     ) -> Result<(), Error<CustomError>> {
-        let mut new_chains = HashMap::<KeywordHash, HashMap<IndexedValue, BlockType>>::default();
-        for (indexed_value, keywords) in deletions.into_iter() {
+        let mut new_chains = HashMap::<Keyword, HashMap<IndexedValue, BlockType>>::default();
+        for (indexed_value, keywords) in items.into_iter() {
             for keyword in keywords {
                 new_chains
-                    .entry(keyword.hash())
+                    .entry(keyword)
                     .or_default()
                     .insert(indexed_value.clone(), BlockType::Deletion);
             }
@@ -96,15 +86,15 @@ pub trait FindexUpsert<
     ///
     /// # Parameters
     ///
-    /// - `master_key`  : Findex master key
-    /// - `label`       : additional public information used for hashing Entry
-    ///   Table UIDs
-    /// - `modifications`   : keywords to index values for
+    /// - `master_key`      : Findex master key
+    /// - `label`           : additional public information used in key hashing
+    /// - `modifications`   : set of operations to apply on the associated value
+    ///   for the associated keyword
     async fn upsert(
         &mut self,
         master_key: &KeyingMaterial<MASTER_KEY_LENGTH>,
         label: &Label,
-        modifications: HashMap<KeywordHash, HashMap<IndexedValue, BlockType>>,
+        modifications: HashMap<Keyword, HashMap<IndexedValue, BlockType>>,
     ) -> Result<(), Error<CustomError>> {
         check_parameter_constraints::<CHAIN_TABLE_WIDTH, BLOCK_LENGTH>();
 
@@ -115,7 +105,8 @@ pub trait FindexUpsert<
         // Compute the Entry Table UIDs.
         let mut new_chains = modifications
             .into_iter()
-            .map(|(keyword_hash, indexed_values)| {
+            .map(|(keyword, indexed_values)| {
+                let keyword_hash = keyword.hash();
                 (
                     EntryTable::<UID_LENGTH, KWI_LENGTH>::generate_uid(
                         &k_uid,
