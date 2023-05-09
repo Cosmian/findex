@@ -70,10 +70,11 @@ pub trait FindexUpsert<
     ///
     /// # Parameters
     ///
-    /// - `master_key`      : Findex master key
-    /// - `label`           : additional public information used in key hashing
-    /// - `modifications`   : set of operations to apply on the associated value
-    ///   for the associated keyword
+    /// - `master_key`  : Findex master key
+    /// - `label`       : additional public information used in key hashing
+    /// - `additions`   : values to indexed for a set of keywords
+    /// - `deletions`   : values to remove from the indexes for a set of
+    ///   keywords
     async fn upsert(
         &mut self,
         master_key: &KeyingMaterial<MASTER_KEY_LENGTH>,
