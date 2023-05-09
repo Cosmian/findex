@@ -88,28 +88,28 @@ pub trait FindexUpsert<
         let k_uid: KmacKey = master_key.derive_kmac_key(ENTRY_TABLE_KEY_DERIVATION_INFO);
         let k_value = master_key.derive_dem_key(ENTRY_TABLE_KEY_DERIVATION_INFO);
 
-        let mut modifications =
+        let mut new_chains =
             HashMap::<KeywordHash, HashMap<IndexedValue, BlockType>>::with_capacity(
                 additions.len() + deletions.len(),
             );
-        for (value, keywords) in additions {
+        for (indexed_value, keywords) in additions {
             for keyword in keywords {
-                modifications
+                new_chains
                     .entry(keyword.hash())
                     .or_default()
-                    .insert(value.clone(), BlockType::Addition);
+                    .insert(indexed_value.clone(), BlockType::Addition);
             }
         }
-        for (value, keywords) in deletions {
+        for (indexed_value, keywords) in deletions {
             for keyword in keywords {
-                modifications
+                new_chains
                     .entry(keyword.hash())
                     .or_default()
-                    .insert(value.clone(), BlockType::Deletion);
+                    .insert(indexed_value.clone(), BlockType::Deletion);
             }
         }
         // Compute the Entry Table UIDs.
-        let mut new_chains = modifications
+        let mut new_chains = new_chains
             .into_iter()
             .map(|(keyword_hash, indexed_values)| {
                 (
