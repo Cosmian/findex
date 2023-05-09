@@ -108,12 +108,7 @@ async fn test_progress_callack() -> Result<(), Error<ExampleError>> {
 
     let mut findex = FindexInMemory::default();
     findex
-        .upsert(
-            &master_key,
-            &label,
-            indexed_value_to_keywords,
-            HashMap::new(),
-        )
+        .add(&master_key, &label, indexed_value_to_keywords)
         .await?;
 
     let robert_keyword = Keyword::from("robert");
@@ -207,12 +202,7 @@ async fn test_findex() -> Result<(), Error<ExampleError>> {
 
     let mut findex = FindexInMemory::default();
     findex
-        .upsert(
-            &master_key,
-            &label,
-            indexed_value_to_keywords,
-            HashMap::new(),
-        )
+        .add(&master_key, &label, indexed_value_to_keywords)
         .await?;
 
     let robert_keyword = Keyword::from("robert");
@@ -283,12 +273,7 @@ async fn test_findex() -> Result<(), Error<ExampleError>> {
         hashset_keywords(&["jane", "doe"]),
     );
     findex
-        .upsert(
-            &master_key,
-            &label,
-            indexed_value_to_keywords,
-            HashMap::new(),
-        )
+        .add(&master_key, &label, indexed_value_to_keywords)
         .await?;
 
     // search jane
@@ -457,9 +442,7 @@ async fn test_findex() -> Result<(), Error<ExampleError>> {
         IndexedValue::from(john_doe_location.clone()),
         HashSet::from_iter([doe_keyword.clone()]),
     );
-    findex
-        .upsert(&master_key, &new_label, HashMap::new(), deletions)
-        .await?;
+    findex.remove(&master_key, &new_label, deletions).await?;
 
     // Assert John Doe cannot be found by searching for Doe.
     let doe_search = findex
@@ -525,9 +508,7 @@ async fn test_first_names() -> Result<(), Error<ExampleError>> {
             add_keyword_graph(&Keyword::from(first_name), MIN_KEYWORD_LENGTH, &mut map);
         }
 
-        graph_findex
-            .upsert(&master_key, &label, map, HashMap::new())
-            .await?;
+        graph_findex.add(&master_key, &label, map).await?;
 
         // naive Findex
         let mut keywords = HashSet::<Keyword>::new();
@@ -550,9 +531,7 @@ async fn test_first_names() -> Result<(), Error<ExampleError>> {
             let iv = IndexedValue::Location(Location::from(format!("{first_name}_{i}").as_str()));
             map_naive.insert(iv, keywords.clone());
         }
-        naive_findex
-            .upsert(&master_key, &label, map_naive, HashMap::new())
-            .await?;
+        naive_findex.add(&master_key, &label, map_naive).await?;
 
         if first_names_number % 1000 == 0 {
             println!("    ...{first_names_number}");
@@ -649,12 +628,7 @@ async fn test_graph_compacting() {
     // Graph upsert
     let mut label = Label::random(&mut rng);
     findex
-        .upsert(
-            &master_key,
-            &label,
-            indexed_value_to_keywords,
-            HashMap::new(),
-        )
+        .add(&master_key, &label, indexed_value_to_keywords)
         .await
         .unwrap();
 
@@ -735,35 +709,20 @@ async fn test_live_compacting() {
     for _ in 0..100 {
         // Add some keywords.
         findex
-            .upsert(
-                &master_key,
-                &label,
-                indexed_value_to_keywords.clone(),
-                HashMap::new(),
-            )
+            .add(&master_key, &label, indexed_value_to_keywords.clone())
             .await
             .unwrap();
 
         // Remove them.
         findex
-            .upsert(
-                &master_key,
-                &label,
-                HashMap::new(),
-                indexed_value_to_keywords.clone(),
-            )
+            .remove(&master_key, &label, indexed_value_to_keywords.clone())
             .await
             .unwrap();
     }
 
     // Add some keywords.
     findex
-        .upsert(
-            &master_key,
-            &label,
-            indexed_value_to_keywords.clone(),
-            HashMap::new(),
-        )
+        .add(&master_key, &label, indexed_value_to_keywords.clone())
         .await
         .unwrap();
 
@@ -804,12 +763,7 @@ async fn test_live_compacting() {
     for _ in 0..100 {
         // Add some keywords.
         findex
-            .upsert(
-                &master_key,
-                &label,
-                indexed_value_to_keywords.clone(),
-                HashMap::new(),
-            )
+            .add(&master_key, &label, indexed_value_to_keywords.clone())
             .await
             .unwrap();
     }
@@ -938,10 +892,7 @@ async fn test_search_cyclic_graph() {
     );
 
     // Upsert the graph.
-    findex
-        .upsert(&master_key, &label, cyclic_graph, HashMap::new())
-        .await
-        .unwrap();
+    findex.add(&master_key, &label, cyclic_graph).await.unwrap();
 
     let res = findex
         .search(

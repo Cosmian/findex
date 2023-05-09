@@ -34,15 +34,10 @@ pub trait FindexUpsert<
     CustomError: std::error::Error + CallbackError,
 >: FindexCallbacks<CustomError, UID_LENGTH>
 {
-    /// Index the given added values for the given keywords. Desindex the given
-    /// deleted values for the given keywords.
+    /// Index the given values for the associated keywords.
     ///
-    /// After upserting, searching for a keyword with added values will result
-    /// in finding (at least) these values. Searching for a keyword with deleted
-    /// values will not result in finding these values.
-    ///
-    /// Indexing and desindexing the same value for the same keyword in the same
-    /// upsert operation, does nothing.
+    /// Later searching for such a keyword will result in finding the associated
+    /// value(s).
     ///
     /// # Parameters
     ///
@@ -50,21 +45,12 @@ pub trait FindexUpsert<
     /// - `label`       : additional public information used for hashing Entry
     ///   Table UIDs
     /// - `additions`   : keywords to index values for
-    /// - `deletions`   : keywords to desindex values for
-    async fn upsert(
+    async fn add(
         &mut self,
         master_key: &KeyingMaterial<MASTER_KEY_LENGTH>,
         label: &Label,
         additions: HashMap<IndexedValue, HashSet<Keyword>>,
-        deletions: HashMap<IndexedValue, HashSet<Keyword>>,
     ) -> Result<(), Error<CustomError>> {
-        check_parameter_constraints::<CHAIN_TABLE_WIDTH, BLOCK_LENGTH>();
-
-        let mut rng = CsRng::from_entropy();
-        let k_uid: KmacKey = master_key.derive_kmac_key(ENTRY_TABLE_KEY_DERIVATION_INFO);
-        let k_value = master_key.derive_dem_key(ENTRY_TABLE_KEY_DERIVATION_INFO);
-
-        // Revert the `HashMap`.
         let mut new_chains = HashMap::<KeywordHash, HashMap<IndexedValue, BlockType>>::default();
         for (indexed_value, keywords) in additions {
             for keyword in keywords {
@@ -74,8 +60,28 @@ pub trait FindexUpsert<
                     .insert(indexed_value.clone(), BlockType::Addition);
             }
         }
-        // Adding deletions after additions only keeps deletions.
-        for (indexed_value, keywords) in deletions {
+        self.upsert(master_key, label, new_chains).await
+    }
+
+    /// Removes the given values from the Findex indexes for the associated
+    /// keywords.
+    ///
+    /// Later searching for such a keyword will return no value.
+    ///
+    /// # Parameters
+    ///
+    /// - `master_key`  : Findex master key
+    /// - `label`       : additional public information used for hashing Entry
+    ///   Table UIDs
+    /// - `deletions`   : keywords to index values for
+    async fn remove(
+        &mut self,
+        master_key: &KeyingMaterial<MASTER_KEY_LENGTH>,
+        label: &Label,
+        deletions: HashMap<IndexedValue, HashSet<Keyword>>,
+    ) -> Result<(), Error<CustomError>> {
+        let mut new_chains = HashMap::<KeywordHash, HashMap<IndexedValue, BlockType>>::default();
+        for (indexed_value, keywords) in deletions.into_iter() {
             for keyword in keywords {
                 new_chains
                     .entry(keyword.hash())
@@ -83,8 +89,31 @@ pub trait FindexUpsert<
                     .insert(indexed_value.clone(), BlockType::Deletion);
             }
         }
+        self.upsert(master_key, label, new_chains).await
+    }
+
+    /// Upsert the given chain elements in Findex tables.
+    ///
+    /// # Parameters
+    ///
+    /// - `master_key`  : Findex master key
+    /// - `label`       : additional public information used for hashing Entry
+    ///   Table UIDs
+    /// - `modifications`   : keywords to index values for
+    async fn upsert(
+        &mut self,
+        master_key: &KeyingMaterial<MASTER_KEY_LENGTH>,
+        label: &Label,
+        modifications: HashMap<KeywordHash, HashMap<IndexedValue, BlockType>>,
+    ) -> Result<(), Error<CustomError>> {
+        check_parameter_constraints::<CHAIN_TABLE_WIDTH, BLOCK_LENGTH>();
+
+        let mut rng = CsRng::from_entropy();
+        let k_uid: KmacKey = master_key.derive_kmac_key(ENTRY_TABLE_KEY_DERIVATION_INFO);
+        let k_value = master_key.derive_dem_key(ENTRY_TABLE_KEY_DERIVATION_INFO);
+
         // Compute the Entry Table UIDs.
-        let mut new_chains = new_chains
+        let mut new_chains = modifications
             .into_iter()
             .map(|(keyword_hash, indexed_values)| {
                 (
