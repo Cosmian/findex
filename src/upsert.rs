@@ -14,7 +14,9 @@ use crate::{
     error::{CallbackError, Error},
     keys::KeyingMaterial,
     parameters::check_parameter_constraints,
-    structs::{BlockType, EncryptedTable, IndexedValue, Keyword, Label, Uid, UpsertData},
+    structs::{
+        BlockType, EncryptedTable, IndexedValue, Keyword, KeywordHash, Label, Uid, UpsertData,
+    },
     FindexCallbacks, ENTRY_TABLE_KEY_DERIVATION_INFO,
 };
 
@@ -45,16 +47,7 @@ pub trait FindexUpsert<
         label: &Label,
         items: HashMap<IndexedValue, HashSet<Keyword>>,
     ) -> Result<(), Error<CustomError>> {
-        let mut new_chains = HashMap::<Keyword, HashMap<IndexedValue, BlockType>>::default();
-        for (indexed_value, keywords) in items {
-            for keyword in keywords {
-                new_chains
-                    .entry(keyword)
-                    .or_default()
-                    .insert(indexed_value.clone(), BlockType::Addition);
-            }
-        }
-        self.upsert(master_key, label, new_chains).await
+        self.upsert(master_key, label, items, HashMap::new()).await
     }
 
     /// Removes the given values from the indexes for the associated keywords.
@@ -70,16 +63,7 @@ pub trait FindexUpsert<
         label: &Label,
         items: HashMap<IndexedValue, HashSet<Keyword>>,
     ) -> Result<(), Error<CustomError>> {
-        let mut new_chains = HashMap::<Keyword, HashMap<IndexedValue, BlockType>>::default();
-        for (indexed_value, keywords) in items.into_iter() {
-            for keyword in keywords {
-                new_chains
-                    .entry(keyword)
-                    .or_default()
-                    .insert(indexed_value.clone(), BlockType::Deletion);
-            }
-        }
-        self.upsert(master_key, label, new_chains).await
+        self.upsert(master_key, label, HashMap::new(), items).await
     }
 
     /// Upsert the given chain elements in Findex tables.
@@ -94,7 +78,8 @@ pub trait FindexUpsert<
         &mut self,
         master_key: &KeyingMaterial<MASTER_KEY_LENGTH>,
         label: &Label,
-        modifications: HashMap<Keyword, HashMap<IndexedValue, BlockType>>,
+        additions: HashMap<IndexedValue, HashSet<Keyword>>,
+        deletions: HashMap<IndexedValue, HashSet<Keyword>>,
     ) -> Result<(), Error<CustomError>> {
         check_parameter_constraints::<CHAIN_TABLE_WIDTH, BLOCK_LENGTH>();
 
@@ -102,11 +87,30 @@ pub trait FindexUpsert<
         let k_uid: KmacKey = master_key.derive_kmac_key(ENTRY_TABLE_KEY_DERIVATION_INFO);
         let k_value = master_key.derive_dem_key(ENTRY_TABLE_KEY_DERIVATION_INFO);
 
+        let mut modifications =
+            HashMap::<KeywordHash, HashMap<IndexedValue, BlockType>>::with_capacity(
+                additions.len() + deletions.len(),
+            );
+        for (value, keywords) in additions {
+            for keyword in keywords {
+                modifications
+                    .entry(keyword.hash())
+                    .or_default()
+                    .insert(value.clone(), BlockType::Addition);
+            }
+        }
+        for (value, keywords) in deletions {
+            for keyword in keywords {
+                modifications
+                    .entry(keyword.hash())
+                    .or_default()
+                    .insert(value.clone(), BlockType::Deletion);
+            }
+        }
         // Compute the Entry Table UIDs.
         let mut new_chains = modifications
             .into_iter()
-            .map(|(keyword, indexed_values)| {
-                let keyword_hash = keyword.hash();
+            .map(|(keyword_hash, indexed_values)| {
                 (
                     EntryTable::<UID_LENGTH, KWI_LENGTH>::generate_uid(
                         &k_uid,
