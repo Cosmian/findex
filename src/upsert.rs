@@ -34,23 +34,47 @@ pub trait FindexUpsert<
     CustomError: std::error::Error + CallbackError,
 >: FindexCallbacks<CustomError, UID_LENGTH>
 {
-    /// Index the given added values for the given keywords. Desindex the given
-    /// deleted values for the given keywords.
-    ///
-    /// After upserting, searching for a keyword with added values will result
-    /// in finding (at least) these values. Searching for a keyword with deleted
-    /// values will not result in finding these values.
-    ///
-    /// Indexing and desindexing the same value for the same keyword in the same
-    /// upsert operation, does nothing.
+    /// Index the given values for the associated keywords.
     ///
     /// # Parameters
     ///
     /// - `master_key`  : Findex master key
-    /// - `label`       : additional public information used for hashing Entry
-    ///   Table UIDs
-    /// - `additions`   : keywords to index values for
-    /// - `deletions`   : keywords to desindex values for
+    /// - `label`       : additional public information used in key hashing
+    /// - `items`       : set of keywords used to index values
+    async fn add(
+        &mut self,
+        master_key: &KeyingMaterial<MASTER_KEY_LENGTH>,
+        label: &Label,
+        items: HashMap<IndexedValue, HashSet<Keyword>>,
+    ) -> Result<(), Error<CustomError>> {
+        self.upsert(master_key, label, items, HashMap::new()).await
+    }
+
+    /// Removes the given values from the indexes for the associated keywords.
+    ///
+    /// # Parameters
+    ///
+    /// - `master_key`  : Findex master key
+    /// - `label`       : additional public information used in key hashing
+    /// - `items`       : set of keywords used to index values
+    async fn remove(
+        &mut self,
+        master_key: &KeyingMaterial<MASTER_KEY_LENGTH>,
+        label: &Label,
+        items: HashMap<IndexedValue, HashSet<Keyword>>,
+    ) -> Result<(), Error<CustomError>> {
+        self.upsert(master_key, label, HashMap::new(), items).await
+    }
+
+    /// Upsert the given chain elements in Findex tables.
+    ///
+    /// # Parameters
+    ///
+    /// - `master_key`  : Findex master key
+    /// - `label`       : additional public information used in key hashing
+    /// - `additions`   : values to indexed for a set of keywords
+    /// - `deletions`   : values to remove from the indexes for a set of
+    ///   keywords
     async fn upsert(
         &mut self,
         master_key: &KeyingMaterial<MASTER_KEY_LENGTH>,
@@ -64,8 +88,10 @@ pub trait FindexUpsert<
         let k_uid: KmacKey = master_key.derive_kmac_key(ENTRY_TABLE_KEY_DERIVATION_INFO);
         let k_value = master_key.derive_dem_key(ENTRY_TABLE_KEY_DERIVATION_INFO);
 
-        // Revert the `HashMap`.
-        let mut new_chains = HashMap::<KeywordHash, HashMap<IndexedValue, BlockType>>::default();
+        let mut new_chains =
+            HashMap::<KeywordHash, HashMap<IndexedValue, BlockType>>::with_capacity(
+                additions.len() + deletions.len(),
+            );
         for (indexed_value, keywords) in additions {
             for keyword in keywords {
                 new_chains
@@ -74,7 +100,6 @@ pub trait FindexUpsert<
                     .insert(indexed_value.clone(), BlockType::Addition);
             }
         }
-        // Adding deletions after additions only keeps deletions.
         for (indexed_value, keywords) in deletions {
             for keyword in keywords {
                 new_chains

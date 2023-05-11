@@ -45,7 +45,7 @@ fn main() {
     // Prepare indexes to be search
     //
     let mut findex = FindexInMemory::default();
-    block_on(findex.upsert(&master_key, &label, locations_and_words, HashMap::new())).expect("msg");
+    block_on(findex.add(&master_key, &label, locations_and_words)).expect("msg");
 
     //
     // Search 1000 words
