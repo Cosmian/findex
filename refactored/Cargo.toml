@@ -1,0 +1,11 @@
+[package]
+name = "refactored"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+cosmian_crypto_core = { git = "https://github.com/Cosmian/crypto_core.git", branch = "feature/add_compiler_feature", features = ["aes", "kdf", "ser"]}
+tiny-keccak = { version = "2.0.2", features = ["kmac", "sha3"] }
+zeroize = "1.6.0"
