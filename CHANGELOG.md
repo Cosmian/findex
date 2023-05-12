@@ -2,6 +2,10 @@
 
 All notable changes to this project will be documented in this file.
 
+## Unreleased
+
+Global refactoring.
+
 ## [5.0.3] - 2023-09-18
 
 ### Bug Fixes
