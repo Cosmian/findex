@@ -4,8 +4,8 @@
 
 - [Overview](#overview)
 - [Benchmark Results](#benchmark-results)
-  - [search](#search)
-  - [upsert](#upsert)
+    - [search](#search)
+    - [upsert](#upsert)
 
 ## Overview
 

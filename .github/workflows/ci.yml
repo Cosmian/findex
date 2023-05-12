@@ -7,14 +7,14 @@ jobs:
   cargo-lint:
     uses: Cosmian/reusable_workflows/.github/workflows/cargo-nursery.yml@develop
     with:
-      toolchain: stable
+      toolchain: nightly-2022-10-28
   cargo-publish:
     needs:
       - cargo-lint
     uses: Cosmian/reusable_workflows/.github/workflows/cargo-publish.yml@develop
     if: startsWith(github.ref, 'refs/tags/')
     with:
-      toolchain: stable
+      toolchain: nightly-2022-10-28
     secrets: inherit
   cleanup:
     needs:
