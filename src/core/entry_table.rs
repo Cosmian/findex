@@ -139,7 +139,8 @@ impl<const UID_LENGTH: usize, const KWI_LENGTH: usize> EntryTableValue<UID_LENGT
                 // Encrypt and insert the current value in the Chain Table.
                 let encrypted_chain_table_value = chain_table_value
                     .encrypt::<TABLE_WIDTH, DEM_KEY_LENGTH, DemScheme>(kwi_value, rng)?;
-                chain_table.insert(self.chain_table_uid.clone(), encrypted_chain_table_value);
+                chain_table
+                    .replace_or_push(self.chain_table_uid.clone(), encrypted_chain_table_value);
                 // Start a new line in the chain.
                 self.next_chain_table_uid::<BLOCK_LENGTH, KMAC_KEY_LENGTH, KmacKey>(kwi_uid);
                 chain_table_value = ChainTableValue::new::<TABLE_WIDTH>(vec![block])?;
@@ -149,7 +150,7 @@ impl<const UID_LENGTH: usize, const KWI_LENGTH: usize> EntryTableValue<UID_LENGT
         // Encrypt and insert the value in the Chain Table.
         let encrypted_chain_table_value =
             chain_table_value.encrypt::<TABLE_WIDTH, DEM_KEY_LENGTH, DemScheme>(kwi_value, rng)?;
-        chain_table.insert(self.chain_table_uid.clone(), encrypted_chain_table_value);
+        chain_table.replace_or_push(self.chain_table_uid.clone(), encrypted_chain_table_value);
         Ok(())
     }
 
@@ -372,7 +373,7 @@ impl<const UID_LENGTH: usize, const KWI_LENGTH: usize> EntryTable<UID_LENGTH, KW
     ) -> Result<EncryptedTable<UID_LENGTH>, FindexErr> {
         let mut encrypted_entry_table = EncryptedTable::with_capacity(self.len());
         for (k, v) in self.iter() {
-            encrypted_entry_table.insert(
+            encrypted_entry_table.replace_or_push(
                 k.clone(),
                 EntryTableValue::<UID_LENGTH, KWI_LENGTH>::encrypt::<
                     BLOCK_LENGTH,

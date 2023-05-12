@@ -112,7 +112,7 @@ pub fn js_value_to_encrypted_table<const UID_LENGTH: usize>(
         let uid = get_bytes_from_object_property(&obj, "uid", &object_source_for_errors, i)?;
 
         let value = get_bytes_from_object_property(&obj, "value", &object_source_for_errors, i)?;
-        encrypted_table.insert(
+        encrypted_table.push((
             Uid::try_from_bytes(&uid).map_err(|e| {
                 FindexErr::CallBack(format!(
                     "cannot parse the `uid` returned by `{callback_name_for_errors}` at position \
@@ -121,7 +121,7 @@ pub fn js_value_to_encrypted_table<const UID_LENGTH: usize>(
                 ))
             })?,
             value.clone(),
-        );
+        ));
     }
     Ok(encrypted_table)
 }

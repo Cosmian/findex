@@ -365,16 +365,41 @@ impl_byte_array!(Uid);
 // NOTE TBZ: need struct to implement `Serializable`
 #[must_use]
 #[derive(Default, Debug, Clone)]
-pub struct EncryptedTable<const UID_LENGTH: usize>(HashMap<Uid<UID_LENGTH>, Vec<u8>>);
+pub struct EncryptedTable<const UID_LENGTH: usize>(Vec<(Uid<UID_LENGTH>, Vec<u8>)>);
 
 impl<const UID_LENGTH: usize> EncryptedTable<UID_LENGTH> {
     pub fn with_capacity(capacity: usize) -> Self {
-        Self(HashMap::with_capacity(capacity))
+        Self(Vec::with_capacity(capacity))
+    }
+
+    pub fn contains_uid(&self, target_uid: &Uid<UID_LENGTH>) -> bool {
+        self.get(target_uid).is_some()
+    }
+
+    pub fn get(&self, target_uid: &Uid<UID_LENGTH>) -> Option<&Vec<u8>> {
+        for (uid, value) in &self.0 {
+            if uid == target_uid {
+                return Some(value);
+            }
+        }
+
+        None
+    }
+
+    pub fn replace_or_push(&mut self, target_uid: Uid<UID_LENGTH>, new_value: Vec<u8>) {
+        for (uid, value) in &mut self.0 {
+            if uid == &target_uid {
+                *value = new_value;
+                return;
+            }
+        }
+
+        self.push((target_uid, new_value));
     }
 }
 
 impl<const UID_LENGTH: usize> Deref for EncryptedTable<UID_LENGTH> {
-    type Target = HashMap<Uid<UID_LENGTH>, Vec<u8>>;
+    type Target = Vec<(Uid<UID_LENGTH>, Vec<u8>)>;
 
     #[inline]
     fn deref(&self) -> &Self::Target {
@@ -389,9 +414,7 @@ impl<const UID_LENGTH: usize> DerefMut for EncryptedTable<UID_LENGTH> {
     }
 }
 
-impl<const UID_LENGTH: usize> From<EncryptedTable<UID_LENGTH>>
-    for HashMap<Uid<UID_LENGTH>, Vec<u8>>
-{
+impl<const UID_LENGTH: usize> From<EncryptedTable<UID_LENGTH>> for Vec<(Uid<UID_LENGTH>, Vec<u8>)> {
     #[inline]
     fn from(encrypted_table: EncryptedTable<UID_LENGTH>) -> Self {
         encrypted_table.0
@@ -400,8 +423,8 @@ impl<const UID_LENGTH: usize> From<EncryptedTable<UID_LENGTH>>
 
 impl<const UID_LENGTH: usize> From<<Self as Deref>::Target> for EncryptedTable<UID_LENGTH> {
     #[inline]
-    fn from(hashmap: <Self as Deref>::Target) -> Self {
-        Self(hashmap)
+    fn from(vec: <Self as Deref>::Target) -> Self {
+        Self(vec)
     }
 }
 
@@ -419,8 +442,8 @@ impl<const UID_LENGTH: usize> FromIterator<(Uid<UID_LENGTH>, Vec<u8>)>
     for EncryptedTable<UID_LENGTH>
 {
     fn from_iter<T: IntoIterator<Item = (Uid<UID_LENGTH>, Vec<u8>)>>(iter: T) -> Self {
-        let hashmap = iter.into_iter().collect();
-        Self(hashmap)
+        let vec = iter.into_iter().collect();
+        Self(vec)
     }
 }
 
@@ -430,7 +453,7 @@ impl<const UID_LENGTH: usize> Serializable for EncryptedTable<UID_LENGTH> {
     #[inline]
     fn length(&self) -> usize {
         let mut length = UID_LENGTH * self.len();
-        for value in self.values() {
+        for (_, value) in &self.0 {
             length += value.len();
         }
         length
@@ -450,11 +473,11 @@ impl<const UID_LENGTH: usize> Serializable for EncryptedTable<UID_LENGTH> {
     #[inline]
     fn read(de: &mut Deserializer) -> Result<Self, Self::Error> {
         let length = <usize>::try_from(de.read_u64()?)?;
-        let mut items = HashMap::with_capacity(length);
+        let mut items = Vec::with_capacity(length);
         for _ in 0..length {
             let key = Uid::from(de.read_array()?);
             let value = de.read_vec()?;
-            items.insert(key, value);
+            items.push((key, value));
         }
         Ok(Self(items))
     }

@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 use cosmian_crypto_core::bytes_ser_de::Serializable;
 use rusqlite::{Connection, Statement};
 
@@ -51,12 +49,12 @@ pub fn sqlite_fetch_entry_table_items(
     let mut stmt = prepare_statement(connection, serialized_entry_uids, "entry_table")?;
 
     let mut rows = stmt.raw_query();
-    let mut entry_table_items = HashMap::new();
+    let mut entry_table_items = Vec::new();
     while let Some(row) = rows.next()? {
-        entry_table_items.insert(
+        entry_table_items.push((
             Uid::try_from_bytes(&row.get::<usize, Vec<u8>>(0)?)?,
             row.get(1)?,
-        );
+        ));
     }
     EncryptedTable::<UID_LENGTH>::from(entry_table_items).try_to_bytes()
 }

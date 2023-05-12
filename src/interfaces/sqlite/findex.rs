@@ -54,7 +54,7 @@ impl FindexCallbacks<UID_LENGTH> for RusqliteFindex<'_> {
         let mut chain_table_items = EncryptedTable::default();
         while let Some(row) = rows.next()? {
             let uid: Vec<u8> = row.get(0)?;
-            chain_table_items.insert(Uid::try_from_bytes(&uid)?, row.get(1)?);
+            chain_table_items.replace_or_push(Uid::try_from_bytes(&uid)?, row.get(1)?);
         }
         Ok(chain_table_items)
     }
@@ -79,7 +79,7 @@ impl FindexCallbacks<UID_LENGTH> for RusqliteFindex<'_> {
                     [uid.to_vec(), new_value.clone()],
                 )?;
             } else {
-                rejected_items.insert(
+                rejected_items.replace_or_push(
                     uid.clone(),
                     actual_value.ok_or_else(|| {
                         FindexErr::CallBack(

@@ -100,16 +100,16 @@ impl FindexCallbacks<UID_LENGTH> for InternalFindex {
                 .fetch_entry
                 .call1(py, (py_entry_uids,))
                 .map_err(|e| FindexErr::CallBack(format!("{e} (fetch_entry)")))?;
-            let py_result_table: HashMap<[u8; UID_LENGTH], Vec<u8>> = results
+            let py_result_table: Vec<([u8; UID_LENGTH], Vec<u8>)> = results
                 .extract(py)
                 .map_err(|e| FindexErr::ConversionError(format!("{e} (fetch_entry)")))?;
 
-            // Convert python result (HashMap<[u8; UID_LENGTH], Vec<u8>>) to
+            // Convert python result (Vec<([u8; UID_LENGTH], Vec<u8>)>) to
             // EncryptedEntryTable<UID_LENGTH>
             let entry_table_items = py_result_table
                 .into_iter()
                 .map(|(k, v)| (Uid::from(k), v))
-                .collect::<HashMap<_, _>>();
+                .collect::<Vec<_>>();
 
             Ok(entry_table_items.into())
         })
@@ -130,16 +130,16 @@ impl FindexCallbacks<UID_LENGTH> for InternalFindex {
                 .call1(py, (py_chain_uids,))
                 .map_err(|e| FindexErr::CallBack(format!("{e} (fetch_chain)")))?;
 
-            let py_result_table: HashMap<[u8; UID_LENGTH], Vec<u8>> = result
+            let py_result_table: Vec<([u8; UID_LENGTH], Vec<u8>)> = result
                 .extract(py)
                 .map_err(|e| FindexErr::ConversionError(format!("{e} (fetch_chain)")))?;
 
-            // Convert python result (HashMap<[u8; UID_LENGTH], Vec<u8>>) to
+            // Convert python result (Vec<([u8; UID_LENGTH], Vec<u8>)>) to
             // EncryptedTable<UID_LENGTH>
             let chain_table_items = py_result_table
                 .into_iter()
                 .map(|(k, v)| (Uid::from(k), v))
-                .collect::<HashMap<_, _>>();
+                .collect::<Vec<_>>();
             Ok(chain_table_items.into())
         })
     }
@@ -168,14 +168,14 @@ impl FindexCallbacks<UID_LENGTH> for InternalFindex {
                 .call1(py, (py_entry_table,))
                 .map_err(|e| FindexErr::CallBack(format!("{e} (upsert_entry)")))?;
 
-            let rejected_lines: HashMap<[u8; UID_LENGTH], Vec<u8>> = rejected_lines
+            let rejected_lines: Vec<([u8; UID_LENGTH], Vec<u8>)> = rejected_lines
                 .extract(py)
                 .map_err(|e| FindexErr::ConversionError(format!("{e} (upsert_entry)")))?;
 
             let rejected_lines = rejected_lines
                 .into_iter()
                 .map(|(k, v)| (Uid::from(k), v))
-                .collect::<HashMap<_, _>>();
+                .collect::<Vec<_>>();
 
             Ok(rejected_lines.into())
         })

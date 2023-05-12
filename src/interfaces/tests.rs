@@ -82,7 +82,7 @@ impl<const UID_LENGTH: usize> FindexCallbacks<UID_LENGTH> for FindexTest<UID_LEN
         let mut entry_table_items = EncryptedTable::default();
         for keyword_hash in entry_table_uids {
             if let Some(value) = self.entry_table.get(keyword_hash) {
-                entry_table_items.insert(keyword_hash.clone(), value.clone());
+                entry_table_items.replace_or_push(keyword_hash.clone(), value.clone());
             }
         }
         Ok(entry_table_items)
@@ -93,15 +93,22 @@ impl<const UID_LENGTH: usize> FindexCallbacks<UID_LENGTH> for FindexTest<UID_LEN
         chain_uids: &HashSet<Uid<UID_LENGTH>>,
     ) -> Result<EncryptedTable<UID_LENGTH>, FindexErr> {
         println!("Fetch {} items from the Chain Table", chain_uids.len());
-        Ok(chain_uids
+
+        let results: EncryptedTable<UID_LENGTH> = chain_uids
             .iter()
             .filter_map(|uid| {
-                self.chain_table
+                let test = self
+                    .chain_table
                     .get(uid)
-                    .map(|value| (uid.clone(), value.clone()))
+                    .map(|value| (uid.clone(), value.clone()));
+
+                test
             })
-            .collect::<HashMap<Uid<UID_LENGTH>, Vec<u8>>>()
-            .into())
+            .collect();
+        dbg!(&chain_uids);
+        println!("Fetched {} items from the Chain Table", results.len());
+
+        Ok(results)
     }
 
     async fn upsert_entry_table(
@@ -114,10 +121,11 @@ impl<const UID_LENGTH: usize> FindexCallbacks<UID_LENGTH> for FindexTest<UID_LEN
         // Simulate insertion failures.
         for (uid, (old_value, new_value)) in modifications.iter() {
             // Reject insert with probability 0.2.
-            if self.entry_table.contains_key(uid) && rng.gen_range(0..5) == 0 {
-                rejected.insert(uid.clone(), old_value.clone().unwrap_or_default());
+            if self.entry_table.contains_uid(uid) && rng.gen_range(0..5) == 0 {
+                rejected.replace_or_push(uid.clone(), old_value.clone().unwrap_or_default());
             } else {
-                self.entry_table.insert(uid.clone(), new_value.clone());
+                self.entry_table
+                    .replace_or_push(uid.clone(), new_value.clone());
             }
         }
         println!("{} rejected upsertions", rejected.len());
@@ -130,12 +138,12 @@ impl<const UID_LENGTH: usize> FindexCallbacks<UID_LENGTH> for FindexTest<UID_LEN
     ) -> Result<(), FindexErr> {
         println!("Insert {} itemps in the Chain Table", items.len());
         for (uid, value) in items.iter() {
-            if self.chain_table.contains_key(uid) {
+            if self.chain_table.contains_uid(uid) {
                 return Err(FindexErr::CallBack(format!(
                     "Conflict in Chain Table for UID: {uid:?}"
                 )));
             }
-            self.chain_table.insert(uid.clone(), value.clone());
+            self.chain_table.replace_or_push(uid.clone(), value.clone());
         }
         Ok(())
     }
@@ -150,6 +158,8 @@ impl<const UID_LENGTH: usize> FindexCallbacks<UID_LENGTH> for FindexTest<UID_LEN
             "Remove {} items from the Chain Table",
             chain_table_uids_to_remove.len()
         );
+
+        dbg!(&chain_table_uids_to_remove);
         println!(
             "Insert {} items to the Chain Table",
             new_encrypted_chain_table_items.len()
@@ -162,22 +172,29 @@ impl<const UID_LENGTH: usize> FindexCallbacks<UID_LENGTH> for FindexTest<UID_LEN
         self.entry_table = EncryptedTable::default();
 
         for new_encrypted_entry_table_item in new_encrypted_entry_table_items.iter() {
-            self.entry_table.insert(
+            self.entry_table.push((
                 new_encrypted_entry_table_item.0.clone(),
                 new_encrypted_entry_table_item.1.clone(),
-            );
+            ));
         }
 
         for new_encrypted_chain_table_item in new_encrypted_chain_table_items.iter() {
-            self.chain_table.insert(
+            self.chain_table.replace_or_push(
                 new_encrypted_chain_table_item.0.clone(),
                 new_encrypted_chain_table_item.1.clone(),
             );
         }
 
-        for removed_chain_table_uid in chain_table_uids_to_remove {
-            self.chain_table.remove(&removed_chain_table_uid);
-        }
+        dbg!(&self.chain_table);
+
+        self.chain_table = self
+            .chain_table
+            .iter()
+            .filter(|(uid, _)| chain_table_uids_to_remove.contains(uid))
+            .cloned()
+            .collect();
+
+        dbg!(&self.chain_table);
 
         Ok(())
     }
@@ -190,7 +207,12 @@ impl<const UID_LENGTH: usize> FindexCallbacks<UID_LENGTH> for FindexTest<UID_LEN
     }
 
     async fn fetch_all_entry_table_uids(&self) -> Result<HashSet<Uid<UID_LENGTH>>, FindexErr> {
-        let uids: HashSet<Uid<UID_LENGTH>> = self.entry_table.keys().cloned().collect();
+        let uids: HashSet<Uid<UID_LENGTH>> = self
+            .entry_table
+            .iter()
+            .map(|(uid, _)| uid)
+            .cloned()
+            .collect();
         Ok(uids)
     }
 }
@@ -344,7 +366,8 @@ async fn test_findex() -> Result<(), FindexErr> {
     let mut findex = FindexTest::default();
     findex
         .upsert(indexed_value_to_keywords, &master_key, &label)
-        .await?;
+        .await
+        .unwrap();
 
     let robert_keyword = Keyword::from("robert");
     let rob_keyword = Keyword::from("rob");
@@ -361,7 +384,8 @@ async fn test_findex() -> Result<(), FindexErr> {
             SECURE_FETCH_CHAINS_BATCH_SIZE,
             0,
         )
-        .await?;
+        .await
+        .unwrap();
     check_search_result(&robert_search, &robert_keyword, &robert_doe_location);
 
     // cannot find robert with wrong label
@@ -375,7 +399,8 @@ async fn test_findex() -> Result<(), FindexErr> {
             SECURE_FETCH_CHAINS_BATCH_SIZE,
             0,
         )
-        .await?;
+        .await
+        .unwrap();
     assert_eq!(0, robert_search.len());
 
     // search doe
@@ -389,7 +414,8 @@ async fn test_findex() -> Result<(), FindexErr> {
             SECURE_FETCH_CHAINS_BATCH_SIZE,
             0,
         )
-        .await?;
+        .await
+        .unwrap();
     check_search_result(&doe_search, &doe_keyword, &robert_doe_location);
     check_search_result(&doe_search, &doe_keyword, &john_doe_location);
 
@@ -404,7 +430,8 @@ async fn test_findex() -> Result<(), FindexErr> {
             SECURE_FETCH_CHAINS_BATCH_SIZE,
             0,
         )
-        .await?;
+        .await
+        .unwrap();
     check_search_result(
         &rob_search,
         &rob_keyword,
@@ -423,7 +450,8 @@ async fn test_findex() -> Result<(), FindexErr> {
             SECURE_FETCH_CHAINS_BATCH_SIZE,
             0,
         )
-        .await?;
+        .await
+        .unwrap();
     check_search_result(&rob_search, &rob_keyword, &robert_doe_location);
     check_search_result(&rob_search, &rob_keyword, &rob_location);
 
@@ -440,7 +468,8 @@ async fn test_findex() -> Result<(), FindexErr> {
     );
     findex
         .upsert(indexed_value_to_keywords, &master_key, &label)
-        .await?;
+        .await
+        .unwrap();
 
     // search jane
     let jane_keyword = Keyword::from("jane");
@@ -454,7 +483,8 @@ async fn test_findex() -> Result<(), FindexErr> {
             SECURE_FETCH_CHAINS_BATCH_SIZE,
             0,
         )
-        .await?;
+        .await
+        .unwrap();
     check_search_result(&jane_search, &jane_keyword, &jane_doe_location);
 
     // search robert (no change)
@@ -468,7 +498,8 @@ async fn test_findex() -> Result<(), FindexErr> {
             SECURE_FETCH_CHAINS_BATCH_SIZE,
             0,
         )
-        .await?;
+        .await
+        .unwrap();
     check_search_result(&robert_search, &robert_keyword, &robert_doe_location);
 
     // search doe (jane added)
@@ -482,7 +513,8 @@ async fn test_findex() -> Result<(), FindexErr> {
             SECURE_FETCH_CHAINS_BATCH_SIZE,
             0,
         )
-        .await?;
+        .await
+        .unwrap();
     check_search_result(&doe_search, &doe_keyword, &jane_doe_location);
     check_search_result(&doe_search, &doe_keyword, &robert_doe_location);
     check_search_result(&doe_search, &doe_keyword, &john_doe_location);
@@ -498,7 +530,8 @@ async fn test_findex() -> Result<(), FindexErr> {
             SECURE_FETCH_CHAINS_BATCH_SIZE,
             0,
         )
-        .await?;
+        .await
+        .unwrap();
     check_search_result(
         &rob_search,
         &rob_keyword,
@@ -516,7 +549,8 @@ async fn test_findex() -> Result<(), FindexErr> {
         let new_master_key = KeyingMaterial::new(&mut rng);
         findex
             .compact(i, &master_key, &new_master_key, &new_label)
-            .await?;
+            .await
+            .unwrap();
         master_key = new_master_key;
 
         // search doe
@@ -530,7 +564,8 @@ async fn test_findex() -> Result<(), FindexErr> {
                 SECURE_FETCH_CHAINS_BATCH_SIZE,
                 0,
             )
-            .await?;
+            .await
+            .unwrap();
         check_search_result(&doe_search, &doe_keyword, &robert_doe_location);
         check_search_result(&doe_search, &doe_keyword, &john_doe_location);
         check_search_result(&doe_search, &doe_keyword, &jane_doe_location);
@@ -540,7 +575,8 @@ async fn test_findex() -> Result<(), FindexErr> {
     let new_master_key = KeyingMaterial::new(&mut rng);
     findex
         .compact(1, &master_key, &new_master_key, &new_label)
-        .await?;
+        .await
+        .unwrap();
     master_key = new_master_key;
 
     // search jane
@@ -554,7 +590,8 @@ async fn test_findex() -> Result<(), FindexErr> {
             SECURE_FETCH_CHAINS_BATCH_SIZE,
             0,
         )
-        .await?;
+        .await
+        .unwrap();
     // Jane is not indexed anymore.
     assert_eq!(jane_search.get(&jane_keyword), None);
 
@@ -569,7 +606,8 @@ async fn test_findex() -> Result<(), FindexErr> {
             SECURE_FETCH_CHAINS_BATCH_SIZE,
             0,
         )
-        .await?;
+        .await
+        .unwrap();
     check_search_result(&doe_search, &doe_keyword, &robert_doe_location);
     check_search_result(&doe_search, &doe_keyword, &john_doe_location);
 
@@ -584,7 +622,8 @@ async fn test_findex() -> Result<(), FindexErr> {
             SECURE_FETCH_CHAINS_BATCH_SIZE,
             0,
         )
-        .await?;
+        .await
+        .unwrap();
     assert_eq!(0, doe_search.len());
 
     for i in 1..=100 {
@@ -593,7 +632,8 @@ async fn test_findex() -> Result<(), FindexErr> {
         let new_master_key = KeyingMaterial::new(&mut rng);
         findex
             .compact(i, &master_key, &new_master_key, &new_label)
-            .await?;
+            .await
+            .unwrap();
         master_key = new_master_key;
     }
 
@@ -608,7 +648,8 @@ async fn test_findex() -> Result<(), FindexErr> {
             SECURE_FETCH_CHAINS_BATCH_SIZE,
             0,
         )
-        .await?;
+        .await
+        .unwrap();
     check_search_result(&doe_search, &doe_keyword, &robert_doe_location);
     check_search_result(&doe_search, &doe_keyword, &john_doe_location);
 
@@ -623,7 +664,8 @@ async fn test_findex() -> Result<(), FindexErr> {
             SECURE_FETCH_CHAINS_BATCH_SIZE,
             0,
         )
-        .await?;
+        .await
+        .unwrap();
     assert_eq!(0, doe_search.len());
 
     for i in 1..100 {
@@ -631,7 +673,8 @@ async fn test_findex() -> Result<(), FindexErr> {
         let new_master_key = KeyingMaterial::new(&mut rng);
         findex
             .compact(i, &master_key, &new_master_key, &new_label)
-            .await?;
+            .await
+            .unwrap();
         master_key = new_master_key;
 
         // search doe (jane removed)
@@ -645,7 +688,8 @@ async fn test_findex() -> Result<(), FindexErr> {
                 SECURE_FETCH_CHAINS_BATCH_SIZE,
                 0,
             )
-            .await?;
+            .await
+            .unwrap();
         check_search_result(&doe_search, &doe_keyword, &robert_doe_location);
         check_search_result(&doe_search, &doe_keyword, &john_doe_location);
     }
@@ -704,7 +748,7 @@ async fn test_first_names() -> Result<(), FindexErr> {
             add_keyword_graph(&Keyword::from(first_name), MIN_KEYWORD_LENGTH, &mut map);
         }
 
-        graph_findex.upsert(map, &master_key, &label).await?;
+        graph_findex.upsert(map, &master_key, &label).await.unwrap();
 
         // naive Findex
         let mut keywords = HashSet::<Keyword>::new();
@@ -727,7 +771,10 @@ async fn test_first_names() -> Result<(), FindexErr> {
             let iv = IndexedValue::Location(Location::from(format!("{first_name}_{i}").as_str()));
             map_naive.insert(iv, keywords.clone());
         }
-        naive_findex.upsert(map_naive, &master_key, &label).await?;
+        naive_findex
+            .upsert(map_naive, &master_key, &label)
+            .await
+            .unwrap();
 
         if first_names_number % 1000 == 0 {
             println!("    ...{first_names_number}");
@@ -774,7 +821,8 @@ async fn test_first_names() -> Result<(), FindexErr> {
                 SECURE_FETCH_CHAINS_BATCH_SIZE,
                 0,
             )
-            .await?;
+            .await
+            .unwrap();
         if graph_results.is_empty() {
             return Err(FindexErr::Other(format!(
                 "No graph results for keyword: {}! This should not happen",
@@ -793,7 +841,8 @@ async fn test_first_names() -> Result<(), FindexErr> {
                 SECURE_FETCH_CHAINS_BATCH_SIZE,
                 0,
             )
-            .await?;
+            .await
+            .unwrap();
         assert_eq!(
             graph_results.len(),
             naive_results.len(),

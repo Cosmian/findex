@@ -120,7 +120,7 @@ pub trait FindexUpsert<
 
             for (keyword, uid) in &entry_table_uid_cache {
                 // Remove chains that have successfully been upserted.
-                if !encrypted_entry_table.contains_key(uid) {
+                if !encrypted_entry_table.contains_uid(uid) {
                     new_chain_elements.remove_entry(keyword);
                 }
             }
@@ -149,7 +149,7 @@ pub trait FindexUpsert<
         let encrypted_entry_table = self.upsert_entry_table(&entry_table_modifications).await?;
 
         // Insert new Chain Table lines.
-        chain_table_additions.retain(|uid, _| !encrypted_entry_table.contains_key(uid));
+        chain_table_additions.retain(|uid, _| !encrypted_entry_table.contains_uid(uid));
         let new_chain_table_entries = chain_table_additions.into_values().flatten().collect();
 
         self.insert_chain_table(&new_chain_table_entries).await?;
