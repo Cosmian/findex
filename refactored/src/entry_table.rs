@@ -111,9 +111,10 @@ impl<
     }
 
     fn insert(
+        &self,
         k: &Self::Key,
-        values: &HashMap<Self::Token, Self::Value>,
-    ) -> std::collections::HashSet<[u8; TOKEN_LENGTH]> {
+        values: HashMap<Self::Token, Self::Value>,
+    ) -> Result<HashSet<Self::Token>, Error<CallbackError>> {
         todo!("The Entry Table does not do any insert")
     }
 }

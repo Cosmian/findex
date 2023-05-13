@@ -67,5 +67,9 @@ pub trait Edx<
     /// Encrypts the given values and inserts them into the Encrypted Dictionary
     /// if no value is already stored for the corresponding tokens. Returns the
     /// set of tokens for which a value is already stored.
-    fn insert(k: &Self::Key, values: &HashMap<Self::Token, Self::Value>) -> HashSet<Self::Token>;
+    fn insert(
+        &self,
+        k: &Self::Key,
+        values: HashMap<Self::Token, Self::Value>,
+    ) -> Result<HashSet<Self::Token>, Error>;
 }
