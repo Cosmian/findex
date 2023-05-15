@@ -105,14 +105,16 @@ impl<const UID_LENGTH: usize> FindexCallbacks<ExampleError, UID_LENGTH>
     async fn fetch_entry_table(
         &self,
         entry_table_uids: HashSet<Uid<UID_LENGTH>>,
-    ) -> Result<EncryptedTable<UID_LENGTH>, ExampleError> {
-        let mut items = EncryptedTable::with_capacity(entry_table_uids.len());
-        for uid in entry_table_uids {
-            if let Some(value) = self.entry_table.get(&uid) {
-                items.insert(uid, value.clone());
-            }
-        }
-        Ok(items)
+    ) -> Result<Vec<(Uid<UID_LENGTH>, Vec<u8>)>, ExampleError> {
+        Ok(entry_table_uids
+            .into_iter()
+            .filter_map(|uid| {
+                self.entry_table
+                    .get(&uid)
+                    .cloned()
+                    .map(|value| (uid, value))
+            })
+            .collect())
     }
 
     async fn fetch_chain_table(

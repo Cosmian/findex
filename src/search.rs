@@ -7,7 +7,7 @@ use cosmian_crypto_core::symmetric_crypto::{Dem, SymKey};
 use crate::{
     callbacks::{FetchChains, FindexCallbacks},
     chain_table::KwiChainUids,
-    entry_table::EntryTable,
+    entry_table::{EntryTable, EntryTableValue},
     error::CallbackError,
     parameters::check_parameter_constraints,
     structs::{IndexedValue, Keyword, Label, Location},
@@ -71,22 +71,23 @@ pub trait FindexSearch<
             .collect::<HashMap<_, _>>();
 
         // Query the Entry Table for these UIDs.
-        let entry_table = EntryTable::decrypt::<DEM_KEY_LENGTH, DemScheme>(
-            k_value,
-            &self
-                .fetch_entry_table(entry_table_uid_map.keys().copied().collect())
-                .await?,
-        )?;
+        let entry_table = self
+            .fetch_entry_table(entry_table_uid_map.keys().copied().collect())
+            .await?;
 
         // Unchain all Entry Table values.
         let mut kwi_chain_table_uids = KwiChainUids::with_capacity(entry_table.len());
         let mut kwi_to_keyword = HashMap::with_capacity(entry_table.len());
-        for (uid, value) in entry_table.into_iter() {
+        for (uid, encrypted_value) in entry_table.into_iter() {
             let keyword = entry_table_uid_map.get(&uid).ok_or_else(|| {
                 Error::<CustomError>::CryptoError(format!(
                     "Could not find keyword associated to UID {uid:?}."
                 ))
             })?;
+            let value = EntryTableValue::<UID_LENGTH, KWI_LENGTH>::decrypt::<
+                DEM_KEY_LENGTH,
+                DemScheme,
+            >(k_value, &encrypted_value)?;
             kwi_to_keyword.insert(value.kwi.clone(), *keyword);
             let k_uid = value.kwi.derive_kmac_key(CHAIN_TABLE_KEY_DERIVATION_INFO);
             let chain = value.unchain::<
@@ -104,7 +105,7 @@ pub trait FindexSearch<
         let chains = self.fetch_chains(kwi_chain_table_uids).await?;
 
         // Convert the blocks of the given chains into indexed values.
-        let mut res = HashMap::with_capacity(chains.len());
+        let mut res = HashMap::<Keyword, HashSet<IndexedValue>>::with_capacity(chains.len());
         for (kwi, chain) in &chains {
             let keyword = kwi_to_keyword.get(kwi).ok_or_else(|| {
                 Error::<CustomError>::CryptoError("Missing Kwi in reversed map.".to_string())
@@ -112,7 +113,9 @@ pub trait FindexSearch<
             let blocks = chain
                 .iter()
                 .flat_map(|(_, chain_table_value)| chain_table_value.as_blocks());
-            res.insert((*keyword).clone(), IndexedValue::from_blocks(blocks)?);
+            res.entry((*keyword).clone())
+                .or_default()
+                .extend(IndexedValue::from_blocks(blocks)?);
         }
 
         Ok(res)

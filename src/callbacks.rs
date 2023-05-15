@@ -40,7 +40,7 @@ pub trait FindexCallbacks<Error: std::error::Error + CallbackError, const UID_LE
     async fn fetch_entry_table(
         &self,
         entry_table_uids: HashSet<Uid<UID_LENGTH>>,
-    ) -> Result<EncryptedTable<UID_LENGTH>, Error>;
+    ) -> Result<Vec<(Uid<UID_LENGTH>, Vec<u8>)>, Error>;
 
     /// Fetch the lines with the given UIDs from the Chain Table. The returned
     /// values are encrypted since they are stored that way. The decryption is
