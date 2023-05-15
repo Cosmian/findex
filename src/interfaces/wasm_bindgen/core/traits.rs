@@ -12,8 +12,8 @@ use super::{
 };
 use crate::{
     core::{
-        EncryptedTable, FindexCallbacks, FindexSearch, FindexUpsert, IndexedValue, Keyword, Uid,
-        UpsertData,
+        EncryptedMultiTable, EncryptedTable, FindexCallbacks, FindexSearch, FindexUpsert,
+        IndexedValue, Keyword, Uid, UpsertData,
     },
     error::FindexErr,
     interfaces::generic_parameters::{
@@ -40,7 +40,7 @@ impl FindexCallbacks<UID_LENGTH> for FindexUser {
     async fn fetch_entry_table(
         &self,
         entry_table_uids: &HashSet<Uid<UID_LENGTH>>,
-    ) -> Result<EncryptedTable<UID_LENGTH>, FindexErr> {
+    ) -> Result<EncryptedMultiTable<UID_LENGTH>, FindexErr> {
         let fetch_entry = unwrap_callback!(self, fetch_entry);
         fetch_uids(
             &entry_table_uids.iter().cloned().collect(),
@@ -55,7 +55,9 @@ impl FindexCallbacks<UID_LENGTH> for FindexUser {
         chain_table_uids: &HashSet<Uid<UID_LENGTH>>,
     ) -> Result<EncryptedTable<UID_LENGTH>, FindexErr> {
         let fetch_chain = unwrap_callback!(self, fetch_chain);
-        fetch_uids(chain_table_uids, fetch_chain, "fetchChains").await
+        fetch_uids(chain_table_uids, fetch_chain, "fetchChains")
+            .await?
+            .to_encrypted_table()
     }
 
     async fn upsert_entry_table(
@@ -87,7 +89,7 @@ impl FindexCallbacks<UID_LENGTH> for FindexUser {
         }
 
         let result = callback!(upsert_entry, inputs);
-        js_value_to_encrypted_table(&result, "upsertEntries")
+        js_value_to_encrypted_table(&result, "upsertEntries")?.to_encrypted_table()
     }
 
     async fn insert_chain_table(

@@ -1,5 +1,6 @@
 use std::collections::{HashMap, HashSet};
 
+use super::structs::EncryptedMultiTable;
 use crate::{
     core::{EncryptedTable, IndexedValue, Keyword, Location, Uid, UpsertData},
     error::FindexErr,
@@ -37,7 +38,7 @@ pub trait FindexCallbacks<const UID_LENGTH: usize> {
     async fn fetch_entry_table(
         &self,
         entry_table_uids: &HashSet<Uid<UID_LENGTH>>,
-    ) -> Result<EncryptedTable<UID_LENGTH>, FindexErr>;
+    ) -> Result<EncryptedMultiTable<UID_LENGTH>, FindexErr>;
 
     /// Fetch the lines with the given UIDs from the Chain Table. The returned
     /// values are encrypted since they are stored that way. The decryption is

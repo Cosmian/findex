@@ -17,7 +17,7 @@ use cosmian_crypto_core::{
 };
 use zeroize::Zeroize;
 
-use super::structs::Block;
+use super::structs::{Block, EncryptedMultiTable};
 use crate::{
     core::{
         chain_table::{ChainTable, ChainTableValue, KwiChainUids},
@@ -509,6 +509,111 @@ impl<const UID_LENGTH: usize, const KWI_LENGTH: usize> EntryTable<UID_LENGTH, KW
         }
 
         Ok(chain_table_additions)
+    }
+}
+
+#[derive(Debug, Default)]
+pub struct EntryMultiTable<const UID_LENGTH: usize, const KWI_LENGTH: usize>(
+    HashMap<Uid<UID_LENGTH>, Vec<EntryTableValue<UID_LENGTH, KWI_LENGTH>>>,
+);
+
+impl<const UID_LENGTH: usize, const KWI_LENGTH: usize> Deref
+    for EntryMultiTable<UID_LENGTH, KWI_LENGTH>
+{
+    type Target = HashMap<Uid<UID_LENGTH>, Vec<EntryTableValue<UID_LENGTH, KWI_LENGTH>>>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl<const UID_LENGTH: usize, const KWI_LENGTH: usize> DerefMut
+    for EntryMultiTable<UID_LENGTH, KWI_LENGTH>
+{
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
+
+impl<const UID_LENGTH: usize, const KWI_LENGTH: usize> EntryMultiTable<UID_LENGTH, KWI_LENGTH> {
+    /// Creates a new Entry Table with the given capacity.
+    #[inline]
+    pub fn with_capacity(capacity: usize) -> Self {
+        Self(HashMap::with_capacity(capacity))
+    }
+
+    /// Decrypts an Entry Table with the given `K_value`.
+    ///
+    /// - `k_value`                 : DEM key
+    /// - `encrypted_entry_table`   : encrypted Entry Table
+    pub fn decrypt<
+        const BLOCK_LENGTH: usize,
+        const DEM_KEY_LENGTH: usize,
+        DemScheme: Dem<DEM_KEY_LENGTH>,
+    >(
+        k_value: &DemScheme::Key,
+        encrypted_entry_table: &EncryptedMultiTable<UID_LENGTH>,
+    ) -> Result<Self, FindexErr> {
+        let mut entry_table = Self::with_capacity(encrypted_entry_table.len());
+        for (key, values) in encrypted_entry_table.iter() {
+            let mut decrypted_values = Vec::with_capacity(values.len());
+
+            for value in values {
+                decrypted_values.push(
+                    EntryTableValue::<UID_LENGTH, KWI_LENGTH>::decrypt::<
+                        BLOCK_LENGTH,
+                        DEM_KEY_LENGTH,
+                        DemScheme,
+                    >(k_value, value)
+                    .map_err(|_| {
+                        FindexErr::CallBack(format!(
+                            "fail to decrypt one of the `value` returned by the fetch entries \
+                             callback (uid as hex was '{}', value {})",
+                            hex::encode(key),
+                            if values.is_empty() {
+                                "was empty".to_owned()
+                            } else {
+                                format!("as hex was '{}'", hex::encode(value))
+                            },
+                        ))
+                    })?,
+                );
+            }
+
+            entry_table.insert(key.clone(), decrypted_values);
+        }
+
+        Ok(entry_table)
+    }
+
+    /// Unchains the entries of this Entry Table with the given UIDs.
+    ///
+    /// - `uids`                : UIDs of the Entry Table entries to unchain
+    /// - `max_results_per_uid` : maximum number of Chain Table UIDs to compute
+    ///   per entry
+    pub fn unchain<
+        'a,
+        const BLOCK_LENGTH: usize,
+        const KMAC_KEY_LENGTH: usize,
+        const DEM_KEY_LENGTH: usize,
+        KmacKey: SymKey<KMAC_KEY_LENGTH>,
+    >(
+        &self,
+        uids: impl Iterator<Item = &'a Uid<UID_LENGTH>>,
+        max_results_per_uid: usize,
+    ) -> KwiChainUids<UID_LENGTH, KWI_LENGTH> {
+        let mut kwi_chain_table_uids = KwiChainUids::default();
+        for entry_table_uid in uids {
+            if let Some(values) = self.get(entry_table_uid) {
+                for value in values {
+                    value.unchain::<BLOCK_LENGTH, KMAC_KEY_LENGTH, DEM_KEY_LENGTH, KmacKey>(
+                        max_results_per_uid,
+                        &mut kwi_chain_table_uids,
+                    );
+                }
+            }
+        }
+        kwi_chain_table_uids
     }
 }
 

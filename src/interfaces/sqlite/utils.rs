@@ -4,7 +4,7 @@ use cosmian_crypto_core::bytes_ser_de::Serializable;
 use rusqlite::{Connection, Statement};
 
 use crate::{
-    core::{EncryptedTable, Uid},
+    core::{EncryptedMultiTable, Uid},
     error::FindexErr,
     interfaces::{generic_parameters::UID_LENGTH, ser_de::deserialize_set},
 };
@@ -51,14 +51,14 @@ pub fn sqlite_fetch_entry_table_items(
     let mut stmt = prepare_statement(connection, serialized_entry_uids, "entry_table")?;
 
     let mut rows = stmt.raw_query();
-    let mut entry_table_items = HashMap::new();
+    let mut entry_table_items: HashMap<_, Vec<Vec<u8>>> = HashMap::new();
     while let Some(row) = rows.next()? {
-        entry_table_items.insert(
-            Uid::try_from_bytes(&row.get::<usize, Vec<u8>>(0)?)?,
-            row.get(1)?,
-        );
+        entry_table_items
+            .entry(Uid::try_from_bytes(&row.get::<usize, Vec<u8>>(0)?)?)
+            .or_default()
+            .push(row.get(1)?);
     }
-    EncryptedTable::<UID_LENGTH>::from(entry_table_items).try_to_bytes()
+    EncryptedMultiTable::<UID_LENGTH>::from(entry_table_items).try_to_bytes()
 }
 
 pub fn delete_db(sqlite_path: &str) -> Result<(), FindexErr> {

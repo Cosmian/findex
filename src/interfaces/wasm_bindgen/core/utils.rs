@@ -7,7 +7,7 @@ use wasm_bindgen::JsCast;
 pub use wasm_bindgen::JsValue;
 
 use crate::{
-    core::{EncryptedTable, Uid},
+    core::{EncryptedMultiTable, EncryptedTable, Uid},
     error::FindexErr,
     interfaces::wasm_bindgen::core::{types::ObjectSourceForErrors, Fetch},
 };
@@ -50,7 +50,7 @@ pub async fn fetch_uids<const UID_LENGTH: usize>(
     uids: &HashSet<Uid<UID_LENGTH>>,
     fetch_callback: &Fetch,
     source_for_errors: &'static str,
-) -> Result<EncryptedTable<UID_LENGTH>, FindexErr> {
+) -> Result<EncryptedMultiTable<UID_LENGTH>, FindexErr> {
     // Convert Inputs to array of Uint8Array
     let input = Array::new();
     for uid in uids {
@@ -82,7 +82,7 @@ pub fn set_bytes_in_object_property(
 pub fn js_value_to_encrypted_table<const UID_LENGTH: usize>(
     encrypted_table: &JsValue,
     callback_name_for_errors: &'static str,
-) -> Result<EncryptedTable<UID_LENGTH>, FindexErr> {
+) -> Result<EncryptedMultiTable<UID_LENGTH>, FindexErr> {
     if !Array::is_array(encrypted_table) {
         return Err(FindexErr::CallBack(format!(
             "return value of {callback_name_for_errors} is of type {}, array expected",
@@ -94,7 +94,8 @@ pub fn js_value_to_encrypted_table<const UID_LENGTH: usize>(
     }
 
     let array = Array::from(encrypted_table);
-    let mut encrypted_table = EncryptedTable::<UID_LENGTH>::with_capacity(array.length() as usize);
+    let mut encrypted_table =
+        EncryptedMultiTable::<UID_LENGTH>::with_capacity(array.length() as usize);
     let object_source_for_errors =
         ObjectSourceForErrors::ReturnedFromCallback(callback_name_for_errors);
     for (i, try_obj) in array.values().into_iter().enumerate() {
@@ -112,16 +113,16 @@ pub fn js_value_to_encrypted_table<const UID_LENGTH: usize>(
         let uid = get_bytes_from_object_property(&obj, "uid", &object_source_for_errors, i)?;
 
         let value = get_bytes_from_object_property(&obj, "value", &object_source_for_errors, i)?;
-        encrypted_table.insert(
-            Uid::try_from_bytes(&uid).map_err(|e| {
+        encrypted_table
+            .entry(Uid::try_from_bytes(&uid).map_err(|e| {
                 FindexErr::CallBack(format!(
                     "cannot parse the `uid` returned by `{callback_name_for_errors}` at position \
                      {i} ({e}). `uid` as hex was '{}'.",
                     hex::encode(uid),
                 ))
-            })?,
-            value.clone(),
-        );
+            })?)
+            .or_default()
+            .push(value.clone());
     }
     Ok(encrypted_table)
 }

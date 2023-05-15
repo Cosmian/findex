@@ -4,7 +4,7 @@ name: Cloudproof build
 on:
   push:
     tags:
-      - '*'
+      - "*"
   pull_request:
 
 jobs:
@@ -15,9 +15,9 @@ jobs:
       toolchain: nightly-2023-03-20
       kms-version: 4.0.1
       regression-filename: sqlite.db
-      branch-java: 3_0_3_exception_handling
-      branch-js: findex_batch_keywords_together_in_fetch_chains_callback
-      branch-flutter: callback_exceptions
+      branch-java: multi_values_fetch_entry_table
+      branch-js: multi_values_fetch_entry_table
+      branch-flutter: multi_values_fetch_entry_table
       branch-python: python_not_tested
       bench-features: sqlite
     secrets: inherit

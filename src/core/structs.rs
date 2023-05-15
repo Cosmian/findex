@@ -460,6 +460,102 @@ impl<const UID_LENGTH: usize> Serializable for EncryptedTable<UID_LENGTH> {
     }
 }
 
+#[derive(Default)]
+pub struct EncryptedMultiTable<const UID_LENGTH: usize>(HashMap<Uid<UID_LENGTH>, Vec<Vec<u8>>>);
+
+impl<const UID_LENGTH: usize> EncryptedMultiTable<UID_LENGTH> {
+    pub fn with_capacity(capacity: usize) -> Self {
+        Self(HashMap::with_capacity(capacity))
+    }
+
+    pub fn to_encrypted_table(self) -> Result<EncryptedTable<UID_LENGTH>, FindexErr> {
+        let mut table = EncryptedTable::with_capacity(self.0.len());
+
+        for (uid, values) in self.0 {
+            if values.len() != 1 {
+                return Err(FindexErr::CallBack(
+                    "In this particular space, encrypted table should contains unique UIDs."
+                        .to_owned(),
+                ));
+            }
+
+            table.insert(uid, values.into_iter().next().unwrap());
+        }
+
+        Ok(table)
+    }
+}
+
+impl<const UID_LENGTH: usize> Deref for EncryptedMultiTable<UID_LENGTH> {
+    type Target = HashMap<Uid<UID_LENGTH>, Vec<Vec<u8>>>;
+
+    #[inline]
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl<const UID_LENGTH: usize> From<<Self as Deref>::Target> for EncryptedMultiTable<UID_LENGTH> {
+    #[inline]
+    fn from(hashmap: <Self as Deref>::Target) -> Self {
+        Self(hashmap)
+    }
+}
+
+impl<const UID_LENGTH: usize> DerefMut for EncryptedMultiTable<UID_LENGTH> {
+    #[inline]
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
+
+impl<const UID_LENGTH: usize> FromIterator<(Uid<UID_LENGTH>, Vec<Vec<u8>>)>
+    for EncryptedMultiTable<UID_LENGTH>
+{
+    fn from_iter<T: IntoIterator<Item = (Uid<UID_LENGTH>, Vec<Vec<u8>>)>>(iter: T) -> Self {
+        let hashmap = iter.into_iter().collect();
+        Self(hashmap)
+    }
+}
+
+impl<const UID_LENGTH: usize> Serializable for EncryptedMultiTable<UID_LENGTH> {
+    type Error = FindexErr;
+
+    #[inline]
+    fn length(&self) -> usize {
+        let mut length = UID_LENGTH * self.len();
+        for value in self.values() {
+            length += value.len();
+        }
+        length
+    }
+
+    #[inline]
+    fn write(&self, ser: &mut Serializer) -> Result<usize, Self::Error> {
+        let mut n = 0;
+        n += ser.write_u64(self.0.len() as u64)?;
+        for (uid, values) in &self.0 {
+            for value in values {
+                n += ser.write_array(uid)?;
+                n += ser.write_vec(value)?;
+            }
+        }
+        Ok(n)
+    }
+
+    #[inline]
+    fn read(de: &mut Deserializer) -> Result<Self, Self::Error> {
+        let length = <usize>::try_from(de.read_u64()?)?;
+        let mut items: HashMap<_, Vec<Vec<u8>>> = HashMap::with_capacity(length);
+        for _ in 0..length {
+            let key = Uid::from(de.read_array()?);
+            let value = de.read_vec()?;
+            items.entry(key).or_default().push(value);
+        }
+        Ok(Self(items))
+    }
+}
+
 /// Data format used for upsert operations. It contains for each UID upserted
 /// the old value (optiona) and the new value:
 ///

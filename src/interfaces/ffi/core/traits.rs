@@ -7,8 +7,8 @@ use cosmian_crypto_core::bytes_ser_de::{Serializable, Serializer};
 
 use crate::{
     core::{
-        EncryptedTable, FindexCallbacks, FindexCompact, FindexSearch, FindexUpsert, IndexedValue,
-        Keyword, Location, Uid, UpsertData,
+        EncryptedMultiTable, EncryptedTable, FindexCallbacks, FindexCompact, FindexSearch,
+        FindexUpsert, IndexedValue, Keyword, Location, Uid, UpsertData,
     },
     error::FindexErr,
     interfaces::{
@@ -65,7 +65,7 @@ impl FindexCallbacks<UID_LENGTH> for FindexUser {
     async fn fetch_entry_table(
         &self,
         entry_table_uids: &HashSet<Uid<UID_LENGTH>>,
-    ) -> Result<EncryptedTable<UID_LENGTH>, FindexErr> {
+    ) -> Result<EncryptedMultiTable<UID_LENGTH>, FindexErr> {
         let fetch_entry = unwrap_callback!(self, fetch_entry);
 
         let serialized_uids = serialize_set(entry_table_uids)?;
@@ -76,7 +76,7 @@ impl FindexCallbacks<UID_LENGTH> for FindexUser {
             "fetch entries",
         )?;
 
-        EncryptedTable::try_from_bytes(&res)
+        EncryptedMultiTable::try_from_bytes(&res)
     }
 
     async fn fetch_chain_table(

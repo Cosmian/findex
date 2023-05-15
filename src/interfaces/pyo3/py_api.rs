@@ -11,8 +11,8 @@ use pyo3::{
 
 use crate::{
     core::{
-        EncryptedTable, FindexCallbacks, FindexCompact, FindexSearch, FindexUpsert,
-        IndexedValue as IndexedValueRust, Keyword, Location, Uid, UpsertData,
+        EncryptedMultiTable, EncryptedTable, FindexCallbacks, FindexCompact, FindexSearch,
+        FindexUpsert, IndexedValue as IndexedValueRust, Keyword, Location, Uid, UpsertData,
     },
     error::FindexErr,
     interfaces::{
@@ -90,7 +90,7 @@ impl FindexCallbacks<UID_LENGTH> for InternalFindex {
     async fn fetch_entry_table(
         &self,
         entry_table_uids: &HashSet<Uid<UID_LENGTH>>,
-    ) -> Result<EncryptedTable<UID_LENGTH>, FindexErr> {
+    ) -> Result<EncryptedMultiTable<UID_LENGTH>, FindexErr> {
         Python::with_gil(|py| {
             let py_entry_uids = entry_table_uids
                 .iter()
@@ -108,10 +108,10 @@ impl FindexCallbacks<UID_LENGTH> for InternalFindex {
             // EncryptedEntryTable<UID_LENGTH>
             let entry_table_items = py_result_table
                 .into_iter()
-                .map(|(k, v)| (Uid::from(k), v))
-                .collect::<HashMap<_, _>>();
+                .map(|(k, v)| (Uid::from(k), vec![v]))
+                .collect();
 
-            Ok(entry_table_items.into())
+            Ok(entry_table_items)
         })
     }
 
