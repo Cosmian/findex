@@ -481,6 +481,27 @@ impl<const UID_LENGTH: usize> From<<Self as Deref>::Target> for EncryptedTable<U
     }
 }
 
+impl<const UID_LENGTH: usize> TryFrom<Vec<(Uid<UID_LENGTH>, Vec<u8>)>>
+    for EncryptedTable<UID_LENGTH>
+{
+    type Error = Error;
+
+    fn try_from(value: Vec<(Uid<UID_LENGTH>, Vec<u8>)>) -> Result<Self, Self::Error> {
+        value
+            .into_iter()
+            .try_fold(EncryptedTable::default(), |mut acc, (k, v)| {
+                let old_value = acc.insert(k, v);
+                if old_value.is_none() {
+                    Ok(acc)
+                } else {
+                    Err(Self::Error::CryptoError(
+                        "Several chains given for the uid: {uid}".to_string(),
+                    ))
+                }
+            })
+    }
+}
+
 impl<const UID_LENGTH: usize> IntoIterator for EncryptedTable<UID_LENGTH> {
     type IntoIter = <<Self as Deref>::Target as IntoIterator>::IntoIter;
     type Item = (Uid<UID_LENGTH>, Vec<u8>);

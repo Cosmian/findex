@@ -126,7 +126,8 @@ pub trait FindexUpsert<
         // Query the Entry Table for these UIDs.
         let mut encrypted_entry_table = self
             .fetch_entry_table(new_chains.keys().cloned().collect())
-            .await?;
+            .await?
+            .try_into()?;
 
         while !new_chains.is_empty() {
             // Decrypt the Entry Table once and for all.

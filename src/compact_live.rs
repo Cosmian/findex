@@ -349,7 +349,8 @@ pub trait FindexLiveCompact<
         // Fetch both target and noise values from the Entry Table.
         let mut encrypted_entry_table = self
             .fetch_entry_table(mixed_uids)
-            .await?;
+            .await?
+            .try_into()?;
 
         // Fetch all associated chains.
         let mut chains = self
