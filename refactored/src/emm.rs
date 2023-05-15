@@ -10,7 +10,7 @@ pub trait Emm<const KEY_LENGTH: usize, const TOKEN_LENGTH: usize> {
     /// multi-map.
     type Token = [u8; TOKEN_LENGTH];
 
-    /// Fixed length value stored inside the dictionary.
+    /// Variable length value stored inside the encrypted multi-map.
     type Value = Vec<u8>;
 
     /// Deterministically derives a `KEY_LENGTH` sized cryptographic key from
@@ -26,8 +26,6 @@ pub trait Emm<const KEY_LENGTH: usize, const TOKEN_LENGTH: usize> {
 
     /// Queries the encrypted multi-map for the given tokens and returns the
     /// decrypted values.
-    ///
-    /// One network call should be made for all the tokens.
     fn get(
         k: &Key<KEY_LENGTH>,
         tokens: HashSet<Self::Token>,
