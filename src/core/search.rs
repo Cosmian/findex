@@ -13,7 +13,7 @@ use cosmian_crypto_core::{
 use futures::future::join_all;
 use rand::{seq::SliceRandom, thread_rng};
 
-use super::{callbacks::FindexCallbacks, structs::Block};
+use super::{callbacks::FindexCallbacks, entry_table::EntryMultiTable, structs::Block};
 use crate::{
     core::{
         chain_table::{ChainTableValue, KwiChainUids},
@@ -86,7 +86,7 @@ pub trait FindexSearch<
         //
         // Query the Entry Table for these UIDs
         //
-        let entry_table = EntryTable::decrypt::<BLOCK_LENGTH, DEM_KEY_LENGTH, DemScheme>(
+        let entry_table = EntryMultiTable::decrypt::<BLOCK_LENGTH, DEM_KEY_LENGTH, DemScheme>(
             &k_value,
             &self
                 .fetch_entry_table(&entry_table_uid_map.keys().cloned().collect())
@@ -94,17 +94,15 @@ pub trait FindexSearch<
         )?;
 
         // Build the reversed map `Kwi <-> keyword`.
-        let reversed_map = entry_table
-            .iter()
-            .map(|(uid, value)| -> Result<_, _> {
-                let keyword = entry_table_uid_map.get(uid).ok_or_else(|| {
-                    FindexErr::CryptoError(format!(
-                        "Could not find keyword associated to UID {uid:?}."
-                    ))
-                })?;
-                Ok((&value.kwi, *keyword))
-            })
-            .collect::<Result<HashMap<_, _>, FindexErr>>()?;
+        let mut reversed_map = HashMap::with_capacity(entry_table.len());
+        for (uid, values) in entry_table.iter() {
+            let keyword = entry_table_uid_map.get(uid).ok_or_else(|| {
+                FindexErr::CryptoError(format!("Could not find keyword associated to UID {uid:?}."))
+            })?;
+            for value in values {
+                reversed_map.insert(&value.kwi, *keyword);
+            }
+        }
 
         //
         // Get all the corresponding Chain Table UIDs

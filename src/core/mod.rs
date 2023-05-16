@@ -31,5 +31,7 @@ pub use callbacks::FindexCallbacks;
 pub use compact::FindexCompact;
 pub use keys::KeyingMaterial;
 pub use search::FindexSearch;
-pub use structs::{EncryptedTable, IndexedValue, Keyword, Label, Location, Uid, UpsertData};
+pub use structs::{
+    EncryptedMultiTable, EncryptedTable, IndexedValue, Keyword, Label, Location, Uid, UpsertData,
+};
 pub use upsert::FindexUpsert;

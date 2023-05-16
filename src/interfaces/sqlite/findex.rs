@@ -5,8 +5,8 @@ use rusqlite::{Connection, OptionalExtension, Result};
 
 use crate::{
     core::{
-        EncryptedTable, FindexCallbacks, FindexSearch, FindexUpsert, IndexedValue, Keyword, Uid,
-        UpsertData,
+        EncryptedMultiTable, EncryptedTable, FindexCallbacks, FindexSearch, FindexUpsert,
+        IndexedValue, Keyword, Uid, UpsertData,
     },
     error::FindexErr,
     interfaces::{
@@ -34,10 +34,10 @@ impl FindexCallbacks<UID_LENGTH> for RusqliteFindex<'_> {
     async fn fetch_entry_table(
         &self,
         entry_table_uids: &HashSet<Uid<UID_LENGTH>>,
-    ) -> Result<EncryptedTable<UID_LENGTH>, FindexErr> {
+    ) -> Result<EncryptedMultiTable<UID_LENGTH>, FindexErr> {
         let serialized_res =
             sqlite_fetch_entry_table_items(self.connection, &serialize_set(entry_table_uids)?)?;
-        EncryptedTable::try_from_bytes(&serialized_res)
+        EncryptedMultiTable::try_from_bytes(&serialized_res)
     }
 
     async fn fetch_chain_table(

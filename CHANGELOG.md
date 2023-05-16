@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.0.3] - 2023-05-16
+
+**This version follows the 2.0.0 since the 2.0.1 version introduced breaking changes we didn't want to include.**
+
+### Features
+
+- Allow multiple values returned by fetching entry table entries
+
 ## [2.0.2] - 2023-04-21
 
 **This version follows the 2.0.0 since the 2.0.1 version introduced breaking changes we didn't want to include.**

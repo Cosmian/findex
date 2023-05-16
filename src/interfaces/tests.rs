@@ -9,8 +9,8 @@ use rand::Rng;
 
 use crate::{
     core::{
-        EncryptedTable, FindexCallbacks, FindexCompact, FindexSearch, FindexUpsert, IndexedValue,
-        KeyingMaterial, Keyword, Label, Location, Uid, UpsertData,
+        EncryptedMultiTable, EncryptedTable, FindexCallbacks, FindexCompact, FindexSearch,
+        FindexUpsert, IndexedValue, KeyingMaterial, Keyword, Label, Location, Uid, UpsertData,
     },
     error::FindexErr,
     interfaces::generic_parameters::{
@@ -74,15 +74,18 @@ impl<const UID_LENGTH: usize> FindexCallbacks<UID_LENGTH> for FindexTest<UID_LEN
     async fn fetch_entry_table(
         &self,
         entry_table_uids: &HashSet<Uid<UID_LENGTH>>,
-    ) -> Result<EncryptedTable<UID_LENGTH>, FindexErr> {
+    ) -> Result<EncryptedMultiTable<UID_LENGTH>, FindexErr> {
         println!(
             "Fetch {} items from the Entry Table",
             entry_table_uids.len()
         );
-        let mut entry_table_items = EncryptedTable::default();
+        let mut entry_table_items = EncryptedMultiTable::default();
         for keyword_hash in entry_table_uids {
             if let Some(value) = self.entry_table.get(keyword_hash) {
-                entry_table_items.insert(keyword_hash.clone(), value.clone());
+                entry_table_items
+                    .entry(keyword_hash.clone())
+                    .or_default()
+                    .push(value.clone());
             }
         }
         Ok(entry_table_items)
