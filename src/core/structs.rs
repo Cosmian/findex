@@ -472,7 +472,7 @@ impl<const UID_LENGTH: usize> EncryptedMultiTable<UID_LENGTH> {
         self,
         debug: &'static str,
     ) -> Result<EncryptedTable<UID_LENGTH>, FindexErr> {
-        let mut table = EncryptedTable::with_capacity(self.0.len());
+        let mut table = EncryptedTable::with_capacity(self.len());
 
         for (uid, mut values) in self.0 {
             if let Some(value) = values.pop() {
