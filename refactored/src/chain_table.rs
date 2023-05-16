@@ -7,7 +7,7 @@
 //!
 //! TODO: give a rational of this implementation choice
 //!
-//! In order to fit valiable size lists of variable size values, a double
+//! In order to fit variable size lists of variable size values, a double
 //! padding is used:
 //! - the variable size values are padded into fixed size *blocks*;
 //! - the lists of blocks are padded into fixed size *lines*.
@@ -15,7 +15,7 @@
 //!
 //! The encryption scheme used in AES256-GCM.
 //!
-//! TODO: the nonce used to encrypt the values sould be derived from the token
+//! TODO: the nonce used to encrypt the values should be derived from the token
 //! to avoid storing yet another random value.
 
 use std::collections::{HashMap, HashSet};
@@ -164,7 +164,7 @@ where
     /// - blocks are padded into fixed size lines.
     ///
     /// TODO: this may be done in one loop only by iterating over the values and
-    /// the lines independantly.
+    /// the lines independently.
     ///
     /// TODO: values may not need to be padded into fixed size blocks first.
     pub fn prepare(
@@ -175,7 +175,7 @@ where
             .map(|v| v.len() / BLOCK_LENGTH + usize::from(v.len() % BLOCK_LENGTH != 0))
             .sum::<usize>();
 
-        // Padd values into blocks.
+        // Pads values into blocks.
         let mut blocks = Vec::with_capacity(n_blocks);
         for value in values {
             let (q, r) = (value.len() / BLOCK_LENGTH, value.len() % BLOCK_LENGTH);
@@ -193,7 +193,7 @@ where
             }
         }
 
-        // Padd blocks into lines.
+        // Pads blocks into lines.
         let (q, r) = (blocks.len() / LINE_LENGTH, blocks.len() % LINE_LENGTH);
         let mut res = Vec::with_capacity(q + usize::from(r != 0));
         for i in 0..q {

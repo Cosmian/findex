@@ -51,14 +51,14 @@ pub trait Edx<
         encrypted_value: Self::EncryptedValue,
     ) -> Result<Self::Value, Error>;
 
-    /// Encrypts the given new values and conditionally upserts them into the
+    /// Encrypts the given new values and conditionally upsert them into the
     /// encrypted dictionary.
     ///
-    /// For each token in the set of new values:
+    /// For each new values:
     /// - if there is no value in both the set of old values and the encrypted
     ///   dictionary, inserts the new value;
-    /// - if there is a value in the set of old values and that it matches the
-    ///   value in the encrypted dictionary, replaces the it by the new value;
+    /// - if there is a value in the set of old values that matches the value in
+    ///   the encrypted dictionary, replaces it by the new value;
     /// - if there is a value in the set of old values that does not match the
     ///   value in the encrypted dictionary, returns the encrypted value stored;
     /// - if there is a value in the set of old values but no value in the
