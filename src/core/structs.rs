@@ -468,18 +468,28 @@ impl<const UID_LENGTH: usize> EncryptedMultiTable<UID_LENGTH> {
         Self(HashMap::with_capacity(capacity))
     }
 
-    pub fn to_encrypted_table(self) -> Result<EncryptedTable<UID_LENGTH>, FindexErr> {
+    pub fn to_encrypted_table(
+        self,
+        debug: &'static str,
+    ) -> Result<EncryptedTable<UID_LENGTH>, FindexErr> {
         let mut table = EncryptedTable::with_capacity(self.0.len());
 
-        for (uid, values) in self.0 {
-            if values.len() != 1 {
-                return Err(FindexErr::CallBack(
-                    "In this particular space, encrypted table should contains unique UIDs."
-                        .to_owned(),
-                ));
-            }
+        for (uid, mut values) in self.0 {
+            if let Some(value) = values.pop() {
+                if !values.is_empty() {
+                    return Err(FindexErr::CallBack(format!(
+                        "In {debug}, UID '{}' is associated with multiple values.",
+                        hex::encode(uid)
+                    )));
+                }
 
-            table.insert(uid, values.into_iter().next().unwrap());
+                table.insert(uid, value);
+            } else {
+                return Err(FindexErr::CallBack(format!(
+                    "In {debug}, UID '{}' is associated with no values.",
+                    hex::encode(uid)
+                )));
+            }
         }
 
         Ok(table)

@@ -88,7 +88,7 @@ pub trait FindexCompact<
         let encrypted_entry_table = self
             .fetch_entry_table(&all_uids)
             .await?
-            .to_encrypted_table()?;
+            .to_encrypted_table("fetch entries")?;
 
         // The goal of this function is to build these two data sets (along with
         // `chain_table_uids_to_remove`) and send them to the callback to update the

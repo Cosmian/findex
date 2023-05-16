@@ -57,7 +57,7 @@ impl FindexCallbacks<UID_LENGTH> for FindexUser {
         let fetch_chain = unwrap_callback!(self, fetch_chain);
         fetch_uids(chain_table_uids, fetch_chain, "fetchChains")
             .await?
-            .to_encrypted_table()
+            .to_encrypted_table("fetch chains")
     }
 
     async fn upsert_entry_table(
@@ -89,7 +89,8 @@ impl FindexCallbacks<UID_LENGTH> for FindexUser {
         }
 
         let result = callback!(upsert_entry, inputs);
-        js_value_to_encrypted_table(&result, "upsertEntries")?.to_encrypted_table()
+        js_value_to_encrypted_table(&result, "upsertEntries")?
+            .to_encrypted_table("rejected upsert entries")
     }
 
     async fn insert_chain_table(

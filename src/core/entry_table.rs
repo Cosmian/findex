@@ -542,7 +542,7 @@ impl<const UID_LENGTH: usize, const KWI_LENGTH: usize> EntryMultiTable<UID_LENGT
         Self(HashMap::with_capacity(capacity))
     }
 
-    /// Decrypts an Entry Table with the given `K_value`.
+    /// Decrypts an Entry Multi Table with the given `K_value`.
     ///
     /// - `k_value`                 : DEM key
     /// - `encrypted_entry_table`   : encrypted Entry Table
