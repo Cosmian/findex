@@ -7,11 +7,18 @@ use cosmian_crypto_core::{reexport::rand_core::SeedableRng, CsRng};
 use rand::Rng;
 
 use crate::{
-    callbacks::FetchChains, parameters::UID_LENGTH, EncryptedTable, FindexCallbacks, FindexCompact,
-    FindexSearch, FindexUpsert, IndexedValue, Keyword, Location, Uid, UpsertData,
+    callbacks::FetchChains,
+    parameters::{
+        DemScheme, BLOCK_LENGTH, CHAIN_TABLE_WIDTH, DEM_KEY_LENGTH, KWI_LENGTH, UID_LENGTH,
+    },
+    EncryptedTable, FindexCallbacks, FindexCompact, FindexSearch, FindexUpsert, IndexedValue,
+    Keyword, Location, Uid, UpsertData,
 };
 #[cfg(feature = "live_compact")]
-use crate::{compact_live::FindexLiveCompact, parameters::*};
+use crate::{
+    compact_live::FindexLiveCompact,
+    parameters::{KmacKey, KMAC_KEY_LENGTH, MASTER_KEY_LENGTH},
+};
 
 #[derive(Debug)]
 pub struct ExampleError(String);
