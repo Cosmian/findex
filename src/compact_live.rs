@@ -208,7 +208,6 @@ pub trait FindexLiveCompact<
                         KMAC_KEY_LENGTH,
                         DEM_KEY_LENGTH,
                         KmacKey,
-                        DemScheme
                     >(&k_uid)?
             ))
         }).collect::<Result<_, Error<CustomError>>>()?;

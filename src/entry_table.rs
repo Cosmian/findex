@@ -222,7 +222,6 @@ impl<const UID_LENGTH: usize, const KWI_LENGTH: usize> EntryTableValue<UID_LENGT
         const KMAC_KEY_LENGTH: usize,
         const DEM_KEY_LENGTH: usize,
         KmacKey: SymKey<KMAC_KEY_LENGTH>,
-        DemScheme: Dem<DEM_KEY_LENGTH>,
     >(
         &self,
         kwi_uid: &KmacKey,
@@ -568,7 +567,6 @@ mod tests {
             KMAC_KEY_LENGTH,
             {Aes256GcmCrypto::KEY_LENGTH},
             KmacKey,
-            Aes256GcmCrypto
         >(&k_uid).unwrap();
 
         // Recover the indexed values from the Chain Table blocks.
@@ -607,7 +605,6 @@ mod tests {
             KMAC_KEY_LENGTH,
             {Aes256GcmCrypto::KEY_LENGTH},
             KmacKey,
-            Aes256GcmCrypto
         >(&k_uid).unwrap();
 
         // Recover the indexed values from the Chain Table blocks.
@@ -668,7 +665,6 @@ mod tests {
                     KMAC_KEY_LENGTH,
                     {Aes256GcmCrypto::KEY_LENGTH},
                     KmacKey,
-                    Aes256GcmCrypto
                 >(&k_uid).unwrap()
         );
 
