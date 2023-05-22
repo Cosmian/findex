@@ -9,56 +9,15 @@ use std::collections::{HashMap, HashSet};
 use cosmian_crypto_core::{
     kdf,
     reexport::rand_core::CryptoRngCore,
-    symmetric_crypto::{
-        aes_256_gcm_pure::{
-            decrypt_in_place_detached, encrypt_in_place_detached, KEY_LENGTH, MAC_LENGTH,
-            NONCE_LENGTH,
-        },
-        key::Key,
-        SymKey,
-    },
+    symmetric_crypto::{aes_256_gcm_pure::KEY_LENGTH, key::Key, SymKey},
 };
 
 use crate::{
     callbacks::{FetchEntry, UpsertEntry},
-    edx::{Edx, EdxKey},
+    edx::Edx,
     error::Error,
     parameters::TOKEN_LENGTH,
 };
-
-/// Encrypted value contained inside the Entry Table. It is composed of the
-/// AESGCM-256 encrypted value, the nonce used and the corresponding MAC tag.
-pub struct EncryptedValue<const VALUE_LENGTH: usize> {
-    ciphertext: [u8; VALUE_LENGTH],
-    tag: [u8; MAC_LENGTH],
-    nonce: [u8; NONCE_LENGTH],
-}
-
-impl<const VALUE_LENGTH: usize> EncryptedValue<VALUE_LENGTH> {
-    fn encrypt(
-        rng: &mut impl CryptoRngCore,
-        key: &[u8],
-        value: [u8; VALUE_LENGTH],
-    ) -> Result<Self, cosmian_crypto_core::CryptoCoreError> {
-        let mut res = Self {
-            ciphertext: value,
-            nonce: [0; NONCE_LENGTH],
-            tag: [0; MAC_LENGTH],
-        };
-        rng.fill_bytes(&mut res.nonce);
-        encrypt_in_place_detached(key, &mut res.ciphertext, &res.nonce, None)?;
-        todo!()
-    }
-
-    fn decrypt(
-        &self,
-        key: &[u8],
-    ) -> Result<[u8; VALUE_LENGTH], cosmian_crypto_core::CryptoCoreError> {
-        let mut res = self.ciphertext;
-        decrypt_in_place_detached(key, &mut res, &self.tag, &self.nonce, None)?;
-        Ok(res)
-    }
-}
 
 pub struct EntryTable<const VALUE_LENGTH: usize, CallbackError: std::error::Error> {
     fetch: FetchEntry<TOKEN_LENGTH, VALUE_LENGTH, CallbackError>,
@@ -69,14 +28,9 @@ impl<const VALUE_LENGTH: usize, CallbackError: std::error::Error>
     Edx<KEY_LENGTH, TOKEN_LENGTH, VALUE_LENGTH, Error<CallbackError>>
     for EntryTable<VALUE_LENGTH, CallbackError>
 {
-    type EncryptedValue = EncryptedValue<VALUE_LENGTH>;
-    type Key = EdxKey<KEY_LENGTH>;
-    type Token = [u8; TOKEN_LENGTH];
-    type Value = [u8; VALUE_LENGTH];
-
     // TODO (TBZ): add info in the derivation.
     fn derive_key(&self, seed: &[u8]) -> Self::Key {
-        EdxKey {
+        Self::Key {
             token: Key::from_bytes(kdf!(KEY_LENGTH, seed)),
             value: Key::from_bytes(kdf!(KEY_LENGTH, seed)),
         }
@@ -99,9 +53,7 @@ impl<const VALUE_LENGTH: usize, CallbackError: std::error::Error>
         k: &Self::Key,
         encrypted_value: Self::EncryptedValue,
     ) -> Result<Self::Value, Error<CallbackError>> {
-        encrypted_value
-            .decrypt(&k.value)
-            .map_err(Error::CryptoCoreError)
+        encrypted_value.decrypt(&k.value).map_err(Error::CryptoCore)
     }
 
     fn upsert(

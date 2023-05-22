@@ -1,6 +1,14 @@
 use std::collections::{HashMap, HashSet};
 
-use cosmian_crypto_core::{reexport::rand_core::CryptoRngCore, symmetric_crypto::key::Key};
+use cosmian_crypto_core::{
+    reexport::rand_core::CryptoRngCore,
+    symmetric_crypto::{
+        aes_256_gcm_pure::{
+            decrypt_in_place_detached, encrypt_in_place_detached, MAC_LENGTH, NONCE_LENGTH,
+        },
+        key::Key,
+    },
+};
 use zeroize::ZeroizeOnDrop;
 
 pub struct EdxKey<const KEY_LENGTH: usize> {
@@ -10,6 +18,41 @@ pub struct EdxKey<const KEY_LENGTH: usize> {
 
 impl<const KEY_LENGTH: usize> ZeroizeOnDrop for EdxKey<KEY_LENGTH> {}
 
+/// Encrypted value contained inside the EDX. It is composed of the AESGCM-256
+/// encrypted value, the nonce used and the corresponding MAC tag.
+pub struct EncryptedValue<const VALUE_LENGTH: usize> {
+    ciphertext: [u8; VALUE_LENGTH],
+    tag: [u8; MAC_LENGTH],
+    nonce: [u8; NONCE_LENGTH],
+}
+
+impl<const VALUE_LENGTH: usize> EncryptedValue<VALUE_LENGTH> {
+    pub fn encrypt(
+        rng: &mut impl CryptoRngCore,
+        key: &[u8],
+        value: [u8; VALUE_LENGTH],
+    ) -> Result<Self, cosmian_crypto_core::CryptoCoreError> {
+        let mut res = Self {
+            ciphertext: value,
+            nonce: [0; NONCE_LENGTH],
+            tag: [0; MAC_LENGTH],
+        };
+        rng.fill_bytes(&mut res.nonce);
+        let tag = encrypt_in_place_detached(key, &mut res.ciphertext, &res.nonce, None)?;
+        res.tag.copy_from_slice(tag.as_slice());
+        Ok(res)
+    }
+
+    pub fn decrypt(
+        &self,
+        key: &[u8],
+    ) -> Result<[u8; VALUE_LENGTH], cosmian_crypto_core::CryptoCoreError> {
+        let mut res = self.ciphertext;
+        decrypt_in_place_detached(key, &mut res, &self.tag, &self.nonce, None)?;
+        Ok(res)
+    }
+}
+
 pub trait Edx<
     const KEY_LENGTH: usize,
     const TOKEN_LENGTH: usize,
@@ -18,17 +61,20 @@ pub trait Edx<
 >
 {
     /// Cryptographically secure key.
-    type Key: ZeroizeOnDrop;
+    type Key: ZeroizeOnDrop = EdxKey<KEY_LENGTH>;
+
+    /// Type of the values stored inside the EDX.
+    type Item: Sized = u8;
 
     /// Cryptographically secure token used to index values inside the encrypted
     /// dictionary.
-    type Token = [u8; TOKEN_LENGTH];
+    type Token = [Self::Item; TOKEN_LENGTH];
 
     /// Fixed length value stored inside the dictionary.
-    type Value;
+    type Value = [Self::Item; VALUE_LENGTH];
 
     /// Fixed length encrypted value stored inside the encrypted dictionary.
-    type EncryptedValue;
+    type EncryptedValue = EncryptedValue<VALUE_LENGTH>;
 
     /// Deterministically derives a cryptographic key from the given seed.
     fn derive_key(&self, seed: &[u8]) -> Self::Key;

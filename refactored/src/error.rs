@@ -9,19 +9,19 @@ pub trait CallbackError {}
 
 #[derive(Debug)]
 pub enum Error<T: std::error::Error> {
-    CryptoError(String),
-    CryptoCoreError(CryptoCoreError),
-    ConversionError(String),
+    Crypto(String),
+    CryptoCore(CryptoCoreError),
+    Conversion(String),
     Callback(T),
 }
 
 impl<T: std::error::Error> Display for Error<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::CryptoError(msg) | Self::ConversionError(msg) => {
+            Self::Crypto(msg) | Self::Conversion(msg) => {
                 write!(f, "{msg}")
             }
-            Self::CryptoCoreError(err) => write!(f, "{err}"),
+            Self::CryptoCore(err) => write!(f, "{err}"),
             Self::Callback(msg) => write!(f, "{msg}"),
         }
     }
@@ -29,13 +29,13 @@ impl<T: std::error::Error> Display for Error<T> {
 
 impl<T: std::error::Error> From<std::num::TryFromIntError> for Error<T> {
     fn from(e: std::num::TryFromIntError) -> Self {
-        Self::ConversionError(e.to_string())
+        Self::Conversion(e.to_string())
     }
 }
 
 impl<T: std::error::Error> From<CryptoCoreError> for Error<T> {
     fn from(e: CryptoCoreError) -> Self {
-        Self::CryptoCoreError(e)
+        Self::CryptoCore(e)
     }
 }
 
@@ -54,9 +54,9 @@ pub type CoreError = Error<!>;
 impl<T: std::error::Error + CallbackError> From<CoreError> for Error<T> {
     fn from(value: CoreError) -> Self {
         match value {
-            CoreError::CryptoError(err) => Self::CryptoError(err),
-            CoreError::CryptoCoreError(err) => Self::CryptoCoreError(err),
-            CoreError::ConversionError(err) => Self::ConversionError(err),
+            CoreError::Crypto(err) => Self::Crypto(err),
+            CoreError::CryptoCore(err) => Self::CryptoCore(err),
+            CoreError::Conversion(err) => Self::Conversion(err),
             CoreError::Callback(_) => {
                 panic!("this cannot happen because CoreError uses the `!` type");
             }

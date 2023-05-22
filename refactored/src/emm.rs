@@ -10,8 +10,11 @@ pub trait Emm<const KEY_LENGTH: usize, const TOKEN_LENGTH: usize> {
     /// multi-map.
     type Token = [u8; TOKEN_LENGTH];
 
+    /// Type of the values stored inside the EMM.
+    type Item;
+
     /// Variable length value stored inside the encrypted multi-map.
-    type Value = Vec<u8>;
+    type Value = Vec<Self::Item>;
 
     /// Deterministically derives a `KEY_LENGTH` sized cryptographic key from
     /// the given seed.

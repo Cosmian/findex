@@ -77,16 +77,16 @@ pub struct Findex<
     const LINE_LENGTH: usize,
     CallbackError: std::error::Error,
 > where
-    [(); BLOCK_LENGTH * LINE_LENGTH]: Sized,
+    [(); 2 + BLOCK_LENGTH * LINE_LENGTH]: Sized,
 {
     entry_table: EntryTable<ENTRY_TABLE_VALUE_LENGTH, CallbackError>,
-    chain_table: ChainTable<BLOCK_LENGTH, LINE_LENGTH, CallbackError>,
+    chain_table: ChainTable<{ 2 + BLOCK_LENGTH * LINE_LENGTH }, CallbackError>,
 }
 
 impl<const BLOCK_LENGTH: usize, const LINE_LENGTH: usize, CallbackError: std::error::Error>
     Findex<BLOCK_LENGTH, LINE_LENGTH, CallbackError>
 where
-    [(); BLOCK_LENGTH * LINE_LENGTH]: Sized,
+    [(); 2 + BLOCK_LENGTH * LINE_LENGTH]: Sized,
 {
     /// Derives all tags used to index the Entry Table from the given
     /// initialization value and counter.
@@ -143,9 +143,17 @@ where
     /// *Note*: only one operation per indexed value and per tag can be applied
     /// per push.
     fn push<Tag: Hash + Eq + Clone>(
+        &self,
         k: &Key<SEED_LENGTH>,
         items: HashMap<Tag, HashMap<IndexedValue<Tag>, Operation>>,
     ) {
+        //let lines = items
+        //.into_iter()
+        //.map(|(tag, values)| -> Result<_, _> {
+        //let lines = self.chain_table.prepare(values.into_iter().map(|v| ))?;
+        //Ok((tag, lines))
+        //})
+        //.collect::<Result<_, _>>();
         todo!()
     }
 
@@ -196,9 +204,9 @@ where
             let mut ct_keys = HashMap::with_capacity(et_values.len());
 
             for tag in &tags {
-                let token = et_tokens.get(tag).ok_or_else(|| {
-                    Error::CryptoError(format!("no token for the given tag: {tag:?}"))
-                })?;
+                let token = et_tokens
+                    .get(tag)
+                    .ok_or_else(|| Error::Crypto(format!("no token for the given tag: {tag:?}")))?;
                 if let Some(value) = et_values.get(token) {
                     let value = EntryTableValue(value);
                     let k_ct: crate::edx::EdxKey<KEY_LENGTH> =
@@ -225,6 +233,7 @@ where
 
     /// Adds the given values to the index for the associated tags.
     pub fn add<Tag: Hash + Eq + Clone>(
+        &self,
         k: &Key<SEED_LENGTH>,
         items: HashMap<IndexedValue<Tag>, HashSet<Tag>>,
     ) {
@@ -237,11 +246,12 @@ where
                     .insert(indexed_value.clone(), Operation::Addition);
             }
         }
-        Self::push(k, pushed_items)
+        self.push(k, pushed_items)
     }
 
     /// Removes the given values from the index for the associated tags.
     pub fn remove<Tag: Hash + Eq + Clone>(
+        &self,
         k: &Key<SEED_LENGTH>,
         items: HashMap<IndexedValue<Tag>, HashSet<Tag>>,
     ) {
@@ -254,6 +264,6 @@ where
                     .insert(indexed_value.clone(), Operation::Deletion);
             }
         }
-        Self::push(k, pushed_items)
+        self.push(k, pushed_items)
     }
 }
