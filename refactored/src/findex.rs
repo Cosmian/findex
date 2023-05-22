@@ -29,26 +29,45 @@ use crate::{
     parameters::{HASH_LENGTH, SEED_LENGTH, TOKEN_LENGTH},
 };
 
+/// Value indexed by Findex.
+///
+/// This can be a data -typically a location to a document like a database UID-
+/// or another tag in which case values indexed by this tag are part of the
+/// results of the tag indexing it.
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
+pub enum IndexedValue<Tag: Clone> {
+    Data(Vec<u8>),
+    NextTag(Tag),
+}
+
+/// Operation allowed by Findex.
 #[derive(Debug)]
-pub enum Operation {
+enum Operation {
     Addition,
     Deletion,
 }
 
+/// Size of the Entry Table values used by Findex.
 const ENTRY_TABLE_VALUE_LENGTH: usize = SEED_LENGTH + HASH_LENGTH + 4;
 
-pub struct EntryTableValue<'a>(&'a [u8; ENTRY_TABLE_VALUE_LENGTH]);
+/// Value stored in the Entry Table by Findex.
+///
+/// It is composed of:
+/// - a seed;
+/// - a hash;
+/// - a counter.
+struct EntryTableValue<'a>(&'a [u8; ENTRY_TABLE_VALUE_LENGTH]);
 
 impl<'a> EntryTableValue<'a> {
-    pub fn seed(&self) -> &[u8] {
+    fn seed(&self) -> &[u8] {
         &self.0[..SEED_LENGTH]
     }
 
-    pub fn hash(&self) -> &[u8] {
+    fn hash(&self) -> &[u8] {
         &self.0[SEED_LENGTH..SEED_LENGTH + HASH_LENGTH]
     }
 
-    pub fn counter(&self) -> u32 {
+    fn counter(&self) -> u32 {
         let mut counter = [0; 4];
         counter.copy_from_slice(&self.0[SEED_LENGTH + HASH_LENGTH..]);
         u32::from_be_bytes(counter)
@@ -62,10 +81,6 @@ pub struct Findex<
 > where
     [(); BLOCK_LENGTH * LINE_LENGTH]: Sized,
 {
-    // Findex Entry Table is used to store:
-    // - a seed
-    // - a hash
-    // - a counter (an u32)
     entry_table: EntryTable<ENTRY_TABLE_VALUE_LENGTH, CallbackError>,
     chain_table: ChainTable<BLOCK_LENGTH, LINE_LENGTH, CallbackError>,
 }
@@ -89,11 +104,11 @@ where
     ///
     /// In order not to enter cycles, the same node is not visited twice. This
     /// is ensured by maintaining a set of visited nodes.
-    fn walk<'a, Tag: Hash + Eq, IndexedValue: Clone>(
-        graph: &HashMap<Tag, HashSet<IndexedValue>>,
+    fn walk<'a, Tag: Hash + Eq + Clone>(
+        graph: &'a HashMap<Tag, HashSet<IndexedValue<Tag>>>,
         entry: &'a Tag,
         visited: &mut HashSet<&'a Tag>,
-    ) -> HashSet<IndexedValue> {
+    ) -> HashSet<IndexedValue<Tag>> {
         if visited.contains(&entry) {
             // Results associated to this tag have already been recovered.
             return HashSet::new();
@@ -106,12 +121,19 @@ where
             None => return HashSet::new(),
         };
 
+        let mut res = HashSet::new();
         for value in indexed_values {
-            // If the value is a Location, add it to the results
-            // else, recurse on this next tag
+            match value {
+                IndexedValue::Data(_) => {
+                    res.insert(value.clone());
+                }
+                IndexedValue::NextTag(next_tag) => {
+                    res.extend(Self::walk(graph, next_tag, visited));
+                }
+            }
         }
 
-        todo!()
+        res
     }
 
     /// Push the given modifications to the indexes using the given key.
@@ -122,14 +144,16 @@ where
     ///
     /// *Note*: only one operation per indexed value and per tag can be applied
     /// per push.
-    fn push<IndexedValue: Hash + Eq, Tag: Hash + Eq>(
+    fn push<Tag: Hash + Eq + Clone>(
         k: &Key<SEED_LENGTH>,
-        items: HashMap<Tag, HashMap<IndexedValue, Operation>>,
+        items: HashMap<Tag, HashMap<IndexedValue<Tag>, Operation>>,
     ) {
         todo!()
     }
 
-    /// Derives Findex master key using the given seed.
+    /// Derives Findex secret key using the given seed.
+    ///
+    /// The Findex secret key is the Entry Table key.
     pub fn derive_key(
         &self,
         seed: &Key<SEED_LENGTH>,
@@ -143,7 +167,7 @@ where
     }
 
     /// Searches indexes for the given tags using the given key.
-    pub fn search<Tag: Clone + Debug + Hash + Eq + AsRef<[u8]>, IndexedValue: Clone>(
+    pub fn search<Tag: Clone + Debug + Hash + Eq + AsRef<[u8]>>(
         &self,
         k: &<EntryTable<ENTRY_TABLE_VALUE_LENGTH, CallbackError> as Edx<
             KEY_LENGTH,
@@ -152,9 +176,10 @@ where
             Error<CallbackError>,
         >>::Key,
         tags: HashSet<Tag>,
-    ) -> Result<!, Error<CallbackError>> {
-        let graph = HashMap::<Tag, HashSet<IndexedValue>>::with_capacity(tags.len());
+    ) -> Result<HashMap<Tag, HashSet<IndexedValue<Tag>>>, Error<CallbackError>> {
+        let graph = HashMap::<Tag, HashSet<IndexedValue<Tag>>>::with_capacity(tags.len());
 
+        // Fetches the graph of indexed values.
         while !tags.is_empty() {
             let et_tokens = tags
                 .iter()
@@ -190,15 +215,22 @@ where
                 }
             }
         }
-        todo!()
+
+        let mut res = HashMap::with_capacity(tags.len());
+        for tag in tags {
+            let values = Self::walk(&graph, &tag, &mut HashSet::new());
+            res.insert(tag, values);
+        }
+
+        Ok(res)
     }
 
     /// Adds the given values to the index for the associater tags.
-    pub fn add<IndexedValue: Hash + Eq + Clone, Tag: Hash + Eq>(
+    pub fn add<Tag: Hash + Eq + Clone>(
         k: &Key<SEED_LENGTH>,
-        items: HashMap<IndexedValue, HashSet<Tag>>,
+        items: HashMap<IndexedValue<Tag>, HashSet<Tag>>,
     ) {
-        let mut pushed_items = HashMap::<Tag, HashMap<IndexedValue, Operation>>::new();
+        let mut pushed_items = HashMap::<Tag, HashMap<IndexedValue<Tag>, Operation>>::new();
         for (indexed_value, tags) in items {
             for tag in tags {
                 pushed_items
@@ -211,11 +243,11 @@ where
     }
 
     /// Removes the given values from the index for the associater tags.
-    pub fn remove<IndexedValue: Hash + Eq + Clone, Tag: Hash + Eq>(
+    pub fn remove<Tag: Hash + Eq + Clone>(
         k: &Key<SEED_LENGTH>,
-        items: HashMap<IndexedValue, HashSet<Tag>>,
+        items: HashMap<IndexedValue<Tag>, HashSet<Tag>>,
     ) {
-        let mut pushed_items = HashMap::<Tag, HashMap<IndexedValue, Operation>>::new();
+        let mut pushed_items = HashMap::<Tag, HashMap<IndexedValue<Tag>, Operation>>::new();
         for (indexed_value, tags) in items {
             for tag in tags {
                 pushed_items

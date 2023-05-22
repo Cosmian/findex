@@ -168,7 +168,7 @@ where
     ///
     /// TODO: values may not need to be padded into fixed size blocks first.
     pub fn prepare(
-        values: &[Vec<u8>],
+        values: Vec<&[u8]>,
     ) -> Result<Vec<[u8; (BLOCK_LENGTH + 1) * LINE_LENGTH]>, Error<CallbackError>> {
         let n_blocks = values
             .iter()
