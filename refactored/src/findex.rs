@@ -19,14 +19,20 @@ use std::{
     hash::Hash,
 };
 
-use cosmian_crypto_core::symmetric_crypto::{aes_256_gcm_pure::KEY_LENGTH, key::Key};
+use cosmian_crypto_core::{
+    kdf,
+    symmetric_crypto::{aes_256_gcm_pure::KEY_LENGTH, key::Key, SymKey},
+};
+use zeroize::ZeroizeOnDrop;
 
 use crate::{
     chain_table::{self, ChainTable},
     edx::Edx,
+    emm::Emm,
     entry_table::{self, EntryTable},
     error::Error,
     parameters::{HASH_LENGTH, SEED_LENGTH, TOKEN_LENGTH},
+    FindexApi,
 };
 
 /// Value indexed by Findex.
@@ -70,6 +76,26 @@ impl<'a> EntryTableValue<'a> {
         counter.copy_from_slice(&self.0[SEED_LENGTH + HASH_LENGTH..]);
         u32::from_be_bytes(counter)
     }
+}
+
+pub struct FindexKey<
+    CallbackError: std::error::Error,
+    EntryTableDb: entry_table::Callbacks<TOKEN_LENGTH, ENTRY_TABLE_VALUE_LENGTH, CallbackError>,
+> {
+    token: Key<KEY_LENGTH>,
+    entry_table: <EntryTable<ENTRY_TABLE_VALUE_LENGTH, CallbackError, EntryTableDb> as Edx<
+        KEY_LENGTH,
+        TOKEN_LENGTH,
+        ENTRY_TABLE_VALUE_LENGTH,
+        Error<CallbackError>,
+    >>::Key,
+}
+
+impl<
+    CallbackError: std::error::Error,
+    EntryTableDb: entry_table::Callbacks<TOKEN_LENGTH, ENTRY_TABLE_VALUE_LENGTH, CallbackError>,
+> ZeroizeOnDrop for FindexKey<CallbackError, EntryTableDb>
+{
 }
 
 /// Value stored in the Chain Table by Findex.
@@ -185,21 +211,6 @@ where
         todo!()
     }
 
-    /// Derives Findex secret key using the given seed.
-    ///
-    /// The Findex secret key is the Entry Table key.
-    pub fn derive_key(
-        &self,
-        seed: &Key<SEED_LENGTH>,
-    ) -> <EntryTable<ENTRY_TABLE_VALUE_LENGTH, CallbackError, EntryTableDb> as Edx<
-        KEY_LENGTH,
-        TOKEN_LENGTH,
-        ENTRY_TABLE_VALUE_LENGTH,
-        Error<CallbackError>,
-    >>::Key {
-        self.entry_table.derive_key(seed)
-    }
-
     /// Searches indexes for the given tags using the given key.
     pub fn search<Tag: Clone + Debug + Hash + Eq + AsRef<[u8]>>(
         &self,
@@ -293,5 +304,146 @@ where
             }
         }
         self.push(k, pushed_items)
+    }
+}
+
+/// Findex implements an EMM scheme.
+///
+/// Tokens are the hash of the tag. A reduced size is authorized since this
+/// hash only needs collision resistance.
+impl<
+    const BLOCK_LENGTH: usize,
+    const LINE_LENGTH: usize,
+    CallbackError: std::error::Error,
+    EntryTableDb: entry_table::Callbacks<TOKEN_LENGTH, ENTRY_TABLE_VALUE_LENGTH, CallbackError>,
+    ChainTableDb: chain_table::Callbacks<TOKEN_LENGTH, { 2 + BLOCK_LENGTH * LINE_LENGTH }, CallbackError>,
+> Emm<KEY_LENGTH, HASH_LENGTH, CallbackError>
+    for Findex<BLOCK_LENGTH, LINE_LENGTH, CallbackError, EntryTableDb, ChainTableDb>
+where
+    [(); 2 + BLOCK_LENGTH * LINE_LENGTH]: Sized,
+{
+    type Item = IndexedValue<Self::Token>;
+    type Key = FindexKey<CallbackError, EntryTableDb>;
+
+    fn derive_keys(&self, seed: &[u8]) -> Self::Key {
+        Self::Key {
+            token: Key::from_bytes(kdf!(KEY_LENGTH, seed)),
+            entry_table: self.entry_table.derive_key(seed),
+        }
+    }
+
+    fn tokenize(k: &Self::Key, tag: &[u8]) -> Self::Token {
+        kmac!(HASH_LENGTH, &k.token, tag)
+    }
+
+    fn get(
+        &self,
+        k: &Self::Key,
+        tokens: HashSet<Self::Token>,
+    ) -> Result<HashMap<Self::Token, Self::Value>, Error<CallbackError>> {
+        let graph = HashMap::<Self::Token, HashSet<Self::Item>>::with_capacity(tokens.len());
+
+        // Fetches the graph of indexed values.
+        while !tokens.is_empty() {
+            let et_tokens = tokens
+                .iter()
+                .map(|token| {
+                    (
+                        *token,
+                        self.entry_table.tokenize(&k.entry_table, token.as_ref()),
+                    )
+                })
+                .collect::<HashMap<_, _>>();
+
+            let et_values = self
+                .entry_table
+                .get(et_tokens.values().cloned().collect())?
+                .into_iter()
+                .map(|(token, value)| -> Result<_, _> {
+                    Ok((token, self.entry_table.resolve(&k.entry_table, value)?))
+                })
+                .collect::<Result<HashMap<_, _>, Error<CallbackError>>>()?;
+
+            let mut ct_tokens = HashMap::<Self::Token, Vec<_>>::with_capacity(et_values.len());
+            let mut ct_keys = HashMap::with_capacity(et_values.len());
+
+            for token in &tokens {
+                let et_token = et_tokens.get(token).ok_or_else(|| {
+                    Error::Crypto(format!("no token for the given tag: {token:?}"))
+                })?;
+                if let Some(value) = et_values.get(et_token) {
+                    let value = EntryTableValue(value);
+                    let k_ct: crate::edx::EdxKey<KEY_LENGTH> =
+                        self.chain_table.derive_key(value.seed());
+
+                    ct_tokens.entry(*token).or_default().extend(
+                        Self::unroll(0, value.counter() as usize)
+                            .map(|ct_tag| self.chain_table.tokenize(&k_ct, &ct_tag.to_be_bytes())),
+                    );
+
+                    ct_keys.insert(*token, k_ct);
+                }
+            }
+        }
+
+        let mut res = HashMap::with_capacity(tokens.len());
+        for token in tokens {
+            let values = Self::walk(&graph, &token, &mut HashSet::new());
+            res.insert(token, values);
+        }
+
+        Ok(res)
+    }
+
+    fn insert(&mut self, k: &Self::Key, values: HashSet<Self::Token, Self::Value>) {
+        todo!()
+    }
+}
+
+impl<
+    const BLOCK_LENGTH: usize,
+    const LINE_LENGTH: usize,
+    CallbackError: std::error::Error,
+    EntryTableDb: entry_table::Callbacks<TOKEN_LENGTH, ENTRY_TABLE_VALUE_LENGTH, CallbackError>,
+    ChainTableDb: chain_table::Callbacks<TOKEN_LENGTH, { 2 + BLOCK_LENGTH * LINE_LENGTH }, CallbackError>,
+    Tag: Hash + PartialEq + Eq,
+    Data: Hash + PartialEq + Eq,
+> FindexApi<Tag, Data, CallbackError>
+    for Findex<BLOCK_LENGTH, LINE_LENGTH, CallbackError, EntryTableDb, ChainTableDb>
+where
+    [(); 2 + BLOCK_LENGTH * LINE_LENGTH]: Sized,
+{
+    type Key = <Self as Emm<KEY_LENGTH, HASH_LENGTH, CallbackError>>::Key;
+    type Seed = Key<KEY_LENGTH>;
+
+    fn gen_seed(
+        &self,
+        rng: &mut impl cosmian_crypto_core::reexport::rand_core::CryptoRngCore,
+    ) -> Self::Seed {
+        todo!()
+    }
+
+    fn tokenize(&self, seed: &Self::Seed) -> Self::Key {
+        todo!()
+    }
+
+    fn search(&self, key: &Self::Key, tags: HashSet<Tag>) -> HashMap<Tag, HashSet<Data>> {
+        todo!()
+    }
+
+    fn add(
+        &mut self,
+        key: &Self::Key,
+        items: HashMap<Tag, HashSet<Data>>,
+    ) -> Result<(), Error<CallbackError>> {
+        todo!()
+    }
+
+    fn delete(
+        &mut self,
+        key: &Self::Key,
+        items: HashMap<Tag, HashSet<Data>>,
+    ) -> Result<(), Error<CallbackError>> {
+        todo!()
     }
 }

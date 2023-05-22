@@ -1,9 +1,11 @@
 use std::collections::{HashMap, HashSet};
 
-use cosmian_crypto_core::symmetric_crypto::key::Key;
 use zeroize::ZeroizeOnDrop;
 
-pub trait Emm<const KEY_LENGTH: usize, const TOKEN_LENGTH: usize> {
+use crate::error::Error;
+
+pub trait Emm<const KEY_LENGTH: usize, const TOKEN_LENGTH: usize, CallbackError: std::error::Error>
+{
     type Key: ZeroizeOnDrop;
 
     /// Cryptographically secure token used to index values inside the encrypted
@@ -14,31 +16,28 @@ pub trait Emm<const KEY_LENGTH: usize, const TOKEN_LENGTH: usize> {
     type Item;
 
     /// Variable length value stored inside the encrypted multi-map.
-    type Value = Vec<Self::Item>;
+    type Value = HashSet<Self::Item>;
 
     /// Deterministically derives a `KEY_LENGTH` sized cryptographic key from
     /// the given seed.
-    fn derive_keys(seed: &[u8]) -> Key<KEY_LENGTH>;
+    fn derive_keys(&self, seed: &[u8]) -> Self::Key;
 
     /// Deterministically transforms the given tag into a `TOKEN_LENGTH` sized
     /// cryptographically secure token using the given key. This token can then
     /// be used to index data inside the multi-map.
     ///
     /// In particular, the token should leak no information about the tag.
-    fn tokenize(k: &Key<KEY_LENGTH>, tag: &[u8]) -> Self::Token;
+    fn tokenize(k: &Self::Key, tag: &[u8]) -> Self::Token;
 
     /// Queries the encrypted multi-map for the given tokens and returns the
     /// decrypted values.
     fn get(
-        k: &Key<KEY_LENGTH>,
+        &self,
+        k: &Self::Key,
         tokens: HashSet<Self::Token>,
-    ) -> HashMap<Self::Token, Vec<Self::Value>>;
+    ) -> Result<HashMap<Self::Token, Self::Value>, Error<CallbackError>>;
 
     /// Encrypts the given values using the given key and insert the ciphertexts
     /// into the multi-map.
-    fn insert(k: &Key<KEY_LENGTH>, values: HashSet<Self::Token, Vec<Self::Value>>);
-
-    /// Encrypts the given values using the given key and insert the ciphertexts
-    /// into the multi-map.
-    fn remove(k: &Key<KEY_LENGTH>, values: HashSet<Self::Token, Vec<Self::Value>>);
+    fn insert(&mut self, k: &Self::Key, values: HashSet<Self::Token, Self::Value>);
 }
