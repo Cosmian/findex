@@ -47,15 +47,13 @@ enum Operation {
     Deletion,
 }
 
-/// Size of the Entry Table values used by Findex.
-const ENTRY_TABLE_VALUE_LENGTH: usize = SEED_LENGTH + HASH_LENGTH + 4;
-
 /// Value stored in the Entry Table by Findex.
 ///
 /// It is composed of:
 /// - a seed;
 /// - a hash;
 /// - a counter.
+const ENTRY_TABLE_VALUE_LENGTH: usize = SEED_LENGTH + HASH_LENGTH + 4;
 struct EntryTableValue<'a>(&'a [u8; ENTRY_TABLE_VALUE_LENGTH]);
 
 impl<'a> EntryTableValue<'a> {
@@ -136,9 +134,9 @@ where
         res
     }
 
-    /// Push the given modifications to the indexes using the given key.
+    /// Pushes the given modifications to the indexes using the given key.
     ///
-    /// Modifications list for each tag, a set of indexed value with the
+    /// Modifications list for each tag, a set of indexed values with the
     /// associated operation to perform on the indexes. Operations can be
     /// additions or deletions.
     ///
@@ -225,7 +223,7 @@ where
         Ok(res)
     }
 
-    /// Adds the given values to the index for the associater tags.
+    /// Adds the given values to the index for the associated tags.
     pub fn add<Tag: Hash + Eq + Clone>(
         k: &Key<SEED_LENGTH>,
         items: HashMap<IndexedValue<Tag>, HashSet<Tag>>,
@@ -242,7 +240,7 @@ where
         Self::push(k, pushed_items)
     }
 
-    /// Removes the given values from the index for the associater tags.
+    /// Removes the given values from the index for the associated tags.
     pub fn remove<Tag: Hash + Eq + Clone>(
         k: &Key<SEED_LENGTH>,
         items: HashMap<IndexedValue<Tag>, HashSet<Tag>>,
