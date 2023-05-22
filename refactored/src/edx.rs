@@ -20,6 +20,10 @@ impl<const KEY_LENGTH: usize> ZeroizeOnDrop for EdxKey<KEY_LENGTH> {}
 
 /// Encrypted value contained inside the EDX. It is composed of the AESGCM-256
 /// encrypted value, the nonce used and the corresponding MAC tag.
+///
+/// TODO: the nonce used to encrypt the values should be derived from the token
+/// to avoid storing yet another random value.
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct EncryptedValue<const VALUE_LENGTH: usize> {
     ciphertext: [u8; VALUE_LENGTH],
     tag: [u8; MAC_LENGTH],
@@ -68,13 +72,15 @@ pub trait Edx<
 
     /// Cryptographically secure token used to index values inside the encrypted
     /// dictionary.
-    type Token = [Self::Item; TOKEN_LENGTH];
+    type Token = [u8; TOKEN_LENGTH];
 
     /// Fixed length value stored inside the dictionary.
     type Value = [Self::Item; VALUE_LENGTH];
 
     /// Fixed length encrypted value stored inside the encrypted dictionary.
     type EncryptedValue = EncryptedValue<VALUE_LENGTH>;
+
+    fn gen_seed(&self, rng: &mut impl CryptoRngCore) -> [u8; KEY_LENGTH];
 
     /// Deterministically derives a cryptographic key from the given seed.
     fn derive_key(&self, seed: &[u8]) -> Self::Key;
@@ -112,7 +118,7 @@ pub trait Edx<
     ///
     /// All modifications to the encrypted dictionary are *atomic*.
     fn upsert(
-        &self,
+        &mut self,
         rng: &mut impl CryptoRngCore,
         k: &Self::Key,
         old_values: &HashMap<Self::Token, Self::EncryptedValue>,
@@ -123,7 +129,7 @@ pub trait Edx<
     /// if no value is already stored for the corresponding tokens. Returns the
     /// set of tokens for which a value is already stored.
     fn insert(
-        &self,
+        &mut self,
         rng: &mut impl CryptoRngCore,
         k: &Self::Key,
         values: HashMap<Self::Token, Self::Value>,

@@ -37,4 +37,8 @@ pub trait Emm<const KEY_LENGTH: usize, const TOKEN_LENGTH: usize> {
     /// Encrypts the given values using the given key and insert the ciphertexts
     /// into the multi-map.
     fn insert(k: &Key<KEY_LENGTH>, values: HashSet<Self::Token, Vec<Self::Value>>);
+
+    /// Encrypts the given values using the given key and insert the ciphertexts
+    /// into the multi-map.
+    fn remove(k: &Key<KEY_LENGTH>, values: HashSet<Self::Token, Vec<Self::Value>>);
 }

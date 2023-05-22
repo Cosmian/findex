@@ -22,9 +22,9 @@ use std::{
 use cosmian_crypto_core::symmetric_crypto::{aes_256_gcm_pure::KEY_LENGTH, key::Key};
 
 use crate::{
-    chain_table::ChainTable,
+    chain_table::{self, ChainTable},
     edx::Edx,
-    entry_table::EntryTable,
+    entry_table::{self, EntryTable},
     error::Error,
     parameters::{HASH_LENGTH, SEED_LENGTH, TOKEN_LENGTH},
 };
@@ -72,19 +72,47 @@ impl<'a> EntryTableValue<'a> {
     }
 }
 
+/// Value stored in the Chain Table by Findex.
+///
+/// It is composed of a list of:
+/// - a type byte;
+/// - an operation byte;
+/// - a list of `LINE_LENGTH` blocks of length `BLOCK_LENGTH`.
+///
+/// The type byte (resp. operation byte) is used to write all the type bits
+/// (resp. operation bits) into a single byte rather than adding an entire byte
+/// per block.
+struct ChainTableValue<const BLOCK_LENGTH: usize, const LINE_LENGTH: usize>(
+    [u8; 2 + BLOCK_LENGTH * LINE_LENGTH],
+)
+where
+    [(); 2 + BLOCK_LENGTH * LINE_LENGTH]: Sized;
+
+impl<const BLOCK_LENGTH: usize, const LINE_LENGTH: usize> ChainTableValue<BLOCK_LENGTH, LINE_LENGTH> where
+    [(); 2 + BLOCK_LENGTH * LINE_LENGTH]: Sized
+{
+}
+
 pub struct Findex<
     const BLOCK_LENGTH: usize,
     const LINE_LENGTH: usize,
     CallbackError: std::error::Error,
+    EntryTableDb: entry_table::Callbacks<TOKEN_LENGTH, ENTRY_TABLE_VALUE_LENGTH, CallbackError>,
+    ChainTableDb: chain_table::Callbacks<TOKEN_LENGTH, { 2 + BLOCK_LENGTH * LINE_LENGTH }, CallbackError>,
 > where
     [(); 2 + BLOCK_LENGTH * LINE_LENGTH]: Sized,
 {
-    entry_table: EntryTable<ENTRY_TABLE_VALUE_LENGTH, CallbackError>,
-    chain_table: ChainTable<{ 2 + BLOCK_LENGTH * LINE_LENGTH }, CallbackError>,
+    entry_table: EntryTable<ENTRY_TABLE_VALUE_LENGTH, CallbackError, EntryTableDb>,
+    chain_table: ChainTable<{ 2 + BLOCK_LENGTH * LINE_LENGTH }, CallbackError, ChainTableDb>,
 }
 
-impl<const BLOCK_LENGTH: usize, const LINE_LENGTH: usize, CallbackError: std::error::Error>
-    Findex<BLOCK_LENGTH, LINE_LENGTH, CallbackError>
+impl<
+    const BLOCK_LENGTH: usize,
+    const LINE_LENGTH: usize,
+    CallbackError: std::error::Error,
+    EntryTableDb: entry_table::Callbacks<TOKEN_LENGTH, ENTRY_TABLE_VALUE_LENGTH, CallbackError>,
+    ChainTableDb: chain_table::Callbacks<TOKEN_LENGTH, { 2 + BLOCK_LENGTH * LINE_LENGTH }, CallbackError>,
+> Findex<BLOCK_LENGTH, LINE_LENGTH, CallbackError, EntryTableDb, ChainTableDb>
 where
     [(); 2 + BLOCK_LENGTH * LINE_LENGTH]: Sized,
 {
@@ -163,7 +191,7 @@ where
     pub fn derive_key(
         &self,
         seed: &Key<SEED_LENGTH>,
-    ) -> <EntryTable<ENTRY_TABLE_VALUE_LENGTH, CallbackError> as Edx<
+    ) -> <EntryTable<ENTRY_TABLE_VALUE_LENGTH, CallbackError, EntryTableDb> as Edx<
         KEY_LENGTH,
         TOKEN_LENGTH,
         ENTRY_TABLE_VALUE_LENGTH,
@@ -175,7 +203,7 @@ where
     /// Searches indexes for the given tags using the given key.
     pub fn search<Tag: Clone + Debug + Hash + Eq + AsRef<[u8]>>(
         &self,
-        k: &<EntryTable<ENTRY_TABLE_VALUE_LENGTH, CallbackError> as Edx<
+        k: &<EntryTable<ENTRY_TABLE_VALUE_LENGTH, CallbackError, EntryTableDb> as Edx<
             KEY_LENGTH,
             TOKEN_LENGTH,
             ENTRY_TABLE_VALUE_LENGTH,

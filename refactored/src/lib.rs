@@ -11,7 +11,6 @@
 #[macro_use]
 mod macros;
 
-mod callbacks;
 mod chain_table;
 mod edx;
 mod emm;
@@ -19,3 +18,6 @@ mod entry_table;
 mod error;
 mod findex;
 mod parameters;
+
+pub use chain_table::ChainTable;
+pub use edx::Edx;

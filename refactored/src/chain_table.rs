@@ -1,24 +1,14 @@
 //! Implements the Chain Table algorithm.
 //!
 //! This algorithm is in charge of storing the lists of values indexed by
-//! Findex. Formally, it implements an Encrypted Multi-Map (EMM) scheme.
-//! However, the data structure is an Encrypted Dictionary (EDX) which
-//! characteristic is to store fixed length values.
-//!
-//! TODO: give a rational of this implementation choice
-//!
-//! In order to fit variable size lists of variable size values, a double
-//! padding is used:
-//! - the variable size values are padded into fixed size *blocks*;
-//! - the lists of blocks are padded into fixed size *lines*.
-//! This padding is performed by the `prepare` method.
+//! Findex. Formally, it implements an Encrypted Dictionary (EDX) scheme.
 //!
 //! The encryption scheme used in AES256-GCM.
-//!
-//! TODO: the nonce used to encrypt the values should be derived from the token
-//! to avoid storing yet another random value.
 
-use std::collections::{HashMap, HashSet};
+use std::{
+    collections::{HashMap, HashSet},
+    marker::PhantomData,
+};
 
 use cosmian_crypto_core::{
     kdf,
@@ -27,22 +17,79 @@ use cosmian_crypto_core::{
 };
 
 use crate::{
-    callbacks::{FetchChain, InsertChain},
-    edx::Edx,
+    edx::{Edx, EncryptedValue},
     error::Error,
     parameters::TOKEN_LENGTH,
 };
 
-/// Chain Table representation.
-pub struct ChainTable<const VALUE_LENGTH: usize, CallbackError: std::error::Error> {
-    fetch: FetchChain<TOKEN_LENGTH, VALUE_LENGTH, CallbackError>,
-    insert: InsertChain<TOKEN_LENGTH, VALUE_LENGTH, CallbackError>,
+pub trait Callbacks<
+    const TOKEN_LENGTH: usize,
+    const VALUE_LENGTH: usize,
+    CallbackError: std::error::Error,
+>
+{
+    /// Queries a table for the given tokens (UIDs).
+    ///
+    /// Tokens that do not index any value in the table should not be present in
+    /// the returned map.
+    ///
+    /// # Error
+    ///
+    /// No error should be returned in case a requested token does not index any
+    /// value.
+    fn fetch(
+        &self,
+        tokens: HashSet<[u8; TOKEN_LENGTH]>,
+    ) -> Result<HashMap<[u8; TOKEN_LENGTH], EncryptedValue<VALUE_LENGTH>>, CallbackError>;
+
+    /// Inserts the given values into the table.
+    ///
+    /// # Error
+    ///
+    /// An error should be returned if a value already exists for a given token.
+    fn insert(
+        &mut self,
+        tokens: HashMap<[u8; TOKEN_LENGTH], EncryptedValue<VALUE_LENGTH>>,
+    ) -> Result<HashSet<[u8; TOKEN_LENGTH]>, CallbackError>;
 }
 
-impl<const VALUE_LENGTH: usize, CallbackError: std::error::Error>
-    Edx<KEY_LENGTH, TOKEN_LENGTH, VALUE_LENGTH, Error<CallbackError>>
-    for ChainTable<VALUE_LENGTH, CallbackError>
+/// Chain Table representation.
+pub struct ChainTable<
+    const VALUE_LENGTH: usize,
+    CallbackError: std::error::Error,
+    Database: Callbacks<TOKEN_LENGTH, VALUE_LENGTH, CallbackError>,
+> {
+    db: Database,
+    err: PhantomData<CallbackError>,
+}
+
+impl<
+    const VALUE_LENGTH: usize,
+    CallbackError: std::error::Error,
+    Database: Callbacks<TOKEN_LENGTH, VALUE_LENGTH, CallbackError>,
+> ChainTable<VALUE_LENGTH, CallbackError, Database>
 {
+    pub fn new(db: Database) -> Self {
+        Self {
+            db,
+            err: Default::default(),
+        }
+    }
+}
+
+impl<
+    const VALUE_LENGTH: usize,
+    CallbackError: std::error::Error,
+    Database: Callbacks<TOKEN_LENGTH, VALUE_LENGTH, CallbackError>,
+> Edx<KEY_LENGTH, TOKEN_LENGTH, VALUE_LENGTH, Error<CallbackError>>
+    for ChainTable<VALUE_LENGTH, CallbackError, Database>
+{
+    fn gen_seed(&self, rng: &mut impl CryptoRngCore) -> [u8; KEY_LENGTH] {
+        let mut seed = [0; KEY_LENGTH];
+        rng.fill_bytes(&mut seed);
+        seed
+    }
+
     // TODO (TBZ): add info in the derivation.
     fn derive_key(&self, seed: &[u8]) -> Self::Key {
         Self::Key {
@@ -60,7 +107,7 @@ impl<const VALUE_LENGTH: usize, CallbackError: std::error::Error>
         &self,
         tokens: HashSet<Self::Token>,
     ) -> Result<HashMap<Self::Token, Self::EncryptedValue>, Error<CallbackError>> {
-        (self.fetch)(tokens).map_err(Error::Callback)
+        self.db.fetch(tokens).map_err(Error::Callback)
     }
 
     fn resolve(
@@ -72,17 +119,17 @@ impl<const VALUE_LENGTH: usize, CallbackError: std::error::Error>
     }
 
     fn upsert(
-        &self,
+        &mut self,
         rng: &mut impl CryptoRngCore,
         k: &Self::Key,
         old_values: &HashMap<Self::Token, Self::EncryptedValue>,
         new_values: HashMap<Self::Token, Self::Value>,
     ) -> Result<HashMap<Self::Token, Self::EncryptedValue>, Error<CallbackError>> {
-        todo!("The Chain Table does not do any upsert.")
+        panic!("The Chain Table does not do any upsert.")
     }
 
     fn insert(
-        &self,
+        &mut self,
         rng: &mut impl CryptoRngCore,
         k: &Self::Key,
         values: HashMap<Self::Token, Self::Value>,
@@ -93,7 +140,7 @@ impl<const VALUE_LENGTH: usize, CallbackError: std::error::Error>
                 Ok((token, Self::EncryptedValue::encrypt(rng, &k.value, value)?))
             })
             .collect::<Result<HashMap<_, _>, Error<CallbackError>>>()?;
-        (self.insert)(encrypted_values).map_err(Error::Callback)
+        self.db.insert(encrypted_values).map_err(Error::Callback)
     }
 }
 
@@ -158,3 +205,88 @@ impl<const VALUE_LENGTH: usize, CallbackError: std::error::Error>
 //}
 //Ok(res)
 //}
+//
+
+#[cfg(test)]
+mod tests {
+    use std::fmt::Display;
+
+    use cosmian_crypto_core::{
+        reexport::rand_core::{RngCore, SeedableRng},
+        CsRng,
+    };
+
+    use super::*;
+    use crate::edx::EncryptedValue;
+
+    const VALUE_LENGTH: usize = 32;
+
+    #[derive(Debug)]
+    struct CallbackError;
+
+    impl Display for CallbackError {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            write!(f, "callback error")
+        }
+    }
+
+    impl std::error::Error for CallbackError {}
+
+    #[derive(Default)]
+    struct Table(HashMap<[u8; TOKEN_LENGTH], EncryptedValue<VALUE_LENGTH>>);
+
+    impl Callbacks<TOKEN_LENGTH, VALUE_LENGTH, CallbackError> for Table {
+        fn fetch(
+            &self,
+            tokens: HashSet<[u8; TOKEN_LENGTH]>,
+        ) -> Result<HashMap<[u8; TOKEN_LENGTH], EncryptedValue<VALUE_LENGTH>>, CallbackError>
+        {
+            Ok(tokens
+                .into_iter()
+                .filter_map(|t| self.0.get(&t).cloned().map(|v| (t, v)))
+                .collect())
+        }
+
+        fn insert(
+            &mut self,
+            tokens: HashMap<[u8; TOKEN_LENGTH], EncryptedValue<VALUE_LENGTH>>,
+        ) -> Result<HashSet<[u8; TOKEN_LENGTH]>, CallbackError> {
+            let failed_uids = tokens
+                .into_iter()
+                .filter_map(|(token, value)| {
+                    let old_value = self.0.insert(token, value);
+                    old_value.map(|_| token)
+                })
+                .collect::<HashSet<_>>();
+            Ok(failed_uids)
+        }
+    }
+
+    #[test]
+    fn test_edx() {
+        let mut rng = CsRng::from_entropy();
+
+        let mut table = ChainTable::new(Table::default());
+        let seed = table.gen_seed(&mut rng);
+        let key = table.derive_key(&seed);
+
+        let tag = "only value";
+        let token = table.tokenize(&key, tag.as_bytes());
+
+        let mut value = [0; VALUE_LENGTH];
+        rng.fill_bytes(&mut value);
+
+        table
+            .insert(&mut rng, &key, HashMap::from_iter([(token, value)]))
+            .unwrap();
+
+        let res = table.get(HashSet::from_iter([token])).unwrap();
+
+        assert_eq!(res.len(), 1);
+
+        for (_, ciphertext) in res {
+            let decrypted_value = table.resolve(&key, ciphertext).unwrap();
+            assert_eq!(decrypted_value, value);
+        }
+    }
+}
