@@ -20,6 +20,9 @@ crate-type = ["cdylib", "rlib", "staticlib"]
 name = "cosmian_findex"
 path = "src/lib.rs"
 
+[workspace]
+members = ["refactored"]
+
 [[bench]]
 harness = false
 name = "benches"
