@@ -38,7 +38,7 @@ pub trait FindexCompact<
 {
     /// Replaces all the Index Entry Table UIDs and values. New UIDs are derived
     /// using the given label and the KMAC key derived from the new master key.
-    /// The values are dectypted using the DEM key derived from the master key
+    /// The values are decrypted using the DEM key derived from the master key
     /// and re-encrypted using the DEM key derived from the new master key.
     ///
     /// Randomly selects index entries and recompact their associated chains.

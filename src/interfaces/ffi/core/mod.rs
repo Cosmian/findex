@@ -18,7 +18,7 @@ pub const NUMBER_OF_ENTRY_TABLE_LINE_IN_BATCH: usize = 100;
 /// Other error codes will be forwarded to the client as a response to
 /// the main call error code so that the client can report some custom
 /// callbacks errors (for example the Flutter lib is using 42 to report
-/// an expection during a callback, save this exception and re-report this
+/// an exception during a callback, save this exception and re-report this
 /// exception at the end of the main call if the response is 42).
 pub enum ErrorCode {
     Success = 0,
@@ -33,6 +33,7 @@ pub enum ErrorCode {
 
 /// Implements Findex traits.
 pub struct FindexUser {
+    pub(crate) entry_table_number: usize,
     pub(crate) progress: Option<ProgressCallback>,
     pub(crate) fetch_all_entry_table_uids: Option<FetchAllEntryTableUidsCallback>,
     pub(crate) fetch_entry: Option<FetchEntryTableCallback>,

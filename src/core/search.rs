@@ -50,6 +50,7 @@ pub trait FindexSearch<
     /// - `label`                   : public label
     /// - `max_results_per_keyword` : maximum number of results to return per
     ///   keyword
+    /// - `fetch_chains_batch_size` : maximum number of chains fetched in batch
     async fn non_recursive_search(
         &mut self,
         keywords: &HashSet<Keyword>,

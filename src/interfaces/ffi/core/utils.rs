@@ -46,15 +46,21 @@ macro_rules! unwrap_callback {
 ///
 /// # Arguments
 /// - `line_number` : number of lines in the encrypted Entry Table
-pub const fn get_serialized_encrypted_entry_table_size_bound(line_number: usize) -> usize {
-    LEB128_MAXIMUM_ENCODED_BYTES_NUMBER
+/// - `entry_table_number` : number of different entry tables. The number is
+///   required here since severable entry table could give multiple results
+pub const fn get_serialized_encrypted_entry_table_size_bound(
+    line_number: usize,
+    entry_table_number: usize,
+) -> usize {
+    (LEB128_MAXIMUM_ENCODED_BYTES_NUMBER
         + line_number * UID_LENGTH
         + line_number
             * (LEB128_MAXIMUM_ENCODED_BYTES_NUMBER
                 + DemScheme::ENCRYPTION_OVERHEAD
                 + KWI_LENGTH
                 + UID_LENGTH
-                + Keyword::HASH_LENGTH)
+                + Keyword::HASH_LENGTH))
+        * entry_table_number
 }
 
 /// Returns an upper-bound on the size of a serialized encrypted Chain Table.
