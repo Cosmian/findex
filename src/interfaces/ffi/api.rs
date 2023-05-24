@@ -44,7 +44,6 @@ use crate::{
 /// - `max_depth`               : maximum recursion depth allowed
 /// - `fetch_chains_batch_size` : maximum number of chains fetched in batch
 /// - `entry_table_number`      : number of different entry tables
-
 /// - `progress_callback`       : callback used to retrieve intermediate results
 ///   and transmit user interrupt
 ///  - `fetch_entry`            : the callback function to fetch the values from
