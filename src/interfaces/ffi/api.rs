@@ -29,9 +29,7 @@ use crate::{
             error::{set_last_error, FfiErr},
             MAX_DEPTH,
         },
-        generic_parameters::{
-            MASTER_KEY_LENGTH, MAX_RESULTS_PER_KEYWORD, SECURE_FETCH_CHAINS_BATCH_SIZE,
-        },
+        generic_parameters::{MAX_RESULTS_PER_KEYWORD, SECURE_FETCH_CHAINS_BATCH_SIZE},
         ser_de::SerializableSet,
     },
 };
@@ -44,6 +42,8 @@ use crate::{
 ///  - `max_results_per_keyword`: maximum number of results to return per
 ///    keyword
 /// - `max_depth`               : maximum recursion depth allowed
+/// - `fetch_chains_batch_size` : maximum number of chains fetched in batch
+/// - `entry_table_number`      : number of different entry tables
 /// - `progress_callback`       : callback used to retrieve intermediate results
 ///   and transmit user interrupt
 ///  - `fetch_entry`            : the callback function to fetch the values from
@@ -58,14 +58,14 @@ async fn ffi_search(
     max_results_per_keyword: usize,
     max_depth: usize,
     fetch_chains_batch_size: NonZeroUsize,
+    entry_table_number: usize,
     progress: ProgressCallback,
     fetch_entry: FetchEntryTableCallback,
     fetch_chain: FetchChainTableCallback,
 ) -> Result<Vec<u8>, FindexErr> {
-    let master_key = KeyingMaterial::<MASTER_KEY_LENGTH>::try_from_bytes(master_key_bytes)
-        .map_err(|e| {
-            FindexErr::Other(format!("While parsing master key for Findex search, {e}"))
-        })?;
+    let master_key = KeyingMaterial::try_from_bytes(master_key_bytes).map_err(|e| {
+        FindexErr::Other(format!("While parsing master key for Findex search, {e}"))
+    })?;
     let label = Label::from(label_bytes);
 
     let mut keywords = HashSet::with_capacity(base64_keywords.len());
@@ -80,6 +80,7 @@ async fn ffi_search(
     }
 
     let mut ffi_search = FindexUser {
+        entry_table_number,
         progress: Some(progress),
         fetch_entry: Some(fetch_entry),
         fetch_chain: Some(fetch_chain),
@@ -152,6 +153,7 @@ pub unsafe extern "C" fn h_search(
     max_results_per_keyword: c_int,
     max_depth: c_int,
     fetch_chains_batch_size: c_uint,
+    entry_table_number: c_uint,
     progress_callback: ProgressCallback,
     fetch_entry: FetchEntryTableCallback,
     fetch_chain: FetchChainTableCallback,
@@ -173,7 +175,7 @@ pub unsafe extern "C" fn h_search(
     } else {
         ffi_unwrap!(
             usize::try_from(max_results_per_keyword),
-            "loop_iteration_limit must be a positive int"
+            "max_results_per_keyword must be a positive int"
         )
     };
 
@@ -182,7 +184,7 @@ pub unsafe extern "C" fn h_search(
     } else {
         ffi_unwrap!(
             usize::try_from(max_depth),
-            "loop_iteration_limit must be a positive int"
+            "max_depth must be a positive int"
         )
     };
 
@@ -220,6 +222,10 @@ pub unsafe extern "C" fn h_search(
         .and_then(NonZeroUsize::new)
         .unwrap_or(SECURE_FETCH_CHAINS_BATCH_SIZE);
 
+    if entry_table_number == 0 {
+        ffi_bail!("The parameter entry_table_number must be strictly positive. Found 0");
+    }
+
     let serialized_uids = ffi_unwrap!(executor::block_on(ffi_search(
         &base64_keywords,
         master_key_bytes,
@@ -227,6 +233,7 @@ pub unsafe extern "C" fn h_search(
         max_results_per_keyword,
         max_depth,
         fetch_chains_batch_size,
+        entry_table_number as usize,
         progress_callback,
         fetch_entry,
         fetch_chain,
@@ -273,13 +280,17 @@ pub unsafe extern "C" fn h_search(
 ///
 /// # Parameters
 ///
-/// - `master_key`      : Findex master key
-/// - `label`           : additional information used to derive Entry Table UIDs
+/// - `master_key`                  : Findex master key
+/// - `label`                       : additional information used to derive
+///   Entry Table UIDs
 /// - `indexed_values_and_keywords` : serialized list of values and the keywords
 ///   used to index them
-/// - `fetch_entry`     : callback used to fetch the Entry Table
-/// - `upsert_entry`    : callback used to upsert lines in the Entry Table
-/// - `insert_chain`    : callback used to insert lines in the Chain Table
+/// - `entry_table_number`          : number of different entry tables
+/// - `fetch_entry`                 : callback used to fetch the Entry Table
+/// - `upsert_entry`                : callback used to upsert lines in the Entry
+///   Table
+/// - `insert_chain`                : callback used to insert lines in the Chain
+///   Table
 ///
 /// # Safety
 ///
@@ -290,6 +301,7 @@ pub unsafe extern "C" fn h_upsert(
     label_ptr: *const u8,
     label_len: c_int,
     indexed_values_and_keywords_ptr: *const c_char,
+    entry_table_number: c_uint,
     fetch_entry: FetchEntryTableCallback,
     upsert_entry: UpsertEntryTableCallback,
     insert_chain: InsertChainTableCallback,
@@ -299,7 +311,7 @@ pub unsafe extern "C" fn h_upsert(
     ffi_not_null!(master_key_ptr, "Master Key pointer should not be null");
     let master_key_bytes = slice::from_raw_parts(master_key_ptr, master_key_len as usize);
     let master_key = ffi_unwrap!(
-        KeyingMaterial::<MASTER_KEY_LENGTH>::try_from_bytes(master_key_bytes).map_err(|e| {
+        KeyingMaterial::try_from_bytes(master_key_bytes).map_err(|e| {
             FindexErr::Other(format!("while parsing master key for Findex upsert, {e}"))
         })
     );
@@ -326,6 +338,11 @@ pub unsafe extern "C" fn h_upsert(
                 return 1;
             }
         };
+
+    if entry_table_number == 0 {
+        ffi_bail!("The parameter entry_table_number must be strictly positive. Found 0");
+    }
+
     // a map of base64 encoded `IndexedValue` to a list of base64 encoded keyWords
     let parsed_indexed_values_and_keywords = ffi_unwrap!(serde_json::from_str::<
         HashMap<String, Vec<String>>,
@@ -348,6 +365,7 @@ pub unsafe extern "C" fn h_upsert(
     // Finally write indexes in database
     //
     let mut ffi_upsert = FindexUser {
+        entry_table_number: entry_table_number as usize,
         progress: None,
         fetch_entry: Some(fetch_entry),
         fetch_chain: None,
@@ -370,7 +388,7 @@ pub unsafe extern "C" fn h_upsert(
 #[no_mangle]
 /// Replaces all the Index Entry Table UIDs and values. New UIDs are derived
 /// using the given label and the KMAC key derived from the new master key. The
-/// values are dectypted using the DEM key derived from the master key and
+/// values are decrypted using the DEM key derived from the master key and
 /// re-encrypted using the DEM key derived from the new master key.
 ///
 /// Randomly selects index entries and recompact their associated chains. Chains
@@ -386,7 +404,8 @@ pub unsafe extern "C" fn h_upsert(
 /// - `old_master_key`                  : old Findex master key
 /// - `new_master_key`                  : new Findex master key
 /// - `label`                           : additional information used to derive
-///   Entry Table UIDs
+/// - `entry_table_number`              : number of different entry table Entry
+///   Table UIDs
 /// - `fetch_entry`                     : callback used to fetch the Entry Table
 /// - `fetch_chain`                     : callback used to fetch the Chain Table
 /// - `update_lines`                    : callback used to update lines in both
@@ -405,6 +424,7 @@ pub unsafe extern "C" fn h_compact(
     new_master_key_len: c_int,
     label_ptr: *const u8,
     label_len: c_int,
+    entry_table_number: c_uint,
     fetch_all_entry_table_uids: FetchAllEntryTableUidsCallback,
     fetch_entry: FetchEntryTableCallback,
     fetch_chain: FetchChainTableCallback,
@@ -426,24 +446,24 @@ pub unsafe extern "C" fn h_compact(
     // Parse master Key
     ffi_not_null!(master_key_ptr, "Master Key pointer should not be null");
     let master_key_bytes = slice::from_raw_parts(master_key_ptr, master_key_len as usize);
-    let master_key = ffi_unwrap!(KeyingMaterial::<MASTER_KEY_LENGTH>::try_from_bytes(
-        master_key_bytes
-    ));
+    let master_key = ffi_unwrap!(KeyingMaterial::try_from_bytes(master_key_bytes));
     let new_master_key_bytes =
         slice::from_raw_parts(new_master_key_ptr, new_master_key_len as usize);
-    let new_master_key = ffi_unwrap!(KeyingMaterial::<MASTER_KEY_LENGTH>::try_from_bytes(
-        new_master_key_bytes
-    ));
+    let new_master_key = ffi_unwrap!(KeyingMaterial::try_from_bytes(new_master_key_bytes));
 
     ffi_not_null!(label_ptr, "Label pointer should not be null");
 
     let label_bytes = slice::from_raw_parts(label_ptr, label_len as usize);
     let label = Label::from(label_bytes);
 
+    if entry_table_number == 0 {
+        ffi_bail!("The parameter entry_table_number must be strictly positive. Found 0");
+    }
     //
     // Finally write indexes in database
     //
     let mut ffi_compact = FindexUser {
+        entry_table_number: entry_table_number as usize,
         progress: None,
         fetch_entry: Some(fetch_entry),
         fetch_chain: Some(fetch_chain),

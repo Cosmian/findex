@@ -71,7 +71,10 @@ impl FindexCallbacks<UID_LENGTH> for FindexUser {
         let serialized_uids = serialize_set(entry_table_uids)?;
         let res = fetch_callback(
             &serialized_uids,
-            get_serialized_encrypted_entry_table_size_bound(entry_table_uids.len()),
+            get_serialized_encrypted_entry_table_size_bound(
+                entry_table_uids.len(),
+                self.entry_table_number,
+            ),
             *fetch_entry,
             "fetch entries",
         )?;
@@ -104,7 +107,10 @@ impl FindexCallbacks<UID_LENGTH> for FindexUser {
         let serialized_upsert_data = modifications.try_to_bytes()?;
 
         // Callback output
-        let allocation_size = get_serialized_encrypted_entry_table_size_bound(modifications.len());
+        let allocation_size = get_serialized_encrypted_entry_table_size_bound(
+            modifications.len(),
+            self.entry_table_number,
+        );
         let mut serialized_rejected_items = vec![0; allocation_size];
         let mut serialized_rejected_items_len = allocation_size as u32;
         let serialized_rejected_items_ptr =

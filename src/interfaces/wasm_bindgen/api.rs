@@ -10,9 +10,7 @@ use super::core::search_results_to_js;
 use crate::{
     core::{FindexSearch, FindexUpsert, KeyingMaterial, Keyword, Label},
     interfaces::{
-        generic_parameters::{
-            MASTER_KEY_LENGTH, MAX_RESULTS_PER_KEYWORD, SECURE_FETCH_CHAINS_BATCH_SIZE,
-        },
+        generic_parameters::{MAX_RESULTS_PER_KEYWORD, SECURE_FETCH_CHAINS_BATCH_SIZE},
         wasm_bindgen::core::{
             to_indexed_values_to_keywords, ArrayOfKeywords, Fetch, FindexUser,
             IndexedValuesAndWords, Insert, Progress, SearchResults, Upsert,
@@ -29,6 +27,7 @@ use crate::{
 /// - `keywords`                : list of keyword bytes to search
 /// - `max_results_per_keyword` : maximum results returned for a keyword
 /// - `max_depth`               : maximum recursion level allowed
+/// - `fetch_chains_batch_size` : maximum number of chains fetched in batch
 /// - `progress`                : progress callback
 /// - `fetch_entries`           : callback to fetch from the Entry Table
 /// - `fetch_chains`            : callback to fetch from the Chain Table
@@ -45,7 +44,7 @@ pub async fn webassembly_search(
     fetch_entry: Fetch,
     fetch_chain: Fetch,
 ) -> Result<SearchResults, JsValue> {
-    let master_key = KeyingMaterial::<MASTER_KEY_LENGTH>::try_from_bytes(&master_key.to_vec())
+    let master_key = KeyingMaterial::try_from_bytes(&master_key.to_vec())
         .map_err(|e| JsValue::from(format!("While parsing master key for Findex search, {e}")))?;
     let label = Label::from(label_bytes.to_vec());
 
@@ -110,7 +109,7 @@ pub async fn webassembly_upsert(
     upsert_entry: Upsert,
     insert_chain: Insert,
 ) -> Result<(), JsValue> {
-    let master_key = KeyingMaterial::<MASTER_KEY_LENGTH>::try_from_bytes(&master_key.to_vec())
+    let master_key = KeyingMaterial::try_from_bytes(&master_key.to_vec())
         .map_err(|e| JsValue::from(format!("While parsing master key for Findex upsert, {e}")))?;
     let label = Label::from(label_bytes.to_vec());
     let indexed_values_to_keywords = to_indexed_values_to_keywords(&indexed_values_to_keywords)?;

@@ -4,7 +4,7 @@ name: Cloudproof build
 on:
   push:
     tags:
-      - "*"
+      - '*'
   pull_request:
 
 jobs:
@@ -15,9 +15,9 @@ jobs:
       toolchain: nightly-2023-03-20
       kms-version: 4.0.1
       regression-filename: sqlite.db
-      branch-java: multi_values_fetch_entry_table
-      branch-js: multi_values_fetch_entry_table
-      branch-flutter: multi_values_fetch_entry_table
+      branch-java: fix/alloc_problem_with_multi_values_in_fetch_entry_tables
+      branch-js: v6.0.4
+      branch-flutter: fix/alloc_problem_with_multi_values_in_fetch_entry_tables
       branch-python: python_not_tested
       bench-features: sqlite
     secrets: inherit

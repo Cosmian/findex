@@ -10,3 +10,5 @@ jniLibs
 *.svg
 perf.data*
 *dataset.json
+Cargo.lock
+sqlite_bench.db

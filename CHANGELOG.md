@@ -2,9 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
-## [2.0.3] - 2023-05-16
+## [2.0.4] - 2023-05-23
 
-**This version follows the 2.0.0 since the 2.0.1 version introduced breaking changes we didn't want to include.**
+### Bug Fixes
+
+- Add entry table number in FFI functions in order to pre-allocate the output buffer size in fetching callbacks
+
+## [2.0.3] - 2023-05-16
 
 ### Features
 
