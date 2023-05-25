@@ -75,7 +75,7 @@ pub enum BlockPrefix {
 impl From<BlockPrefix> for u8 {
     fn from(value: BlockPrefix) -> Self {
         match value {
-            BlockPrefix::NonTerminating => u8::MAX,
+            BlockPrefix::NonTerminating => Self::MAX,
             BlockPrefix::Terminating { length } => length,
             BlockPrefix::Padding => 0,
         }
@@ -489,7 +489,7 @@ impl<const UID_LENGTH: usize> TryFrom<Vec<(Uid<UID_LENGTH>, Vec<u8>)>>
     fn try_from(value: Vec<(Uid<UID_LENGTH>, Vec<u8>)>) -> Result<Self, Self::Error> {
         value
             .into_iter()
-            .try_fold(EncryptedTable::default(), |mut acc, (k, v)| {
+            .try_fold(Self::default(), |mut acc, (k, v)| {
                 let old_value = acc.insert(k, v);
                 if old_value.is_none() {
                     Ok(acc)

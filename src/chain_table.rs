@@ -1,6 +1,6 @@
 //! This module defines all structures and methods specific to the Chain Table.
 //! The Chain Table contains the chains indexed in the Entry Table. A chain is
-//! composed of values indexed by Findex and are stored in the Chain Table by
+//! composed of values indexed by Findex and is stored in the Chain Table by
 //! blocks. An indexed value can be divided in several blocks of length
 //! `BLOCK_LENGTH`. Each Chain Table lines contains `TABLE_WIDTH` blocks. All
 //! blocks containing the same indexed value may not be stored in the same Chain

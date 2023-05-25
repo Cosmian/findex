@@ -20,7 +20,7 @@ use crate::{
     ENTRY_TABLE_KEY_DERIVATION_INFO,
 };
 
-/// The compact is an operation required to remove old indexes from the Index
+/// The compact operation is required to remove old indexes from the Index
 /// Chain Table and to improve the security of the index by changing all the
 /// Index Entry Table.
 pub trait FindexCompact<

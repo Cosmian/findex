@@ -8,7 +8,7 @@ use std::{
 use cosmian_crypto_core::{reexport::rand_core::SeedableRng, CsRng};
 use cosmian_findex::{
     in_memory_example::{ExampleError, FindexInMemory},
-    parameters::*,
+    parameters::UID_LENGTH,
     Error, FindexCallbacks, FindexCompact, FindexSearch, FindexUpsert, IndexedValue,
     KeyingMaterial, Keyword, Label, Location,
 };
@@ -82,7 +82,7 @@ fn check_search_result(
 /// result for the `rob` keyword or the `robert` location as result for the
 /// `robert` keyword.
 #[actix_rt::test]
-async fn test_progress_callack() -> Result<(), Error<ExampleError>> {
+async fn test_progress_callback() -> Result<(), Error<ExampleError>> {
     let mut rng = CsRng::from_entropy();
     let label = Label::random(&mut rng);
     let master_key = KeyingMaterial::new(&mut rng);

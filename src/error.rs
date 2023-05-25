@@ -47,7 +47,7 @@ impl<T: std::error::Error + CallbackError> From<T> for Error<T> {
 
 impl<T: std::error::Error> std::error::Error for Error<T> {}
 
-/// Alias used to represent a Findex error that does not originate from a
+/// Alias used to represent a Findex error that does not come from a
 /// callback.
 pub type CoreError = Error<!>;
 
