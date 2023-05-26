@@ -118,9 +118,11 @@ pub trait FindexSearch<
         // Query the Chain Table for these UIDs to recover the associated
         // chain values.
         //
+        println!("rust: non_recursive_search: before noisy_fetch_chains");
         let chains = self
             .noisy_fetch_chains(&kwi_chain_table_uids, fetch_chains_batch_size)
             .await?;
+        println!("rust: non_recursive_search: after noisy_fetch_chains");
 
         // Convert the block of the given chains into indexed values.
         let mut res = HashMap::<Keyword, HashSet<IndexedValue>>::new();
@@ -134,6 +136,8 @@ pub trait FindexSearch<
                 entry.insert(IndexedValue::try_from_bytes(&bytes)?);
             }
         }
+        println!("rust: non_recursive_search: end noisy_fetch_chains");
+
         Ok(res)
     }
 
@@ -251,6 +255,7 @@ pub trait FindexSearch<
         HashMap<KeyingMaterial<KWI_LENGTH>, Vec<(Uid<UID_LENGTH>, ChainTableValue<BLOCK_LENGTH>)>>,
         FindexErr,
     > {
+        println!("rust: noisy_fetch_chains: start");
         let mut chain_table_uids: Vec<_> = kwi_chain_table_uids
             .iter()
             .flat_map(|(_, uids)| uids.clone())
@@ -259,17 +264,20 @@ pub trait FindexSearch<
         let mut rng = thread_rng();
         chain_table_uids.shuffle(&mut rng);
 
+        println!("rust: noisy_fetch_chains: 0");
         // Fetch all chain table values by batch of `batch_size` to increase noise.
         let chain_table_uids_batched: Vec<_> = chain_table_uids
             .chunks(batch_size.into())
             .map(|uids| uids.iter().cloned().collect())
             .collect();
 
+        println!("rust: noisy_fetch_chains: before fetch_chain_table");
         let mut futures = Vec::with_capacity(chain_table_uids_batched.len());
         for uids in &chain_table_uids_batched {
             futures.push(self.fetch_chain_table(uids));
         }
 
+        println!("rust: noisy_fetch_chains: after fetch_chain_table");
         let mut chains_encrypted_values_by_uids = HashMap::with_capacity(chain_table_uids.len());
         for future_result in join_all(futures).await {
             for (uid, encrypted_value) in future_result? {
@@ -277,6 +285,7 @@ pub trait FindexSearch<
             }
         }
 
+        println!("rust: noisy_fetch_chains: before decryptions");
         let mut results = HashMap::with_capacity(kwi_chain_table_uids.len());
         for (kwi, chain_table_uids) in kwi_chain_table_uids.iter() {
             let kwi_value: DemScheme::Key = kwi.derive_dem_key(CHAIN_TABLE_KEY_DERIVATION_INFO);
@@ -317,6 +326,7 @@ pub trait FindexSearch<
             }
         }
 
+        println!("rust: noisy_fetch_chains: end");
         Ok(results)
     }
 }
