@@ -288,6 +288,7 @@ pub trait FindexSearch<
         println!("rust: noisy_fetch_chains: before decryptions");
         let mut results = HashMap::with_capacity(kwi_chain_table_uids.len());
         for (kwi, chain_table_uids) in kwi_chain_table_uids.iter() {
+            println!("rust: noisy_fetch_chains: before derive_dem_key");
             let kwi_value: DemScheme::Key = kwi.derive_dem_key(CHAIN_TABLE_KEY_DERIVATION_INFO);
 
             // Use a vector not to shuffle the chain. This is important because indexed
@@ -296,13 +297,19 @@ pub trait FindexSearch<
                 .entry(kwi.clone())
                 .or_insert_with(|| Vec::with_capacity(chain_table_uids.len()));
 
+            println!(
+                "rust: noisy_fetch_chains: before iteration on chain_table_uids: \
+                 {chain_table_uids:?}"
+            );
             for uid in chain_table_uids {
+                println!("rust: noisy_fetch_chains: iteration: uid {uid:?}");
                 let value = chains_encrypted_values_by_uids.get(uid).ok_or_else(|| {
                     FindexErr::CryptoError(format!(
                         "fail to find the uid '{}' inside fetch chains callback response",
                         hex::encode(uid)
                     ))
                 })?;
+                println!("rust: noisy_fetch_chains: after the get(uid)");
 
                 let decrypted_value = ChainTableValue::<BLOCK_LENGTH>::decrypt::<
                     TABLE_WIDTH,
@@ -321,6 +328,7 @@ pub trait FindexSearch<
                         },
                     ))
                 })?;
+                println!("rust: noisy_fetch_chains: after decrypted_value");
 
                 chains.push((uid.clone(), decrypted_value));
             }
