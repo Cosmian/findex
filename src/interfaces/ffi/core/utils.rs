@@ -61,6 +61,7 @@ pub const fn get_serialized_encrypted_entry_table_size_bound(
                 + KWI_LENGTH
                 + UID_LENGTH
                 + Keyword::HASH_LENGTH)
+            * 100
 }
 
 /// Returns an upper-bound on the size of a serialized encrypted Chain Table.
@@ -87,6 +88,7 @@ pub const fn get_allocation_size_for_select_chain_request(line_number: usize) ->
             * (LEB128_MAXIMUM_ENCODED_BYTES_NUMBER
                 + DemScheme::ENCRYPTION_OVERHEAD
                 + TABLE_WIDTH * BLOCK_LENGTH)
+            * 100
 }
 
 /// Call the given fetch callback.
