@@ -8,3 +8,68 @@ jobs:
     uses: Cosmian/reusable_workflows/.github/workflows/cargo-nursery.yml@findex_2.0_cover_crypt_8.0
     with:
       toolchain: nightly-2023-03-20
+
+  windows:
+    name: windows
+    runs-on: ubuntu-22.04
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Set up cargo cache
+        uses: actions/cache@v3
+        continue-on-error: false
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            pkg/
+            target/
+          key: ${{ runner.os }}-x86_64-pc-windows-gnu-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-x86_64-pc-windows-gnu-cargo-${{ hashFiles('**/Cargo.lock') }}
+
+      - uses: actions-rs/toolchain@v1
+        with:
+          toolchain: nightly-2023-03-20
+          target: x86_64-pc-windows-gnu
+          override: true
+
+      - name: specific-pre-requisites
+        run: sudo apt-get update && sudo apt-get install -y gcc-mingw-w64
+
+      - name: ffi pre-requisites
+        run: |
+          cargo install --locked cbindgen || true
+          mkdir -p target
+          cbindgen . -c cbindgen.toml | grep -v \#include | uniq >target/findex.h
+
+      - name: Test release with ffi feature
+        uses: actions-rs/cargo@v1
+        with:
+          command: test
+          use-cross: true
+          args: --release --features ffi --target x86_64-pc-windows-gnu
+
+      - name: Test release with all features
+        uses: actions-rs/cargo@v1
+        with:
+          command: test
+          use-cross: true
+          args: --release --all-features --target x86_64-pc-windows-gnu
+
+      - name: Build release with feature ffi
+        uses: actions-rs/cargo@v1
+        with:
+          command: build
+          use-cross: true
+          args: --release --features ffi --target x86_64-pc-windows-gnu
+
+      - name: Upload cargo binaries
+        uses: actions/upload-artifact@v3
+        with:
+          name: x86_64-pc-windows-gnu
+          path: target/x86_64-pc-windows-gnu/release/*.dll
+          retention-days: 1
+          if-no-files-found: error
