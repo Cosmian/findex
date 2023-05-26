@@ -302,14 +302,20 @@ pub trait FindexSearch<
                  {chain_table_uids:?}"
             );
             for uid in chain_table_uids {
-                println!("rust: noisy_fetch_chains: iteration: uid {uid:?}");
+                println!(
+                    "rust: noisy_fetch_chains: iteration: uid {:?}",
+                    hex::encode(uid)
+                );
                 let value = chains_encrypted_values_by_uids.get(uid).ok_or_else(|| {
                     FindexErr::CryptoError(format!(
                         "fail to find the uid '{}' inside fetch chains callback response",
                         hex::encode(uid)
                     ))
                 })?;
-                println!("rust: noisy_fetch_chains: after the get(uid)");
+                println!(
+                    "rust: noisy_fetch_chains: after the get(uid): value: {:?}",
+                    hex::encode(value)
+                );
 
                 let decrypted_value = ChainTableValue::<BLOCK_LENGTH>::decrypt::<
                     TABLE_WIDTH,

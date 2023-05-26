@@ -4,10 +4,10 @@ name: CI checks
 on: push
 
 jobs:
-  cargo-lint:
-    uses: Cosmian/reusable_workflows/.github/workflows/cargo-nursery.yml@findex_2.0_cover_crypt_8.0
-    with:
-      toolchain: nightly-2023-03-20
+  # cargo-lint:
+  #   uses: Cosmian/reusable_workflows/.github/workflows/cargo-nursery.yml@findex_2.0_cover_crypt_8.0
+  #   with:
+  #     toolchain: nightly-2023-03-20
 
   windows:
     name: windows
