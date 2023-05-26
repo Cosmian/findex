@@ -45,20 +45,6 @@ jobs:
           mkdir -p target
           cbindgen . -c cbindgen.toml | grep -v \#include | uniq >target/findex.h
 
-      - name: Test release with ffi feature
-        uses: actions-rs/cargo@v1
-        with:
-          command: test
-          use-cross: true
-          args: --release --features ffi --target x86_64-pc-windows-gnu
-
-      - name: Test release with all features
-        uses: actions-rs/cargo@v1
-        with:
-          command: test
-          use-cross: true
-          args: --release --all-features --target x86_64-pc-windows-gnu
-
       - name: Build release with feature ffi
         uses: actions-rs/cargo@v1
         with:

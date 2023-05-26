@@ -15,9 +15,9 @@ jobs:
       toolchain: nightly-2023-03-20
       kms-version: 4.0.1
       regression-filename: sqlite.db
-      branch-java: fix/alloc_problem_with_multi_values_in_fetch_entry_tables
+      branch-java: v3.1.1
       branch-js: v6.0.4
-      branch-flutter: fix/alloc_problem_with_multi_values_in_fetch_entry_tables
+      branch-flutter: v4.1.1
       branch-python: python_not_tested
       bench-features: sqlite
     secrets: inherit
