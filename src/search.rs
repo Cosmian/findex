@@ -87,7 +87,18 @@ pub trait FindexSearch<
             let value = EntryTableValue::<UID_LENGTH, KWI_LENGTH>::decrypt::<
                 DEM_KEY_LENGTH,
                 DemScheme,
-            >(k_value, &encrypted_value)?;
+            >(k_value, &encrypted_value)
+            .map_err(|_| {
+                Error::<CustomError>::CryptoError(format!(
+                    "fail to decrypt one of the `value` returned by the fetch entries callback \
+                     (uid was '{uid:?}', value was {})",
+                    if encrypted_value.is_empty() {
+                        "empty".to_owned()
+                    } else {
+                        format!("'{encrypted_value:?}'")
+                    },
+                ))
+            })?;
             kwi_to_keyword.insert(value.kwi.clone(), *keyword);
             let k_uid = value.kwi.derive_kmac_key(CHAIN_TABLE_KEY_DERIVATION_INFO);
             let chain = value.unchain::<
@@ -209,7 +220,7 @@ pub trait FindexSearch<
     }
 }
 
-/// Retrives the `Location`s stored in the given graph for the given
+/// Retrieves the `Location`s stored in the given graph for the given
 /// `Keyword`.
 ///
 /// When a `NextWord` is found among the results, appends the results

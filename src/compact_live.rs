@@ -56,7 +56,7 @@ const GAMMA: f64 = 0.577;
 /// The following operations have been applied:
 /// - a new random ephemeral key `K_w'` is drawn;
 /// - the new last chain UID is stored in the Entry Table entry;
-/// - chain UIDs are generated anew (random-like);
+/// - chain UIDs are randomly generated;
 /// - chain values are encrypted under the new ephemeral key;
 /// - `B1` is removed since its last occurrence in the chain is a deletion;
 /// - `B2` is kept since its last occurrence is an addition and is simplified

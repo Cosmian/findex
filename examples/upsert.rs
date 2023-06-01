@@ -57,7 +57,7 @@ fn main() {
 
     let mut findex = FindexInMemory::default();
 
-    for _ in 0..100000 {
+    for _ in 0..100_000 {
         block_on(findex.add(&master_key, &label, indexed_value_to_keywords.clone())).unwrap();
     }
 }

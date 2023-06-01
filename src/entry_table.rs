@@ -148,7 +148,7 @@ impl<const UID_LENGTH: usize, const KWI_LENGTH: usize> EntryTableValue<UID_LENGT
             let old_value = chain_table.insert(*new_chain_uid, new_chain_value);
             if old_value.is_some() {
                 return Err(Error::CryptoError(format!(
-                    "conflit when inserting Chain Table value for UID {new_chain_uid:?}"
+                    "conflict when inserting Chain Table value for UID {new_chain_uid:?}"
                 )));
             }
         }
@@ -273,7 +273,7 @@ impl<const UID_LENGTH: usize, const KWI_LENGTH: usize> EntryTableValue<UID_LENGT
 ///   [`Keyword::HASH_LENGTH`](Keyword::HASH_LENGTH)
 /// - `UID_last` is the UID of the last Chain Table line used to store the chain
 ///   of the keyword `w_i`; it is optional in the Entry Table since the line
-///   assocated to a keyword can link to no Chain Table line after a compact
+///   associated to a keyword can link to no Chain Table line after a compact
 ///   operation deleted all values indexed for this keyword (Entry Table lines
 ///   with no `UID_last` are removed during reindexation).
 #[derive(Debug, Default)]
