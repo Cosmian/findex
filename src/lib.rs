@@ -16,7 +16,6 @@
 // It allows the Wasm Findex implementation to reuse the common traits
 // for searching and upserting indexes.
 #![feature(async_fn_in_trait)]
-#![feature(iter_next_chunk)]
 #![allow(incomplete_features)]
 #![feature(never_type)]
 
@@ -37,12 +36,18 @@ mod search;
 mod structs;
 mod upsert;
 
-#[cfg(feature = "in_memory")]
-pub mod in_memory_example;
 pub mod parameters;
 
-pub use callbacks::FindexCallbacks;
+#[cfg(feature = "live_compact")]
+mod compact_live;
+
+#[cfg(feature = "in_memory")]
+pub mod in_memory_example;
+
+pub use callbacks::{FetchChains, FindexCallbacks};
 pub use compact::FindexCompact;
+#[cfg(feature = "live_compact")]
+pub use compact_live::FindexLiveCompact;
 pub use error::{CallbackError, CoreError, Error};
 pub use keys::KeyingMaterial;
 pub use search::FindexSearch;

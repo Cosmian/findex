@@ -1,6 +1,6 @@
 [package]
 name = "cosmian_findex"
-version = "3.0.0"
+version = "4.0.0"
 authors = [
   "Chloé Hébant <chloe.hebant@cosmian.com>",
   "Bruno Grieder <bruno.grieder@cosmian.com>",
@@ -26,9 +26,9 @@ name = "benches"
 
 [features]
 in_memory = []
+live_compact = []
 
 [dependencies]
-async-recursion = "1.0.0"
 cosmian_crypto_core = "7.0.0"
 futures = "0.3"
 rand = "0.8"

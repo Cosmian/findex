@@ -13,7 +13,10 @@ use crate::{
     entry_table::EntryTable,
     error::{CallbackError, Error},
     keys::KeyingMaterial,
-    structs::{EncryptedTable, IndexedValue, Keyword, Label, Uid, UpsertData},
+    parameters::check_parameter_constraints,
+    structs::{
+        BlockType, EncryptedTable, IndexedValue, Keyword, KeywordHash, Label, Uid, UpsertData,
+    },
     FindexCallbacks, ENTRY_TABLE_KEY_DERIVATION_INFO,
 };
 
@@ -21,7 +24,7 @@ use crate::{
 pub trait FindexUpsert<
     const UID_LENGTH: usize,
     const BLOCK_LENGTH: usize,
-    const TABLE_WIDTH: usize,
+    const CHAIN_TABLE_WIDTH: usize,
     const MASTER_KEY_LENGTH: usize,
     const KWI_LENGTH: usize,
     const KMAC_KEY_LENGTH: usize,
@@ -31,79 +34,119 @@ pub trait FindexUpsert<
     CustomError: std::error::Error + CallbackError,
 >: FindexCallbacks<CustomError, UID_LENGTH>
 {
-    /// Index the given values for the given keywords. After upserting, any
-    /// search for such a keyword will result in finding (at least) the
-    /// corresponding value.
+    /// Index the given values for the associated keywords.
     ///
     /// # Parameters
     ///
-    /// - `new_chain_elements`  : values to index by keywords
-    /// - `master_key`          : Findex master key
-    /// - `label`               : additional public information used for hashing
-    ///   Entry Table UIDs
-    async fn upsert(
+    /// - `master_key`  : Findex master key
+    /// - `label`       : additional public information used in key hashing
+    /// - `items`       : set of keywords used to index values
+    async fn add(
         &mut self,
-        indexed_value_to_keywords: HashMap<IndexedValue, HashSet<Keyword>>,
         master_key: &KeyingMaterial<MASTER_KEY_LENGTH>,
         label: &Label,
+        items: HashMap<IndexedValue, HashSet<Keyword>>,
     ) -> Result<(), Error<CustomError>> {
+        self.upsert(master_key, label, items, HashMap::new()).await
+    }
+
+    /// Removes the given values from the indexes for the associated keywords.
+    ///
+    /// # Parameters
+    ///
+    /// - `master_key`  : Findex master key
+    /// - `label`       : additional public information used in key hashing
+    /// - `items`       : set of keywords used to index values
+    async fn remove(
+        &mut self,
+        master_key: &KeyingMaterial<MASTER_KEY_LENGTH>,
+        label: &Label,
+        items: HashMap<IndexedValue, HashSet<Keyword>>,
+    ) -> Result<(), Error<CustomError>> {
+        self.upsert(master_key, label, HashMap::new(), items).await
+    }
+
+    /// Upsert the given chain elements in Findex tables.
+    ///
+    /// # Parameters
+    ///
+    /// - `master_key`  : Findex master key
+    /// - `label`       : additional public information used in key hashing
+    /// - `additions`   : values to indexed for a set of keywords
+    /// - `deletions`   : values to remove from the indexes for a set of
+    ///   keywords
+    async fn upsert(
+        &mut self,
+        master_key: &KeyingMaterial<MASTER_KEY_LENGTH>,
+        label: &Label,
+        additions: HashMap<IndexedValue, HashSet<Keyword>>,
+        deletions: HashMap<IndexedValue, HashSet<Keyword>>,
+    ) -> Result<(), Error<CustomError>> {
+        check_parameter_constraints::<CHAIN_TABLE_WIDTH, BLOCK_LENGTH>();
+
         let mut rng = CsRng::from_entropy();
-
-        // Revert the `HashMap`.
-        let mut new_chain_elements = HashMap::<Keyword, HashSet<IndexedValue>>::default();
-        for (indexed_value, keywords) in indexed_value_to_keywords {
-            for keyword in keywords {
-                new_chain_elements
-                    .entry(keyword)
-                    .or_default()
-                    .insert(indexed_value.clone());
-            }
-        }
-
-        // Derive DEM and KMAC keys.
         let k_uid: KmacKey = master_key.derive_kmac_key(ENTRY_TABLE_KEY_DERIVATION_INFO);
         let k_value = master_key.derive_dem_key(ENTRY_TABLE_KEY_DERIVATION_INFO);
 
-        // Get the list of keywords to upsert with their associated Entry Table UID.
-        let entry_table_uid_cache = new_chain_elements
-            .keys()
-            .map(|keyword| {
+        let mut new_chains =
+            HashMap::<KeywordHash, HashMap<IndexedValue, BlockType>>::with_capacity(
+                additions.len() + deletions.len(),
+            );
+        for (indexed_value, keywords) in additions {
+            for keyword in keywords {
+                new_chains
+                    .entry(keyword.hash())
+                    .or_default()
+                    .insert(indexed_value.clone(), BlockType::Addition);
+            }
+        }
+        for (indexed_value, keywords) in deletions {
+            for keyword in keywords {
+                new_chains
+                    .entry(keyword.hash())
+                    .or_default()
+                    .insert(indexed_value.clone(), BlockType::Deletion);
+            }
+        }
+        // Compute the Entry Table UIDs.
+        let mut new_chains = new_chains
+            .into_iter()
+            .map(|(keyword_hash, indexed_values)| {
                 (
-                    keyword.clone(),
                     EntryTable::<UID_LENGTH, KWI_LENGTH>::generate_uid(
                         &k_uid,
-                        &keyword.hash(),
+                        &keyword_hash,
                         label,
                     ),
+                    (keyword_hash, indexed_values),
                 )
             })
             .collect::<HashMap<_, _>>();
 
         // Query the Entry Table for these UIDs.
         let mut encrypted_entry_table = self
-            .fetch_entry_table(&entry_table_uid_cache.values().cloned().collect())
-            .await?;
+            .fetch_entry_table(new_chains.keys().cloned().collect())
+            .await?
+            .try_into()?;
 
-        while !new_chain_elements.is_empty() {
+        while !new_chains.is_empty() {
             // Decrypt the Entry Table once and for all.
             let mut entry_table = EntryTable::<UID_LENGTH, KWI_LENGTH>::decrypt::<
-                BLOCK_LENGTH,
                 DEM_KEY_LENGTH,
                 DemScheme,
             >(&k_value, &encrypted_entry_table)?;
 
-            // Upsert keywords locally.
+            // Build the chains and update the Entry Table.
             let chain_table_additions = entry_table.upsert::<
+                CHAIN_TABLE_WIDTH,
                 BLOCK_LENGTH,
-                TABLE_WIDTH,
                 KMAC_KEY_LENGTH,
                 DEM_KEY_LENGTH,
                 KmacKey,
                 DemScheme,
             >(
                 &mut rng,
-                &new_chain_elements,
-                &entry_table_uid_cache,
+                &new_chains,
             )?;
 
             // Finally write new indexes in database. Get the new values of the Entry Table
@@ -111,19 +154,15 @@ pub trait FindexUpsert<
             encrypted_entry_table = self
                 .write_indexes(
                     encrypted_entry_table,
-                    entry_table
-                        .encrypt::<BLOCK_LENGTH, DEM_KEY_LENGTH, DemScheme>(&k_value, &mut rng)?,
+                    entry_table.encrypt::<DEM_KEY_LENGTH, DemScheme>(&mut rng, &k_value)?,
                     chain_table_additions,
                 )
                 .await?;
 
-            for (keyword, uid) in &entry_table_uid_cache {
-                // Remove chains that have successfully been upserted.
-                if !encrypted_entry_table.contains_key(uid) {
-                    new_chain_elements.remove_entry(keyword);
-                }
-            }
+            // Remove chains that have successfully been upserted.
+            new_chains.retain(|uid, _| encrypted_entry_table.contains_key(uid));
         }
+
         Ok(())
     }
 
@@ -145,13 +184,13 @@ pub trait FindexUpsert<
 
         // Try upserting Entry Table modifications. Get the current values of the Entry
         // Table lines that failed to be upserted.
-        let encrypted_entry_table = self.upsert_entry_table(&entry_table_modifications).await?;
+        let encrypted_entry_table = self.upsert_entry_table(entry_table_modifications).await?;
 
         // Insert new Chain Table lines.
         chain_table_additions.retain(|uid, _| !encrypted_entry_table.contains_key(uid));
         let new_chain_table_entries = chain_table_additions.into_values().flatten().collect();
 
-        self.insert_chain_table(&new_chain_table_entries).await?;
+        self.insert_chain_table(new_chain_table_entries).await?;
 
         Ok(encrypted_entry_table)
     }

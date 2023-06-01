@@ -1,6 +1,12 @@
 use std::collections::{HashMap, HashSet};
 
-use crate::{CallbackError, EncryptedTable, IndexedValue, Keyword, Location, Uid, UpsertData};
+use cosmian_crypto_core::symmetric_crypto::Dem;
+
+use crate::{
+    chain_table::{ChainTableValue, KwiChainUids},
+    CallbackError, EncryptedTable, Error, IndexedValue, KeyingMaterial, Keyword, Location, Uid,
+    UpsertData, CHAIN_TABLE_KEY_DERIVATION_INFO,
+};
 
 /// Trait implementing all callbacks needed by Findex.
 pub trait FindexCallbacks<Error: std::error::Error + CallbackError, const UID_LENGTH: usize> {
@@ -33,8 +39,8 @@ pub trait FindexCallbacks<Error: std::error::Error + CallbackError, const UID_LE
     ///   Table
     async fn fetch_entry_table(
         &self,
-        entry_table_uids: &HashSet<Uid<UID_LENGTH>>,
-    ) -> Result<EncryptedTable<UID_LENGTH>, Error>;
+        entry_table_uids: HashSet<Uid<UID_LENGTH>>,
+    ) -> Result<Vec<(Uid<UID_LENGTH>, Vec<u8>)>, Error>;
 
     /// Fetch the lines with the given UIDs from the Chain Table. The returned
     /// values are encrypted since they are stored that way. The decryption is
@@ -52,7 +58,7 @@ pub trait FindexCallbacks<Error: std::error::Error + CallbackError, const UID_LE
     ///   Table
     async fn fetch_chain_table(
         &self,
-        chain_table_uids: &HashSet<Uid<UID_LENGTH>>,
+        chain_table_uids: HashSet<Uid<UID_LENGTH>>,
     ) -> Result<EncryptedTable<UID_LENGTH>, Error>;
 
     /// Upserts lines in the Entry Table. The input data maps each Entry Table
@@ -75,7 +81,7 @@ pub trait FindexCallbacks<Error: std::error::Error + CallbackError, const UID_LE
     /// - `items`   : entries to be upserted
     async fn upsert_entry_table(
         &mut self,
-        items: &UpsertData<UID_LENGTH>,
+        items: UpsertData<UID_LENGTH>,
     ) -> Result<EncryptedTable<UID_LENGTH>, Error>;
 
     /// Inserts the given lines into the Chain Table.
@@ -88,8 +94,7 @@ pub trait FindexCallbacks<Error: std::error::Error + CallbackError, const UID_LE
     /// # Parameters
     ///
     /// - `items`   : items to be inserted
-    async fn insert_chain_table(&mut self, items: &EncryptedTable<UID_LENGTH>)
-    -> Result<(), Error>;
+    async fn insert_chain_table(&mut self, items: EncryptedTable<UID_LENGTH>) -> Result<(), Error>;
 
     /// Updates the indexes with the given data.
     ///
@@ -146,7 +151,7 @@ pub trait FindexCallbacks<Error: std::error::Error + CallbackError, const UID_LE
         new_chain_table_items: EncryptedTable<UID_LENGTH>,
     ) -> Result<(), Error>;
 
-    /// Returns all locations among the ones given that do not exist anymore.
+    /// Returns all locations that point to existing data.
     ///
     /// **NOTE**: this callback does not call the index database since indexed
     /// locations can be anything in Findex (DB UID, path, other ID...). It may
@@ -157,6 +162,92 @@ pub trait FindexCallbacks<Error: std::error::Error + CallbackError, const UID_LE
     /// - `locations`   : locations queried
     fn list_removed_locations(
         &self,
-        locations: &HashSet<Location>,
+        locations: HashSet<Location>,
     ) -> Result<HashSet<Location>, Error>;
+
+    #[cfg(feature = "live_compact")]
+    /// Returns all locations that point to existing data.
+    fn filter_removed_locations(
+        &self,
+        locations: HashSet<Location>,
+    ) -> Result<HashSet<Location>, Error>;
+
+    #[cfg(feature = "live_compact")]
+    /// Delete the Chain Table lines with the given UIDs.
+    async fn delete_chain(&mut self, uids: HashSet<Uid<UID_LENGTH>>) -> Result<(), Error>;
+}
+
+pub trait FetchChains<
+    const UID_LENGTH: usize,
+    const BLOCK_LENGTH: usize,
+    const CHAIN_TABLE_WIDTH: usize,
+    const KWI_LENGTH: usize,
+    const DEM_KEY_LENGTH: usize,
+    DemScheme: Dem<DEM_KEY_LENGTH>,
+    CustomError: std::error::Error + CallbackError,
+>: FindexCallbacks<CustomError, UID_LENGTH>
+{
+    /// Fetches the values of the given chains from the Chain Table.
+    ///
+    /// # Parameters
+    ///
+    /// - `kwi_chain_table_uids`    : Maps `Kwi`s to sets of Chain Table UIDs
+    async fn fetch_chains(
+        &self,
+        kwi_chain_table_uids: KwiChainUids<UID_LENGTH, KWI_LENGTH>,
+    ) -> Result<
+        HashMap<
+            KeyingMaterial<KWI_LENGTH>,
+            Vec<(
+                Uid<UID_LENGTH>,
+                ChainTableValue<CHAIN_TABLE_WIDTH, BLOCK_LENGTH>,
+            )>,
+        >,
+        Error<CustomError>,
+    > {
+        // Collect to a `HashSet` to mix UIDs between chains.
+        let chain_table_uids = kwi_chain_table_uids.values().flatten().cloned().collect();
+
+        let encrypted_items = self.fetch_chain_table(chain_table_uids).await?;
+
+        let mut res = HashMap::with_capacity(kwi_chain_table_uids.len());
+        for (kwi, chain_table_uids) in kwi_chain_table_uids.into_iter() {
+            let kwi_value = kwi.derive_dem_key(CHAIN_TABLE_KEY_DERIVATION_INFO);
+
+            // Use a vector not to shuffle the chain. This is important because indexed
+            // values can be divided in blocks that span several lines in the chain.
+            let mut chain = Vec::with_capacity(chain_table_uids.len());
+
+            for uid in chain_table_uids {
+                let encrypted_value =
+                    encrypted_items
+                        .get(&uid)
+                        .ok_or(Error::<CustomError>::CryptoError(format!(
+                            "no Chain Table entry with UID '{uid:?}' in fetch result",
+                        )))?;
+                chain.push((
+                    uid,
+                    ChainTableValue::decrypt::<DEM_KEY_LENGTH, DemScheme>(
+                        &kwi_value,
+                        encrypted_value,
+                    )
+                    .map_err(|err| {
+                        Error::<CustomError>::CryptoError(format!(
+                            "fail to decrypt one of the `value` returned by the fetch chains \
+                             callback (uid was '{uid:?}', value was {}, crypto error was '{err}')",
+                            if encrypted_value.is_empty() {
+                                "empty".to_owned()
+                            } else {
+                                format!("'{encrypted_value:?}'")
+                            },
+                        ))
+                    })?,
+                ));
+            }
+
+            res.insert(kwi, chain);
+        }
+
+        Ok(res)
+    }
 }

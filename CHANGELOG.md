@@ -2,6 +2,25 @@
 
 All notable changes to this project will be documented in this file.
 
+## [4.0.0] - 2023-06-01
+
+### Changed
+
+- deletions in upsert
+- format of the Chain Table (block length is now 16)
+- take ownership of the data in callbacks
+- allow multiple ET values in search
+
+### Added
+
+- add live compact functionality
+
+## [3.1.0] - 2023-03-03
+
+### Added
+
+- add macro to implement Findex traits
+
 ## [3.0.0] - 2023-02-27
 
 ### Refactor
