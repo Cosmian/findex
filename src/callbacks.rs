@@ -219,30 +219,27 @@ pub trait FetchChains<
             let mut chain = Vec::with_capacity(chain_table_uids.len());
 
             for uid in chain_table_uids {
-                let encrypted_value =
-                    encrypted_items
-                        .get(&uid)
-                        .ok_or(Error::<CustomError>::CryptoError(format!(
-                            "no Chain Table entry with UID '{uid:?}' in fetch result",
-                        )))?;
-                chain.push((
-                    uid,
-                    ChainTableValue::decrypt::<DEM_KEY_LENGTH, DemScheme>(
-                        &kwi_value,
-                        encrypted_value,
-                    )
-                    .map_err(|err| {
-                        Error::<CustomError>::CryptoError(format!(
-                            "fail to decrypt one of the `value` returned by the fetch chains \
-                             callback (uid was '{uid:?}', value was {}, crypto error was '{err}')",
-                            if encrypted_value.is_empty() {
-                                "empty".to_owned()
-                            } else {
-                                format!("'{encrypted_value:?}'")
-                            },
-                        ))
-                    })?,
-                ));
+                if let Some(encrypted_value) = encrypted_items.get(&uid) {
+                    chain.push((
+                        uid,
+                        ChainTableValue::decrypt::<DEM_KEY_LENGTH, DemScheme>(
+                            &kwi_value,
+                            encrypted_value,
+                        )
+                        .map_err(|err| {
+                            Error::<CustomError>::CryptoError(format!(
+                                "fail to decrypt one of the `value` returned by the fetch chains \
+                                 callback (uid was '{uid:?}', value was {}, crypto error was \
+                                 '{err}')",
+                                if encrypted_value.is_empty() {
+                                    "empty".to_owned()
+                                } else {
+                                    format!("'{encrypted_value:?}'")
+                                },
+                            ))
+                        })?,
+                    ));
+                }
             }
 
             res.insert(kwi, chain);

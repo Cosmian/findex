@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [4.0.1] - 2023-06-02
+
+### Bug Fixes
+
+- Race condition in `fetch_chains()`
+
 ## [4.0.0] - 2023-06-01
 
 ### Changed
