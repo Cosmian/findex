@@ -460,7 +460,7 @@ impl<const UID_LENGTH: usize> Serializable for EncryptedTable<UID_LENGTH> {
     }
 }
 
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct EncryptedMultiTable<const UID_LENGTH: usize>(HashMap<Uid<UID_LENGTH>, Vec<Vec<u8>>>);
 
 impl<const UID_LENGTH: usize> EncryptedMultiTable<UID_LENGTH> {

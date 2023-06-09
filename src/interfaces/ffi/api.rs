@@ -158,6 +158,7 @@ pub unsafe extern "C" fn h_search(
     fetch_entry: FetchEntryTableCallback,
     fetch_chain: FetchChainTableCallback,
 ) -> c_int {
+    println!("rust: h_search: starting");
     //
     // Check arguments
     //
@@ -253,6 +254,8 @@ pub unsafe extern "C" fn h_search(
     }
     std::slice::from_raw_parts_mut(indexed_values_ptr.cast::<u8>(), len)
         .copy_from_slice(&serialized_uids);
+    println!("rust: h_search: ending");
+
     0
 }
 

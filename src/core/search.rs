@@ -163,6 +163,7 @@ pub trait FindexSearch<
         fetch_chains_batch_size: NonZeroUsize,
         current_depth: usize,
     ) -> Result<HashMap<Keyword, HashSet<IndexedValue>>, FindexErr> {
+        println!("rust: search (internal): starting");
         // Get indexed values associated to the given keywords
         let res = self
             .non_recursive_search(
@@ -175,6 +176,7 @@ pub trait FindexSearch<
             .await?;
         // Stop here if there is no result
         if res.is_empty() {
+            println!("rust: search (internal): ending with empty result");
             return Ok(res);
         }
 
@@ -203,6 +205,7 @@ pub trait FindexSearch<
 
         if keyword_map.is_empty() {
             // All branches have been explored.
+            println!("rust: search (internal): ending (all branches have been explored)");
             return Ok(results);
         }
 
@@ -231,6 +234,7 @@ pub trait FindexSearch<
             }
         }
 
+        println!("rust: search (internal): ending");
         Ok(results)
     }
 

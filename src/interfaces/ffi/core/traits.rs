@@ -66,6 +66,7 @@ impl FindexCallbacks<UID_LENGTH> for FindexUser {
         &self,
         entry_table_uids: &HashSet<Uid<UID_LENGTH>>,
     ) -> Result<EncryptedMultiTable<UID_LENGTH>, FindexErr> {
+        println!("rust: fetch_entry_table callback: starting");
         let fetch_entry = unwrap_callback!(self, fetch_entry);
 
         let serialized_uids = serialize_set(entry_table_uids)?;
@@ -79,13 +80,20 @@ impl FindexCallbacks<UID_LENGTH> for FindexUser {
             "fetch entries",
         )?;
 
-        EncryptedMultiTable::try_from_bytes(&res)
+        let encrypted_table = EncryptedMultiTable::try_from_bytes(&res)?;
+        println!(
+            "rust: fetch_entry_table callback: results (nb: {}): {encrypted_table:?}",
+            encrypted_table.len()
+        );
+        println!("rust: fetch_entry_table callback: ending");
+        Ok(encrypted_table)
     }
 
     async fn fetch_chain_table(
         &self,
         chain_uids: &HashSet<Uid<UID_LENGTH>>,
     ) -> Result<EncryptedTable<UID_LENGTH>, FindexErr> {
+        println!("rust: fetch_chain_table callback: starting");
         let fetch_chain = unwrap_callback!(self, fetch_chain);
         let serialized_chain_uids = serialize_set(chain_uids)?;
         let res = fetch_callback(
@@ -94,7 +102,14 @@ impl FindexCallbacks<UID_LENGTH> for FindexUser {
             *fetch_chain,
             "fetch chains",
         )?;
-        EncryptedTable::try_from_bytes(&res)
+
+        let encrypted_table = EncryptedTable::try_from_bytes(&res)?;
+        println!(
+            "rust: fetch_chain_table callback: results (nb: {}): {encrypted_table:?}",
+            encrypted_table.len()
+        );
+        println!("rust: fetch_chain_table callback: ending");
+        Ok(encrypted_table)
     }
 
     async fn upsert_entry_table(
