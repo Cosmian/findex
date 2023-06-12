@@ -2,7 +2,7 @@
 
 use std::{
     collections::HashMap,
-    fmt::Debug,
+    fmt::{Debug, Display},
     ops::{Deref, DerefMut},
     vec::Vec,
 };
@@ -460,6 +460,41 @@ impl<const UID_LENGTH: usize> Serializable for EncryptedTable<UID_LENGTH> {
     }
 }
 
+impl<const UID_LENGTH: usize> Display for EncryptedTable<UID_LENGTH> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let mut output = String::new();
+        for (uid, value) in self.0.clone() {
+            output = format!(
+                "uid: {:?}, value: {:?}, {}",
+                base64::encode(uid),
+                base64::encode(value),
+                output,
+            );
+        }
+        write!(f, "{output}")
+    }
+}
+
+impl<const UID_LENGTH: usize> Display for EncryptedMultiTable<UID_LENGTH> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let mut output = String::new();
+        for (uid, values) in self.0.clone() {
+            let mut values_formatted = String::new();
+            for value in values {
+                values_formatted =
+                    format!("{}, value: {:?}", values_formatted, base64::encode(value));
+            }
+            output = format!(
+                "uid: {:?}, values: {:?}, {}",
+                base64::encode(uid),
+                base64::encode(values_formatted),
+                output,
+            );
+        }
+        write!(f, "{output}")
+    }
+}
+
 #[derive(Default, Debug)]
 pub struct EncryptedMultiTable<const UID_LENGTH: usize>(HashMap<Uid<UID_LENGTH>, Vec<Vec<u8>>>);
 
@@ -571,6 +606,7 @@ impl<const UID_LENGTH: usize> Serializable for EncryptedMultiTable<UID_LENGTH> {
 ///
 /// UID <-> (`OLD_VALUE`, `NEW_VALUE`)
 #[must_use]
+#[derive(Debug)]
 pub struct UpsertData<const UID_LENGTH: usize>(
     HashMap<Uid<UID_LENGTH>, (Option<Vec<u8>>, Vec<u8>)>,
 );

@@ -12,6 +12,7 @@ use cosmian_crypto_core::{
 };
 use futures::future::join_all;
 use rand::{seq::SliceRandom, thread_rng};
+use tracing::{info, instrument};
 
 use super::{callbacks::FindexCallbacks, entry_table::EntryMultiTable, structs::Block};
 use crate::{
@@ -51,6 +52,7 @@ pub trait FindexSearch<
     /// - `max_results_per_keyword` : maximum number of results to return per
     ///   keyword
     /// - `fetch_chains_batch_size` : maximum number of chains fetched in batch
+    #[instrument(skip(self, master_key))]
     async fn non_recursive_search(
         &mut self,
         keywords: &HashSet<Keyword>,
@@ -153,6 +155,7 @@ pub trait FindexSearch<
     /// - `current_depth`           : current depth reached by the recursion
     #[async_recursion(?Send)]
     #[allow(clippy::too_many_arguments)]
+    #[instrument(skip(self, master_key))]
     async fn search(
         &mut self,
         keywords: &HashSet<Keyword>,
@@ -163,7 +166,6 @@ pub trait FindexSearch<
         fetch_chains_batch_size: NonZeroUsize,
         current_depth: usize,
     ) -> Result<HashMap<Keyword, HashSet<IndexedValue>>, FindexErr> {
-        println!("rust: search (internal): starting");
         // Get indexed values associated to the given keywords
         let res = self
             .non_recursive_search(
@@ -176,7 +178,7 @@ pub trait FindexSearch<
             .await?;
         // Stop here if there is no result
         if res.is_empty() {
-            println!("rust: search (internal): ending with empty result");
+            info!("ending with empty result");
             return Ok(res);
         }
 
@@ -205,7 +207,7 @@ pub trait FindexSearch<
 
         if keyword_map.is_empty() {
             // All branches have been explored.
-            println!("rust: search (internal): ending (all branches have been explored)");
+            info!("ending (all branches have been explored)");
             return Ok(results);
         }
 
@@ -233,8 +235,6 @@ pub trait FindexSearch<
                 entry.extend(indexed_values);
             }
         }
-
-        println!("rust: search (internal): ending");
         Ok(results)
     }
 

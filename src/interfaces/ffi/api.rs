@@ -27,6 +27,7 @@ use crate::{
                 UpdateLinesCallback, UpsertEntryTableCallback,
             },
             error::{set_last_error, FfiErr},
+            logger::log_init,
             MAX_DEPTH,
         },
         generic_parameters::{MAX_RESULTS_PER_KEYWORD, SECURE_FETCH_CHAINS_BATCH_SIZE},
@@ -51,6 +52,7 @@ use crate::{
 ///  - `fetch_chain`            : the callback function to fetch the values from
 ///    the Chain Table
 #[allow(clippy::too_many_arguments)]
+#[tracing::instrument(ret, err, skip(master_key_bytes))]
 async fn ffi_search(
     base64_keywords: &[String],
     master_key_bytes: &[u8],
@@ -113,7 +115,6 @@ async fn ffi_search(
     Ok(serializer.finalize())
 }
 
-#[no_mangle]
 /// Recursively searches Findex graphs for values indexed by the given keywords.
 ///
 /// # Serialization
@@ -142,6 +143,8 @@ async fn ffi_search(
 /// # Safety
 ///
 /// Cannot be safe since using FFI.
+#[no_mangle]
+#[tracing::instrument(ret)]
 pub unsafe extern "C" fn h_search(
     indexed_values_ptr: *mut c_char,
     indexed_values_len: *mut c_int,
@@ -158,7 +161,8 @@ pub unsafe extern "C" fn h_search(
     fetch_entry: FetchEntryTableCallback,
     fetch_chain: FetchChainTableCallback,
 ) -> c_int {
-    println!("rust: h_search: starting");
+    log_init("info");
+
     //
     // Check arguments
     //
@@ -254,12 +258,10 @@ pub unsafe extern "C" fn h_search(
     }
     std::slice::from_raw_parts_mut(indexed_values_ptr.cast::<u8>(), len)
         .copy_from_slice(&serialized_uids);
-    println!("rust: h_search: ending");
 
     0
 }
 
-#[no_mangle]
 /// Index the given values for the given keywords. After upserting, any
 /// search for such a keyword will result in finding (at least) the
 /// corresponding value.
@@ -298,6 +300,8 @@ pub unsafe extern "C" fn h_search(
 /// # Safety
 ///
 /// Cannot be safe since using FFI.
+#[no_mangle]
+#[tracing::instrument(ret)]
 pub unsafe extern "C" fn h_upsert(
     master_key_ptr: *const u8,
     master_key_len: c_int,
@@ -309,6 +313,7 @@ pub unsafe extern "C" fn h_upsert(
     upsert_entry: UpsertEntryTableCallback,
     insert_chain: InsertChainTableCallback,
 ) -> c_int {
+    log_init("info");
     //
     // Parse master Key
     ffi_not_null!(master_key_ptr, "Master Key pointer should not be null");
@@ -388,7 +393,6 @@ pub unsafe extern "C" fn h_upsert(
     0
 }
 
-#[no_mangle]
 /// Replaces all the Index Entry Table UIDs and values. New UIDs are derived
 /// using the given label and the KMAC key derived from the new master key. The
 /// values are decrypted using the DEM key derived from the master key and
@@ -419,6 +423,8 @@ pub unsafe extern "C" fn h_upsert(
 /// # Safety
 ///
 /// Cannot be safe since using FFI.
+#[no_mangle]
+#[tracing::instrument(ret)]
 pub unsafe extern "C" fn h_compact(
     num_reindexing_before_full_set: c_int,
     master_key_ptr: *const u8,
@@ -434,6 +440,7 @@ pub unsafe extern "C" fn h_compact(
     update_lines: UpdateLinesCallback,
     list_removed_locations: ListRemovedLocationsCallback,
 ) -> c_int {
+    log_init("info");
     let num_reindexing_before_full_set = match num_reindexing_before_full_set.try_into() {
         Ok(uint) => uint,
         Err(e) => {

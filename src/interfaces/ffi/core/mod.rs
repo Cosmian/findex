@@ -32,6 +32,7 @@ pub enum ErrorCode {
 }
 
 /// Implements Findex traits.
+#[derive(Debug)]
 pub struct FindexUser {
     pub(crate) entry_table_number: usize,
     pub(crate) progress: Option<ProgressCallback>,

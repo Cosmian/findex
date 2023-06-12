@@ -1,6 +1,7 @@
 use std::{convert::TryFrom, ffi::c_uchar};
 
 use cosmian_crypto_core::symmetric_crypto::Dem;
+use tracing::info;
 
 use super::callbacks::FetchEntryTableCallback;
 use crate::{
@@ -100,6 +101,10 @@ pub fn fetch_callback(
     callback: FetchEntryTableCallback,
     debug_name: &'static str,
 ) -> Result<Vec<u8>, FindexErr> {
+    info!(
+        "debug_name: {}: callback address: {:?}",
+        debug_name, callback
+    );
     //
     // DB request with correct allocation size
     //
