@@ -11,6 +11,7 @@ use std::{
 
 use cosmian_crypto_core::bytes_ser_de::{Serializable, Serializer};
 use futures::executor;
+use tracing::info;
 
 use super::core::FetchAllEntryTableUidsCallback;
 use crate::{
@@ -105,6 +106,7 @@ async fn ffi_search(
         )
         .await?;
 
+    info!("search results: {:?}", res);
     // Serialize the results.
     let mut serializer = Serializer::new();
     serializer.write_u64(res.len() as u64)?;

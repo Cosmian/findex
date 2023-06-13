@@ -465,7 +465,7 @@ impl<const UID_LENGTH: usize> Display for EncryptedTable<UID_LENGTH> {
         let mut output = String::new();
         for (uid, value) in self.0.clone() {
             output = format!(
-                "uid: {:?}, value: {:?}, {}",
+                "uid: {:?}, value: {:?}, \n{}",
                 base64::encode(uid),
                 base64::encode(value),
                 output,
@@ -485,7 +485,7 @@ impl<const UID_LENGTH: usize> Display for EncryptedMultiTable<UID_LENGTH> {
                     format!("{}, value: {:?}", values_formatted, base64::encode(value));
             }
             output = format!(
-                "uid: {:?}, values: {:?}, {}",
+                "uid: {:?}, values: {:?}, \n{}",
                 base64::encode(uid),
                 base64::encode(values_formatted),
                 output,
@@ -602,7 +602,7 @@ impl<const UID_LENGTH: usize> Serializable for EncryptedMultiTable<UID_LENGTH> {
 }
 
 /// Data format used for upsert operations. It contains for each UID upserted
-/// the old value (optiona) and the new value:
+/// the old value (optional) and the new value:
 ///
 /// UID <-> (`OLD_VALUE`, `NEW_VALUE`)
 #[must_use]
@@ -610,6 +610,30 @@ impl<const UID_LENGTH: usize> Serializable for EncryptedMultiTable<UID_LENGTH> {
 pub struct UpsertData<const UID_LENGTH: usize>(
     HashMap<Uid<UID_LENGTH>, (Option<Vec<u8>>, Vec<u8>)>,
 );
+
+impl<const UID_LENGTH: usize> Display for UpsertData<UID_LENGTH> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let mut output = String::new();
+        for (uid, (old_value, new_value)) in self.0.clone() {
+            match old_value {
+                Some(old) => {
+                    output = format!(
+                        "uid: {uid:?} old_value: {} new_value: {}, \n{output}",
+                        base64::encode(old),
+                        base64::encode(new_value)
+                    )
+                }
+                None => {
+                    output = format!(
+                        "uid: {uid:?} old_value: '' new_value: {}, \n{output}",
+                        base64::encode(new_value)
+                    )
+                }
+            }
+        }
+        write!(f, "{output}")
+    }
+}
 
 impl<const UID_LENGTH: usize> UpsertData<UID_LENGTH> {
     /// Build the upsert data from the old and new table.

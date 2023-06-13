@@ -118,11 +118,12 @@ impl FindexCallbacks<UID_LENGTH> for FindexUser {
         Ok(encrypted_table)
     }
 
-    #[tracing::instrument(ret, err)]
+    #[tracing::instrument(ret(Display), err, skip(modifications))]
     async fn upsert_entry_table(
         &mut self,
         modifications: &UpsertData<UID_LENGTH>,
     ) -> Result<EncryptedTable<UID_LENGTH>, FindexErr> {
+        info!("modifications: {modifications}");
         let upsert_entry = unwrap_callback!(self, upsert_entry);
 
         // Callback input
@@ -161,11 +162,12 @@ impl FindexCallbacks<UID_LENGTH> for FindexUser {
         EncryptedTable::try_from_bytes(&serialized_rejected_items)
     }
 
-    #[tracing::instrument(ret, err)]
+    #[tracing::instrument(ret, err, skip(items))]
     async fn insert_chain_table(
         &mut self,
         items: &EncryptedTable<UID_LENGTH>,
     ) -> Result<(), FindexErr> {
+        info!("items: {items}");
         let insert_chain = unwrap_callback!(self, insert_chain);
 
         // Callback input

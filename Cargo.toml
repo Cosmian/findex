@@ -20,7 +20,15 @@ name = "cosmian_findex"
 path = "src/lib.rs"
 
 [features]
-ffi = ["interfaces", "interfaces", "serde", "serde_json"]
+ffi = [
+  "interfaces",
+  "interfaces",
+  "serde",
+  "serde_json",
+  "tracing-log",
+  "tracing-subscriber",
+  "tracing-tree",
+]
 sqlite = ["rusqlite", "faker_rand", "interfaces", "serde", "serde_json"]
 wasm_bindgen = [
   "interfaces",
@@ -50,9 +58,9 @@ sha3 = "0.10"
 thiserror = "1"
 tiny-keccak = { version = "2.0.2", features = ["kmac"] }
 tracing = "0.1"
-tracing-log = "0.1"
-tracing-subscriber = { version = "0.3", features = ["env-filter"] }
-tracing-tree = "0.2"
+tracing-log = { version = "0.1", optional = true }
+tracing-subscriber = { version = "0.3", features = ["env-filter"], optional = true }
+tracing-tree = { version = "0.2", optional = true }
 wasm-bindgen = { version = "0.2", features = ["serde-serialize"], optional = true }
 wasm-bindgen-futures = { version = "0.4", optional = true }
 zeroize = "1.5"
