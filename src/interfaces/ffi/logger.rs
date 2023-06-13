@@ -6,12 +6,12 @@ static LOG_INIT: Once = Once::new();
 
 pub fn log_init(paths: &str) {
     // We only want to log if the environment variable RUST_LOG is defined
-    if let Ok(old) = std::env::var("RUST_LOG") {
-        LOG_INIT.call_once(|| {
-            std::env::set_var("RUST_LOG", format!("{},{}", old, paths));
-            tracing_setup();
-        });
-    };
+    // if let Ok(old) = std::env::var("RUST_LOG") {
+    LOG_INIT.call_once(|| {
+        std::env::set_var("RUST_LOG", paths);
+        tracing_setup();
+    });
+    // };
 }
 
 fn tracing_setup() {
