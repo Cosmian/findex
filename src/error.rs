@@ -1,6 +1,6 @@
 //! Defines error type and conversions for Findex.
 
-use std::fmt::Display;
+use std::{convert::Infallible, fmt::Display};
 
 use base64::DecodeError;
 use cosmian_crypto_core::CryptoCoreError;
@@ -98,6 +98,13 @@ impl From<DecodeError> for FindexErr {
 impl From<std::ffi::NulError> for FindexErr {
     fn from(e: std::ffi::NulError) -> Self {
         Self::Other(format!("FFI error: {e}"))
+    }
+}
+
+#[cfg(feature = "ffi")]
+impl From<Infallible> for FindexErr {
+    fn from(e: Infallible) -> Self {
+        Self::Other(format!("FFI Infallible error: {e}"))
     }
 }
 

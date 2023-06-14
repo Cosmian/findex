@@ -3,7 +3,7 @@
 use std::{
     collections::{HashMap, HashSet},
     convert::TryFrom,
-    ffi::{c_uint, CStr},
+    ffi::CStr,
     num::NonZeroUsize,
     os::raw::{c_char, c_int},
     slice,
@@ -157,8 +157,8 @@ pub unsafe extern "C" fn h_search(
     keywords_ptr: *const c_char,
     max_results_per_keyword: c_int,
     max_depth: c_int,
-    fetch_chains_batch_size: c_uint,
-    entry_table_number: c_uint,
+    fetch_chains_batch_size: c_int,
+    entry_table_number: c_int,
     progress_callback: ProgressCallback,
     fetch_entry: FetchEntryTableCallback,
     fetch_chain: FetchChainTableCallback,
@@ -229,9 +229,14 @@ pub unsafe extern "C" fn h_search(
         .and_then(NonZeroUsize::new)
         .unwrap_or(SECURE_FETCH_CHAINS_BATCH_SIZE);
 
-    if entry_table_number == 0 {
-        ffi_bail!("The parameter entry_table_number must be strictly positive. Found 0");
-    }
+    let entry_table_number = if entry_table_number <= 0 {
+        ffi_bail!("The parameter entry_table_number must be strictly positive. Found <= 0");
+    } else {
+        ffi_unwrap!(
+            usize::try_from(entry_table_number),
+            "entry_table_number must be a strictly positive integer"
+        )
+    };
 
     let serialized_uids = ffi_unwrap!(executor::block_on(ffi_search(
         &base64_keywords,
@@ -240,7 +245,7 @@ pub unsafe extern "C" fn h_search(
         max_results_per_keyword,
         max_depth,
         fetch_chains_batch_size,
-        entry_table_number as usize,
+        entry_table_number,
         progress_callback,
         fetch_entry,
         fetch_chain,
@@ -310,7 +315,7 @@ pub unsafe extern "C" fn h_upsert(
     label_ptr: *const u8,
     label_len: c_int,
     indexed_values_and_keywords_ptr: *const c_char,
-    entry_table_number: c_uint,
+    entry_table_number: c_int,
     fetch_entry: FetchEntryTableCallback,
     upsert_entry: UpsertEntryTableCallback,
     insert_chain: InsertChainTableCallback,
@@ -349,9 +354,14 @@ pub unsafe extern "C" fn h_upsert(
             }
         };
 
-    if entry_table_number == 0 {
-        ffi_bail!("The parameter entry_table_number must be strictly positive. Found 0");
-    }
+    let entry_table_number = if entry_table_number <= 0 {
+        ffi_bail!("The parameter entry_table_number must be strictly positive. Found <= 0");
+    } else {
+        ffi_unwrap!(
+            usize::try_from(entry_table_number),
+            "entry_table_number must be a strictly positive integer"
+        )
+    };
 
     // a map of base64 encoded `IndexedValue` to a list of base64 encoded keyWords
     let parsed_indexed_values_and_keywords = ffi_unwrap!(serde_json::from_str::<
@@ -375,7 +385,7 @@ pub unsafe extern "C" fn h_upsert(
     // Finally write indexes in database
     //
     let mut ffi_upsert = FindexUser {
-        entry_table_number: entry_table_number as usize,
+        entry_table_number,
         progress: None,
         fetch_entry: Some(fetch_entry),
         fetch_chain: None,
@@ -435,7 +445,7 @@ pub unsafe extern "C" fn h_compact(
     new_master_key_len: c_int,
     label_ptr: *const u8,
     label_len: c_int,
-    entry_table_number: c_uint,
+    entry_table_number: c_int,
     fetch_all_entry_table_uids: FetchAllEntryTableUidsCallback,
     fetch_entry: FetchEntryTableCallback,
     fetch_chain: FetchChainTableCallback,
@@ -468,14 +478,19 @@ pub unsafe extern "C" fn h_compact(
     let label_bytes = slice::from_raw_parts(label_ptr, label_len as usize);
     let label = Label::from(label_bytes);
 
-    if entry_table_number == 0 {
-        ffi_bail!("The parameter entry_table_number must be strictly positive. Found 0");
-    }
+    let entry_table_number = if entry_table_number <= 0 {
+        ffi_bail!("The parameter entry_table_number must be strictly positive. Found <= 0");
+    } else {
+        ffi_unwrap!(
+            usize::try_from(entry_table_number),
+            "entry_table_number must be a strictly positive integer"
+        )
+    };
     //
     // Finally write indexes in database
     //
     let mut ffi_compact = FindexUser {
-        entry_table_number: entry_table_number as usize,
+        entry_table_number,
         progress: None,
         fetch_entry: Some(fetch_entry),
         fetch_chain: Some(fetch_chain),
