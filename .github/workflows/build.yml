@@ -17,7 +17,7 @@ jobs:
       regression-filename: sqlite.db
       branch-java: v3.1.1
       branch-js: v6.0.4
-      branch-flutter: v4.1.1
+      branch-flutter: ffi_signatures
       branch-python: python_not_tested
       bench-features: sqlite
     secrets: inherit
