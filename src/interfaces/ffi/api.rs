@@ -3,7 +3,7 @@
 use std::{
     collections::{HashMap, HashSet},
     convert::TryFrom,
-    ffi::CStr,
+    ffi::{c_uint, CStr},
     num::NonZeroUsize,
     os::raw::{c_char, c_int},
     slice,
@@ -157,14 +157,12 @@ pub unsafe extern "C" fn h_search(
     keywords_ptr: *const c_char,
     max_results_per_keyword: c_int,
     max_depth: c_int,
-    fetch_chains_batch_size: c_int,
-    entry_table_number: c_int,
+    fetch_chains_batch_size: c_uint,
+    entry_table_number: c_uint,
     progress_callback: ProgressCallback,
     fetch_entry: FetchEntryTableCallback,
     fetch_chain: FetchChainTableCallback,
 ) -> c_int {
-    log_init("info");
-
     //
     // Check arguments
     //
@@ -229,14 +227,9 @@ pub unsafe extern "C" fn h_search(
         .and_then(NonZeroUsize::new)
         .unwrap_or(SECURE_FETCH_CHAINS_BATCH_SIZE);
 
-    let entry_table_number = if entry_table_number <= 0 {
-        ffi_bail!("The parameter entry_table_number must be strictly positive. Found <= 0");
-    } else {
-        ffi_unwrap!(
-            usize::try_from(entry_table_number),
-            "entry_table_number must be a strictly positive integer"
-        )
-    };
+    if entry_table_number == 0 {
+        ffi_bail!("The parameter entry_table_number must be strictly positive. Found 0");
+    }
 
     let serialized_uids = ffi_unwrap!(executor::block_on(ffi_search(
         &base64_keywords,
@@ -245,7 +238,7 @@ pub unsafe extern "C" fn h_search(
         max_results_per_keyword,
         max_depth,
         fetch_chains_batch_size,
-        entry_table_number,
+        entry_table_number as usize,
         progress_callback,
         fetch_entry,
         fetch_chain,
@@ -269,6 +262,42 @@ pub unsafe extern "C" fn h_search(
     0
 }
 
+#[no_mangle]
+#[tracing::instrument(ret)]
+pub unsafe extern "C" fn h_search_with_logs(
+    indexed_values_ptr: *mut c_char,
+    indexed_values_len: *mut c_int,
+    master_key_ptr: *const c_char,
+    master_key_len: c_int,
+    label_ptr: *const u8,
+    label_len: c_int,
+    keywords_ptr: *const c_char,
+    max_results_per_keyword: c_int,
+    max_depth: c_int,
+    fetch_chains_batch_size: c_uint,
+    entry_table_number: c_uint,
+    progress_callback: ProgressCallback,
+    fetch_entry: FetchEntryTableCallback,
+    fetch_chain: FetchChainTableCallback,
+) -> c_int {
+    log_init("info", 1);
+    h_search(
+        indexed_values_ptr,
+        indexed_values_len,
+        master_key_ptr,
+        master_key_len,
+        label_ptr,
+        label_len,
+        keywords_ptr,
+        max_results_per_keyword,
+        max_depth,
+        fetch_chains_batch_size,
+        entry_table_number,
+        progress_callback,
+        fetch_entry,
+        fetch_chain,
+    )
+}
 /// Index the given values for the given keywords. After upserting, any
 /// search for such a keyword will result in finding (at least) the
 /// corresponding value.
@@ -315,12 +344,11 @@ pub unsafe extern "C" fn h_upsert(
     label_ptr: *const u8,
     label_len: c_int,
     indexed_values_and_keywords_ptr: *const c_char,
-    entry_table_number: c_int,
+    entry_table_number: c_uint,
     fetch_entry: FetchEntryTableCallback,
     upsert_entry: UpsertEntryTableCallback,
     insert_chain: InsertChainTableCallback,
 ) -> c_int {
-    log_init("info");
     //
     // Parse master Key
     ffi_not_null!(master_key_ptr, "Master Key pointer should not be null");
@@ -354,14 +382,9 @@ pub unsafe extern "C" fn h_upsert(
             }
         };
 
-    let entry_table_number = if entry_table_number <= 0 {
-        ffi_bail!("The parameter entry_table_number must be strictly positive. Found <= 0");
-    } else {
-        ffi_unwrap!(
-            usize::try_from(entry_table_number),
-            "entry_table_number must be a strictly positive integer"
-        )
-    };
+    if entry_table_number == 0 {
+        ffi_bail!("The parameter entry_table_number must be strictly positive. Found 0");
+    }
 
     // a map of base64 encoded `IndexedValue` to a list of base64 encoded keyWords
     let parsed_indexed_values_and_keywords = ffi_unwrap!(serde_json::from_str::<
@@ -385,7 +408,7 @@ pub unsafe extern "C" fn h_upsert(
     // Finally write indexes in database
     //
     let mut ffi_upsert = FindexUser {
-        entry_table_number,
+        entry_table_number: entry_table_number as usize,
         progress: None,
         fetch_entry: Some(fetch_entry),
         fetch_chain: None,
@@ -403,6 +426,33 @@ pub unsafe extern "C" fn h_upsert(
     )));
 
     0
+}
+
+#[no_mangle]
+#[tracing::instrument(ret)]
+pub unsafe extern "C" fn h_upsert_with_logs(
+    master_key_ptr: *const u8,
+    master_key_len: c_int,
+    label_ptr: *const u8,
+    label_len: c_int,
+    indexed_values_and_keywords_ptr: *const c_char,
+    entry_table_number: c_uint,
+    fetch_entry: FetchEntryTableCallback,
+    upsert_entry: UpsertEntryTableCallback,
+    insert_chain: InsertChainTableCallback,
+) -> c_int {
+    log_init("info", 1);
+    h_upsert(
+        master_key_ptr,
+        master_key_len,
+        label_ptr,
+        label_len,
+        indexed_values_and_keywords_ptr,
+        entry_table_number,
+        fetch_entry,
+        upsert_entry,
+        insert_chain,
+    )
 }
 
 /// Replaces all the Index Entry Table UIDs and values. New UIDs are derived
@@ -445,14 +495,13 @@ pub unsafe extern "C" fn h_compact(
     new_master_key_len: c_int,
     label_ptr: *const u8,
     label_len: c_int,
-    entry_table_number: c_int,
+    entry_table_number: c_uint,
     fetch_all_entry_table_uids: FetchAllEntryTableUidsCallback,
     fetch_entry: FetchEntryTableCallback,
     fetch_chain: FetchChainTableCallback,
     update_lines: UpdateLinesCallback,
     list_removed_locations: ListRemovedLocationsCallback,
 ) -> c_int {
-    log_init("info");
     let num_reindexing_before_full_set = match num_reindexing_before_full_set.try_into() {
         Ok(uint) => uint,
         Err(e) => {
@@ -478,19 +527,15 @@ pub unsafe extern "C" fn h_compact(
     let label_bytes = slice::from_raw_parts(label_ptr, label_len as usize);
     let label = Label::from(label_bytes);
 
-    let entry_table_number = if entry_table_number <= 0 {
-        ffi_bail!("The parameter entry_table_number must be strictly positive. Found <= 0");
-    } else {
-        ffi_unwrap!(
-            usize::try_from(entry_table_number),
-            "entry_table_number must be a strictly positive integer"
-        )
-    };
+    if entry_table_number == 0 {
+        ffi_bail!("The parameter entry_table_number must be strictly positive. Found 0");
+    }
+
     //
     // Finally write indexes in database
     //
     let mut ffi_compact = FindexUser {
-        entry_table_number,
+        entry_table_number: entry_table_number as usize,
         progress: None,
         fetch_entry: Some(fetch_entry),
         fetch_chain: Some(fetch_chain),
@@ -509,4 +554,39 @@ pub unsafe extern "C" fn h_compact(
     )));
 
     0
+}
+
+#[no_mangle]
+#[tracing::instrument(ret)]
+pub unsafe extern "C" fn h_compact_with_logs(
+    num_reindexing_before_full_set: c_int,
+    master_key_ptr: *const u8,
+    master_key_len: c_int,
+    new_master_key_ptr: *const u8,
+    new_master_key_len: c_int,
+    label_ptr: *const u8,
+    label_len: c_int,
+    entry_table_number: c_uint,
+    fetch_all_entry_table_uids: FetchAllEntryTableUidsCallback,
+    fetch_entry: FetchEntryTableCallback,
+    fetch_chain: FetchChainTableCallback,
+    update_lines: UpdateLinesCallback,
+    list_removed_locations: ListRemovedLocationsCallback,
+) -> c_int {
+    log_init("info", 1);
+    h_compact(
+        num_reindexing_before_full_set,
+        master_key_ptr,
+        master_key_len,
+        new_master_key_ptr,
+        new_master_key_len,
+        label_ptr,
+        label_len,
+        entry_table_number,
+        fetch_all_entry_table_uids,
+        fetch_entry,
+        fetch_chain,
+        update_lines,
+        list_removed_locations,
+    )
 }

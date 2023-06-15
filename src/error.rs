@@ -1,6 +1,8 @@
 //! Defines error type and conversions for Findex.
 
-use std::{convert::Infallible, fmt::Display};
+#[cfg(feature = "ffi")]
+use std::convert::Infallible;
+use std::fmt::Display;
 
 use base64::DecodeError;
 use cosmian_crypto_core::CryptoCoreError;
