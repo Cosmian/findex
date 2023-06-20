@@ -8,6 +8,7 @@ use cosmian_crypto_core::{
     symmetric_crypto::{Dem, SymKey},
     CsRng,
 };
+use tracing::instrument;
 
 use crate::{
     core::{
@@ -42,6 +43,7 @@ pub trait FindexUpsert<
     /// - `master_key`          : Findex master key
     /// - `label`               : additional public information used for hashing
     ///   Entry Table UIDs
+    #[instrument(skip(self, master_key))]
     async fn upsert(
         &mut self,
         indexed_value_to_keywords: HashMap<IndexedValue, HashSet<Keyword>>,

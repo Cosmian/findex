@@ -4,6 +4,7 @@ use std::{
 };
 
 use cosmian_crypto_core::bytes_ser_de::{Serializable, Serializer};
+use tracing::info;
 
 use crate::{
     core::{
@@ -28,6 +29,7 @@ use crate::{
 };
 
 impl FindexCallbacks<UID_LENGTH> for FindexUser {
+    #[tracing::instrument(ret, err)]
     async fn progress(
         &self,
         results: &HashMap<Keyword, HashSet<IndexedValue>>,
@@ -43,6 +45,7 @@ impl FindexCallbacks<UID_LENGTH> for FindexUser {
         Ok(progress(results.as_ptr(), results.len() as c_uint))
     }
 
+    #[tracing::instrument(ret, err)]
     async fn fetch_all_entry_table_uids(&self) -> Result<HashSet<Uid<UID_LENGTH>>, FindexErr> {
         let fetch_all_entry_table_uids = unwrap_callback!(self, fetch_all_entry_table_uids);
         let mut allocation_size = 1_000_000 * UID_LENGTH; // about 32MB
@@ -62,11 +65,14 @@ impl FindexCallbacks<UID_LENGTH> for FindexUser {
         }
     }
 
+    #[tracing::instrument(ret(Display), err)]
     async fn fetch_entry_table(
         &self,
         entry_table_uids: &HashSet<Uid<UID_LENGTH>>,
     ) -> Result<EncryptedMultiTable<UID_LENGTH>, FindexErr> {
+        info!("fetch_entry address: {:?}", self.fetch_entry);
         let fetch_entry = unwrap_callback!(self, fetch_entry);
+        info!("fetch_entry address (unwrapped): {:?}", fetch_entry);
 
         let serialized_uids = serialize_set(entry_table_uids)?;
         let res = fetch_callback(
@@ -79,14 +85,23 @@ impl FindexCallbacks<UID_LENGTH> for FindexUser {
             "fetch entries",
         )?;
 
-        EncryptedMultiTable::try_from_bytes(&res)
+        let encrypted_table = EncryptedMultiTable::try_from_bytes(&res)?;
+        info!(
+            "results entries: (nb: {}): {encrypted_table}",
+            encrypted_table.len()
+        );
+        Ok(encrypted_table)
     }
 
+    #[tracing::instrument(ret(Display), err)]
     async fn fetch_chain_table(
         &self,
         chain_uids: &HashSet<Uid<UID_LENGTH>>,
     ) -> Result<EncryptedTable<UID_LENGTH>, FindexErr> {
+        info!("fetch_chain address: {:?}", self.fetch_chain);
         let fetch_chain = unwrap_callback!(self, fetch_chain);
+        info!("fetch_chain address (unwrapped): {:?}", fetch_chain);
+
         let serialized_chain_uids = serialize_set(chain_uids)?;
         let res = fetch_callback(
             &serialized_chain_uids,
@@ -94,13 +109,21 @@ impl FindexCallbacks<UID_LENGTH> for FindexUser {
             *fetch_chain,
             "fetch chains",
         )?;
-        EncryptedTable::try_from_bytes(&res)
+
+        let encrypted_table = EncryptedTable::try_from_bytes(&res)?;
+        info!(
+            "results chains: (nb: {}): {encrypted_table}",
+            encrypted_table.len()
+        );
+        Ok(encrypted_table)
     }
 
+    #[tracing::instrument(ret(Display), err, skip(modifications))]
     async fn upsert_entry_table(
         &mut self,
         modifications: &UpsertData<UID_LENGTH>,
     ) -> Result<EncryptedTable<UID_LENGTH>, FindexErr> {
+        info!("modifications: {modifications}");
         let upsert_entry = unwrap_callback!(self, upsert_entry);
 
         // Callback input
@@ -139,10 +162,12 @@ impl FindexCallbacks<UID_LENGTH> for FindexUser {
         EncryptedTable::try_from_bytes(&serialized_rejected_items)
     }
 
+    #[tracing::instrument(ret, err, skip(items))]
     async fn insert_chain_table(
         &mut self,
         items: &EncryptedTable<UID_LENGTH>,
     ) -> Result<(), FindexErr> {
+        info!("items: {items}");
         let insert_chain = unwrap_callback!(self, insert_chain);
 
         // Callback input
@@ -154,6 +179,7 @@ impl FindexCallbacks<UID_LENGTH> for FindexUser {
         Ok(())
     }
 
+    #[tracing::instrument(ret, err)]
     fn update_lines(
         &mut self,
         chain_table_uids_to_remove: HashSet<Uid<UID_LENGTH>>,
@@ -187,6 +213,7 @@ impl FindexCallbacks<UID_LENGTH> for FindexUser {
         Ok(())
     }
 
+    #[tracing::instrument(ret, err)]
     fn list_removed_locations(
         &self,
         locations: &HashSet<Location>,
