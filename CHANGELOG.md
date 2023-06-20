@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.0.5] - 2023-06-20
+
+### Testing
+
+- Add debug logs for callback fetch_entry_table and fetch_chain_table
+
 ## [2.0.4] - 2023-05-23
 
 ### Bug Fixes
