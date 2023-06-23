@@ -11,7 +11,7 @@ use crate::{
     error::CallbackError,
     parameters::check_parameter_constraints,
     structs::{IndexedValue, Keyword, Label, Location},
-    Error, KeyingMaterial, CHAIN_TABLE_KEY_DERIVATION_INFO, ENTRY_TABLE_KEY_DERIVATION_INFO,
+    Error, KeyingMaterial, Uids, CHAIN_TABLE_KEY_DERIVATION_INFO, ENTRY_TABLE_KEY_DERIVATION_INFO,
 };
 
 /// Trait implementing the search functionality of Findex.
@@ -72,7 +72,7 @@ pub trait FindexSearch<
 
         // Query the Entry Table for these UIDs.
         let entry_table = self
-            .fetch_entry_table(entry_table_uid_map.keys().copied().collect())
+            .fetch_entry_table(Uids(entry_table_uid_map.keys().copied().collect()))
             .await?;
 
         // Unchain all Entry Table values.

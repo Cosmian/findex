@@ -16,7 +16,7 @@ use crate::{
     error::CallbackError,
     parameters::check_parameter_constraints,
     structs::{BlockType, EncryptedTable, IndexedValue, Label},
-    Error, FindexCallbacks, KeyingMaterial, CHAIN_TABLE_KEY_DERIVATION_INFO,
+    Error, FindexCallbacks, KeyingMaterial, Uids, CHAIN_TABLE_KEY_DERIVATION_INFO,
     ENTRY_TABLE_KEY_DERIVATION_INFO,
 };
 
@@ -48,7 +48,7 @@ pub trait FindexCompact<
 {
     /// Replaces all the Index Entry Table UIDs and values. New UIDs are derived
     /// using the given label and the KMAC key derived from the new master key.
-    /// The values are dectypted using the DEM key derived from the master key
+    /// The values are decrypted using the DEM key derived from the master key
     /// and re-encrypted using the DEM key derived from the new master key.
     ///
     /// Randomly selects index entries and recompact their associated chains.
@@ -152,11 +152,13 @@ pub trait FindexCompact<
         //
         // Remove all reindexed Chain Table items. Chains are recomputed entirely.
         //
-        let chain_table_uids_to_remove = chains_to_reindex
-            .values()
-            .flat_map(|chain| chain.iter().map(|(k, _)| k))
-            .cloned()
-            .collect();
+        let chain_table_uids_to_remove = Uids(
+            chains_to_reindex
+                .values()
+                .flat_map(|chain| chain.iter().map(|(k, _)| k))
+                .cloned()
+                .collect(),
+        );
 
         // Get the values stored in the reindexed chains.
         let mut reindexed_chain_values = HashMap::with_capacity(chains_to_reindex.len());

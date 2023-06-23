@@ -17,7 +17,7 @@ use crate::{
     structs::{
         BlockType, EncryptedTable, IndexedValue, Keyword, KeywordHash, Label, Uid, UpsertData,
     },
-    FindexCallbacks, ENTRY_TABLE_KEY_DERIVATION_INFO,
+    FindexCallbacks, Uids, ENTRY_TABLE_KEY_DERIVATION_INFO,
 };
 
 /// This the public trait exposed to the users of the Findex Upsert API.
@@ -125,7 +125,7 @@ pub trait FindexUpsert<
 
         // Query the Entry Table for these UIDs.
         let mut encrypted_entry_table = self
-            .fetch_entry_table(new_chains.keys().cloned().collect())
+            .fetch_entry_table(Uids(new_chains.keys().cloned().collect()))
             .await?
             .try_into()?;
 

@@ -13,7 +13,7 @@ use crate::{
     entry_table::{EntryTable, EntryTableValue},
     structs::{BlockType, ChainData},
     CallbackError, EncryptedTable, Error, FindexCallbacks, FindexCompact, IndexedValue,
-    KeyingMaterial, Location, Uid, UpsertData, CHAIN_TABLE_KEY_DERIVATION_INFO,
+    KeyingMaterial, Location, Uid, Uids, UpsertData, CHAIN_TABLE_KEY_DERIVATION_INFO,
     ENTRY_TABLE_KEY_DERIVATION_INFO,
 };
 
@@ -116,7 +116,7 @@ pub trait FindexLiveCompact<
         &self,
         rng: &mut impl CryptoRngCore,
         num_reindexing_before_full_set: u32
-    ) -> Result<(Vec<Uid<UID_LENGTH>>, HashSet<Uid<UID_LENGTH>>), Error<CustomError>> {
+    ) -> Result<(Vec<Uid<UID_LENGTH>>, Uids<UID_LENGTH>), Error<CustomError>> {
 
         let entry_table_uids = self.fetch_all_entry_table_uids().await?;
 
@@ -173,7 +173,7 @@ pub trait FindexLiveCompact<
             }
         }
 
-        Ok((mixed_uids, noise_uids))
+        Ok((mixed_uids, Uids(noise_uids)))
     }
 
     /// Fetch all useful information for the compact from the Chain Table:
@@ -269,7 +269,7 @@ pub trait FindexLiveCompact<
         &self,
         rng: &mut impl CryptoRngCore,
         k_value: &DemScheme::Key,
-        noise: &HashSet<Uid<UID_LENGTH>>,
+        noise: &Uids<UID_LENGTH>,
         noisy_remaining_locations: &HashSet<Location>,
         noisy_encrypted_entry_table: &EncryptedTable<UID_LENGTH>,
         noisy_chain_values: &HashMap<Uid<UID_LENGTH>, HashSet<IndexedValue>>,
@@ -343,8 +343,8 @@ pub trait FindexLiveCompact<
         &mut self,
         rng: &mut impl CryptoRngCore,
         k_value: &DemScheme::Key,
-        mixed_uids: HashSet<Uid<UID_LENGTH>>,
-        noise_uids: &HashSet<Uid<UID_LENGTH>>,
+        mixed_uids: Uids<UID_LENGTH>,
+        noise_uids: &Uids<UID_LENGTH>,
     ) -> Result<(), Error<CustomError>> {
         // Fetch both target and noise values from the Entry Table.
         let mut encrypted_entry_table = self
@@ -419,7 +419,7 @@ pub trait FindexLiveCompact<
                 chains_to_delete.extend(chain);
             }
 
-            self.delete_chain(chains_to_delete).await?;
+            self.delete_chain(Uids(chains_to_delete)).await?;
         }
 
         Ok(())
@@ -451,7 +451,7 @@ pub trait FindexLiveCompact<
             self.live_compact_uids(
                 &mut rng,
                 &k_value,
-                batch.iter().cloned().collect(),
+                Uids(batch.iter().cloned().collect()),
                 &noise_uids,
             ).await?;
         }

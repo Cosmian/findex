@@ -2,11 +2,12 @@
 
 use std::{
     collections::{hash_map::IntoKeys, HashMap, HashSet},
-    fmt::Debug,
+    fmt::{Debug, Display},
     ops::{Deref, DerefMut},
     vec::Vec,
 };
 
+use base64::{engine::general_purpose::STANDARD, Engine as _};
 use cosmian_crypto_core::{
     bytes_ser_de::{to_leb128_len, Deserializer, Serializable, Serializer},
     reexport::rand_core::CryptoRngCore,
@@ -184,6 +185,12 @@ pub struct Location(Vec<u8>);
 
 impl_byte_vector!(Location);
 
+impl Display for Location {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "location: {}", STANDARD.encode(self))
+    }
+}
+
 /// The value indexed by a [`Keyword`]. It can be either a [`Location`] or
 /// another [`Keyword`] in case the searched [`Keyword`] was a tree node.
 ///
@@ -194,6 +201,15 @@ impl_byte_vector!(Location);
 pub enum IndexedValue {
     Location(Location),
     NextKeyword(Keyword),
+}
+
+impl Display for IndexedValue {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Location(location) => write!(f, "location: {}", STANDARD.encode(location)),
+            Self::NextKeyword(keyword) => write!(f, "next keyword: {}", STANDARD.encode(keyword)),
+        }
+    }
 }
 
 impl IndexedValue {
@@ -435,13 +451,63 @@ impl Serializable for IndexedValue {
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Uid<const LENGTH: usize>([u8; LENGTH]);
 
+impl<const UID_LENGTH: usize> Display for Uid<UID_LENGTH> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", STANDARD.encode(self.0))
+    }
+}
+
 impl_byte_array!(Uid);
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Uids<const LENGTH: usize>(pub HashSet<Uid<LENGTH>>);
+
+impl<const LENGTH: usize> Deref for Uids<LENGTH> {
+    type Target = HashSet<Uid<LENGTH>>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl<const UID_LENGTH: usize> IntoIterator for Uids<UID_LENGTH> {
+    type IntoIter = <<Self as Deref>::Target as IntoIterator>::IntoIter;
+    type Item = Uid<UID_LENGTH>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.into_iter()
+    }
+}
+
+impl<const UID_LENGTH: usize> Display for Uids<UID_LENGTH> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let mut output = String::new();
+        for uid in self.clone() {
+            output.push_str(&format!("uid: {}\n", STANDARD.encode(uid)));
+        }
+        write!(f, "{output}")
+    }
+}
 
 /// An encrypted table maps [`Uid`]s to encrypted values.
 // NOTE TBZ: need struct to implement `Serializable`
 #[must_use]
 #[derive(Default, Debug, Clone)]
 pub struct EncryptedTable<const UID_LENGTH: usize>(HashMap<Uid<UID_LENGTH>, Vec<u8>>);
+
+impl<const UID_LENGTH: usize> Display for EncryptedTable<UID_LENGTH> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let mut output = String::new();
+        for (uid, value) in self.clone() {
+            output.push_str(&format!(
+                "uid: {}, value: {}, \n",
+                STANDARD.encode(uid),
+                STANDARD.encode(value),
+            ));
+        }
+        write!(f, "{output}")
+    }
+}
 
 impl<const UID_LENGTH: usize> EncryptedTable<UID_LENGTH> {
     pub fn with_capacity(capacity: usize) -> Self {
@@ -481,13 +547,14 @@ impl<const UID_LENGTH: usize> From<<Self as Deref>::Target> for EncryptedTable<U
     }
 }
 
-impl<const UID_LENGTH: usize> TryFrom<Vec<(Uid<UID_LENGTH>, Vec<u8>)>>
+impl<const UID_LENGTH: usize> TryFrom<EncryptedMultiTable<UID_LENGTH>>
     for EncryptedTable<UID_LENGTH>
 {
     type Error = Error;
 
-    fn try_from(value: Vec<(Uid<UID_LENGTH>, Vec<u8>)>) -> Result<Self, Self::Error> {
+    fn try_from(value: EncryptedMultiTable<UID_LENGTH>) -> Result<Self, Self::Error> {
         value
+            .0
             .into_iter()
             .try_fold(Self::default(), |mut acc, (k, v)| {
                 let old_value = acc.insert(k, v);
@@ -499,6 +566,40 @@ impl<const UID_LENGTH: usize> TryFrom<Vec<(Uid<UID_LENGTH>, Vec<u8>)>>
                     ))
                 }
             })
+    }
+}
+
+#[derive(Default, Debug)]
+pub struct EncryptedMultiTable<const UID_LENGTH: usize>(pub Vec<(Uid<UID_LENGTH>, Vec<u8>)>);
+
+impl<const LENGTH: usize> Deref for EncryptedMultiTable<LENGTH> {
+    type Target = Vec<(Uid<LENGTH>, Vec<u8>)>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl<const UID_LENGTH: usize> IntoIterator for EncryptedMultiTable<UID_LENGTH> {
+    type IntoIter = <<Self as Deref>::Target as IntoIterator>::IntoIter;
+    type Item = (Uid<UID_LENGTH>, Vec<u8>);
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.into_iter()
+    }
+}
+
+impl<const UID_LENGTH: usize> Display for EncryptedMultiTable<UID_LENGTH> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let mut output = String::new();
+        for (uid, value) in self.0.clone() {
+            output.push_str(&format!(
+                "uid: {}, values: {}, \n",
+                STANDARD.encode(uid),
+                STANDARD.encode(value),
+            ));
+        }
+        write!(f, "{output}")
     }
 }
 
@@ -578,6 +679,32 @@ impl<const UID_LENGTH: usize> Serializable for EncryptedTable<UID_LENGTH> {
 pub struct UpsertData<const UID_LENGTH: usize>(
     HashMap<Uid<UID_LENGTH>, (Option<Vec<u8>>, Vec<u8>)>,
 );
+
+impl<const UID_LENGTH: usize> Display for UpsertData<UID_LENGTH> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let mut output = String::new();
+        for (uid, (old_value, new_value)) in self.0.clone() {
+            match old_value {
+                Some(old) => {
+                    output.push_str(&format!(
+                        "uid: {} old_value: {} new_value: {}, \n",
+                        STANDARD.encode(uid),
+                        STANDARD.encode(old),
+                        STANDARD.encode(new_value)
+                    ));
+                }
+                None => {
+                    output.push_str(&format!(
+                        "uid: {} old_value: '' new_value: {}, \n",
+                        STANDARD.encode(uid),
+                        STANDARD.encode(new_value)
+                    ));
+                }
+            }
+        }
+        write!(f, "{output}")
+    }
+}
 
 impl<const UID_LENGTH: usize> UpsertData<UID_LENGTH> {
     /// Build the upsert data from the old and new tables.
