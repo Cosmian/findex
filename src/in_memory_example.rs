@@ -7,8 +7,9 @@ use cosmian_crypto_core::{reexport::rand_core::SeedableRng, CsRng};
 use rand::Rng;
 
 use crate::{
-    callbacks::FetchChains, parameters::UID_LENGTH, EncryptedTable, FindexCallbacks, FindexCompact,
-    FindexSearch, FindexUpsert, IndexedValue, Keyword, Location, Uid, UpsertData,
+    callbacks::FetchChains, parameters::UID_LENGTH, structs::EncryptedMultiTable, EncryptedTable,
+    FindexCallbacks, FindexCompact, FindexSearch, FindexUpsert, IndexedValue, Keyword, Location,
+    Uids, UpsertData,
 };
 #[cfg(feature = "live_compact")]
 use crate::{compact_live::FindexLiveCompact, parameters::*};
@@ -97,16 +98,17 @@ impl<const UID_LENGTH: usize> FindexCallbacks<ExampleError, UID_LENGTH>
         Ok(!self.progress_callback_cancel)
     }
 
-    async fn fetch_all_entry_table_uids(&self) -> Result<HashSet<Uid<UID_LENGTH>>, ExampleError> {
-        let uids = self.entry_table.keys().cloned().collect();
+    async fn fetch_all_entry_table_uids(&self) -> Result<Uids<UID_LENGTH>, ExampleError> {
+        let uids = Uids(self.entry_table.keys().cloned().collect());
         Ok(uids)
     }
 
     async fn fetch_entry_table(
         &self,
-        entry_table_uids: HashSet<Uid<UID_LENGTH>>,
-    ) -> Result<Vec<(Uid<UID_LENGTH>, Vec<u8>)>, ExampleError> {
-        Ok(entry_table_uids
+        entry_table_uids: Uids<UID_LENGTH>,
+    ) -> Result<EncryptedMultiTable<UID_LENGTH>, ExampleError> {
+        let items = entry_table_uids
+            .0
             .into_iter()
             .filter_map(|uid| {
                 self.entry_table
@@ -114,15 +116,16 @@ impl<const UID_LENGTH: usize> FindexCallbacks<ExampleError, UID_LENGTH>
                     .cloned()
                     .map(|value| (uid, value))
             })
-            .collect())
+            .collect::<Vec<_>>();
+        Ok(EncryptedMultiTable(items))
     }
 
     async fn fetch_chain_table(
         &self,
-        chain_table_uids: HashSet<Uid<UID_LENGTH>>,
+        chain_table_uids: Uids<UID_LENGTH>,
     ) -> Result<EncryptedTable<UID_LENGTH>, ExampleError> {
-        let mut items = EncryptedTable::with_capacity(chain_table_uids.len());
-        for uid in chain_table_uids {
+        let mut items = EncryptedTable::with_capacity(chain_table_uids.0.len());
+        for uid in chain_table_uids.0 {
             if let Some(value) = self.chain_table.get(&uid) {
                 items.insert(uid, value.clone());
             }
@@ -165,7 +168,7 @@ impl<const UID_LENGTH: usize> FindexCallbacks<ExampleError, UID_LENGTH>
 
     fn update_lines(
         &mut self,
-        chain_table_uids_to_remove: HashSet<Uid<UID_LENGTH>>,
+        chain_table_uids_to_remove: Uids<UID_LENGTH>,
         new_encrypted_entry_table_items: EncryptedTable<UID_LENGTH>,
         new_encrypted_chain_table_items: EncryptedTable<UID_LENGTH>,
     ) -> Result<(), ExampleError> {
@@ -178,7 +181,7 @@ impl<const UID_LENGTH: usize> FindexCallbacks<ExampleError, UID_LENGTH>
             );
         }
 
-        for removed_chain_table_uid in chain_table_uids_to_remove {
+        for removed_chain_table_uid in chain_table_uids_to_remove.0 {
             self.chain_table.remove(&removed_chain_table_uid);
         }
 
@@ -204,8 +207,8 @@ impl<const UID_LENGTH: usize> FindexCallbacks<ExampleError, UID_LENGTH>
     }
 
     #[cfg(feature = "live_compact")]
-    async fn delete_chain(&mut self, uids: HashSet<Uid<UID_LENGTH>>) -> Result<(), ExampleError> {
-        self.chain_table.retain(|uid, _| !uids.contains(uid));
+    async fn delete_chain(&mut self, uids: Uids<UID_LENGTH>) -> Result<(), ExampleError> {
+        self.chain_table.retain(|uid, _| !uids.0.contains(uid));
         Ok(())
     }
 }

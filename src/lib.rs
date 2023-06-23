@@ -51,5 +51,8 @@ pub use compact_live::FindexLiveCompact;
 pub use error::{CallbackError, CoreError, Error};
 pub use keys::KeyingMaterial;
 pub use search::FindexSearch;
-pub use structs::{EncryptedTable, IndexedValue, Keyword, Label, Location, Uid, UpsertData};
+pub use structs::{
+    EncryptedMultiTable, EncryptedTable, IndexedValue, Keyword, Label, Location, Uid, Uids,
+    UpsertData,
+};
 pub use upsert::FindexUpsert;
