@@ -1,6 +1,6 @@
 //! Defines generic parameters used in Findex interfaces.
 
-use cosmian_crypto_core::symmetric_crypto::{aes_256_gcm_pure::Aes256GcmCrypto, key::Key};
+use cosmian_crypto_core::{Aes256Gcm, SymmetricKey};
 
 use crate::{chain_table::ChainTableValue, structs::Block};
 
@@ -23,14 +23,14 @@ pub const KWI_LENGTH: usize = 16;
 /// Length of a KMAC key in bytes.
 pub const KMAC_KEY_LENGTH: usize = 32;
 
-/// Length of a DEM key in bytes.
-pub const DEM_KEY_LENGTH: usize = 32;
-
 /// KMAC key type.
-pub type KmacKey = Key<KMAC_KEY_LENGTH>;
+pub type KmacKey = SymmetricKey<KMAC_KEY_LENGTH>;
 
-/// DEM used in Findex.
-pub type DemScheme = Aes256GcmCrypto;
+/// Findex uses Aes256 GCM as DEM.
+pub type DemKey = SymmetricKey<{ Aes256Gcm::KEY_LENGTH }>;
+
+/// Symmetric overhead size.
+pub const ENCRYPTION_OVERHEAD: usize = Aes256Gcm::NONCE_LENGTH + Aes256Gcm::MAC_LENGTH;
 
 /// Checks some constraints on constant generics at compile time.
 pub const fn check_parameter_constraints<

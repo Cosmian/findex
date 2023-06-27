@@ -550,14 +550,14 @@ async fn test_first_names() -> Result<(), Error<ExampleError>> {
     );
     println!("Built a list of {} search keywords", searches.len());
     println!(
-        "Graphs: table sizes: entry -> {} records, {} kbytes, chain -> {} records, {} kbytes",
+        "Graphs: table sizes: entry -> {} records, {} kB, chain -> {} records, {} kB",
         graph_findex.entry_table_len(),
         graph_findex.entry_table_size() / 1024,
         graph_findex.chain_table_len(),
         graph_findex.chain_table_size() / 1024
     );
     println!(
-        "Naive: table sizes: entry -> {} records, {} kbytes, chain -> {} records, {} kbytes",
+        "Naive: table sizes: entry -> {} records, {} kB, chain -> {} records, {} kB",
         naive_findex.entry_table_len(),
         naive_findex.entry_table_size() / 1024,
         naive_findex.chain_table_len(),

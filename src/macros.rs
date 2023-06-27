@@ -66,12 +66,12 @@ macro_rules! impl_byte_vector {
                 Ok(Self::from(de.read_vec()?))
             }
 
-            fn try_to_bytes(&self) -> Result<Vec<u8>, Self::Error> {
+            fn serialize(&self) -> Result<zeroize::Zeroizing<Vec<u8>>, Self::Error> {
                 // don't call `write()` to avoir writing size
-                Ok(self.0.to_vec())
+                Ok(self.0.to_vec().into())
             }
 
-            fn try_from_bytes(bytes: &[u8]) -> Result<Self, Self::Error> {
+            fn deserialize(bytes: &[u8]) -> Result<Self, Self::Error> {
                 // don't call `read()` since there is no leading size
                 Ok(Self(bytes.to_vec()))
             }
@@ -168,9 +168,6 @@ macro_rules! impl_findex_trait {
                 { $crate::parameters::MASTER_KEY_LENGTH },
                 { $crate::parameters::KWI_LENGTH },
                 { $crate::parameters::KMAC_KEY_LENGTH },
-                { $crate::parameters::DEM_KEY_LENGTH },
-                $crate::parameters::KmacKey,
-                $crate::parameters::DemScheme,
                 $error,
             > for $findex
         {
