@@ -20,7 +20,7 @@ Findex is part of Cosmian Cloudproof Encryption.
 - [Getting started](#getting-started)
 - [Building and testing](#building-and-testing)
 - [Findex indexes](#findex-indexes)
-	- [Two indexing strategies](#two-indexing-strategies)
+  * [Two indexing strategies](#two-indexing-strategies)
 - [Benchmarks](#benchmarks)
 - [Documentation](#documentation)
 
@@ -32,6 +32,7 @@ Findex allows to index values by keywords. These values can be locations (UIDs
 of an encrypted database, URLs, paths, etc.).
 
 Using Findex API one can:
+
 - index or desindex values by keywords via the `FindexUpsert` trait;
 - search for keywords via the `FindexSearch` trait;
 - compact the indexes via the `FindexCompact` trait.
@@ -52,16 +53,19 @@ implementation.
 ## Building and testing
 
 To build Findex simply run:
+
 ```bash
 cargo build --release
 ```
 
 To test, run:
+
 ```bash
 cargo test --release --all-features
 ```
 
 To launch the benchmarks, run:
+
 ```bash
 cargo bench --all-features
 ```
@@ -69,6 +73,7 @@ cargo bench --all-features
 ## Findex indexes
 
 Findex relies on two server side indexes:
+
 - **Entry Table**: provides the values needed to fetch the correct locations
   from the Chain Table. Each indexing keyword matches a line in the Entry
   Table.
@@ -85,63 +90,63 @@ $H_{w_i}$ the hash of $w_i$ and $UID_{last}$ the last UID of the chain of
 indexed values associated to $w_i$.
 
 <table>
-	<tr>
-		<th colspan=4>Entry Table</th>
-	</tr>
-	<tr>
-		<th>key</th>
-		<th colspan=3>value</th>
-	</tr>
-	<tr>
-		<td>UID</td>
-		<td>$K_{w_i}$</td>
-		<td>$H_{w_i}$</td>
-		<td>$UID_{last}$</td>
-	</tr>
+ <tr>
+  <th colspan=4>Entry Table</th>
+ </tr>
+ <tr>
+  <th>key</th>
+  <th colspan=3>value</th>
+ </tr>
+ <tr>
+  <td>UID</td>
+  <td>$K_{w_i}$</td>
+  <td>$H_{w_i}$</td>
+  <td>$UID_{last}$</td>
+ </tr>
 </table>
 
 <table>
-	<tr>
-		<th colspan=4>Chain Table</th>
-	<tr>
-	<tr>
-		<th>key</th>
-		<th colspan=3>value</th>
-	</tr>
-	<tr>
-		<td>UID</td>
-		<td>$\textnormal{block}_1$</td>
-		<td>...</td>
-		<td>$\textnormal{block}_B$</td>
-	</tr>
+ <tr>
+  <th colspan=4>Chain Table</th>
+ <tr>
+ <tr>
+  <th>key</th>
+  <th colspan=3>value</th>
+ </tr>
+ <tr>
+  <td>UID</td>
+  <td>$\textnormal{block}_1$</td>
+  <td>...</td>
+  <td>$\textnormal{block}_B$</td>
+ </tr>
 </table>
 
 The Chain Table values are serialized as follows (sizes are given in bytes):
 
 <table>
-	<tr>
-		<th rowspan=2></th>
-		<th rowspan=2>flag</th>
-		<th colspan=2>Block<sub>1</sub></th>
-		<th>...</th>
-		<th colspan=2>Block<sub>B</sub></th>
-	</tr>
-	<tr>
-		<th>prefix</th>
-		<th>data</th>
-		<th>...</th>
-		<th>prefix</th>
-		<th>data</th>
-	</tr>
-	<tr>
-		<th>Size (in bytes)</th>
-		<td>1</td>
-		<td>1</td>
-		<td>16</td>
-		<td>...</td>
-		<td>1</td>
-		<td>16</td>
-	</tr>
+ <tr>
+  <th rowspan=2></th>
+  <th rowspan=2>flag</th>
+  <th colspan=2>Block<sub>1</sub></th>
+  <th>...</th>
+  <th colspan=2>Block<sub>B</sub></th>
+ </tr>
+ <tr>
+  <th>prefix</th>
+  <th>data</th>
+  <th>...</th>
+  <th>prefix</th>
+  <th>data</th>
+ </tr>
+ <tr>
+  <th>Size (in bytes)</th>
+  <td>1</td>
+  <td>1</td>
+  <td>16</td>
+  <td>...</td>
+  <td>1</td>
+  <td>16</td>
+ </tr>
 </table>
 
 When stored, the values of the indexes are symmetrically encrypted with an
@@ -153,19 +158,25 @@ single Chain Table value to 8. The prefix is used to write the actual length of
 the data stored inside a block.
 
 Therefore:
+
 - given $N$ the number of keywords used, the size of the Entry Table is given
   by (in bytes):
+
 ```math
 L_{entry~table} = (L_{uid} + C_e + L_{K_{w_i}} + L_{H_{w_i}} + L_{uid}) \cdot N
-       		= 140 \cdot N
+                = 140 \cdot N
 ```
+
 - given $V(w_i)$ the volume of the keyword $w_i$ (i.e. the number of values
   indexed by this keyword) the size of the Chain Table is given by (in bytes):
+
 ```math
 L_{chain~table} = \left(L_{uid} + C_e + 1 + B * (1 + L_{block})\right) \sum\limits_{i~\in~[1,N]}\left\lceil \frac{V(w_i)}{B}\right\rceil
                 = 146 \sum\limits_{i~\in~[1;N]}\left\lceil \frac{V(w_i)}{5}\right\rceil
 ```
+
 where:
+
 - the length of an UID: $L_{uid} = 32~\textnormal{bytes}$
 - the length of the ephemeral key: $K_{w_i} = 16~\textnormal{bytes}$
 - the length of the hash of the keyword: $H_{w_i} = 32~\textnormal{bytes}$
@@ -176,6 +187,7 @@ where:
 ### Two indexing strategies
 
 Naive (locations are indexed for all possible slices):
+
 - `mar` -> {locations}
 - `mart` -> {locations}
 - `marti` -> {locations}
@@ -183,6 +195,7 @@ Naive (locations are indexed for all possible slices):
 - `martine` -> {locations}
 
 Mixed:
+
 - `mar` -> `martine`
 - `mart` -> `martine`
 - `marti` -> `martine`
@@ -190,6 +203,7 @@ Mixed:
 - `martine` -> {locations}
 
 Graph:
+
 - `mar` -> `mart`
 - `mart` -> `marti`
 - `marti` -> `martin`
@@ -203,80 +217,80 @@ the mixed solution.
 In the other hand, the graph solution optimizes the size of the Chain Table.
 
 <table>
-	<tr>
-		<th rowspan=2>Avg locations</th>
-		<th colspan=3>#records</th>
-		<th colspan=3>size (in KB)</th>
-		<th colspan=2>ratio</th>
-	</tr>
-	<tr>
-		<th>naive</th>
-		<th>mixed</th>
-		<th>graph</th>
-		<th>naive</th>
-		<th>mixed</th>
-		<th>graph</th>
-		<th>mixed / naive</th>
-		<th>graph / naive</th>
-	</tr>
-	<tr>
-		<td>1</td>
-		<td>49016</td>
-		<td>53058</td>
-		<td>49316</td>
-		<td>6988</td>
-		<td>7564</td>
-		<td>7031</td>
-		<td>1.08</td>
-		<td>1.01</td>
-	</tr>
-	<tr>
-		<td>2</td>
-		<td>58253</td>
-		<td>57347</td>
-		<td>53526</td>
-		<td>8305</td>
-		<td>8176</td>
-		<td>7631</td>
-		<td>0.98</td>
-		<td>0.92</td>
-	</tr>
-	<tr>
-		<td>3</td>
-		<td>71455</td>
-		<td>61817</td>
-		<td>57949</td>
-		<td>10187</td>
-		<td>8813</td>
-		<td>8262</td>
-		<td>0.87</td>
-		<td>0.81</td>
-	</tr>
-	<tr>
-		<td>4</td>
-		<td>80692</td>
-		<td>66671</td>
-		<td>62785</td>
-		<td>11504</td>
-		<td>9505</td>
-		<td>8951</td>
-		<td>0.83</td>
-		<td>0.78</td>
-	</tr>
-	<tr>
-		<td>5</td>
-		<td>86048</td>
-		<td>72676</td>
-		<td>69014</td>
-		<td>12268</td>
-		<td>10362</td>
-		<td>9839</td>
-		<td>0.84</td>
-		<td>0.80</td>
-	</tr>
+  <tr>
+    <th rowspan=2>Avg locations</th>
+    <th colspan=3>#records</th>
+    <th colspan=3>size (in KB)</th>
+    <th colspan=2>ratio</th>
+  </tr>
+  <tr>
+    <th>naive</th>
+    <th>mixed</th>
+    <th>graph</th>
+    <th>naive</th>
+    <th>mixed</th>
+    <th>graph</th>
+    <th>mixed / naive</th>
+    <th>graph / naive</th>
+  </tr>
+  <tr>
+    <td>1</td>
+    <td>49016</td>
+    <td>53058</td>
+    <td>49316</td>
+    <td>6988</td>
+    <td>7564</td>
+    <td>7031</td>
+    <td>1.08</td>
+    <td>1.01</td>
+  </tr>
+  <tr>
+    <td>2</td>
+    <td>58253</td>
+    <td>57347</td>
+    <td>53526</td>
+    <td>8305</td>
+    <td>8176</td>
+    <td>7631</td>
+    <td>0.98</td>
+    <td>0.92</td>
+  </tr>
+  <tr>
+    <td>3</td>
+    <td>71455</td>
+    <td>61817</td>
+    <td>57949</td>
+    <td>10187</td>
+    <td>8813</td>
+    <td>8262</td>
+    <td>0.87</td>
+    <td>0.81</td>
+  </tr>
+  <tr>
+    <td>4</td>
+    <td>80692</td>
+    <td>66671</td>
+    <td>62785</td>
+    <td>11504</td>
+    <td>9505</td>
+    <td>8951</td>
+    <td>0.83</td>
+    <td>0.78</td>
+  </tr>
+  <tr>
+    <td>5</td>
+    <td>86048</td>
+    <td>72676</td>
+    <td>69014</td>
+    <td>12268</td>
+    <td>10362</td>
+    <td>9839</td>
+    <td>0.84</td>
+    <td>0.80</td>
+  </tr>
 </table>
 
-### Benchmarks
+## Benchmarks
 
 The benchmarks presented in this section are run on a Intel(R) Xeon(R) Platinum 8171M CPU @ 2.60GHz.
 

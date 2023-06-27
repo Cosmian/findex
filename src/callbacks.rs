@@ -1,7 +1,5 @@
 use std::collections::{HashMap, HashSet};
 
-use cosmian_crypto_core::symmetric_crypto::Dem;
-
 use crate::{
     chain_table::{ChainTableValue, KwiChainUids},
     structs::EncryptedMultiTable,
@@ -183,8 +181,6 @@ pub trait FetchChains<
     const BLOCK_LENGTH: usize,
     const CHAIN_TABLE_WIDTH: usize,
     const KWI_LENGTH: usize,
-    const DEM_KEY_LENGTH: usize,
-    DemScheme: Dem<DEM_KEY_LENGTH>,
     CustomError: std::error::Error + CallbackError,
 >: FindexCallbacks<CustomError, UID_LENGTH>
 {
@@ -207,12 +203,12 @@ pub trait FetchChains<
         Error<CustomError>,
     > {
         // Collect to a `HashSet` to mix UIDs between chains.
-        let chain_table_uids = Uids(kwi_chain_table_uids.values().flatten().cloned().collect());
+        let chain_table_uids = Uids(kwi_chain_table_uids.values().flatten().copied().collect());
 
         let encrypted_items = self.fetch_chain_table(chain_table_uids).await?;
 
         let mut res = HashMap::with_capacity(kwi_chain_table_uids.len());
-        for (kwi, chain_table_uids) in kwi_chain_table_uids.into_iter() {
+        for (kwi, chain_table_uids) in kwi_chain_table_uids {
             let kwi_value = kwi.derive_dem_key(CHAIN_TABLE_KEY_DERIVATION_INFO);
 
             // Use a vector not to shuffle the chain. This is important because indexed
@@ -223,11 +219,7 @@ pub trait FetchChains<
                 if let Some(encrypted_value) = encrypted_items.get(&uid) {
                     chain.push((
                         uid,
-                        ChainTableValue::decrypt::<DEM_KEY_LENGTH, DemScheme>(
-                            &kwi_value,
-                            encrypted_value,
-                        )
-                        .map_err(|err| {
+                        ChainTableValue::decrypt(&kwi_value, encrypted_value).map_err(|err| {
                             Error::<CustomError>::CryptoError(format!(
                                 "fail to decrypt one of the `value` returned by the fetch chains \
                                  callback (uid was '{uid:?}', value was {}, crypto error was \
