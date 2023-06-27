@@ -12,7 +12,10 @@ use crate::{
     Uids, UpsertData,
 };
 #[cfg(feature = "live_compact")]
-use crate::{compact_live::FindexLiveCompact, parameters::*};
+use crate::{
+    compact_live::FindexLiveCompact,
+    parameters::{BLOCK_LENGTH, CHAIN_TABLE_WIDTH, KMAC_KEY_LENGTH, KWI_LENGTH, MASTER_KEY_LENGTH},
+};
 
 #[derive(Debug)]
 pub struct ExampleError(String);
@@ -99,7 +102,7 @@ impl<const UID_LENGTH: usize> FindexCallbacks<ExampleError, UID_LENGTH>
     }
 
     async fn fetch_all_entry_table_uids(&self) -> Result<Uids<UID_LENGTH>, ExampleError> {
-        let uids = Uids(self.entry_table.keys().cloned().collect());
+        let uids = Uids(self.entry_table.keys().copied().collect());
         Ok(uids)
     }
 
@@ -212,16 +215,8 @@ impl<const UID_LENGTH: usize> FindexCallbacks<ExampleError, UID_LENGTH>
     }
 }
 
-impl
-    FetchChains<
-        UID_LENGTH,
-        BLOCK_LENGTH,
-        CHAIN_TABLE_WIDTH,
-        KWI_LENGTH,
-        DEM_KEY_LENGTH,
-        DemScheme,
-        ExampleError,
-    > for FindexInMemory<UID_LENGTH>
+impl FetchChains<UID_LENGTH, BLOCK_LENGTH, CHAIN_TABLE_WIDTH, KWI_LENGTH, ExampleError>
+    for FindexInMemory<UID_LENGTH>
 {
 }
 
@@ -240,9 +235,6 @@ impl
         MASTER_KEY_LENGTH,
         KWI_LENGTH,
         KMAC_KEY_LENGTH,
-        DEM_KEY_LENGTH,
-        KmacKey,
-        DemScheme,
         ExampleError,
     > for FindexInMemory<UID_LENGTH>
 {

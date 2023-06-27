@@ -13,6 +13,7 @@ use cosmian_crypto_core::{
     reexport::rand_core::CryptoRngCore,
 };
 use tiny_keccak::{Hasher, Sha3};
+use zeroize::Zeroizing;
 
 use crate::error::CoreError as Error;
 
@@ -278,7 +279,7 @@ impl IndexedValue {
             if length != 0 {
                 // This block is not padding.
                 byte_vector.extend(&block.data[..length]);
-                let value = Self::try_from_bytes(&byte_vector)?;
+                let value = Self::deserialize(&byte_vector)?;
                 if BlockType::Addition == block_type {
                     indexed_values.insert(value);
                 } else {
@@ -435,12 +436,12 @@ impl Serializable for IndexedValue {
         Self::try_from(de.read_vec()?.as_slice())
     }
 
-    fn try_to_bytes(&self) -> Result<Vec<u8>, Self::Error> {
+    fn serialize(&self) -> Result<Zeroizing<Vec<u8>>, Self::Error> {
         // don't call `write()` to avoir writing size
-        Ok(self.to_vec())
+        Ok(self.to_vec().into())
     }
 
-    fn try_from_bytes(bytes: &[u8]) -> Result<Self, Self::Error> {
+    fn deserialize(bytes: &[u8]) -> Result<Self, Self::Error> {
         // don't call `read()` since there is no leading size
         Self::try_from(bytes)
     }

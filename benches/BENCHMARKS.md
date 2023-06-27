@@ -4,8 +4,8 @@
 
 - [Overview](#overview)
 - [Benchmark Results](#benchmark-results)
-    - [search](#search)
-    - [upsert](#upsert)
+  - [search](#search)
+  - [upsert](#upsert)
 
 ## Overview
 
@@ -27,4 +27,3 @@ This is a benchmark comparison report.
 
 ---
 Made with [criterion-table](https://github.com/nu11ptr/criterion-table)
-

@@ -17,7 +17,7 @@ repos:
         args: [] # optional: list of Conventional Commits types to allow e.g. [feat, fix, ci, chore, test]
 
   - repo: https://github.com/pre-commit/mirrors-prettier
-    rev: v3.0.0-alpha.4
+    rev: v3.0.0-alpha.6
     hooks:
       - id: prettier
         stages: [commit]
@@ -26,10 +26,10 @@ repos:
           - markdown
 
   - repo: https://github.com/igorshubovych/markdownlint-cli
-    rev: v0.32.2
+    rev: v0.33.0
     hooks:
       - id: markdownlint-fix
-        args: [--disable=MD013, --disable=MD024, --disable=MD041, --disable=MD046]
+        args: [--disable=MD004, --disable=MD013, --disable=MD033, --disable=MD024, --disable=MD041]
 
   - repo: https://github.com/Lucas-C/pre-commit-hooks-nodejs
     rev: v1.1.2
@@ -37,7 +37,6 @@ repos:
       - id: htmlhint
       - id: dockerfile_lint
       - id: markdown-toc
-        args: [--bullets='-'] # comment this to refresh TOC
 
   - repo: https://github.com/jumanjihouse/pre-commit-hook-yamlfmt
     rev: 0.2.2
@@ -46,18 +45,12 @@ repos:
         args: [--mapping, '2', --sequence, '4', --offset, '2']
 
   - repo: https://github.com/crate-ci/typos
-    rev: v1.13.6
+    rev: v1.14.4
     hooks:
       - id: typos
 
-  - repo: https://github.com/python-jsonschema/check-jsonschema
-    rev: 0.19.2
-    hooks:
-      - id: check-github-actions
-      - id: check-github-workflows
-
   - repo: https://github.com/Lucas-C/pre-commit-hooks
-    rev: v1.3.1
+    rev: v1.5.1
     hooks:
       - id: forbid-crlf
       - id: remove-crlf
@@ -67,7 +60,7 @@ repos:
         exclude: ^.git/
 
   - repo: https://github.com/sirosen/texthooks
-    rev: 0.4.0
+    rev: 0.5.0
     hooks:
       - id: fix-smartquotes
       - id: fix-ligatures
@@ -84,22 +77,6 @@ repos:
     rev: v1.0
     hooks:
       - id: cargo-check
-
-  - repo: https://github.com/Cosmian/git-hooks.git
-    rev: v1.0.7
-    hooks:
-      - id: dprint-toml-fix
-      - id: cargo-format
-      - id: cargo-tests-all
-      - id: cargo-update
-      - id: cargo-outdated
-      - id: clippy-autofix-all
-      - id: clippy-autofix-pedantic
-      - id: clippy-autofix-nursery
-      - id: clippy-autofix-others
-      - id: clippy-all-targets-all-features
-      - id: cargo-dry-publish
-        args: [--allow-dirty]
 
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v4.4.0
@@ -133,8 +110,24 @@ repos:
       - id: trailing-whitespace
 
   - repo: https://github.com/psf/black
-    rev: 22.12.0
+    rev: 23.3.0
     hooks:
       - id: black
         # avoid clash with `double-quote-string-fixer`
         args: [--skip-string-normalization]
+
+  - repo: https://github.com/Cosmian/git-hooks.git
+    rev: v1.0.11
+    hooks:
+      - id: dprint-toml-fix
+      - id: cargo-format
+      - id: cargo-update
+      - id: cargo-outdated
+      - id: cargo-udeps
+      - id: cargo-tests-all
+      - id: cargo-test-doc
+      - id: clippy-autofix-all
+      - id: clippy-autofix-pedantic
+      - id: clippy-autofix-nursery
+      - id: clippy-autofix-others
+      - id: clippy-all-targets-all-features

@@ -1,4 +1,3 @@
-
 # Findex callbacks
 
 Findex implementation uses callback functions. The signature of these callbacks

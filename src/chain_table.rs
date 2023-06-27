@@ -23,11 +23,12 @@ use std::{
 use cosmian_crypto_core::{
     bytes_ser_de::{Deserializer, Serializable, Serializer},
     reexport::rand_core::CryptoRngCore,
-    symmetric_crypto::{Dem, SymKey},
+    Aes256Gcm, Dem, FixedSizeCBytes, Instantiable, Nonce, RandomFixedSizeCBytes,
 };
 
 use crate::{
     error::CoreError as Error,
+    parameters::{DemKey, KmacKey, ENCRYPTION_OVERHEAD},
     structs::{Block, BlockPrefix, BlockType, Uid},
     KeyingMaterial, CHAIN_TABLE_KEY_DERIVATION_INFO,
 };
@@ -94,24 +95,37 @@ impl<const TABLE_WIDTH: usize, const BLOCK_LENGTH: usize>
     ///
     /// - `rng`         : random number generator
     /// - `kwi_value`   : DEM key used to encrypt the value
-    pub fn encrypt<const KEY_LENGTH: usize, DEM: Dem<KEY_LENGTH>>(
+    pub fn encrypt(
         &self,
         rng: &mut impl CryptoRngCore,
-        kwi_value: &DEM::Key,
+        kwi_value: &DemKey,
     ) -> Result<Vec<u8>, Error> {
-        let bytes = self.try_to_bytes()?;
-        DEM::encrypt(rng, kwi_value, &bytes, None).map_err(Error::from)
+        let nonce = Nonce::new(rng);
+        let plaintext = self.serialize()?;
+        let mut result = Vec::with_capacity(plaintext.len() + ENCRYPTION_OVERHEAD);
+        result.extend(nonce.as_bytes());
+        result.extend(
+            Aes256Gcm::new(kwi_value)
+                .encrypt(&nonce, &plaintext, None)
+                .map_err(Error::from)?,
+        );
+        Ok(result)
     }
 
     /// Decrypts the Chain Table value using the given DEM key.
     ///
     /// - `kwi_value`   : DEM key used to encrypt the value
     /// - `ciphertext`  : encrypted Chain Table value
-    pub fn decrypt<const DEM_KEY_LENGTH: usize, DEM: Dem<DEM_KEY_LENGTH>>(
-        kwi_value: &DEM::Key,
-        ciphertext: &[u8],
-    ) -> Result<Self, Error> {
-        let max_ciphertext_length = 1 + TABLE_WIDTH * (1 + BLOCK_LENGTH) + DEM::ENCRYPTION_OVERHEAD;
+    pub fn decrypt(kwi_value: &DemKey, ciphertext: &[u8]) -> Result<Self, Error> {
+        if ciphertext.len() <= ENCRYPTION_OVERHEAD {
+            return Err(Error::CryptoCoreError(
+                cosmian_crypto_core::CryptoCoreError::CiphertextTooSmallError {
+                    ciphertext_len: ciphertext.len(),
+                    min: ENCRYPTION_OVERHEAD as u64,
+                },
+            ));
+        }
+        let max_ciphertext_length = 1 + TABLE_WIDTH * (1 + BLOCK_LENGTH) + ENCRYPTION_OVERHEAD;
         if max_ciphertext_length != ciphertext.len() {
             return Err(Error::CryptoError(format!(
                 "invalid ciphertext length: given {}, should be {}",
@@ -119,8 +133,12 @@ impl<const TABLE_WIDTH: usize, const BLOCK_LENGTH: usize>
                 max_ciphertext_length
             )));
         }
-        let bytes = DEM::decrypt(kwi_value, ciphertext, None)?;
-        Self::try_from_bytes(&bytes)
+        let nonce = Nonce::try_from_slice(&ciphertext[..Aes256Gcm::NONCE_LENGTH])?;
+        Self::deserialize(&Aes256Gcm::new(kwi_value).decrypt(
+            &nonce,
+            &ciphertext[Aes256Gcm::NONCE_LENGTH..],
+            None,
+        )?)
     }
 }
 
@@ -185,7 +203,7 @@ impl<const UID_LENGTH: usize, const TABLE_WIDTH: usize, const BLOCK_LENGTH: usiz
     ///
     /// - `key`     : KMAC key
     /// - `bytes`   : bytes from which to derive the UID
-    pub fn generate_uid<const KMAC_KEY_LENGTH: usize, KmacKey: SymKey<KMAC_KEY_LENGTH>>(
+    pub fn generate_uid<const KMAC_KEY_LENGTH: usize>(
         key: &KmacKey,
         bytes: &[u8],
     ) -> Uid<UID_LENGTH> {
@@ -203,7 +221,7 @@ impl<const UID_LENGTH: usize, const TABLE_WIDTH: usize, const BLOCK_LENGTH: usiz
     for ChainTable<UID_LENGTH, TABLE_WIDTH, BLOCK_LENGTH>
 {
     fn default() -> Self {
-        Self(Default::default())
+        Self(HashMap::default())
     }
 }
 
@@ -304,14 +322,11 @@ impl<const UID_LENGTH: usize, const KEY_LENGTH: usize> KwiChainUids<UID_LENGTH, 
 
 #[cfg(test)]
 mod tests {
-    use cosmian_crypto_core::{
-        reexport::rand_core::SeedableRng,
-        symmetric_crypto::{aes_256_gcm_pure::Aes256GcmCrypto, Dem},
-        CsRng,
-    };
+    use cosmian_crypto_core::{reexport::rand_core::SeedableRng, CsRng};
 
     use super::*;
     use crate::{
+        parameters::KMAC_KEY_LENGTH,
         structs::{IndexedValue, Location},
         Keyword, CHAIN_TABLE_KEY_DERIVATION_INFO,
     };
@@ -322,22 +337,22 @@ mod tests {
 
     #[test]
     fn test_serialization() {
-        let indexed_value_1 = IndexedValue::from(Location::from("location1".as_bytes()));
-        let indexed_value_2 = IndexedValue::from(Location::from("location2".as_bytes()));
+        let indexed_value_1 = IndexedValue::from(Location::from("location1"));
+        let indexed_value_2 = IndexedValue::from(Location::from("location2"));
         let mut chain_table_value = ChainTableValue::<CHAIN_TABLE_WIDTH, BLOCK_LENGTH>::default();
         for block in indexed_value_1.to_blocks(BlockType::Addition).unwrap() {
             chain_table_value.try_pushing_blocks(&[block]).unwrap();
         }
-        let bytes = chain_table_value.try_to_bytes().unwrap();
+        let bytes = chain_table_value.serialize().unwrap();
         assert_eq!(chain_table_value.length(), bytes.len());
-        let res = ChainTableValue::try_from_bytes(&bytes).unwrap();
+        let res = ChainTableValue::deserialize(&bytes).unwrap();
         assert_eq!(chain_table_value, res);
         for block in indexed_value_2.to_blocks(BlockType::Addition).unwrap() {
             chain_table_value.try_pushing_blocks(&[block]).unwrap();
         }
-        let bytes = chain_table_value.try_to_bytes().unwrap();
+        let bytes = chain_table_value.serialize().unwrap();
         assert_eq!(chain_table_value.length(), bytes.len());
-        let res = ChainTableValue::try_from_bytes(&bytes).unwrap();
+        let res = ChainTableValue::deserialize(&bytes).unwrap();
         assert_eq!(chain_table_value, res);
     }
 
@@ -345,11 +360,11 @@ mod tests {
     fn test_encryption() {
         let mut rng = CsRng::from_entropy();
         let kwi = KeyingMaterial::<KWI_LENGTH>::new(&mut rng);
-        let kwi_value: <Aes256GcmCrypto as Dem<{ Aes256GcmCrypto::KEY_LENGTH }>>::Key =
-            kwi.derive_kmac_key(CHAIN_TABLE_KEY_DERIVATION_INFO);
 
-        let keyword = Keyword::from("Robert".as_bytes());
-        let location = Location::from("Robert's location".as_bytes());
+        let kwi_value = kwi.derive_kmac_key::<KMAC_KEY_LENGTH>(CHAIN_TABLE_KEY_DERIVATION_INFO);
+
+        let keyword = Keyword::from("Robert");
+        let location = Location::from("Robert's location");
         let indexed_value1 = IndexedValue::from(keyword);
         let indexed_value2 = IndexedValue::from(location);
 
@@ -370,21 +385,11 @@ mod tests {
         // The indexed values should be short enough to fit in a single block.
         assert_eq!(chain_table_value2.length, 1);
 
-        let c1 = chain_table_value1
-            .encrypt::<{ Aes256GcmCrypto::KEY_LENGTH }, Aes256GcmCrypto>(&mut rng, &kwi_value)
-            .unwrap();
-        let c2 = chain_table_value2
-            .encrypt::<{ Aes256GcmCrypto::KEY_LENGTH }, Aes256GcmCrypto>(&mut rng, &kwi_value)
-            .unwrap();
+        let c1 = chain_table_value1.encrypt(&mut rng, &kwi_value).unwrap();
+        let c2 = chain_table_value2.encrypt(&mut rng, &kwi_value).unwrap();
 
-        let res1 = ChainTableValue::decrypt::<{ Aes256GcmCrypto::KEY_LENGTH }, Aes256GcmCrypto>(
-            &kwi_value, &c1,
-        )
-        .unwrap();
-        let res2 = ChainTableValue::decrypt::<{ Aes256GcmCrypto::KEY_LENGTH }, Aes256GcmCrypto>(
-            &kwi_value, &c2,
-        )
-        .unwrap();
+        let res1 = ChainTableValue::decrypt(&kwi_value, &c1).unwrap();
+        let res2 = ChainTableValue::decrypt(&kwi_value, &c2).unwrap();
 
         assert_eq!(
             chain_table_value1, res1,
