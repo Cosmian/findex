@@ -108,7 +108,6 @@ impl<const UID_LENGTH: usize> FindexCallbacks<ExampleError, UID_LENGTH>
         entry_table_uids: Uids<UID_LENGTH>,
     ) -> Result<EncryptedMultiTable<UID_LENGTH>, ExampleError> {
         let items = entry_table_uids
-            .0
             .into_iter()
             .filter_map(|uid| {
                 self.entry_table
@@ -124,8 +123,8 @@ impl<const UID_LENGTH: usize> FindexCallbacks<ExampleError, UID_LENGTH>
         &self,
         chain_table_uids: Uids<UID_LENGTH>,
     ) -> Result<EncryptedTable<UID_LENGTH>, ExampleError> {
-        let mut items = EncryptedTable::with_capacity(chain_table_uids.0.len());
-        for uid in chain_table_uids.0 {
+        let mut items = EncryptedTable::with_capacity(chain_table_uids.len());
+        for uid in chain_table_uids {
             if let Some(value) = self.chain_table.get(&uid) {
                 items.insert(uid, value.clone());
             }
@@ -181,7 +180,7 @@ impl<const UID_LENGTH: usize> FindexCallbacks<ExampleError, UID_LENGTH>
             );
         }
 
-        for removed_chain_table_uid in chain_table_uids_to_remove.0 {
+        for removed_chain_table_uid in chain_table_uids_to_remove {
             self.chain_table.remove(&removed_chain_table_uid);
         }
 
@@ -208,7 +207,7 @@ impl<const UID_LENGTH: usize> FindexCallbacks<ExampleError, UID_LENGTH>
 
     #[cfg(feature = "live_compact")]
     async fn delete_chain(&mut self, uids: Uids<UID_LENGTH>) -> Result<(), ExampleError> {
-        self.chain_table.retain(|uid, _| !uids.0.contains(uid));
+        self.chain_table.retain(|uid, _| !uids.contains(uid));
         Ok(())
     }
 }

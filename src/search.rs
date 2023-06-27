@@ -76,9 +76,9 @@ pub trait FindexSearch<
             .await?;
 
         // Unchain all Entry Table values.
-        let mut kwi_chain_table_uids = KwiChainUids::with_capacity(entry_table.0.len());
-        let mut kwi_to_keyword = HashMap::with_capacity(entry_table.0.len());
-        for (uid, encrypted_value) in entry_table.0.into_iter() {
+        let mut kwi_chain_table_uids = KwiChainUids::with_capacity(entry_table.len());
+        let mut kwi_to_keyword = HashMap::with_capacity(entry_table.len());
+        for (uid, encrypted_value) in entry_table.into_iter() {
             let keyword = entry_table_uid_map.get(&uid).ok_or_else(|| {
                 Error::<CustomError>::CryptoError(format!(
                     "Could not find keyword associated to UID {uid:?}."

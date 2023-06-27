@@ -447,10 +447,27 @@ impl_byte_array!(Uid);
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Uids<const LENGTH: usize>(pub HashSet<Uid<LENGTH>>);
 
+impl<const LENGTH: usize> Deref for Uids<LENGTH> {
+    type Target = HashSet<Uid<LENGTH>>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl<const UID_LENGTH: usize> IntoIterator for Uids<UID_LENGTH> {
+    type IntoIter = <<Self as Deref>::Target as IntoIterator>::IntoIter;
+    type Item = Uid<UID_LENGTH>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.into_iter()
+    }
+}
+
 impl<const UID_LENGTH: usize> Display for Uids<UID_LENGTH> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let mut output = String::new();
-        for uid in self.0.clone() {
+        for uid in self.clone() {
             output = format!("uid: {}\n{output}", STANDARD.encode(uid));
         }
         write!(f, "{output}")
@@ -466,10 +483,10 @@ pub struct EncryptedTable<const UID_LENGTH: usize>(HashMap<Uid<UID_LENGTH>, Vec<
 impl<const UID_LENGTH: usize> Display for EncryptedTable<UID_LENGTH> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let mut output = String::new();
-        for (uid, value) in self.0.clone() {
+        for (uid, value) in self.clone() {
             output = format!(
                 "uid: {}, value: {}, \n{output}",
-                STANDARD.encode(uid.0),
+                STANDARD.encode(uid),
                 STANDARD.encode(value),
             );
         }
@@ -539,6 +556,23 @@ impl<const UID_LENGTH: usize> TryFrom<EncryptedMultiTable<UID_LENGTH>>
 
 #[derive(Default, Debug)]
 pub struct EncryptedMultiTable<const UID_LENGTH: usize>(pub Vec<(Uid<UID_LENGTH>, Vec<u8>)>);
+
+impl<const LENGTH: usize> Deref for EncryptedMultiTable<LENGTH> {
+    type Target = Vec<(Uid<LENGTH>, Vec<u8>)>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl<const UID_LENGTH: usize> IntoIterator for EncryptedMultiTable<UID_LENGTH> {
+    type IntoIter = <<Self as Deref>::Target as IntoIterator>::IntoIter;
+    type Item = (Uid<UID_LENGTH>, Vec<u8>);
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.into_iter()
+    }
+}
 
 impl<const UID_LENGTH: usize> Display for EncryptedMultiTable<UID_LENGTH> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -640,7 +674,7 @@ impl<const UID_LENGTH: usize> Display for UpsertData<UID_LENGTH> {
                 Some(old) => {
                     output = format!(
                         "uid: {} old_value: {} new_value: {}, \n{output}",
-                        STANDARD.encode(uid.0),
+                        STANDARD.encode(uid),
                         STANDARD.encode(old),
                         STANDARD.encode(new_value)
                     )
@@ -648,7 +682,7 @@ impl<const UID_LENGTH: usize> Display for UpsertData<UID_LENGTH> {
                 None => {
                     output = format!(
                         "uid: {} old_value: '' new_value: {}, \n{output}",
-                        STANDARD.encode(uid.0),
+                        STANDARD.encode(uid),
                         STANDARD.encode(new_value)
                     )
                 }

@@ -137,16 +137,16 @@ pub trait FindexLiveCompact<
         // and `gamma` is the Euler's constant.
         //
         // See the [coupon collector's problem](https://wikipedia.org/wiki/Coupon_collector's_problem).
-        let entry_table_length = entry_table_uids.0.len() as f64;
+        let entry_table_length = entry_table_uids.len() as f64;
         let n_compact = ((entry_table_length * (entry_table_length.log2() + GAMMA))
             / f64::from(num_reindexing_before_full_set))
         .ceil() as usize;
 
         // The number of compacted UIDs should leave enough unused UIDs for the noise.
-        if (n_compact as f64  * (1f64 + Self::NOISE_RATIO)) > entry_table_uids.0.len() as f64 {
+        if (n_compact as f64  * (1f64 + Self::NOISE_RATIO)) > entry_table_uids.len() as f64 {
             return Err(Error::CryptoError(format!(
                 "Number of Entry Table UIDs to compact ({n_compact}) should not be greater than {}",
-                entry_table_uids.0.len() as f64 / (1f64 + Self::NOISE_RATIO)
+                entry_table_uids.len() as f64 / (1f64 + Self::NOISE_RATIO)
             )));
         }
 
@@ -157,11 +157,11 @@ pub trait FindexLiveCompact<
         let mut mixed_uids = Vec::with_capacity(2 * n_compact);
 
         // Needed because `uids` is moved in the loop condition.
-        let n_uids = entry_table_uids.0.len();
+        let n_uids = entry_table_uids.len();
         let n_noise_candidates = n_uids - n_compact;
         let n_noise = (Self::NOISE_RATIO * n_compact as f64) as usize;
 
-        for uid in entry_table_uids.0 {
+        for uid in entry_table_uids {
             let tmp = rng.next_u32() as usize;
             if tmp % n_uids < n_compact {
                 // Randomly select ~ `n_compact` target UIDs.
@@ -281,15 +281,15 @@ pub trait FindexLiveCompact<
         Error<CustomError>,
     > {
         let mut noisy_entry_table = EntryTable::with_capacity(noisy_chain_values.len());
-        let mut compacted_chains = HashMap::with_capacity(noisy_chain_values.len() - noise.0.len());
-        let mut cache = HashMap::with_capacity(noisy_chain_values.len() - noise.0.len());
+        let mut compacted_chains = HashMap::with_capacity(noisy_chain_values.len() - noise.len());
+        let mut cache = HashMap::with_capacity(noisy_chain_values.len() - noise.len());
 
         for (uid, encrypted_value) in noisy_encrypted_entry_table.iter() {
             let entry_table_value = EntryTableValue::decrypt::<DEM_KEY_LENGTH, DemScheme>(
                 k_value,
                 encrypted_value
             )?;
-            if noise.0.contains(uid) {
+            if noise.contains(uid) {
                 // Noise entries are simply re-encrypted.
                 noisy_entry_table.insert(*uid, entry_table_value);
             } else {
@@ -408,7 +408,7 @@ pub trait FindexLiveCompact<
             //   which leads to the same number of clone operations, or less)
             let mut old_chains_to_remove = Vec::with_capacity(chains.chain_uids.len());
             for uid in chains.chain_uids.keys() {
-                if !encrypted_entry_table.contains_key(uid) && !noise_uids.0.contains(uid) {
+                if !encrypted_entry_table.contains_key(uid) && !noise_uids.contains(uid) {
                     old_chains_to_remove.push(*uid);
                 }
             }
