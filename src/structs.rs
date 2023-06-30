@@ -185,6 +185,12 @@ pub struct Location(Vec<u8>);
 
 impl_byte_vector!(Location);
 
+impl Display for Location {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "location: {}", STANDARD.encode(self))
+    }
+}
+
 /// The value indexed by a [`Keyword`]. It can be either a [`Location`] or
 /// another [`Keyword`] in case the searched [`Keyword`] was a tree node.
 ///
@@ -195,6 +201,15 @@ impl_byte_vector!(Location);
 pub enum IndexedValue {
     Location(Location),
     NextKeyword(Keyword),
+}
+
+impl Display for IndexedValue {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Location(location) => write!(f, "location: {}", STANDARD.encode(location)),
+            Self::NextKeyword(keyword) => write!(f, "next keyword: {}", STANDARD.encode(keyword)),
+        }
+    }
 }
 
 impl IndexedValue {
@@ -468,7 +483,7 @@ impl<const UID_LENGTH: usize> Display for Uids<UID_LENGTH> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let mut output = String::new();
         for uid in self.clone() {
-            output = format!("uid: {}\n{output}", STANDARD.encode(uid));
+            output.push_str(&format!("uid: {}\n", STANDARD.encode(uid)));
         }
         write!(f, "{output}")
     }
@@ -484,11 +499,11 @@ impl<const UID_LENGTH: usize> Display for EncryptedTable<UID_LENGTH> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let mut output = String::new();
         for (uid, value) in self.clone() {
-            output = format!(
-                "uid: {}, value: {}, \n{output}",
+            output.push_str(&format!(
+                "uid: {}, value: {}, \n",
                 STANDARD.encode(uid),
                 STANDARD.encode(value),
-            );
+            ));
         }
         write!(f, "{output}")
     }
@@ -578,12 +593,11 @@ impl<const UID_LENGTH: usize> Display for EncryptedMultiTable<UID_LENGTH> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let mut output = String::new();
         for (uid, value) in self.0.clone() {
-            output = format!(
-                "uid: {}, values: {}, \n{}",
+            output.push_str(&format!(
+                "uid: {}, values: {}, \n",
                 STANDARD.encode(uid),
                 STANDARD.encode(value),
-                output,
-            );
+            ));
         }
         write!(f, "{output}")
     }
@@ -672,19 +686,19 @@ impl<const UID_LENGTH: usize> Display for UpsertData<UID_LENGTH> {
         for (uid, (old_value, new_value)) in self.0.clone() {
             match old_value {
                 Some(old) => {
-                    output = format!(
-                        "uid: {} old_value: {} new_value: {}, \n{output}",
+                    output.push_str(&format!(
+                        "uid: {} old_value: {} new_value: {}, \n",
                         STANDARD.encode(uid),
                         STANDARD.encode(old),
                         STANDARD.encode(new_value)
-                    )
+                    ));
                 }
                 None => {
-                    output = format!(
-                        "uid: {} old_value: '' new_value: {}, \n{output}",
+                    output.push_str(&format!(
+                        "uid: {} old_value: '' new_value: {}, \n",
                         STANDARD.encode(uid),
                         STANDARD.encode(new_value)
-                    )
+                    ));
                 }
             }
         }
