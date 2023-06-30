@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
+## [4.0.2] - 2023-06-30
+
+### Features
+
+- Update crypto_core to 8
+
+### Testing
+
+- Impl Display trait on structs used in callbacks for logging
+
 ## [4.0.1] - 2023-06-02
 
 ### Bug Fixes
