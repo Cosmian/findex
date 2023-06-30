@@ -1,11 +1,10 @@
 use std::collections::{HashMap, HashSet};
 
-use cosmian_crypto_core::symmetric_crypto::Dem;
-
 use crate::{
     chain_table::{ChainTableValue, KwiChainUids},
+    structs::EncryptedMultiTable,
     CallbackError, EncryptedTable, Error, IndexedValue, KeyingMaterial, Keyword, Location, Uid,
-    UpsertData, CHAIN_TABLE_KEY_DERIVATION_INFO,
+    Uids, UpsertData, CHAIN_TABLE_KEY_DERIVATION_INFO,
 };
 
 /// Trait implementing all callbacks needed by Findex.
@@ -21,7 +20,7 @@ pub trait FindexCallbacks<Error: std::error::Error + CallbackError, const UID_LE
     ) -> Result<bool, Error>;
 
     /// Fetch all the UIDs from the entry table
-    async fn fetch_all_entry_table_uids(&self) -> Result<HashSet<Uid<UID_LENGTH>>, Error>;
+    async fn fetch_all_entry_table_uids(&self) -> Result<Uids<UID_LENGTH>, Error>;
 
     /// Fetch the lines with the given UIDs from the Entry Table. The returned
     /// values are encrypted since they are stored that way. The decryption
@@ -39,8 +38,8 @@ pub trait FindexCallbacks<Error: std::error::Error + CallbackError, const UID_LE
     ///   Table
     async fn fetch_entry_table(
         &self,
-        entry_table_uids: HashSet<Uid<UID_LENGTH>>,
-    ) -> Result<Vec<(Uid<UID_LENGTH>, Vec<u8>)>, Error>;
+        entry_table_uids: Uids<UID_LENGTH>,
+    ) -> Result<EncryptedMultiTable<UID_LENGTH>, Error>;
 
     /// Fetch the lines with the given UIDs from the Chain Table. The returned
     /// values are encrypted since they are stored that way. The decryption is
@@ -58,7 +57,7 @@ pub trait FindexCallbacks<Error: std::error::Error + CallbackError, const UID_LE
     ///   Table
     async fn fetch_chain_table(
         &self,
-        chain_table_uids: HashSet<Uid<UID_LENGTH>>,
+        chain_table_uids: Uids<UID_LENGTH>,
     ) -> Result<EncryptedTable<UID_LENGTH>, Error>;
 
     /// Upserts lines in the Entry Table. The input data maps each Entry Table
@@ -146,7 +145,7 @@ pub trait FindexCallbacks<Error: std::error::Error + CallbackError, const UID_LE
     /// - `new_chain_table_items`       : items to insert into the Chain Table
     fn update_lines(
         &mut self,
-        chain_table_uids_to_remove: HashSet<Uid<UID_LENGTH>>,
+        chain_table_uids_to_remove: Uids<UID_LENGTH>,
         new_entry_table_items: EncryptedTable<UID_LENGTH>,
         new_chain_table_items: EncryptedTable<UID_LENGTH>,
     ) -> Result<(), Error>;
@@ -174,7 +173,7 @@ pub trait FindexCallbacks<Error: std::error::Error + CallbackError, const UID_LE
 
     #[cfg(feature = "live_compact")]
     /// Delete the Chain Table lines with the given UIDs.
-    async fn delete_chain(&mut self, uids: HashSet<Uid<UID_LENGTH>>) -> Result<(), Error>;
+    async fn delete_chain(&mut self, uids: Uids<UID_LENGTH>) -> Result<(), Error>;
 }
 
 pub trait FetchChains<
@@ -182,8 +181,6 @@ pub trait FetchChains<
     const BLOCK_LENGTH: usize,
     const CHAIN_TABLE_WIDTH: usize,
     const KWI_LENGTH: usize,
-    const DEM_KEY_LENGTH: usize,
-    DemScheme: Dem<DEM_KEY_LENGTH>,
     CustomError: std::error::Error + CallbackError,
 >: FindexCallbacks<CustomError, UID_LENGTH>
 {
@@ -206,12 +203,12 @@ pub trait FetchChains<
         Error<CustomError>,
     > {
         // Collect to a `HashSet` to mix UIDs between chains.
-        let chain_table_uids = kwi_chain_table_uids.values().flatten().cloned().collect();
+        let chain_table_uids = Uids(kwi_chain_table_uids.values().flatten().copied().collect());
 
         let encrypted_items = self.fetch_chain_table(chain_table_uids).await?;
 
         let mut res = HashMap::with_capacity(kwi_chain_table_uids.len());
-        for (kwi, chain_table_uids) in kwi_chain_table_uids.into_iter() {
+        for (kwi, chain_table_uids) in kwi_chain_table_uids {
             let kwi_value = kwi.derive_dem_key(CHAIN_TABLE_KEY_DERIVATION_INFO);
 
             // Use a vector not to shuffle the chain. This is important because indexed
@@ -222,11 +219,7 @@ pub trait FetchChains<
                 if let Some(encrypted_value) = encrypted_items.get(&uid) {
                     chain.push((
                         uid,
-                        ChainTableValue::decrypt::<DEM_KEY_LENGTH, DemScheme>(
-                            &kwi_value,
-                            encrypted_value,
-                        )
-                        .map_err(|err| {
+                        ChainTableValue::decrypt(&kwi_value, encrypted_value).map_err(|err| {
                             Error::<CustomError>::CryptoError(format!(
                                 "fail to decrypt one of the `value` returned by the fetch chains \
                                  callback (uid was '{uid:?}', value was {}, crypto error was \

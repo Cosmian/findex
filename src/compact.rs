@@ -2,11 +2,7 @@
 
 use std::collections::HashMap;
 
-use cosmian_crypto_core::{
-    reexport::rand_core::SeedableRng,
-    symmetric_crypto::{Dem, SymKey},
-    CsRng,
-};
+use cosmian_crypto_core::{reexport::rand_core::SeedableRng, CsRng};
 use rand::seq::IteratorRandom;
 
 use crate::{
@@ -16,7 +12,7 @@ use crate::{
     error::CallbackError,
     parameters::check_parameter_constraints,
     structs::{BlockType, EncryptedTable, IndexedValue, Label},
-    Error, FindexCallbacks, KeyingMaterial, CHAIN_TABLE_KEY_DERIVATION_INFO,
+    Error, FindexCallbacks, KeyingMaterial, Uids, CHAIN_TABLE_KEY_DERIVATION_INFO,
     ENTRY_TABLE_KEY_DERIVATION_INFO,
 };
 
@@ -30,25 +26,14 @@ pub trait FindexCompact<
     const MASTER_KEY_LENGTH: usize,
     const KWI_LENGTH: usize,
     const KMAC_KEY_LENGTH: usize,
-    const DEM_KEY_LENGTH: usize,
-    KmacKey: SymKey<KMAC_KEY_LENGTH>,
-    DemScheme: Dem<DEM_KEY_LENGTH>,
     CustomError: std::error::Error + CallbackError,
 >:
     FindexCallbacks<CustomError, UID_LENGTH>
-    + FetchChains<
-        UID_LENGTH,
-        BLOCK_LENGTH,
-        CHAIN_TABLE_WIDTH,
-        KWI_LENGTH,
-        DEM_KEY_LENGTH,
-        DemScheme,
-        CustomError,
-    >
+    + FetchChains<UID_LENGTH, BLOCK_LENGTH, CHAIN_TABLE_WIDTH, KWI_LENGTH, CustomError>
 {
     /// Replaces all the Index Entry Table UIDs and values. New UIDs are derived
     /// using the given label and the KMAC key derived from the new master key.
-    /// The values are dectypted using the DEM key derived from the master key
+    /// The values are decrypted using the DEM key derived from the master key
     /// and re-encrypted using the DEM key derived from the new master key.
     ///
     /// Randomly selects index entries and recompact their associated chains.
@@ -90,7 +75,8 @@ pub trait FindexCompact<
         // using `new_k_value`.
         //
         let k_value = master_key.derive_dem_key(ENTRY_TABLE_KEY_DERIVATION_INFO);
-        let new_k_uid = new_master_key.derive_kmac_key(ENTRY_TABLE_KEY_DERIVATION_INFO);
+        let new_k_uid =
+            new_master_key.derive_kmac_key::<KMAC_KEY_LENGTH>(ENTRY_TABLE_KEY_DERIVATION_INFO);
         let new_k_value = new_master_key.derive_dem_key(ENTRY_TABLE_KEY_DERIVATION_INFO);
 
         // We need to fetch all the Entry Table to re-encrypt it.
@@ -101,8 +87,7 @@ pub trait FindexCompact<
         // The goal of this function is to build these two data sets (along with
         // `chain_table_uids_to_remove`) and send them to the callback to update the
         // database.
-        let mut entry_table =
-            EntryTable::decrypt::<DEM_KEY_LENGTH, DemScheme>(&k_value, &encrypted_entry_table)?;
+        let mut entry_table = EntryTable::decrypt(&k_value, &encrypted_entry_table)?;
         let mut chain_table_adds = EncryptedTable::default();
 
         // Entry Table items indexing empty chains should be removed.
@@ -120,7 +105,7 @@ pub trait FindexCompact<
             .keys()
             .choose_multiple(&mut rng, n_lines)
             .into_iter()
-            .cloned()
+            .copied()
             .collect::<Vec<_>>();
 
         // Unchain the Entry Table entries to be reindexed.
@@ -128,15 +113,11 @@ pub trait FindexCompact<
             KwiChainUids::<UID_LENGTH, KWI_LENGTH>::with_capacity(entry_table.len());
         for (uid, value) in entry_table.iter() {
             if entry_table_items_to_reindex.contains(uid) {
-                let k_uid = value.kwi.derive_kmac_key(CHAIN_TABLE_KEY_DERIVATION_INFO);
-                let chain = value.unchain::<
-                            CHAIN_TABLE_WIDTH,
-                            BLOCK_LENGTH,
-                            KMAC_KEY_LENGTH,
-                            DEM_KEY_LENGTH,
-                            KmacKey,
-                            DemScheme
-                        >(&k_uid)?;
+                let k_uid = value
+                    .kwi
+                    .derive_kmac_key::<KMAC_KEY_LENGTH>(CHAIN_TABLE_KEY_DERIVATION_INFO);
+                let chain =
+                    value.unchain::<CHAIN_TABLE_WIDTH, BLOCK_LENGTH, KMAC_KEY_LENGTH>(&k_uid)?;
                 kwi_chain_table_uids.insert(value.kwi.clone(), chain);
             }
         }
@@ -152,11 +133,13 @@ pub trait FindexCompact<
         //
         // Remove all reindexed Chain Table items. Chains are recomputed entirely.
         //
-        let chain_table_uids_to_remove = chains_to_reindex
-            .values()
-            .flat_map(|chain| chain.iter().map(|(k, _)| k))
-            .cloned()
-            .collect();
+        let chain_table_uids_to_remove = Uids(
+            chains_to_reindex
+                .values()
+                .flat_map(|chain| chain.iter().map(|(k, _)| k))
+                .copied()
+                .collect(),
+        );
 
         // Get the values stored in the reindexed chains.
         let mut reindexed_chain_values = HashMap::with_capacity(chains_to_reindex.len());
@@ -224,7 +207,7 @@ pub trait FindexCompact<
             // Derive the new keys.
             let kwi_uid = new_entry_table_value
                 .kwi
-                .derive_kmac_key(CHAIN_TABLE_KEY_DERIVATION_INFO);
+                .derive_kmac_key::<KMAC_KEY_LENGTH>(CHAIN_TABLE_KEY_DERIVATION_INFO);
             let kwi_value = new_entry_table_value
                 .kwi
                 .derive_dem_key(CHAIN_TABLE_KEY_DERIVATION_INFO);
@@ -233,21 +216,19 @@ pub trait FindexCompact<
 
             // Upsert each remaining location in the Chain Table.
             for remaining_location in remaining_indexed_values_for_this_keyword {
-                new_entry_table_value.upsert_indexed_value::<CHAIN_TABLE_WIDTH, BLOCK_LENGTH, KMAC_KEY_LENGTH, KmacKey>(
-                    &kwi_uid,
-                    BlockType::Addition,
-                    &remaining_location,
-                    &mut new_chains,
-                )?;
+                new_entry_table_value
+                    .upsert_indexed_value::<CHAIN_TABLE_WIDTH, BLOCK_LENGTH, KMAC_KEY_LENGTH>(
+                        &kwi_uid,
+                        BlockType::Addition,
+                        &remaining_location,
+                        &mut new_chains,
+                    )?;
             }
 
             let encrypted_new_chains = new_chains
                 .into_iter()
                 .map(|(uid, value)| -> Result<_, _> {
-                    Ok((
-                        uid,
-                        value.encrypt::<DEM_KEY_LENGTH, DemScheme>(&mut rng, &kwi_value)?,
-                    ))
+                    Ok((uid, value.encrypt(&mut rng, &kwi_value)?))
                 })
                 .collect::<Result<EncryptedTable<UID_LENGTH>, Error<CustomError>>>()?;
 
@@ -256,11 +237,11 @@ pub trait FindexCompact<
         }
 
         entry_table.retain(|uid, _| !entry_table_uids_to_drop.contains(uid));
-        entry_table.refresh_uids::<KMAC_KEY_LENGTH, KmacKey>(&new_k_uid, label);
+        entry_table.refresh_uids::<KMAC_KEY_LENGTH>(&new_k_uid, label);
 
         self.update_lines(
             chain_table_uids_to_remove,
-            entry_table.encrypt::<DEM_KEY_LENGTH, DemScheme>(&mut rng, &new_k_value)?,
+            entry_table.encrypt(&mut rng, &new_k_value)?,
             chain_table_adds,
         )?;
 

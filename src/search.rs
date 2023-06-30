@@ -2,16 +2,14 @@
 
 use std::collections::{HashMap, HashSet};
 
-use cosmian_crypto_core::symmetric_crypto::{Dem, SymKey};
-
 use crate::{
     callbacks::{FetchChains, FindexCallbacks},
     chain_table::KwiChainUids,
     entry_table::{EntryTable, EntryTableValue},
     error::CallbackError,
-    parameters::check_parameter_constraints,
+    parameters::{check_parameter_constraints, DemKey, KmacKey},
     structs::{IndexedValue, Keyword, Label, Location},
-    Error, KeyingMaterial, CHAIN_TABLE_KEY_DERIVATION_INFO, ENTRY_TABLE_KEY_DERIVATION_INFO,
+    Error, KeyingMaterial, Uids, CHAIN_TABLE_KEY_DERIVATION_INFO, ENTRY_TABLE_KEY_DERIVATION_INFO,
 };
 
 /// Trait implementing the search functionality of Findex.
@@ -22,22 +20,11 @@ pub trait FindexSearch<
     const MASTER_KEY_LENGTH: usize,
     const KWI_LENGTH: usize,
     const KMAC_KEY_LENGTH: usize,
-    const DEM_KEY_LENGTH: usize,
-    KmacKey: SymKey<KMAC_KEY_LENGTH>,
-    DemScheme: Dem<DEM_KEY_LENGTH>,
     CustomError: std::error::Error + CallbackError,
 >:
     Sized
     + FindexCallbacks<CustomError, UID_LENGTH>
-    + FetchChains<
-        UID_LENGTH,
-        BLOCK_LENGTH,
-        CHAIN_TABLE_WIDTH,
-        KWI_LENGTH,
-        DEM_KEY_LENGTH,
-        DemScheme,
-        CustomError,
-    >
+    + FetchChains<UID_LENGTH, BLOCK_LENGTH, CHAIN_TABLE_WIDTH, KWI_LENGTH, CustomError>
 {
     /// Searches for a set of `Keyword`s, returning the corresponding
     /// `IndexedValue`s.
@@ -51,7 +38,7 @@ pub trait FindexSearch<
     async fn core_search(
         &mut self,
         k_uid: &KmacKey,
-        k_value: &DemScheme::Key,
+        k_value: &DemKey,
         label: &Label,
         keywords: &HashSet<Keyword>,
     ) -> Result<HashMap<Keyword, HashSet<IndexedValue>>, Error<CustomError>> {
@@ -60,7 +47,7 @@ pub trait FindexSearch<
             .iter()
             .map(|keyword| {
                 (
-                    EntryTable::<UID_LENGTH, KWI_LENGTH>::generate_uid(
+                    EntryTable::<UID_LENGTH, KWI_LENGTH>::generate_uid::<KMAC_KEY_LENGTH>(
                         k_uid,
                         &keyword.hash(),
                         label,
@@ -72,43 +59,37 @@ pub trait FindexSearch<
 
         // Query the Entry Table for these UIDs.
         let entry_table = self
-            .fetch_entry_table(entry_table_uid_map.keys().copied().collect())
+            .fetch_entry_table(Uids(entry_table_uid_map.keys().copied().collect()))
             .await?;
 
         // Unchain all Entry Table values.
         let mut kwi_chain_table_uids = KwiChainUids::with_capacity(entry_table.len());
         let mut kwi_to_keyword = HashMap::with_capacity(entry_table.len());
-        for (uid, encrypted_value) in entry_table.into_iter() {
+        for (uid, encrypted_value) in entry_table {
             let keyword = entry_table_uid_map.get(&uid).ok_or_else(|| {
                 Error::<CustomError>::CryptoError(format!(
                     "Could not find keyword associated to UID {uid:?}."
                 ))
             })?;
-            let value = EntryTableValue::<UID_LENGTH, KWI_LENGTH>::decrypt::<
-                DEM_KEY_LENGTH,
-                DemScheme,
-            >(k_value, &encrypted_value)
-            .map_err(|_| {
-                Error::<CustomError>::CryptoError(format!(
-                    "fail to decrypt one of the `value` returned by the fetch entries callback \
-                     (uid was '{uid:?}', value was {})",
-                    if encrypted_value.is_empty() {
-                        "empty".to_owned()
-                    } else {
-                        format!("'{encrypted_value:?}'")
-                    },
-                ))
-            })?;
+            let value =
+                EntryTableValue::<UID_LENGTH, KWI_LENGTH>::decrypt(k_value, &encrypted_value)
+                    .map_err(|_| {
+                        Error::<CustomError>::CryptoError(format!(
+                            "fail to decrypt one of the `value` returned by the fetch entries \
+                             callback (uid was '{uid:?}', value was {})",
+                            if encrypted_value.is_empty() {
+                                "empty".to_owned()
+                            } else {
+                                format!("'{encrypted_value:?}'")
+                            },
+                        ))
+                    })?;
             kwi_to_keyword.insert(value.kwi.clone(), *keyword);
-            let k_uid = value.kwi.derive_kmac_key(CHAIN_TABLE_KEY_DERIVATION_INFO);
-            let chain = value.unchain::<
-                            CHAIN_TABLE_WIDTH,
-                            BLOCK_LENGTH,
-                            KMAC_KEY_LENGTH,
-                            DEM_KEY_LENGTH,
-                            KmacKey,
-                            DemScheme
-                        >(&k_uid)?;
+            let k_uid = value
+                .kwi
+                .derive_kmac_key::<KMAC_KEY_LENGTH>(CHAIN_TABLE_KEY_DERIVATION_INFO);
+            let chain =
+                value.unchain::<CHAIN_TABLE_WIDTH, BLOCK_LENGTH, KMAC_KEY_LENGTH>(&k_uid)?;
             kwi_chain_table_uids.insert(value.kwi, chain);
         }
 
@@ -153,7 +134,7 @@ pub trait FindexSearch<
         label: &Label,
         mut keywords: HashSet<Keyword>,
     ) -> Result<HashMap<Keyword, HashSet<IndexedValue>>, Error<CustomError>> {
-        let k_uid = master_key.derive_kmac_key(ENTRY_TABLE_KEY_DERIVATION_INFO);
+        let k_uid = master_key.derive_kmac_key::<KMAC_KEY_LENGTH>(ENTRY_TABLE_KEY_DERIVATION_INFO);
         let k_value = master_key.derive_dem_key(ENTRY_TABLE_KEY_DERIVATION_INFO);
 
         let mut graph = HashMap::with_capacity(keywords.len());
@@ -172,7 +153,7 @@ pub trait FindexSearch<
                     .flat_map(|indexed_values| {
                         indexed_values
                             .iter()
-                            .filter_map(|value| value.get_keyword())
+                            .filter_map(IndexedValue::get_keyword)
                             .filter(|next_keyword| !graph.contains_key(*next_keyword))
                             .cloned()
                     })
@@ -240,9 +221,8 @@ fn walk_graph_from<'a>(
     // got the locations for this keyword for the base keyword.
     if ancestors.contains(keyword) {
         return HashSet::new();
-    } else {
-        ancestors.insert(keyword);
     }
+    ancestors.insert(keyword);
 
     // Early return if this keyword doesn't have any `IndexedValue`
     // to avoid allocation `with_capacity` below.

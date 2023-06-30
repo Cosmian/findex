@@ -3,11 +3,7 @@
 
 use std::collections::{HashMap, HashSet};
 
-use cosmian_crypto_core::{
-    reexport::rand_core::SeedableRng,
-    symmetric_crypto::{Dem, SymKey},
-    CsRng,
-};
+use cosmian_crypto_core::{reexport::rand_core::SeedableRng, CsRng};
 
 use crate::{
     entry_table::EntryTable,
@@ -17,7 +13,7 @@ use crate::{
     structs::{
         BlockType, EncryptedTable, IndexedValue, Keyword, KeywordHash, Label, Uid, UpsertData,
     },
-    FindexCallbacks, ENTRY_TABLE_KEY_DERIVATION_INFO,
+    FindexCallbacks, Uids, ENTRY_TABLE_KEY_DERIVATION_INFO,
 };
 
 /// This the public trait exposed to the users of the Findex Upsert API.
@@ -28,9 +24,6 @@ pub trait FindexUpsert<
     const MASTER_KEY_LENGTH: usize,
     const KWI_LENGTH: usize,
     const KMAC_KEY_LENGTH: usize,
-    const DEM_KEY_LENGTH: usize,
-    KmacKey: SymKey<KMAC_KEY_LENGTH>,
-    DemScheme: Dem<DEM_KEY_LENGTH>,
     CustomError: std::error::Error + CallbackError,
 >: FindexCallbacks<CustomError, UID_LENGTH>
 {
@@ -85,7 +78,7 @@ pub trait FindexUpsert<
         check_parameter_constraints::<CHAIN_TABLE_WIDTH, BLOCK_LENGTH>();
 
         let mut rng = CsRng::from_entropy();
-        let k_uid: KmacKey = master_key.derive_kmac_key(ENTRY_TABLE_KEY_DERIVATION_INFO);
+        let k_uid = master_key.derive_kmac_key::<KMAC_KEY_LENGTH>(ENTRY_TABLE_KEY_DERIVATION_INFO);
         let k_value = master_key.derive_dem_key(ENTRY_TABLE_KEY_DERIVATION_INFO);
 
         let mut new_chains =
@@ -113,7 +106,7 @@ pub trait FindexUpsert<
             .into_iter()
             .map(|(keyword_hash, indexed_values)| {
                 (
-                    EntryTable::<UID_LENGTH, KWI_LENGTH>::generate_uid(
+                    EntryTable::<UID_LENGTH, KWI_LENGTH>::generate_uid::<KMAC_KEY_LENGTH>(
                         &k_uid,
                         &keyword_hash,
                         label,
@@ -125,36 +118,28 @@ pub trait FindexUpsert<
 
         // Query the Entry Table for these UIDs.
         let mut encrypted_entry_table = self
-            .fetch_entry_table(new_chains.keys().cloned().collect())
+            .fetch_entry_table(Uids(new_chains.keys().copied().collect()))
             .await?
             .try_into()?;
 
         while !new_chains.is_empty() {
             // Decrypt the Entry Table once and for all.
-            let mut entry_table = EntryTable::<UID_LENGTH, KWI_LENGTH>::decrypt::<
-                DEM_KEY_LENGTH,
-                DemScheme,
-            >(&k_value, &encrypted_entry_table)?;
+            let mut entry_table =
+                EntryTable::<UID_LENGTH, KWI_LENGTH>::decrypt(&k_value, &encrypted_entry_table)?;
 
             // Build the chains and update the Entry Table.
-            let chain_table_additions = entry_table.upsert::<
-                CHAIN_TABLE_WIDTH,
-                BLOCK_LENGTH,
-                KMAC_KEY_LENGTH,
-                DEM_KEY_LENGTH,
-                KmacKey,
-                DemScheme,
-            >(
-                &mut rng,
-                &new_chains,
-            )?;
+            let chain_table_additions = entry_table
+                .upsert::<CHAIN_TABLE_WIDTH, BLOCK_LENGTH, KMAC_KEY_LENGTH>(
+                    &mut rng,
+                    &new_chains,
+                )?;
 
             // Finally write new indexes in database. Get the new values of the Entry Table
             // lines that failed to be upserted.
             encrypted_entry_table = self
                 .write_indexes(
                     encrypted_entry_table,
-                    entry_table.encrypt::<DEM_KEY_LENGTH, DemScheme>(&mut rng, &k_value)?,
+                    entry_table.encrypt(&mut rng, &k_value)?,
                     chain_table_additions,
                 )
                 .await?;
