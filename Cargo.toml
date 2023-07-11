@@ -1,6 +1,6 @@
 [package]
 name = "cosmian_findex"
-version = "4.0.2"
+version = "4.0.3"
 authors = [
   "Chloé Hébant <chloe.hebant@cosmian.com>",
   "Bruno Grieder <bruno.grieder@cosmian.com>",
@@ -30,7 +30,7 @@ live_compact = []
 
 [dependencies]
 base64 = "0.21.2"
-cosmian_crypto_core = { version = "8.0.0", features = ["aes", "sha3", "ser"], default-features = false }
+cosmian_crypto_core = { version = "9.0.0", features = ["aes", "sha3", "ser"], default-features = false }
 rand = "0.8"
 tiny-keccak = { version = "2.0.2", features = ["kmac", "sha3"] }
 zeroize = "1.5"
