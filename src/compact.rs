@@ -155,13 +155,15 @@ pub trait FindexCompact<
         // calling for one location batch for one word to add noise and prevent
         // the database the size of the chains for each keywords.
         //
-        let removed_locations = self.list_removed_locations(
-            reindexed_chain_values
-                .values()
-                .flat_map(|chain| chain.iter().filter_map(IndexedValue::get_location))
-                .cloned()
-                .collect(),
-        )?;
+        let removed_locations = self
+            .list_removed_locations(
+                reindexed_chain_values
+                    .values()
+                    .flat_map(|chain| chain.iter().filter_map(IndexedValue::get_location))
+                    .cloned()
+                    .collect(),
+            )
+            .await?;
 
         for entry_table_uid in entry_table_items_to_reindex {
             let entry_table_value = entry_table.get(&entry_table_uid).ok_or_else(|| {
@@ -243,7 +245,8 @@ pub trait FindexCompact<
             chain_table_uids_to_remove,
             entry_table.encrypt(&mut rng, &new_k_value)?,
             chain_table_adds,
-        )?;
+        )
+        .await?;
 
         Ok(())
     }

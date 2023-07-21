@@ -198,7 +198,7 @@ impl<const UID_LENGTH: usize> FindexCallbacks<ExampleError, UID_LENGTH>
         Ok(())
     }
 
-    fn update_lines(
+    async fn update_lines(
         &mut self,
         chain_table_uids_to_remove: Uids<UID_LENGTH>,
         new_encrypted_entry_table_items: EncryptedTable<UID_LENGTH>,
@@ -220,7 +220,7 @@ impl<const UID_LENGTH: usize> FindexCallbacks<ExampleError, UID_LENGTH>
         Ok(())
     }
 
-    fn list_removed_locations(
+    async fn list_removed_locations(
         &self,
         _: HashSet<Location>,
     ) -> Result<HashSet<Location>, ExampleError> {
@@ -228,7 +228,7 @@ impl<const UID_LENGTH: usize> FindexCallbacks<ExampleError, UID_LENGTH>
     }
 
     #[cfg(feature = "live_compact")]
-    fn filter_removed_locations(
+    async fn filter_removed_locations(
         &self,
         locations: HashSet<Location>,
     ) -> Result<HashSet<Location>, ExampleError> {

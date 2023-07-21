@@ -355,7 +355,7 @@ pub trait FindexLiveCompact<
             .filter_map(IndexedValue::get_location)
             .cloned()
             .collect();
-        let noisy_remaining_locations = self.filter_removed_locations(noisy_locations)?;
+        let noisy_remaining_locations = self.filter_removed_locations(noisy_locations).await?;
 
         // All fetched Entry Table entries need to be modified.
         while !encrypted_entry_table.is_empty() {
