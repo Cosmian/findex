@@ -11,7 +11,7 @@ authors = [
 categories = ["cosmian::crypto"]
 edition = "2021"
 keywords = ["SSE"]
-license = "MIT/Apache-2.0"
+license-file = "LICENSE.md"
 repository = "https://github.com/Cosmian/findex/"
 description = "Symmetric Searchable Encryption"
 
