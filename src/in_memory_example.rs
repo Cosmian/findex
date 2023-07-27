@@ -11,14 +11,11 @@ use cosmian_crypto_core::{
 use rand::Rng;
 
 use crate::{
-    callbacks::FetchChains, parameters::UID_LENGTH, structs::EncryptedMultiTable, EncryptedTable,
-    FindexCallbacks, FindexCompact, FindexSearch, FindexUpsert, IndexedValue, Keyword, Location,
-    Uids, UpsertData,
-};
-#[cfg(feature = "live_compact")]
-use crate::{
-    compact_live::FindexLiveCompact,
-    parameters::{BLOCK_LENGTH, CHAIN_TABLE_WIDTH, KMAC_KEY_LENGTH, KWI_LENGTH, MASTER_KEY_LENGTH},
+    callbacks::FetchChains,
+    parameters::{BLOCK_LENGTH, CHAIN_TABLE_WIDTH, KWI_LENGTH, UID_LENGTH},
+    structs::EncryptedMultiTable,
+    EncryptedTable, FindexCallbacks, FindexCompact, FindexSearch, FindexUpsert, IndexedValue,
+    Keyword, Location, Uids, UpsertData,
 };
 
 #[derive(Debug)]
@@ -226,23 +223,6 @@ impl<const UID_LENGTH: usize> FindexCallbacks<ExampleError, UID_LENGTH>
     ) -> Result<HashSet<Location>, ExampleError> {
         Ok(self.removed_locations.iter().cloned().collect())
     }
-
-    #[cfg(feature = "live_compact")]
-    async fn filter_removed_locations(
-        &self,
-        locations: HashSet<Location>,
-    ) -> Result<HashSet<Location>, ExampleError> {
-        Ok(locations
-            .into_iter()
-            .filter(|location| !self.removed_locations.contains(location))
-            .collect())
-    }
-
-    #[cfg(feature = "live_compact")]
-    async fn delete_chain(&mut self, uids: Uids<UID_LENGTH>) -> Result<(), ExampleError> {
-        self.chain_table.retain(|uid, _| !uids.contains(uid));
-        Ok(())
-    }
 }
 
 impl FetchChains<UID_LENGTH, BLOCK_LENGTH, CHAIN_TABLE_WIDTH, KWI_LENGTH, ExampleError>
@@ -255,19 +235,3 @@ impl_findex_trait!(FindexSearch, FindexInMemory<UID_LENGTH>, ExampleError);
 impl_findex_trait!(FindexUpsert, FindexInMemory<UID_LENGTH>, ExampleError);
 
 impl_findex_trait!(FindexCompact, FindexInMemory<UID_LENGTH>, ExampleError);
-
-#[cfg(feature = "live_compact")]
-impl
-    FindexLiveCompact<
-        UID_LENGTH,
-        BLOCK_LENGTH,
-        CHAIN_TABLE_WIDTH,
-        MASTER_KEY_LENGTH,
-        KWI_LENGTH,
-        KMAC_KEY_LENGTH,
-        ExampleError,
-    > for FindexInMemory<UID_LENGTH>
-{
-    const BATCH_SIZE: usize = 10;
-    const NOISE_RATIO: f64 = 0.5;
-}
