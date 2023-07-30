@@ -922,3 +922,93 @@ async fn test_search_cyclic_graph() {
     assert!(res_i.contains(&l_g));
     assert!(res_i.contains(&l_h));
 }
+
+#[actix_rt::test]
+async fn test_keyword_presence() -> Result<(), Error<ExampleError>> {
+    let mut rng = CsRng::from_entropy();
+
+    let label = Label::random(&mut rng);
+
+    let master_key = KeyingMaterial::new(&mut rng);
+
+    let mut indexed_value_to_keywords = HashMap::new();
+
+    // direct location robert doe
+    let robert_doe_location = Location::from("robert doe DB location");
+    indexed_value_to_keywords.insert(
+        IndexedValue::Location(robert_doe_location.clone()),
+        hashset_keywords(&["robert", "doe"]),
+    );
+
+    // direct location john doe
+    let john_doe_location = Location::from("john doe DB location");
+    indexed_value_to_keywords.insert(
+        IndexedValue::Location(john_doe_location.clone()),
+        hashset_keywords(&["john", "doe"]),
+    );
+
+    let mut findex = FindexInMemory::default();
+    let presence = findex
+        .add(&master_key, &label, indexed_value_to_keywords)
+        .await?;
+    // the 3 keywords should not be present in the database
+    assert_eq!(presence.len(), 3);
+    assert!(presence.contains_key(&Keyword::from("robert")));
+    assert!(presence.contains_key(&Keyword::from("doe")));
+    assert!(presence.contains_key(&Keyword::from("john")));
+    assert!(!*presence.get(&Keyword::from("robert")).unwrap());
+    assert!(!*presence.get(&Keyword::from("doe")).unwrap());
+    assert!(!*presence.get(&Keyword::from("john")).unwrap());
+
+    // Now insert a Robert Smith
+    let mut indexed_value_to_keywords = HashMap::new();
+    let robert_smith_location = Location::from("robert smith DB location");
+    indexed_value_to_keywords.insert(
+        IndexedValue::Location(robert_smith_location),
+        hashset_keywords(&["robert", "smith"]),
+    );
+    let presence = findex
+        .add(&master_key, &label, indexed_value_to_keywords)
+        .await?;
+    // robert should be present, but not smith
+    assert_eq!(presence.len(), 2);
+    assert!(presence.contains_key(&Keyword::from("robert")));
+    assert!(presence.contains_key(&Keyword::from("smith")));
+    assert!(*presence.get(&Keyword::from("robert")).unwrap());
+    assert!(!*presence.get(&Keyword::from("smith")).unwrap());
+
+    // Delete Robert Smith but add the Junior keyword
+    let robert_smith_location = Location::from("robert smith DB location");
+    let mut indexed_value_to_keywords = HashMap::new();
+    indexed_value_to_keywords.insert(
+        IndexedValue::Location(robert_smith_location.clone()),
+        hashset_keywords(&["robert", "smith", "junior"]),
+    );
+    let presence = findex
+        .remove(&master_key, &label, indexed_value_to_keywords.clone())
+        .await?;
+    // robert and smith should be present, but not junior
+    assert_eq!(presence.len(), 3);
+    assert!(presence.contains_key(&Keyword::from("robert")));
+    assert!(presence.contains_key(&Keyword::from("smith")));
+    assert!(presence.contains_key(&Keyword::from("junior")));
+    assert!(*presence.get(&Keyword::from("robert")).unwrap());
+    assert!(*presence.get(&Keyword::from("smith")).unwrap());
+    assert!(!*presence.get(&Keyword::from("junior")).unwrap());
+
+    // however, the first delete create an entry for "junior,
+    // therefore deleting again will find it
+    let presence = findex
+        .remove(&master_key, &label, indexed_value_to_keywords.clone())
+        .await?;
+    // robert and smith should be present, but not junior
+    assert_eq!(presence.len(), 3);
+    assert!(presence.contains_key(&Keyword::from("robert")));
+    assert!(presence.contains_key(&Keyword::from("smith")));
+    assert!(presence.contains_key(&Keyword::from("junior")));
+    assert!(*presence.get(&Keyword::from("robert")).unwrap());
+    assert!(*presence.get(&Keyword::from("smith")).unwrap());
+    assert!(*presence.get(&Keyword::from("junior")).unwrap());
+
+    Ok(())
+}

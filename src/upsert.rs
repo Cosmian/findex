@@ -10,9 +10,7 @@ use crate::{
     error::{CallbackError, Error},
     keys::KeyingMaterial,
     parameters::check_parameter_constraints,
-    structs::{
-        BlockType, EncryptedTable, IndexedValue, Keyword, KeywordHash, Label, Uid, UpsertData,
-    },
+    structs::{BlockType, EncryptedTable, IndexedValue, Keyword, Label, Uid, UpsertData},
     FindexCallbacks, Uids, ENTRY_TABLE_KEY_DERIVATION_INFO,
 };
 
@@ -34,12 +32,15 @@ pub trait FindexUpsert<
     /// - `master_key`  : Findex master key
     /// - `label`       : additional public information used in key hashing
     /// - `items`       : set of keywords used to index values
+    ///
+    /// Returns a map of keywords to booleans indicating whether the keyword
+    /// was already present in the database.
     async fn add(
         &mut self,
         master_key: &KeyingMaterial<MASTER_KEY_LENGTH>,
         label: &Label,
         items: HashMap<IndexedValue, HashSet<Keyword>>,
-    ) -> Result<(), Error<CustomError>> {
+    ) -> Result<HashMap<Keyword, bool>, Error<CustomError>> {
         self.upsert(master_key, label, items, HashMap::new()).await
     }
 
@@ -50,12 +51,15 @@ pub trait FindexUpsert<
     /// - `master_key`  : Findex master key
     /// - `label`       : additional public information used in key hashing
     /// - `items`       : set of keywords used to index values
+    ///
+    /// Returns a map of keywords to booleans indicating whether the keyword
+    /// was already present in the database.
     async fn remove(
         &mut self,
         master_key: &KeyingMaterial<MASTER_KEY_LENGTH>,
         label: &Label,
         items: HashMap<IndexedValue, HashSet<Keyword>>,
-    ) -> Result<(), Error<CustomError>> {
+    ) -> Result<HashMap<Keyword, bool>, Error<CustomError>> {
         self.upsert(master_key, label, HashMap::new(), items).await
     }
 
@@ -68,27 +72,32 @@ pub trait FindexUpsert<
     /// - `additions`   : values to indexed for a set of keywords
     /// - `deletions`   : values to remove from the indexes for a set of
     ///   keywords
+    ///
+    /// Returns a map of keywords to booleans indicating whether the keyword
+    /// was already present in the database.
     async fn upsert(
         &mut self,
         master_key: &KeyingMaterial<MASTER_KEY_LENGTH>,
         label: &Label,
         additions: HashMap<IndexedValue, HashSet<Keyword>>,
         deletions: HashMap<IndexedValue, HashSet<Keyword>>,
-    ) -> Result<(), Error<CustomError>> {
+    ) -> Result<HashMap<Keyword, bool>, Error<CustomError>> {
         check_parameter_constraints::<CHAIN_TABLE_WIDTH, BLOCK_LENGTH>();
 
         let mut rng = CsRng::from_entropy();
         let k_uid = master_key.derive_kmac_key::<KMAC_KEY_LENGTH>(ENTRY_TABLE_KEY_DERIVATION_INFO);
         let k_value = master_key.derive_dem_key(ENTRY_TABLE_KEY_DERIVATION_INFO);
 
-        let mut new_chains =
-            HashMap::<KeywordHash, HashMap<IndexedValue, BlockType>>::with_capacity(
-                additions.len() + deletions.len(),
-            );
+        // a reverse map of Keyword UIDs (e.g. hashes) to Keywords
+        let mut uid_to_keyword = HashMap::<Uid<UID_LENGTH>, Keyword>::new();
+
+        let mut new_chains = HashMap::<Keyword, HashMap<IndexedValue, BlockType>>::with_capacity(
+            additions.len() + deletions.len(),
+        );
         for (indexed_value, keywords) in additions {
             for keyword in keywords {
                 new_chains
-                    .entry(keyword.hash())
+                    .entry(keyword)
                     .or_default()
                     .insert(indexed_value.clone(), BlockType::Addition);
             }
@@ -96,7 +105,7 @@ pub trait FindexUpsert<
         for (indexed_value, keywords) in deletions {
             for keyword in keywords {
                 new_chains
-                    .entry(keyword.hash())
+                    .entry(keyword)
                     .or_default()
                     .insert(indexed_value.clone(), BlockType::Deletion);
             }
@@ -104,23 +113,37 @@ pub trait FindexUpsert<
         // Compute the Entry Table UIDs.
         let mut new_chains = new_chains
             .into_iter()
-            .map(|(keyword_hash, indexed_values)| {
-                (
-                    EntryTable::<UID_LENGTH, KWI_LENGTH>::generate_uid::<KMAC_KEY_LENGTH>(
-                        &k_uid,
-                        &keyword_hash,
-                        label,
-                    ),
-                    (keyword_hash, indexed_values),
-                )
+            .map(|(keyword, indexed_values)| {
+                let keyword_hash = keyword.hash();
+                let uid = EntryTable::<UID_LENGTH, KWI_LENGTH>::generate_uid::<KMAC_KEY_LENGTH>(
+                    &k_uid,
+                    &keyword_hash,
+                    label,
+                );
+                uid_to_keyword.insert(uid, keyword);
+                (uid, (keyword_hash, indexed_values))
             })
             .collect::<HashMap<_, _>>();
 
         // Query the Entry Table for these UIDs.
-        let mut encrypted_entry_table = self
+        let mut encrypted_entry_table: EncryptedTable<UID_LENGTH> = self
             .fetch_entry_table(Uids(new_chains.keys().copied().collect()))
             .await?
             .try_into()?;
+
+        // compute the map of keywords to booleans indicating whether the keyword
+        // was already present in the database
+        let mut keyword_presence = HashMap::new();
+        for uid in encrypted_entry_table.keys() {
+            if let Some(keyword) = uid_to_keyword.remove(uid) {
+                keyword_presence.insert(keyword, true);
+            }
+        }
+        // whatever is left in `uid_to_keyword` is not in the database,
+        // i.e. not already present. Update the keyword_presence accordingly
+        for (_, keyword) in uid_to_keyword {
+            keyword_presence.insert(keyword, false);
+        }
 
         while !new_chains.is_empty() {
             // Decrypt the Entry Table once and for all.
@@ -148,7 +171,7 @@ pub trait FindexUpsert<
             new_chains.retain(|uid, _| encrypted_entry_table.contains_key(uid));
         }
 
-        Ok(())
+        Ok(keyword_presence)
     }
 
     /// Writes the given modifications to the indexes. Returns the current value
