@@ -1,6 +1,3 @@
-#[cfg(not(feature = "in_memory"))]
-compile_error!("Benches require the `in_memory` feature.");
-
 use std::collections::{HashMap, HashSet};
 
 use cosmian_crypto_core::CsRng;
