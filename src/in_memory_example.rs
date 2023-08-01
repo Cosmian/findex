@@ -1,6 +1,7 @@
 use std::{
     collections::{HashMap, HashSet},
     fmt::Display,
+    sync::RwLock,
 };
 
 use cosmian_crypto_core::{
@@ -31,10 +32,10 @@ impl std::error::Error for ExampleError {}
 
 impl crate::CallbackError for ExampleError {}
 
-#[derive(Default, Clone)]
+#[derive(Default)]
 pub struct FindexInMemory<const UID_LENGTH: usize> {
-    entry_table: EncryptedTable<UID_LENGTH>,
-    chain_table: EncryptedTable<UID_LENGTH>,
+    entry_table: RwLock<EncryptedTable<UID_LENGTH>>,
+    chain_table: RwLock<EncryptedTable<UID_LENGTH>>,
     removed_locations: HashSet<Location>,
     pub check_progress_callback_next_keyword: bool,
     pub progress_callback_cancel: bool,
@@ -44,14 +45,22 @@ impl<const UID_LENGTH: usize> FindexInMemory<UID_LENGTH> {
     /// The entry table length (number of records)
     #[must_use]
     pub fn entry_table_len(&self) -> usize {
-        self.entry_table.len()
+        self.entry_table
+            .read()
+            .expect("entry table lock poisoned")
+            .len()
     }
 
     /// The entry table size in bytes
     #[must_use]
     pub fn entry_table_size(&self) -> usize {
         let mut size = 0;
-        for (k, v) in self.entry_table.iter() {
+        for (k, v) in self
+            .entry_table
+            .read()
+            .expect("entry table lock poisoned")
+            .iter()
+        {
             size += k.len() + v.len();
         }
         size
@@ -60,14 +69,22 @@ impl<const UID_LENGTH: usize> FindexInMemory<UID_LENGTH> {
     /// The chain table length (number of records)
     #[must_use]
     pub fn chain_table_len(&self) -> usize {
-        self.chain_table.len()
+        self.chain_table
+            .read()
+            .expect("chain table lock poisoned")
+            .len()
     }
 
     /// The entry table size in bytes
     #[must_use]
     pub fn chain_table_size(&self) -> usize {
         let mut size = 0;
-        for (k, v) in self.chain_table.iter() {
+        for (k, v) in self
+            .chain_table
+            .read()
+            .expect("chain table lock poisoned")
+            .iter()
+        {
             size += k.len() + v.len();
         }
         size
@@ -129,7 +146,14 @@ impl<const UID_LENGTH: usize> FindexCallbacks<ExampleError, UID_LENGTH>
     }
 
     async fn fetch_all_entry_table_uids(&self) -> Result<Uids<UID_LENGTH>, ExampleError> {
-        let uids = Uids(self.entry_table.keys().copied().collect());
+        let uids = Uids(
+            self.entry_table
+                .read()
+                .expect("entry table lock poisoned")
+                .keys()
+                .copied()
+                .collect(),
+        );
         Ok(uids)
     }
 
@@ -141,6 +165,8 @@ impl<const UID_LENGTH: usize> FindexCallbacks<ExampleError, UID_LENGTH>
             .into_iter()
             .filter_map(|uid| {
                 self.entry_table
+                    .read()
+                    .expect("entry table lock poisoned")
                     .get(&uid)
                     .cloned()
                     .map(|value| (uid, value))
@@ -155,7 +181,12 @@ impl<const UID_LENGTH: usize> FindexCallbacks<ExampleError, UID_LENGTH>
     ) -> Result<EncryptedTable<UID_LENGTH>, ExampleError> {
         let mut items = EncryptedTable::with_capacity(chain_table_uids.len());
         for uid in chain_table_uids {
-            if let Some(value) = self.chain_table.get(&uid) {
+            if let Some(value) = self
+                .chain_table
+                .read()
+                .expect("chain table lock poisoned")
+                .get(&uid)
+            {
                 items.insert(uid, value.clone());
             }
         }
@@ -163,7 +194,7 @@ impl<const UID_LENGTH: usize> FindexCallbacks<ExampleError, UID_LENGTH>
     }
 
     async fn upsert_entry_table(
-        &mut self,
+        &self,
         modifications: UpsertData<UID_LENGTH>,
     ) -> Result<EncryptedTable<UID_LENGTH>, ExampleError> {
         let mut rng = CsRng::from_entropy();
@@ -171,47 +202,71 @@ impl<const UID_LENGTH: usize> FindexCallbacks<ExampleError, UID_LENGTH>
         // Simulate insertion failures.
         for (uid, (old_value, new_value)) in modifications {
             // Reject insert with probability 0.2.
-            if self.entry_table.contains_key(&uid) && rng.gen_range(0..5) == 0 {
+            if self
+                .entry_table
+                .read()
+                .expect("entry table lock poisoned")
+                .contains_key(&uid)
+                && rng.gen_range(0..5) == 0
+            {
                 rejected.insert(uid, old_value.unwrap_or_default());
             } else {
-                self.entry_table.insert(uid, new_value);
+                self.entry_table
+                    .write()
+                    .expect("entry table lock poisoned")
+                    .insert(uid, new_value);
             }
         }
         Ok(rejected)
     }
 
     async fn insert_chain_table(
-        &mut self,
+        &self,
         items: EncryptedTable<UID_LENGTH>,
     ) -> Result<(), ExampleError> {
         for (uid, value) in items {
-            if self.chain_table.contains_key(&uid) {
+            if self
+                .chain_table
+                .read()
+                .expect("entry table lock poisoned")
+                .contains_key(&uid)
+            {
                 return Err(ExampleError(format!(
                     "Conflict in Chain Table for UID: {uid:?}"
                 )));
             }
-            self.chain_table.insert(uid, value);
+            self.chain_table
+                .write()
+                .expect("chain table lock poisoned")
+                .insert(uid, value);
         }
         Ok(())
     }
 
     async fn update_lines(
-        &mut self,
+        &self,
         chain_table_uids_to_remove: Uids<UID_LENGTH>,
         new_encrypted_entry_table_items: EncryptedTable<UID_LENGTH>,
         new_encrypted_chain_table_items: EncryptedTable<UID_LENGTH>,
     ) -> Result<(), ExampleError> {
-        self.entry_table = new_encrypted_entry_table_items;
+        *self.entry_table.write().expect("entry table lock poisoned") =
+            new_encrypted_entry_table_items;
 
         for new_encrypted_chain_table_item in new_encrypted_chain_table_items {
-            self.chain_table.insert(
-                new_encrypted_chain_table_item.0,
-                new_encrypted_chain_table_item.1,
-            );
+            self.chain_table
+                .write()
+                .expect("chain table lock poisoned")
+                .insert(
+                    new_encrypted_chain_table_item.0,
+                    new_encrypted_chain_table_item.1,
+                );
         }
 
         for removed_chain_table_uid in chain_table_uids_to_remove {
-            self.chain_table.remove(&removed_chain_table_uid);
+            self.chain_table
+                .write()
+                .expect("chain table lock poisoned")
+                .remove(&removed_chain_table_uid);
         }
 
         Ok(())

@@ -79,7 +79,7 @@ pub trait FindexCallbacks<Error: std::error::Error + CallbackError, const UID_LE
     ///
     /// - `items`   : entries to be upserted
     async fn upsert_entry_table(
-        &mut self,
+        &self,
         items: UpsertData<UID_LENGTH>,
     ) -> Result<EncryptedTable<UID_LENGTH>, Error>;
 
@@ -93,7 +93,7 @@ pub trait FindexCallbacks<Error: std::error::Error + CallbackError, const UID_LE
     /// # Parameters
     ///
     /// - `items`   : items to be inserted
-    async fn insert_chain_table(&mut self, items: EncryptedTable<UID_LENGTH>) -> Result<(), Error>;
+    async fn insert_chain_table(&self, items: EncryptedTable<UID_LENGTH>) -> Result<(), Error>;
 
     /// Updates the indexes with the given data.
     ///
@@ -144,7 +144,7 @@ pub trait FindexCallbacks<Error: std::error::Error + CallbackError, const UID_LE
     /// - `new_entry_table_items`       : new Entry Table
     /// - `new_chain_table_items`       : items to insert into the Chain Table
     async fn update_lines(
-        &mut self,
+        &self,
         chain_table_uids_to_remove: Uids<UID_LENGTH>,
         new_entry_table_items: EncryptedTable<UID_LENGTH>,
         new_chain_table_items: EncryptedTable<UID_LENGTH>,

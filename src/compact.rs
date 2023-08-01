@@ -54,7 +54,7 @@ pub trait FindexCompact<
     /// **WARNING**: the compact operation *cannot* be done concurrently with
     /// upsert operations. This could result in corrupted indexes.
     async fn compact(
-        &mut self,
+        &self,
         master_key: &KeyingMaterial<MASTER_KEY_LENGTH>,
         new_master_key: &KeyingMaterial<MASTER_KEY_LENGTH>,
         label: &Label,

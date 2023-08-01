@@ -464,8 +464,8 @@ async fn test_first_names() -> Result<(), Error<ExampleError>> {
     const MAX_FIRST_NAMES: usize = 1000;
     let mut rng = rand::thread_rng();
     let master_key = KeyingMaterial::new(&mut rng);
-    let mut graph_findex = FindexInMemory::default();
-    let mut naive_findex = FindexInMemory::default();
+    let graph_findex = FindexInMemory::default();
+    let naive_findex = FindexInMemory::default();
 
     // Keywords that will be searched later to run tests
     let mut searches: HashSet<String> = HashSet::new();
@@ -595,7 +595,7 @@ async fn test_first_names() -> Result<(), Error<ExampleError>> {
 async fn test_graph_compacting() {
     let mut rng = CsRng::from_entropy();
     let mut master_key = KeyingMaterial::new(&mut rng);
-    let mut findex = FindexInMemory::default();
+    let findex = FindexInMemory::default();
     let mut indexed_value_to_keywords = HashMap::new();
 
     let rob_keyword = Keyword::from(b"rob".to_vec());
@@ -780,7 +780,7 @@ async fn test_live_compacting() {
 #[actix_rt::test]
 async fn test_search_cyclic_graph() {
     let mut rng = CsRng::from_entropy();
-    let mut findex = FindexInMemory::default();
+    let findex = FindexInMemory::default();
 
     let label = Label::random(&mut rng);
     let master_key = KeyingMaterial::new(&mut rng);
@@ -947,7 +947,7 @@ async fn test_keyword_presence() -> Result<(), Error<ExampleError>> {
         hashset_keywords(&["john", "doe"]),
     );
 
-    let mut findex = FindexInMemory::default();
+    let findex = FindexInMemory::default();
     let presence = findex
         .add(&master_key, &label, indexed_value_to_keywords)
         .await?;

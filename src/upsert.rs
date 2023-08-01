@@ -36,7 +36,7 @@ pub trait FindexUpsert<
     /// Returns a map of keywords to booleans indicating whether the keyword
     /// was already present in the database.
     async fn add(
-        &mut self,
+        &self,
         master_key: &KeyingMaterial<MASTER_KEY_LENGTH>,
         label: &Label,
         items: HashMap<IndexedValue, HashSet<Keyword>>,
@@ -55,7 +55,7 @@ pub trait FindexUpsert<
     /// Returns a map of keywords to booleans indicating whether the keyword
     /// was already present in the database.
     async fn remove(
-        &mut self,
+        &self,
         master_key: &KeyingMaterial<MASTER_KEY_LENGTH>,
         label: &Label,
         items: HashMap<IndexedValue, HashSet<Keyword>>,
@@ -76,7 +76,7 @@ pub trait FindexUpsert<
     /// Returns a map of keywords to booleans indicating whether the keyword
     /// was already present in the database.
     async fn upsert(
-        &mut self,
+        &self,
         master_key: &KeyingMaterial<MASTER_KEY_LENGTH>,
         label: &Label,
         additions: HashMap<IndexedValue, HashSet<Keyword>>,
@@ -182,7 +182,7 @@ pub trait FindexUpsert<
     /// - `new_entry_table`         : new Entry Table
     /// - `chain_table_additions`   : entries to be added to the Chain Table
     async fn write_indexes(
-        &mut self,
+        &self,
         old_entry_table: EncryptedTable<UID_LENGTH>,
         new_entry_table: EncryptedTable<UID_LENGTH>,
         mut chain_table_additions: HashMap<Uid<UID_LENGTH>, EncryptedTable<UID_LENGTH>>,
