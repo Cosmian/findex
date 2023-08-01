@@ -36,7 +36,7 @@ pub trait FindexSearch<
     /// - `label`               : public label
     /// - `keywords`            : keywords to search
     async fn core_search(
-        &mut self,
+        &self,
         k_uid: &KmacKey,
         k_value: &DemKey,
         label: &Label,
@@ -129,7 +129,7 @@ pub trait FindexSearch<
     /// - `label`               : public label used for hashing
     /// - `keywords`            : keywords to search using Findex
     async fn iterative_search(
-        &mut self,
+        &self,
         master_key: &KeyingMaterial<MASTER_KEY_LENGTH>,
         label: &Label,
         mut keywords: HashSet<Keyword>,
@@ -178,7 +178,7 @@ pub trait FindexSearch<
     /// - `keywords`            : keywords to search
     /// - `max_depth`           : maximum recursion depth allowed
     async fn search(
-        &mut self,
+        &self,
         master_key: &KeyingMaterial<MASTER_KEY_LENGTH>,
         label: &Label,
         keywords: HashSet<Keyword>,

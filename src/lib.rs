@@ -38,16 +38,11 @@ mod upsert;
 
 pub mod parameters;
 
-#[cfg(feature = "live_compact")]
-mod compact_live;
-
 #[cfg(feature = "in_memory")]
 pub mod in_memory_example;
 
 pub use callbacks::{FetchChains, FindexCallbacks};
 pub use compact::FindexCompact;
-#[cfg(feature = "live_compact")]
-pub use compact_live::FindexLiveCompact;
 pub use error::{CallbackError, CoreError, Error};
 pub use keys::KeyingMaterial;
 pub use search::FindexSearch;

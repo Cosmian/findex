@@ -41,7 +41,7 @@ async fn write_index() -> Result<(), Error<ExampleError>> {
     let master_key = KeyingMaterial::new(&mut rng);
     let label = Label::random(&mut rng);
 
-    let mut findex = FindexInMemory::default();
+    let findex = FindexInMemory::default();
 
     let reader = BufReader::new(File::open("datasets/first_names.txt").unwrap());
     for maybe_line in reader.lines().take(MAX_FIRST_NAMES) {
@@ -87,7 +87,7 @@ async fn test_non_regression() -> Result<(), Error<ExampleError>> {
     // Uncomment to generate new test data.
     // write_index().await?;
 
-    let mut findex = FindexInMemory::<UID_LENGTH>::default();
+    let findex = FindexInMemory::<UID_LENGTH>::default();
     let serialized_index = std::fs::read("datasets/serialized_index").unwrap();
     findex.load_tables(&serialized_index)?;
 

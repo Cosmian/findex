@@ -79,7 +79,7 @@ pub trait FindexCallbacks<Error: std::error::Error + CallbackError, const UID_LE
     ///
     /// - `items`   : entries to be upserted
     async fn upsert_entry_table(
-        &mut self,
+        &self,
         items: UpsertData<UID_LENGTH>,
     ) -> Result<EncryptedTable<UID_LENGTH>, Error>;
 
@@ -93,7 +93,7 @@ pub trait FindexCallbacks<Error: std::error::Error + CallbackError, const UID_LE
     /// # Parameters
     ///
     /// - `items`   : items to be inserted
-    async fn insert_chain_table(&mut self, items: EncryptedTable<UID_LENGTH>) -> Result<(), Error>;
+    async fn insert_chain_table(&self, items: EncryptedTable<UID_LENGTH>) -> Result<(), Error>;
 
     /// Updates the indexes with the given data.
     ///
@@ -143,14 +143,14 @@ pub trait FindexCallbacks<Error: std::error::Error + CallbackError, const UID_LE
     /// - `chain_table_uids_to_remove`  : UIDs to remove from the Chain Table
     /// - `new_entry_table_items`       : new Entry Table
     /// - `new_chain_table_items`       : items to insert into the Chain Table
-    fn update_lines(
-        &mut self,
+    async fn update_lines(
+        &self,
         chain_table_uids_to_remove: Uids<UID_LENGTH>,
         new_entry_table_items: EncryptedTable<UID_LENGTH>,
         new_chain_table_items: EncryptedTable<UID_LENGTH>,
     ) -> Result<(), Error>;
 
-    /// Returns all locations that point to existing data.
+    /// Returns all locations that do not point to existing data.
     ///
     /// **NOTE**: this callback does not call the index database since indexed
     /// locations can be anything in Findex (DB UID, path, other ID...). It may
@@ -159,14 +159,14 @@ pub trait FindexCallbacks<Error: std::error::Error + CallbackError, const UID_LE
     /// # Parameters
     ///
     /// - `locations`   : locations queried
-    fn list_removed_locations(
+    async fn list_removed_locations(
         &self,
         locations: HashSet<Location>,
     ) -> Result<HashSet<Location>, Error>;
 
     #[cfg(feature = "live_compact")]
     /// Returns all locations that point to existing data.
-    fn filter_removed_locations(
+    async fn filter_removed_locations(
         &self,
         locations: HashSet<Location>,
     ) -> Result<HashSet<Location>, Error>;
