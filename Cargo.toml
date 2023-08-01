@@ -16,7 +16,7 @@ repository = "https://github.com/Cosmian/findex/"
 description = "Symmetric Searchable Encryption"
 
 [lib]
-crate-type = ["cdylib", "rlib", "staticlib"]
+crate-type = ["cdylib", "lib", "staticlib"]
 name = "cosmian_findex"
 path = "src/lib.rs"
 
