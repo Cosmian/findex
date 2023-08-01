@@ -46,9 +46,9 @@ required-features = ["in_memory"]
 name = "test_in_memory"
 required-features = ["in_memory"]
 
-#[[test]]
-#name = "non_regression"
-#required-features = ["in_memory"]
+[[test]]
+name = "non_regression"
+required-features = ["in_memory"]
 
 [[example]]
 name = "search"
