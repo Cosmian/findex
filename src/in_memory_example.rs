@@ -3,7 +3,11 @@ use std::{
     fmt::Display,
 };
 
-use cosmian_crypto_core::{reexport::rand_core::SeedableRng, CsRng};
+use cosmian_crypto_core::{
+    bytes_ser_de::{Deserializer, Serializer},
+    reexport::rand_core::SeedableRng,
+    CsRng,
+};
 use rand::Rng;
 
 use crate::{
@@ -74,6 +78,32 @@ impl<const UID_LENGTH: usize> FindexInMemory<UID_LENGTH> {
 
     pub fn remove_location(&mut self, location: Location) {
         self.removed_locations.insert(location);
+    }
+
+    pub fn dump_tables(&self) -> Result<Vec<u8>, ExampleError> {
+        let mut ser = Serializer::new();
+        ser.write(&self.entry_table)
+            .map_err(|e| ExampleError(e.to_string()))?;
+        ser.write(&self.chain_table)
+            .map_err(|e| ExampleError(e.to_string()))?;
+        Ok(ser.finalize().to_vec())
+    }
+
+    pub fn load_tables(&mut self, bytes: &[u8]) -> Result<(), ExampleError> {
+        let mut de = Deserializer::new(bytes);
+        self.entry_table = de
+            .read::<EncryptedTable<UID_LENGTH>>()
+            .map_err(|e| ExampleError(e.to_string()))?;
+        self.chain_table = de
+            .read::<EncryptedTable<UID_LENGTH>>()
+            .map_err(|e| ExampleError(e.to_string()))?;
+        if !de.finalize().is_empty() {
+            Err(ExampleError(
+                "Remaining bytes found after reading index from given bytes".to_string(),
+            ))
+        } else {
+            Ok(())
+        }
     }
 }
 

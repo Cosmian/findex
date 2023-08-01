@@ -1,4 +1,3 @@
-#![cfg(feature = "in_memory")]
 use std::{
     collections::{HashMap, HashSet},
     fs::File,
