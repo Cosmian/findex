@@ -96,19 +96,19 @@ impl<const UID_LENGTH: usize> FindexInMemory<UID_LENGTH> {
 
     pub fn dump_tables(&self) -> Result<Vec<u8>, ExampleError> {
         let mut ser = Serializer::new();
-        ser.write(&self.entry_table)
+        ser.write(&*self.entry_table.read().expect("entry table lock poisoned"))
             .map_err(|e| ExampleError(e.to_string()))?;
-        ser.write(&self.chain_table)
+        ser.write(&*self.chain_table.read().expect("chain table lock poisoned"))
             .map_err(|e| ExampleError(e.to_string()))?;
         Ok(ser.finalize().to_vec())
     }
 
-    pub fn load_tables(&mut self, bytes: &[u8]) -> Result<(), ExampleError> {
+    pub fn load_tables(&self, bytes: &[u8]) -> Result<(), ExampleError> {
         let mut de = Deserializer::new(bytes);
-        self.entry_table = de
+        *self.entry_table.write().expect("entry table lock poisoned") = de
             .read::<EncryptedTable<UID_LENGTH>>()
             .map_err(|e| ExampleError(e.to_string()))?;
-        self.chain_table = de
+        *self.chain_table.write().expect("chain table lock poisoned") = de
             .read::<EncryptedTable<UID_LENGTH>>()
             .map_err(|e| ExampleError(e.to_string()))?;
         if !de.finalize().is_empty() {
