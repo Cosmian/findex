@@ -27,14 +27,13 @@ pub trait FindexUpsert<
 {
     /// Index the given values for the associated keywords.
     ///
+    /// Returns the set of the new keywords.
+    ///
     /// # Parameters
     ///
     /// - `master_key`  : Findex master key
     /// - `label`       : additional public information used in key hashing
     /// - `items`       : set of keywords used to index values
-    ///
-    /// Returns a map of keywords to booleans indicating whether the keyword
-    /// was already present in the database.
     async fn add(
         &self,
         master_key: &KeyingMaterial<MASTER_KEY_LENGTH>,
@@ -46,14 +45,13 @@ pub trait FindexUpsert<
 
     /// Removes the given values from the indexes for the associated keywords.
     ///
+    /// Returns the set of the new keywords.
+    ///
     /// # Parameters
     ///
     /// - `master_key`  : Findex master key
     /// - `label`       : additional public information used in key hashing
     /// - `items`       : set of keywords used to index values
-    ///
-    /// Returns a map of keywords to booleans indicating whether the keyword
-    /// was already present in the database.
     async fn remove(
         &self,
         master_key: &KeyingMaterial<MASTER_KEY_LENGTH>,
@@ -65,6 +63,8 @@ pub trait FindexUpsert<
 
     /// Upsert the given chain elements in Findex tables.
     ///
+    /// Returns the set of the new keywords.
+    ///
     /// # Parameters
     ///
     /// - `master_key`  : Findex master key
@@ -72,9 +72,6 @@ pub trait FindexUpsert<
     /// - `additions`   : values to indexed for a set of keywords
     /// - `deletions`   : values to remove from the indexes for a set of
     ///   keywords
-    ///
-    /// Returns a map of keywords to booleans indicating whether the keyword
-    /// was already present in the database.
     async fn upsert(
         &self,
         master_key: &KeyingMaterial<MASTER_KEY_LENGTH>,
