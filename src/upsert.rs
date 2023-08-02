@@ -27,7 +27,7 @@ pub trait FindexUpsert<
 {
     /// Index the given values for the associated keywords.
     ///
-    /// Returns the set of the new keywords.
+    /// Returns the set of the new keywords added.
     ///
     /// # Parameters
     ///
@@ -44,8 +44,11 @@ pub trait FindexUpsert<
     }
 
     /// Removes the given values from the indexes for the associated keywords.
+    /// 
+    /// This call actually adds a "delete" to the chain table
+    /// (and potentially the Entry Table if it did not exits before)
     ///
-    /// Returns the set of the new keywords.
+    /// Returns the set of the new keywords added.
     ///
     /// # Parameters
     ///
@@ -63,7 +66,7 @@ pub trait FindexUpsert<
 
     /// Upsert the given chain elements in Findex tables.
     ///
-    /// Returns the set of the new keywords.
+    /// Returns the set of the new keywords added.
     ///
     /// # Parameters
     ///
