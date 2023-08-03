@@ -44,7 +44,7 @@ pub trait FindexUpsert<
     }
 
     /// Removes the given values from the indexes for the associated keywords.
-    /// 
+    ///
     /// This call actually adds a "delete" to the chain table
     /// (and potentially the Entry Table if it did not exits before)
     ///
