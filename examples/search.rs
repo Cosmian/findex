@@ -44,7 +44,7 @@ fn main() {
     //
     // Prepare indexes to be search
     //
-    let mut findex = FindexInMemory::default();
+    let findex = FindexInMemory::default();
     block_on(findex.add(&master_key, &label, locations_and_words)).expect("msg");
 
     //

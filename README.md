@@ -2,12 +2,12 @@
 
 ![Build status](https://github.com/Cosmian/findex/actions/workflows/ci.yml/badge.svg)
 ![Build status](https://github.com/Cosmian/findex/actions/workflows/build.yml/badge.svg)
-![latest version](<https://img.shields.io/crates/v/cosmian_findex.svg>)
+![latest version](https://img.shields.io/crates/v/cosmian_findex.svg)
 
 Findex aims to solve the following problem:
 
-> How to securely recover the *location* of an encrypted data matching a given
-> *keyword*?
+> How to securely recover the _location_ of an encrypted data matching a given
+> _keyword_?
 
 It is a cryptographic protocol designed to securely make search queries on an
 untrusted cloud server. Thanks to its encrypted indexes, large databases can
@@ -20,7 +20,7 @@ Findex is part of Cosmian Cloudproof Encryption.
 - [Getting started](#getting-started)
 - [Building and testing](#building-and-testing)
 - [Findex indexes](#findex-indexes)
-  * [Two indexing strategies](#two-indexing-strategies)
+  - [Two indexing strategies](#two-indexing-strategies)
 - [Benchmarks](#benchmarks)
 - [Documentation](#documentation)
 
@@ -28,12 +28,12 @@ Findex is part of Cosmian Cloudproof Encryption.
 
 ## Getting started
 
-Findex allows to index values by keywords. These values can be locations (UIDs
+Findex allows indexing values by keywords. These values can be locations (UIDs
 of an encrypted database, URLs, paths, etc.).
 
 Using Findex API one can:
 
-- index or desindex values by keywords via the `FindexUpsert` trait;
+- index or deindex values by keywords via the `FindexUpsert` trait;
 - search for keywords via the `FindexSearch` trait;
 - compact the indexes via the `FindexCompact` trait.
 
@@ -41,14 +41,12 @@ These traits can be automatically implemented and a macro is provided to help
 with the syntax. The default parameters (the ones used by the macro) are
 defined in [`parameters.rs`](./src/parameters.rs).
 
-Findex delegates to the user the implementation of *callbacks* to manipulate
-the indexes. This makes Findex compatible with any database technology since no
-database specific code is part of it. Implementation is done via the
+Findex delegates to the user the implementation of _callbacks_ to manipulate
+the indexes. This makes Findex compatible with any database technology since no database-specific code is part of it. Implementation is done via the
 `FindexCallbacks` trait. See [`callbacks.md`](./callbacks.md) for details on
 the implementation of the callbacks.
 
-See [`in_memory_example.rs`](./src/in_memory_example.rs) for a example of
-implementation.
+See `in_memory_example.rs` for an example of implementation.
 
 ## Building and testing
 
@@ -72,7 +70,7 @@ cargo bench --all-features
 
 ## Findex indexes
 
-Findex relies on two server side indexes:
+Findex relies on two server-side indexes:
 
 - **Entry Table**: provides the values needed to fetch the correct locations
   from the Chain Table. Each indexing keyword matches a line in the Entry
@@ -84,8 +82,8 @@ Findex relies on two server side indexes:
   stored by blocks of fixed length and the same number of blocks is stored in
   each line (padding is added where necessary).
 
-Findex indexes are key value stores which structure is given in the following
-tables, with $K_{w_i}$ the ephemeral key associated to a keyword $w_i$,
+Findex indexes are key-value stores whose structure is given in the following
+tables, with $K_{w_i}$ the ephemeral key associated with a keyword $w_i$,
 $H_{w_i}$ the hash of $w_i$ and $UID_{last}$ the last UID of the chain of
 indexed values associated to $w_i$.
 
@@ -214,7 +212,7 @@ More client/server interactions are needed for the graph solution: the depth of
 the graph (4 in this example) compared to 1 for the naive solution and 2 for
 the mixed solution.
 
-In the other hand, the graph solution optimizes the size of the Chain Table.
+On the other hand, the graph solution optimizes the size of the Chain Table.
 
 <table>
   <tr>
@@ -292,7 +290,7 @@ In the other hand, the graph solution optimizes the size of the Chain Table.
 
 ## Benchmarks
 
-The benchmarks presented in this section are run on a Intel(R) Xeon(R) Platinum 8171M CPU @ 2.60GHz.
+The benchmarks presented in this section are run on an Intel(R) Xeon(R) Platinum 8171M CPU @ 2.60GHz.
 
 - [Findex in memory (no database)](./benches/BENCHMARKS.md)
 

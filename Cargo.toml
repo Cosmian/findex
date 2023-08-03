@@ -1,42 +1,65 @@
 [package]
 name = "cosmian_findex"
-version = "4.0.3"
+version = "5.0.0"
 authors = [
-  "Chloé Hébant <chloe.hebant@cosmian.com>",
-  "Bruno Grieder <bruno.grieder@cosmian.com>",
-  "Célia Corsin <celia.corsin@cosmian.com>",
-  "Emmanuel Coste <emmanuel.coste@cosmian.com>",
-  "Théophile Brézot <theophile.brezot@cosmian.com>",
+    "Chloé Hébant <chloe.hebant@cosmian.com>",
+    "Bruno Grieder <bruno.grieder@cosmian.com>",
+    "Célia Corsin <celia.corsin@cosmian.com>",
+    "Emmanuel Coste <emmanuel.coste@cosmian.com>",
+    "Théophile Brézot <theophile.brezot@cosmian.com>",
 ]
 categories = ["cosmian::crypto"]
 edition = "2021"
 keywords = ["SSE"]
-license = "MIT/Apache-2.0"
+license-file = "LICENSE.md"
 repository = "https://github.com/Cosmian/findex/"
 description = "Symmetric Searchable Encryption"
 
 [lib]
-crate-type = ["cdylib", "rlib", "staticlib"]
+crate-type = ["cdylib", "lib", "staticlib"]
 name = "cosmian_findex"
 path = "src/lib.rs"
 
-[[bench]]
-harness = false
-name = "benches"
-
 [features]
 in_memory = []
-live_compact = []
 
 [dependencies]
 base64 = "0.21.2"
-cosmian_crypto_core = { version = "9.0.0", features = ["aes", "sha3", "ser"], default-features = false }
+cosmian_crypto_core = { version = "9.0.0", features = [
+    "aes",
+    "sha3",
+    "ser",
+], default-features = false }
 rand = "0.8"
 tiny-keccak = { version = "2.0.2", features = ["kmac", "sha3"] }
 zeroize = "1.5"
 
 [dev-dependencies]
 actix-rt = "2.8"
-criterion = { version = "0.4", features = ["html_reports", "async_futures"], default_features = false }
+criterion = { version = "0.4", features = [
+    "html_reports",
+    "async_futures",
+], default_features = false }
 futures = "0.3"
 serde_json = "1.0"
+
+[[bench]]
+harness = false
+name = "benches"
+required-features = ["in_memory"]
+
+[[test]]
+name = "test_in_memory"
+required-features = ["in_memory"]
+
+[[test]]
+name = "non_regression"
+required-features = ["in_memory"]
+
+[[example]]
+name = "search"
+required-features = ["in_memory"]
+
+[[example]]
+name = "upsert"
+required-features = ["in_memory"]

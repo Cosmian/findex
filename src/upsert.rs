@@ -10,9 +10,7 @@ use crate::{
     error::{CallbackError, Error},
     keys::KeyingMaterial,
     parameters::check_parameter_constraints,
-    structs::{
-        BlockType, EncryptedTable, IndexedValue, Keyword, KeywordHash, Label, Uid, UpsertData,
-    },
+    structs::{BlockType, EncryptedTable, IndexedValue, Keyword, Label, Uid, UpsertData},
     FindexCallbacks, Uids, ENTRY_TABLE_KEY_DERIVATION_INFO,
 };
 
@@ -29,21 +27,28 @@ pub trait FindexUpsert<
 {
     /// Index the given values for the associated keywords.
     ///
+    /// Returns the set of the new keywords added.
+    ///
     /// # Parameters
     ///
     /// - `master_key`  : Findex master key
     /// - `label`       : additional public information used in key hashing
     /// - `items`       : set of keywords used to index values
     async fn add(
-        &mut self,
+        &self,
         master_key: &KeyingMaterial<MASTER_KEY_LENGTH>,
         label: &Label,
         items: HashMap<IndexedValue, HashSet<Keyword>>,
-    ) -> Result<(), Error<CustomError>> {
+    ) -> Result<HashSet<Keyword>, Error<CustomError>> {
         self.upsert(master_key, label, items, HashMap::new()).await
     }
 
     /// Removes the given values from the indexes for the associated keywords.
+    ///
+    /// This call actually adds a "delete" to the chain table
+    /// (and potentially the Entry Table if it did not exits before)
+    ///
+    /// Returns the set of the new keywords added.
     ///
     /// # Parameters
     ///
@@ -51,15 +56,17 @@ pub trait FindexUpsert<
     /// - `label`       : additional public information used in key hashing
     /// - `items`       : set of keywords used to index values
     async fn remove(
-        &mut self,
+        &self,
         master_key: &KeyingMaterial<MASTER_KEY_LENGTH>,
         label: &Label,
         items: HashMap<IndexedValue, HashSet<Keyword>>,
-    ) -> Result<(), Error<CustomError>> {
+    ) -> Result<HashSet<Keyword>, Error<CustomError>> {
         self.upsert(master_key, label, HashMap::new(), items).await
     }
 
     /// Upsert the given chain elements in Findex tables.
+    ///
+    /// Returns the set of the new keywords added.
     ///
     /// # Parameters
     ///
@@ -69,58 +76,62 @@ pub trait FindexUpsert<
     /// - `deletions`   : values to remove from the indexes for a set of
     ///   keywords
     async fn upsert(
-        &mut self,
+        &self,
         master_key: &KeyingMaterial<MASTER_KEY_LENGTH>,
         label: &Label,
         additions: HashMap<IndexedValue, HashSet<Keyword>>,
         deletions: HashMap<IndexedValue, HashSet<Keyword>>,
-    ) -> Result<(), Error<CustomError>> {
+    ) -> Result<HashSet<Keyword>, Error<CustomError>> {
         check_parameter_constraints::<CHAIN_TABLE_WIDTH, BLOCK_LENGTH>();
 
         let mut rng = CsRng::from_entropy();
         let k_uid = master_key.derive_kmac_key::<KMAC_KEY_LENGTH>(ENTRY_TABLE_KEY_DERIVATION_INFO);
         let k_value = master_key.derive_dem_key(ENTRY_TABLE_KEY_DERIVATION_INFO);
 
-        let mut new_chains =
-            HashMap::<KeywordHash, HashMap<IndexedValue, BlockType>>::with_capacity(
-                additions.len() + deletions.len(),
-            );
+        let mut modifications = HashMap::<Keyword, HashMap<IndexedValue, BlockType>>::with_capacity(
+            additions.len() + deletions.len(),
+        );
         for (indexed_value, keywords) in additions {
             for keyword in keywords {
-                new_chains
-                    .entry(keyword.hash())
+                modifications
+                    .entry(keyword)
                     .or_default()
                     .insert(indexed_value.clone(), BlockType::Addition);
             }
         }
         for (indexed_value, keywords) in deletions {
             for keyword in keywords {
-                new_chains
-                    .entry(keyword.hash())
+                modifications
+                    .entry(keyword)
                     .or_default()
                     .insert(indexed_value.clone(), BlockType::Deletion);
             }
         }
-        // Compute the Entry Table UIDs.
-        let mut new_chains = new_chains
-            .into_iter()
-            .map(|(keyword_hash, indexed_values)| {
-                (
-                    EntryTable::<UID_LENGTH, KWI_LENGTH>::generate_uid::<KMAC_KEY_LENGTH>(
-                        &k_uid,
-                        &keyword_hash,
-                        label,
-                    ),
-                    (keyword_hash, indexed_values),
-                )
-            })
-            .collect::<HashMap<_, _>>();
+
+        let mut uid_to_keyword = HashMap::with_capacity(modifications.len());
+        let mut new_chains = HashMap::with_capacity(modifications.len());
+        for (keyword, indexed_values) in modifications {
+            let keyword_hash = keyword.hash();
+            let uid = EntryTable::<UID_LENGTH, KWI_LENGTH>::generate_uid::<KMAC_KEY_LENGTH>(
+                &k_uid,
+                &keyword_hash,
+                label,
+            );
+            uid_to_keyword.insert(uid, keyword);
+            new_chains.insert(uid, (keyword_hash, indexed_values));
+        }
 
         // Query the Entry Table for these UIDs.
-        let mut encrypted_entry_table = self
+        let mut encrypted_entry_table: EncryptedTable<UID_LENGTH> = self
             .fetch_entry_table(Uids(new_chains.keys().copied().collect()))
             .await?
             .try_into()?;
+
+        let new_keywords = uid_to_keyword
+            .into_iter()
+            .filter(|(uid, _)| !encrypted_entry_table.contains_key(uid))
+            .map(|(_, keyword)| keyword)
+            .collect();
 
         while !new_chains.is_empty() {
             // Decrypt the Entry Table once and for all.
@@ -148,7 +159,7 @@ pub trait FindexUpsert<
             new_chains.retain(|uid, _| encrypted_entry_table.contains_key(uid));
         }
 
-        Ok(())
+        Ok(new_keywords)
     }
 
     /// Writes the given modifications to the indexes. Returns the current value
@@ -159,7 +170,7 @@ pub trait FindexUpsert<
     /// - `new_entry_table`         : new Entry Table
     /// - `chain_table_additions`   : entries to be added to the Chain Table
     async fn write_indexes(
-        &mut self,
+        &self,
         old_entry_table: EncryptedTable<UID_LENGTH>,
         new_entry_table: EncryptedTable<UID_LENGTH>,
         mut chain_table_additions: HashMap<Uid<UID_LENGTH>, EncryptedTable<UID_LENGTH>>,

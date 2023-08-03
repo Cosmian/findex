@@ -1,4 +1,3 @@
-#![cfg(feature = "in_memory")]
 use std::{
     collections::{HashMap, HashSet},
     fs::File,
@@ -465,8 +464,8 @@ async fn test_first_names() -> Result<(), Error<ExampleError>> {
     const MAX_FIRST_NAMES: usize = 1000;
     let mut rng = rand::thread_rng();
     let master_key = KeyingMaterial::new(&mut rng);
-    let mut graph_findex = FindexInMemory::default();
-    let mut naive_findex = FindexInMemory::default();
+    let graph_findex = FindexInMemory::default();
+    let naive_findex = FindexInMemory::default();
 
     // Keywords that will be searched later to run tests
     let mut searches: HashSet<String> = HashSet::new();
@@ -596,7 +595,7 @@ async fn test_first_names() -> Result<(), Error<ExampleError>> {
 async fn test_graph_compacting() {
     let mut rng = CsRng::from_entropy();
     let mut master_key = KeyingMaterial::new(&mut rng);
-    let mut findex = FindexInMemory::default();
+    let findex = FindexInMemory::default();
     let mut indexed_value_to_keywords = HashMap::new();
 
     let rob_keyword = Keyword::from(b"rob".to_vec());
@@ -684,104 +683,10 @@ async fn test_graph_compacting() {
     }
 }
 
-#[cfg(feature = "live_compact")]
-#[actix_rt::test]
-async fn test_live_compacting() {
-    use cosmian_findex::FindexLiveCompact;
-
-    let mut rng = CsRng::from_entropy();
-    let mut findex = FindexInMemory::default();
-
-    let label = Label::random(&mut rng);
-    let master_key = KeyingMaterial::new(&mut rng);
-
-    let doe_keyword = Keyword::from(b"doe".to_vec());
-    let robert_keyword = Keyword::from(b"robert".to_vec());
-    let robert_doe_location = Location::from("robert doe DB location");
-
-    // Direct location robert doe.
-    let mut indexed_value_to_keywords = HashMap::new();
-    indexed_value_to_keywords.insert(
-        IndexedValue::Location(robert_doe_location.clone()),
-        HashSet::from_iter([robert_keyword.clone(), doe_keyword.clone()]),
-    );
-
-    for _ in 0..100 {
-        // Add some keywords.
-        findex
-            .add(&master_key, &label, indexed_value_to_keywords.clone())
-            .await
-            .unwrap();
-
-        // Remove them.
-        findex
-            .remove(&master_key, &label, indexed_value_to_keywords.clone())
-            .await
-            .unwrap();
-    }
-
-    // Add some keywords.
-    findex
-        .add(&master_key, &label, indexed_value_to_keywords.clone())
-        .await
-        .unwrap();
-
-    // Search Robert.
-    let robert_search = findex
-        .search(
-            &master_key,
-            &label,
-            HashSet::from_iter([robert_keyword.clone()]),
-        )
-        .await
-        .unwrap();
-
-    check_search_result(&robert_search, &robert_keyword, &robert_doe_location);
-
-    // Search Doe.
-    let doe_search = findex
-        .search(
-            &master_key,
-            &label,
-            HashSet::from_iter([doe_keyword.clone()]),
-        )
-        .await
-        .unwrap();
-    check_search_result(&doe_search, &doe_keyword, &robert_doe_location);
-
-    // Compact enough times to be sure all entries have been compacted.
-    for _ in 0..10 {
-        findex.live_compact(&master_key, 8).await.unwrap();
-    }
-
-    // After compaction, there should still be two entries in the Entry Table.
-    assert_eq!(findex.entry_table_len(), 2);
-    // But deletions should have been simplified (only two locations indexed per
-    // chain -> one line per chain -> 2 lines)
-    assert_eq!(findex.chain_table_len(), 2);
-
-    for _ in 0..100 {
-        // Add some keywords.
-        findex
-            .add(&master_key, &label, indexed_value_to_keywords.clone())
-            .await
-            .unwrap();
-    }
-    assert_eq!(findex.entry_table_len(), 2);
-    assert_eq!(findex.chain_table_len(), 202);
-
-    // Compact enough times to be sure all entries have been compacted.
-    for _ in 0..10 {
-        findex.live_compact(&master_key, 8).await.unwrap();
-    }
-    assert_eq!(findex.entry_table_len(), 2);
-    assert_eq!(findex.chain_table_len(), 2);
-}
-
 #[actix_rt::test]
 async fn test_search_cyclic_graph() {
     let mut rng = CsRng::from_entropy();
-    let mut findex = FindexInMemory::default();
+    let findex = FindexInMemory::default();
 
     let label = Label::random(&mut rng);
     let master_key = KeyingMaterial::new(&mut rng);
@@ -922,4 +827,79 @@ async fn test_search_cyclic_graph() {
     assert!(res_i.contains(&l_f));
     assert!(res_i.contains(&l_g));
     assert!(res_i.contains(&l_h));
+}
+
+#[actix_rt::test]
+async fn test_keyword_presence() -> Result<(), Error<ExampleError>> {
+    let mut rng = CsRng::from_entropy();
+    let label = Label::random(&mut rng);
+    let master_key = KeyingMaterial::new(&mut rng);
+
+    let mut indexed_value_to_keywords = HashMap::new();
+
+    // direct location robert doe
+    let robert_doe_location = Location::from("robert doe DB location");
+    indexed_value_to_keywords.insert(
+        IndexedValue::Location(robert_doe_location.clone()),
+        hashset_keywords(&["robert", "doe"]),
+    );
+
+    // direct location john doe
+    let john_doe_location = Location::from("john doe DB location");
+    indexed_value_to_keywords.insert(
+        IndexedValue::Location(john_doe_location.clone()),
+        hashset_keywords(&["john", "doe"]),
+    );
+
+    let findex = FindexInMemory::default();
+    let new_keywords = findex
+        .add(&master_key, &label, indexed_value_to_keywords)
+        .await?;
+
+    // the 3 keywords should not be present in the database
+    assert_eq!(new_keywords.len(), 3);
+    assert!(new_keywords.contains(&Keyword::from("robert")));
+    assert!(new_keywords.contains(&Keyword::from("doe")));
+    assert!(new_keywords.contains(&Keyword::from("john")));
+
+    // Now insert a Robert Smith
+    let mut indexed_value_to_keywords = HashMap::new();
+    let robert_smith_location = Location::from("robert smith DB location");
+    indexed_value_to_keywords.insert(
+        IndexedValue::Location(robert_smith_location),
+        hashset_keywords(&["robert", "smith"]),
+    );
+    let new_keywords = findex
+        .add(&master_key, &label, indexed_value_to_keywords)
+        .await?;
+    // robert should be present, but not smith
+    assert_eq!(new_keywords.len(), 1);
+    assert!(!new_keywords.contains(&Keyword::from("robert")));
+    assert!(new_keywords.contains(&Keyword::from("smith")));
+
+    // Delete Robert Smith and the junior keyword
+    let robert_smith_location = Location::from("robert smith DB location");
+    let mut indexed_value_to_keywords = HashMap::new();
+    indexed_value_to_keywords.insert(
+        IndexedValue::Location(robert_smith_location.clone()),
+        hashset_keywords(&["robert", "smith", "junior"]),
+    );
+    let new_keywords = findex
+        .remove(&master_key, &label, indexed_value_to_keywords.clone())
+        .await?;
+    // robert and smith should be present, but not junior
+    assert_eq!(new_keywords.len(), 1);
+    assert!(!new_keywords.contains(&Keyword::from("robert")));
+    assert!(!new_keywords.contains(&Keyword::from("smith")));
+    assert!(new_keywords.contains(&Keyword::from("junior")));
+
+    // however, the first delete create an entry for "junior,
+    // therefore deleting again will find it
+    let new_keywords = findex
+        .remove(&master_key, &label, indexed_value_to_keywords.clone())
+        .await?;
+    // all should be present
+    assert_eq!(new_keywords.len(), 0);
+
+    Ok(())
 }

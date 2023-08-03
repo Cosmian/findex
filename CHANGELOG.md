@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented in this file.
 
+## [5.0.0] - 2023-07-21
+
+### Features
+
+- Changed the Search, Upsert and Compact API from mutable to immutable
+- Upsert now returns the set of new keywords added to the Entry Table
+
+### Bug Fixes
+
+- add missing `async` keyword for compact callbacks
+- fix `list_removed_locations` doc
+
 ## [4.0.3] - 2023-07-11
 
 ### Features

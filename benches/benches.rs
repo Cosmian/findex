@@ -1,6 +1,3 @@
-#[cfg(not(feature = "in_memory"))]
-compile_error!("Benches require the `in_memory` feature.");
-
 use std::collections::{HashMap, HashSet};
 
 use cosmian_crypto_core::CsRng;
@@ -48,7 +45,7 @@ fn bench_search(c: &mut Criterion) {
     //
     // Prepare indexes to be search
     //
-    let mut findex = FindexInMemory::default();
+    let findex = FindexInMemory::default();
     block_on(findex.add(&master_key, &label, locations_and_words)).expect("msg");
 
     println!("Entry Table length: {}", findex.entry_table_len());
