@@ -562,9 +562,9 @@ impl<const UID_LENGTH: usize> TryFrom<EncryptedMultiTable<UID_LENGTH>>
                 if old_value.is_none() {
                     Ok(acc)
                 } else {
-                    Err(Self::Error::CryptoError(
-                        "Several chains given for the uid: {uid}".to_string(),
-                    ))
+                    Err(Self::Error::CryptoError(format!(
+                        "Several chains given for the uid: {k:?}"
+                    )))
                 }
             })
     }
