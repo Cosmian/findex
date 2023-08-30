@@ -149,9 +149,6 @@ pub trait EdxStore<const VALUE_LENGTH: usize>: Sync + Send {
         + From<[u8; TOKEN_LENGTH]>
         + AsRef<[u8]>;
 
-    /// Value stored in the EDX.
-    type EncryptedValue: Sized + Send + Sync;
-
     /// Type of error returned by the EDX.
     type Error: CallbackErrorTrait;
 
@@ -163,7 +160,7 @@ pub trait EdxStore<const VALUE_LENGTH: usize>: Sync + Send {
     async fn fetch(
         &self,
         tokens: HashSet<Self::Token>,
-    ) -> Result<Vec<(Self::Token, Self::EncryptedValue)>, Self::Error>;
+    ) -> Result<Vec<(Self::Token, EncryptedValue<VALUE_LENGTH>)>, Self::Error>;
 
     /// Upserts the given values into the Edx for the given tokens.
     ///
@@ -187,9 +184,9 @@ pub trait EdxStore<const VALUE_LENGTH: usize>: Sync + Send {
     /// +--------------+----------+-----------+-----------+
     async fn upsert(
         &mut self,
-        old_values: &HashMap<Self::Token, Self::EncryptedValue>,
-        new_values: HashMap<Self::Token, Self::EncryptedValue>,
-    ) -> Result<HashMap<Self::Token, Self::EncryptedValue>, Self::Error>;
+        old_values: &HashMap<Self::Token, EncryptedValue<VALUE_LENGTH>>,
+        new_values: HashMap<Self::Token, EncryptedValue<VALUE_LENGTH>>,
+    ) -> Result<HashMap<Self::Token, EncryptedValue<VALUE_LENGTH>>, Self::Error>;
 
     /// Inserts the given values into the Edx for the given tokens.
     ///
@@ -199,9 +196,10 @@ pub trait EdxStore<const VALUE_LENGTH: usize>: Sync + Send {
     /// should be inserted and an error should be returned.
     async fn insert(
         &mut self,
-        tokens: HashMap<Self::Token, Self::EncryptedValue>,
+        values: HashMap<Self::Token, EncryptedValue<VALUE_LENGTH>>,
     ) -> Result<(), Self::Error>;
 
+    /// Deletes the lines associated to the given tokens from the EDX.
     async fn delete(&mut self, tokens: HashSet<Self::Token>) -> Result<(), Self::Error>;
 }
 
@@ -264,7 +262,7 @@ pub mod in_memory {
         pub fn size(&self) -> usize {
             self.len()
                 * (size_of::<<Self as EdxStore<VALUE_LENGTH>>::Token>()
-                    + size_of::<<Self as EdxStore<VALUE_LENGTH>>::EncryptedValue>())
+                    + EncryptedValue::<VALUE_LENGTH>::LENGTH)
         }
 
         pub fn flush(&mut self) {
@@ -273,10 +271,7 @@ pub mod in_memory {
 
         pub fn load(
             &mut self,
-            table: HashMap<
-                <Self as EdxStore<VALUE_LENGTH>>::Token,
-                <Self as EdxStore<VALUE_LENGTH>>::EncryptedValue,
-            >,
+            table: HashMap<<Self as EdxStore<VALUE_LENGTH>>::Token, EncryptedValue<VALUE_LENGTH>>,
         ) {
             *self.0.lock().expect("could not lock mutex") = table;
         }
@@ -334,7 +329,6 @@ pub mod in_memory {
 
     #[async_trait]
     impl<const VALUE_LENGTH: usize> EdxStore<VALUE_LENGTH> for InMemoryEdx<VALUE_LENGTH> {
-        type EncryptedValue = EncryptedValue<VALUE_LENGTH>;
         type Error = KvStoreError;
         type Token = [u8; TOKEN_LENGTH];
 
@@ -351,7 +345,7 @@ pub mod in_memory {
         async fn fetch(
             &self,
             tokens: HashSet<Self::Token>,
-        ) -> Result<Vec<(Self::Token, Self::EncryptedValue)>, KvStoreError> {
+        ) -> Result<Vec<(Self::Token, EncryptedValue<VALUE_LENGTH>)>, KvStoreError> {
             Ok(tokens
                 .into_iter()
                 .filter_map(|uid| {
@@ -367,9 +361,9 @@ pub mod in_memory {
 
         async fn upsert(
             &mut self,
-            old_values: &HashMap<Self::Token, Self::EncryptedValue>,
-            new_values: HashMap<Self::Token, Self::EncryptedValue>,
-        ) -> Result<HashMap<Self::Token, Self::EncryptedValue>, KvStoreError> {
+            old_values: &HashMap<Self::Token, EncryptedValue<VALUE_LENGTH>>,
+            new_values: HashMap<Self::Token, EncryptedValue<VALUE_LENGTH>>,
+        ) -> Result<HashMap<Self::Token, EncryptedValue<VALUE_LENGTH>>, KvStoreError> {
             let mut edx = self.0.lock().expect("couldn't lock the table");
             // Ensures an value is present inside the EDX for each given old value.
             if old_values.keys().any(|token| !edx.contains_key(token)) {
@@ -404,7 +398,7 @@ pub mod in_memory {
 
         async fn insert(
             &mut self,
-            items: HashMap<Self::Token, Self::EncryptedValue>,
+            items: HashMap<Self::Token, EncryptedValue<VALUE_LENGTH>>,
         ) -> Result<(), Self::Error> {
             let mut edx = self.0.lock().expect("couldn't lock the table");
 

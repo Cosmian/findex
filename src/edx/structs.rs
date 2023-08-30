@@ -1,5 +1,6 @@
 use cosmian_crypto_core::{
-    reexport::rand_core::CryptoRngCore, Aes256Gcm, DemInPlace, Instantiable, Nonce, SymmetricKey,
+    reexport::rand_core::CryptoRngCore, Aes256Gcm, DemInPlace, FixedSizeCBytes, Instantiable,
+    Nonce, SymmetricKey,
 };
 use zeroize::{Zeroize, ZeroizeOnDrop};
 
@@ -84,7 +85,45 @@ pub struct EncryptedValue<const VALUE_LENGTH: usize> {
     pub nonce: Nonce<NONCE_LENGTH>,
 }
 
+impl<const VALUE_LENGTH: usize> From<&EncryptedValue<VALUE_LENGTH>> for Vec<u8> {
+    fn from(value: &EncryptedValue<VALUE_LENGTH>) -> Self {
+        let mut res = Self::with_capacity(EncryptedValue::<VALUE_LENGTH>::LENGTH);
+        res.extend(&value.nonce.0);
+        res.extend(&value.ciphertext);
+        res.extend(&value.tag);
+        res
+    }
+}
+
+impl<const VALUE_LENGTH: usize> TryFrom<&[u8]> for EncryptedValue<VALUE_LENGTH> {
+    type Error = CoreError;
+
+    fn try_from(value: &[u8]) -> Result<Self, Self::Error> {
+        if value.len() != Self::LENGTH {
+            return Err(Self::Error::Conversion(format!(
+                "incorrect length for encrypted value: {} bytes give, {} bytes expected",
+                value.len(),
+                Self::LENGTH
+            )));
+        }
+
+        let nonce = Nonce::try_from_slice(&value[..NONCE_LENGTH])?;
+        let ciphertext =
+            <[u8; VALUE_LENGTH]>::try_from(&value[NONCE_LENGTH..NONCE_LENGTH + VALUE_LENGTH])
+                .map_err(|e| Self::Error::Conversion(e.to_string()))?;
+        let tag = <[u8; MAC_LENGTH]>::try_from(&value[NONCE_LENGTH + VALUE_LENGTH..])
+            .map_err(|e| Self::Error::Conversion(e.to_string()))?;
+        Ok(Self {
+            nonce,
+            ciphertext,
+            tag,
+        })
+    }
+}
+
 impl<const VALUE_LENGTH: usize> EncryptedValue<VALUE_LENGTH> {
+    pub const LENGTH: usize = MAC_LENGTH + NONCE_LENGTH + VALUE_LENGTH;
+
     /// Encrypts the given value using AESGCM-256 and returns the EDX encrypted
     /// value.
     pub fn encrypt(

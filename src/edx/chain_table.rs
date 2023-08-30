@@ -39,10 +39,8 @@ impl<const VALUE_LENGTH: usize, Edx: EdxStore<VALUE_LENGTH>> Deref
 const CHAIN_TABLE_KEY_DERIVATION_INFO: &[u8] = b"Chain Table key derivation info.";
 
 #[async_trait]
-impl<
-        const VALUE_LENGTH: usize,
-        EdxScheme: EdxStore<VALUE_LENGTH, EncryptedValue = EncryptedValue<VALUE_LENGTH>>,
-    > DxEnc<VALUE_LENGTH> for ChainTable<VALUE_LENGTH, EdxScheme>
+impl<const VALUE_LENGTH: usize, EdxScheme: EdxStore<VALUE_LENGTH>> DxEnc<VALUE_LENGTH>
+    for ChainTable<VALUE_LENGTH, EdxScheme>
 {
     type EncryptedValue = EncryptedValue<VALUE_LENGTH>;
     type Error = Error<EdxScheme::Error>;

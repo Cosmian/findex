@@ -13,7 +13,7 @@
 
 // Macro declarations should come first.
 #[macro_use]
-mod macros;
+pub mod macros;
 
 mod edx;
 mod error;

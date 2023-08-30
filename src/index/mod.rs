@@ -227,8 +227,8 @@ impl<
         let mut rng = self.rng.lock().expect("could not lock mutex");
         let mut res = HashSet::with_capacity(n);
         for _ in 0..n {
-            // In order to draw a random element from the set, draw a random u64 and use it
-            // modulo the length of the set. This is not perfectly uniform but should be
+            // In order to draw a random element from the set, draw a random `u64` and use
+            // it modulo the length of the set. This is not perfectly uniform but should be
             // enough in practice.
             let index = (rng.next_u64() % tokens.len() as u64) as usize;
             res.insert(tokens[index]);
@@ -237,7 +237,7 @@ impl<
     }
 
     /// Returns the expected number of draws per compact operation such that all
-    /// EntryTable tokens are drawn after `n_compact_to_full` such operation.
+    /// Entry Table tokens are drawn after `n_compact_to_full` such operation.
     fn get_compact_line_number(
         &self,
         entry_table_length: usize,
