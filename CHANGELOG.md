@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [5.0.1] - 2023-09-01
+
+### Features
+
+- Update crypto_core to 9.1.0
+
 ## [5.0.0] - 2023-07-21
 
 ### Features
