@@ -17,7 +17,6 @@
 // for searching and upserting indexes.
 #![feature(async_fn_in_trait)]
 #![allow(incomplete_features)]
-#![feature(never_type)]
 
 const ENTRY_TABLE_KEY_DERIVATION_INFO: &[u8] = b"Entry Table key derivation info.";
 const CHAIN_TABLE_KEY_DERIVATION_INFO: &[u8] = b"Chain Table key derivation info.";

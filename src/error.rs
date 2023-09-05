@@ -3,6 +3,7 @@
 use core::fmt::{Debug, Display};
 
 use cosmian_crypto_core::CryptoCoreError;
+use never::Never;
 
 /// Marker trait indicating an error type is used as `CallbackError`.
 pub trait CallbackError {}
@@ -47,9 +48,11 @@ impl<T: std::error::Error + CallbackError> From<T> for Error<T> {
 
 impl<T: std::error::Error> std::error::Error for Error<T> {}
 
-/// Alias used to represent a Findex error that does not come from a
-/// callback.
-pub type CoreError = Error<!>;
+/// Alias used to represent a Findex error that does not come from a callback.
+///
+/// Once merged into stable, replace `Never` type with `!` std primitive
+/// see: <https://doc.rust-lang.org/std/primitive.never.html>
+pub type CoreError = Error<Never>;
 
 impl<T: std::error::Error + CallbackError> From<CoreError> for Error<T> {
     fn from(value: CoreError) -> Self {
@@ -58,7 +61,7 @@ impl<T: std::error::Error + CallbackError> From<CoreError> for Error<T> {
             CoreError::CryptoCoreError(err) => Self::CryptoCoreError(err),
             CoreError::ConversionError(err) => Self::ConversionError(err),
             CoreError::Callback(_) => {
-                panic!("this cannot happen because CoreError uses the `!` type");
+                panic!("this cannot happen because CoreError uses the `Never` type");
             }
         }
     }
