@@ -160,7 +160,6 @@ macro_rules! kmac {
 #[macro_export]
 macro_rules! impl_findex_trait {
     ($trait:ident, $findex:ty, $error:ty) => {
-        #[async_trait]
         impl
             $trait<
                 { $crate::parameters::UID_LENGTH },

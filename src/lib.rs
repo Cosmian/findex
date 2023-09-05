@@ -9,7 +9,6 @@
 // > In a secure Rust development, the forget function of std::mem (core::mem)
 // must not be used.
 #![deny(clippy::mem_forget)]
-#![allow(incomplete_features)]
 
 const ENTRY_TABLE_KEY_DERIVATION_INFO: &[u8] = b"Entry Table key derivation info.";
 const CHAIN_TABLE_KEY_DERIVATION_INFO: &[u8] = b"Chain Table key derivation info.";
