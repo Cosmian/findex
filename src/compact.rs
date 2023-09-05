@@ -2,6 +2,7 @@
 
 use std::collections::HashMap;
 
+use async_trait::async_trait;
 use cosmian_crypto_core::{reexport::rand_core::SeedableRng, CsRng};
 use rand::seq::IteratorRandom;
 
@@ -19,6 +20,7 @@ use crate::{
 /// The compact operation is required to remove old indexes from the Index
 /// Chain Table and to improve the security of the index by changing all the
 /// Index Entry Table.
+#[async_trait]
 pub trait FindexCompact<
     const UID_LENGTH: usize,
     const BLOCK_LENGTH: usize,

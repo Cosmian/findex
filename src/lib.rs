@@ -9,13 +9,6 @@
 // > In a secure Rust development, the forget function of std::mem (core::mem)
 // must not be used.
 #![deny(clippy::mem_forget)]
-// Since asynchronous functions in traits are not yet stabilized in Rust
-// `stable` toolchain, we are using the incomplete (but working) feature
-// `async_fn_in_trait`:
-// <https://rust-lang.github.io/rfcs/3185-static-async-fn-in-trait.html>.
-// It allows the Wasm Findex implementation to reuse the common traits
-// for searching and upserting indexes.
-#![feature(async_fn_in_trait)]
 #![allow(incomplete_features)]
 
 const ENTRY_TABLE_KEY_DERIVATION_INFO: &[u8] = b"Entry Table key derivation info.";

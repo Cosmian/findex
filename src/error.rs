@@ -49,9 +49,6 @@ impl<T: std::error::Error + CallbackError> From<T> for Error<T> {
 impl<T: std::error::Error> std::error::Error for Error<T> {}
 
 /// Alias used to represent a Findex error that does not come from a callback.
-///
-/// Once merged into stable, replace `Never` type with `!` std primitive
-/// see: <https://doc.rust-lang.org/std/primitive.never.html>
 pub type CoreError = Error<Never>;
 
 impl<T: std::error::Error + CallbackError> From<CoreError> for Error<T> {
