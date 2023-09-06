@@ -28,6 +28,7 @@ use std::{
     sync::{Arc, Mutex},
 };
 
+use async_trait::async_trait;
 use cosmian_crypto_core::reexport::rand_core::CryptoRngCore;
 use zeroize::ZeroizeOnDrop;
 
@@ -39,6 +40,7 @@ mod structs;
 
 pub use structs::{CompactingData, Operation, ENTRY_LENGTH, LINK_LENGTH};
 
+#[async_trait]
 pub trait MmEnc<const SEED_LENGTH: usize, EdxError: CallbackErrorTrait>: Send + Sync {
     /// Seed used to derive the key.
     type Seed: Sized + ZeroizeOnDrop + AsRef<[u8]> + Default + AsMut<[u8]> + Sync + Sync;
@@ -60,7 +62,7 @@ pub trait MmEnc<const SEED_LENGTH: usize, EdxError: CallbackErrorTrait>: Send + 
 
     /// Queries the encrypted multi-map for the given tags and returns the
     /// decrypted values.
-    async fn get<Tag: Debug + Hash + Eq + AsRef<[u8]>>(
+    async fn get<Tag: Send + Sync + Debug + Hash + Eq + AsRef<[u8]>>(
         &self,
         key: &Self::Key,
         tags: HashSet<Tag>,
@@ -69,9 +71,9 @@ pub trait MmEnc<const SEED_LENGTH: usize, EdxError: CallbackErrorTrait>: Send + 
 
     /// Applies the given modifications to the encrypted multi-map. Returns the
     /// set of Tags added to the Multi-Map.
-    async fn insert<Tag: Hash + Eq + AsRef<[u8]>>(
+    async fn insert<Tag: Send + Sync + Hash + Eq + AsRef<[u8]>>(
         &mut self,
-        rng: Arc<Mutex<impl CryptoRngCore>>,
+        rng: Arc<Mutex<impl Send + Sync + CryptoRngCore>>,
         key: &Self::Key,
         modifications: HashMap<Tag, Vec<(Operation, Self::Item)>>,
         label: &Label,

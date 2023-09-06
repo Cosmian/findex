@@ -14,11 +14,11 @@ use crate::{
 };
 
 impl<
-    UserError: CallbackErrorTrait,
-    EntryTable: DxEnc<ENTRY_LENGTH, Error = Error<UserError>>
-        + TokenDump<Token = <EntryTable as DxEnc<ENTRY_LENGTH>>::Token, Error = Error<UserError>>,
-    ChainTable: DxEnc<LINK_LENGTH, Error = Error<UserError>>,
-> FindexMultiMap<UserError, EntryTable, ChainTable>
+        UserError: CallbackErrorTrait,
+        EntryTable: DxEnc<ENTRY_LENGTH, Error = Error<UserError>>
+            + TokenDump<Token = <EntryTable as DxEnc<ENTRY_LENGTH>>::Token, Error = Error<UserError>>,
+        ChainTable: DxEnc<LINK_LENGTH, Error = Error<UserError>>,
+    > FindexMultiMap<UserError, EntryTable, ChainTable>
 {
     /// Returns the set of Entry Table tokens.
     pub async fn dump_entry_tokens(
