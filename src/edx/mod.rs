@@ -214,14 +214,14 @@ pub mod in_memory {
     };
 
     use async_trait::async_trait;
-    use cosmian_crypto_core::{bytes_ser_de::Serializable, CryptoCoreError, Nonce};
+    use cosmian_crypto_core::CryptoCoreError;
+    #[cfg(feature = "in_memory")]
+    use cosmian_crypto_core::{bytes_ser_de::Serializable, Nonce};
 
     use super::{EdxStore, HashMap, HashSet};
-    use crate::{
-        error::CallbackErrorTrait,
-        parameters::{MAC_LENGTH, NONCE_LENGTH, TOKEN_LENGTH},
-        EncryptedValue,
-    };
+    #[cfg(feature = "in_memory")]
+    use crate::parameters::{MAC_LENGTH, NONCE_LENGTH};
+    use crate::{error::CallbackErrorTrait, parameters::TOKEN_LENGTH, EncryptedValue};
 
     #[derive(Debug)]
     pub struct KvStoreError(String);
@@ -282,6 +282,7 @@ pub mod in_memory {
         }
     }
 
+    #[cfg(feature = "in_memory")]
     impl<const VALUE_LENGTH: usize> Serializable for InMemoryEdx<VALUE_LENGTH> {
         type Error = KvStoreError;
 
