@@ -7,6 +7,7 @@ use std::{
     hash::Hash,
 };
 
+use async_trait::async_trait;
 use cosmian_crypto_core::reexport::rand_core::CryptoRngCore;
 use zeroize::ZeroizeOnDrop;
 
@@ -18,6 +19,7 @@ pub use structs::{EncryptedValue, Seed};
 
 use crate::{CallbackErrorTrait, Label, TOKEN_LENGTH};
 
+#[async_trait]
 pub trait TokenDump {
     type Token;
 
@@ -26,6 +28,7 @@ pub trait TokenDump {
     async fn dump_tokens(&self) -> Result<HashSet<Self::Token>, Self::Error>;
 }
 
+#[async_trait]
 pub trait DxEnc<const VALUE_LENGTH: usize>: Sync + Send {
     /// Seed used to derive the key.
     type Seed: Sized + ZeroizeOnDrop + AsRef<[u8]> + Default + AsMut<[u8]> + Send + Sync;
@@ -133,6 +136,7 @@ pub trait DxEnc<const VALUE_LENGTH: usize>: Sync + Send {
     async fn delete(&mut self, tokens: HashSet<Self::Token>) -> Result<(), Self::Error>;
 }
 
+#[async_trait]
 pub trait EdxStore<const VALUE_LENGTH: usize>: Sync + Send {
     /// Token used as key to store values.
     type Token: Sized
@@ -209,6 +213,7 @@ pub mod in_memory {
         sync::{Arc, Mutex},
     };
 
+    use async_trait::async_trait;
     use cosmian_crypto_core::{bytes_ser_de::Serializable, CryptoCoreError, Nonce};
 
     use super::{EdxStore, HashMap, HashSet};
@@ -326,6 +331,7 @@ pub mod in_memory {
         }
     }
 
+    #[async_trait]
     impl<const VALUE_LENGTH: usize> EdxStore<VALUE_LENGTH> for InMemoryEdx<VALUE_LENGTH> {
         type EncryptedValue = EncryptedValue<VALUE_LENGTH>;
         type Error = KvStoreError;

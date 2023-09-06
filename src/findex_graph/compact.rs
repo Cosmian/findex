@@ -15,11 +15,11 @@ use crate::{
 };
 
 impl<
-    UserError: CallbackErrorTrait,
-    EntryTable: DxEnc<ENTRY_LENGTH, Error = Error<UserError>>
-        + TokenDump<Token = <EntryTable as DxEnc<ENTRY_LENGTH>>::Token, Error = Error<UserError>>,
-    ChainTable: DxEnc<LINK_LENGTH, Error = Error<UserError>>,
-> FindexGraph<UserError, EntryTable, ChainTable>
+        UserError: CallbackErrorTrait,
+        EntryTable: DxEnc<ENTRY_LENGTH, Error = Error<UserError>>
+            + TokenDump<Token = <EntryTable as DxEnc<ENTRY_LENGTH>>::Token, Error = Error<UserError>>,
+        ChainTable: DxEnc<LINK_LENGTH, Error = Error<UserError>>,
+    > FindexGraph<UserError, EntryTable, ChainTable>
 {
     pub async fn list_indexed_encrypted_tags(
         &self,

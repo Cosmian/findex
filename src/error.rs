@@ -3,6 +3,7 @@
 use core::fmt::{Debug, Display};
 
 use cosmian_crypto_core::CryptoCoreError;
+use never::Never;
 
 /// Marker trait indicating an error type is used as `CallbackError`.
 pub trait CallbackErrorTrait: std::error::Error + Send + Sync {}
@@ -49,7 +50,7 @@ impl<T: std::error::Error> std::error::Error for Error<T> {}
 
 /// Alias used to represent a Findex error that does not originate from a
 /// callback.
-pub type CoreError = Error<!>;
+pub type CoreError = Error<Never>;
 
 impl<T: CallbackErrorTrait> From<CoreError> for Error<T> {
     fn from(value: CoreError) -> Self {
@@ -58,7 +59,7 @@ impl<T: CallbackErrorTrait> From<CoreError> for Error<T> {
             CoreError::CryptoCore(err) => Self::CryptoCore(err),
             CoreError::Conversion(err) => Self::Conversion(err),
             CoreError::Callback(_) => {
-                panic!("this cannot happen because CoreError uses the `!` type");
+                panic!("this cannot happen because CoreError uses the `Never` type");
             }
         }
     }

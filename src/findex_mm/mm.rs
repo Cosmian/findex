@@ -7,6 +7,7 @@ use std::{
     sync::{Arc, Mutex},
 };
 
+use async_trait::async_trait;
 use cosmian_crypto_core::reexport::rand_core::CryptoRngCore;
 use tiny_keccak::{Hasher, Sha3};
 
@@ -22,10 +23,10 @@ use crate::{
 };
 
 impl<
-    UserError: CallbackErrorTrait,
-    EntryTable: DxEnc<ENTRY_LENGTH, Error = Error<UserError>>,
-    ChainTable: DxEnc<LINK_LENGTH, Error = Error<UserError>>,
-> FindexMultiMap<UserError, EntryTable, ChainTable>
+        UserError: CallbackErrorTrait,
+        EntryTable: DxEnc<ENTRY_LENGTH, Error = Error<UserError>>,
+        ChainTable: DxEnc<LINK_LENGTH, Error = Error<UserError>>,
+    > FindexMultiMap<UserError, EntryTable, ChainTable>
 {
     /// Instantiates a new `FindexMultiMap`.
     pub fn new(entry_table: EntryTable, chain_table: ChainTable) -> Self {
@@ -240,11 +241,12 @@ impl<
     }
 }
 
+#[async_trait]
 impl<
-    UserError: CallbackErrorTrait,
-    EntryTable: DxEnc<ENTRY_LENGTH, Error = Error<UserError>>,
-    ChainTable: DxEnc<LINK_LENGTH, Error = Error<UserError>>,
-> MmEnc<SEED_LENGTH, UserError> for FindexMultiMap<UserError, EntryTable, ChainTable>
+        UserError: CallbackErrorTrait,
+        EntryTable: DxEnc<ENTRY_LENGTH, Error = Error<UserError>>,
+        ChainTable: DxEnc<LINK_LENGTH, Error = Error<UserError>>,
+    > MmEnc<SEED_LENGTH, UserError> for FindexMultiMap<UserError, EntryTable, ChainTable>
 {
     type Error = Error<UserError>;
     type Item = Vec<u8>;
@@ -259,7 +261,7 @@ impl<
         self.entry_table.derive_keys(seed)
     }
 
-    async fn get<Tag: Debug + Hash + Eq + AsRef<[u8]>>(
+    async fn get<Tag: Send + Sync + Debug + Hash + Eq + AsRef<[u8]>>(
         &self,
         key: &Self::Key,
         tags: HashSet<Tag>,
@@ -303,9 +305,9 @@ impl<
         Ok(indexed_values)
     }
 
-    async fn insert<Tag: Hash + Eq + AsRef<[u8]>>(
+    async fn insert<Tag: Send + Sync + Hash + Eq + AsRef<[u8]>>(
         &mut self,
-        rng: Arc<Mutex<impl CryptoRngCore>>,
+        rng: Arc<Mutex<impl Send + Sync + CryptoRngCore>>,
         key: &Self::Key,
         modifications: HashMap<Tag, Vec<(Operation, Self::Item)>>,
         label: &Label,

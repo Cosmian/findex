@@ -11,10 +11,6 @@
 //! the interface and to hide the cryptographic details of the implementation
 //! when it is possible.
 
-#![feature(never_type)]
-#![allow(incomplete_features)]
-#![feature(async_fn_in_trait)]
-
 // Macro declarations should come first.
 #[macro_use]
 mod macros;

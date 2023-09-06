@@ -7,6 +7,8 @@ use std::{
     sync::{Arc, Mutex},
 };
 
+use async_trait::async_trait;
+
 use crate::{
     edx::TokenDump,
     findex_graph::{FindexGraph, GxEnc},
@@ -23,6 +25,7 @@ use cosmian_crypto_core::{
 };
 pub use structs::{Keyword, Label, Location};
 
+#[async_trait]
 pub trait DbCallback {
     type Error: CallbackErrorTrait;
 
@@ -33,9 +36,8 @@ pub trait DbCallback {
     ) -> Result<HashSet<Location>, Self::Error>;
 }
 
-pub trait Index<EntryTable: DxEnc<ENTRY_LENGTH>, ChainTable: DxEnc<LINK_LENGTH>>:
-    Sync + Send
-{
+#[async_trait]
+pub trait Index<EntryTable: DxEnc<ENTRY_LENGTH>, ChainTable: DxEnc<LINK_LENGTH>> {
     /// Index key.
     type Key: SecretCBytes<{ USER_KEY_LENGTH }>;
 
@@ -53,8 +55,8 @@ pub trait Index<EntryTable: DxEnc<ENTRY_LENGTH>, ChainTable: DxEnc<LINK_LENGTH>>
     /// The `interrupt` callback is fed with the results of each graph search
     /// iteration. Iterations are stopped if the `interrupt` return `true`.
     async fn search<
-        F: Future<Output = bool>,
-        Interrupt: Fn(HashMap<Keyword, HashSet<IndexedValue<Keyword, Location>>>) -> F,
+        F: Send + Sync + Future<Output = bool>,
+        Interrupt: Send + Sync + Fn(HashMap<Keyword, HashSet<IndexedValue<Keyword, Location>>>) -> F,
     >(
         &self,
         key: &Self::Key,
@@ -92,11 +94,12 @@ pub struct Findex<
     rng: Arc<Mutex<CsRng>>,
 }
 
+#[async_trait]
 impl<
-    UserError: CallbackErrorTrait,
-    EntryTable: DxEnc<ENTRY_LENGTH, Error = Error<UserError>>,
-    ChainTable: DxEnc<LINK_LENGTH, Error = Error<UserError>>,
-> Index<EntryTable, ChainTable> for Findex<UserError, EntryTable, ChainTable>
+        UserError: CallbackErrorTrait,
+        EntryTable: DxEnc<ENTRY_LENGTH, Error = Error<UserError>>,
+        ChainTable: DxEnc<LINK_LENGTH, Error = Error<UserError>>,
+    > Index<EntryTable, ChainTable> for Findex<UserError, EntryTable, ChainTable>
 {
     type Error = Error<UserError>;
     type Key = SymmetricKey<{ USER_KEY_LENGTH }>;
@@ -113,8 +116,8 @@ impl<
     }
 
     async fn search<
-        F: Future<Output = bool>,
-        Interrupt: Fn(HashMap<Keyword, HashSet<IndexedValue<Keyword, Location>>>) -> F,
+        F: Send + Sync + Future<Output = bool>,
+        Interrupt: Send + Sync + Fn(HashMap<Keyword, HashSet<IndexedValue<Keyword, Location>>>) -> F,
     >(
         &self,
         key: &Self::Key,
@@ -193,11 +196,11 @@ impl<
 }
 
 impl<
-    UserError: CallbackErrorTrait,
-    EntryTable: DxEnc<ENTRY_LENGTH, Error = Error<UserError>>
-        + TokenDump<Token = <EntryTable as DxEnc<ENTRY_LENGTH>>::Token, Error = Error<UserError>>,
-    ChainTable: DxEnc<LINK_LENGTH, Error = Error<UserError>>,
-> Findex<UserError, EntryTable, ChainTable>
+        UserError: CallbackErrorTrait,
+        EntryTable: DxEnc<ENTRY_LENGTH, Error = Error<UserError>>
+            + TokenDump<Token = <EntryTable as DxEnc<ENTRY_LENGTH>>::Token, Error = Error<UserError>>,
+        ChainTable: DxEnc<LINK_LENGTH, Error = Error<UserError>>,
+    > Findex<UserError, EntryTable, ChainTable>
 {
     /// Number of items to compact at once.
     ///

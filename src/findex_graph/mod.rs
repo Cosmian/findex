@@ -12,6 +12,7 @@ use std::{
     sync::{Arc, Mutex},
 };
 
+use async_trait::async_trait;
 use cosmian_crypto_core::reexport::rand_core::CryptoRngCore;
 use zeroize::ZeroizeOnDrop;
 
@@ -26,6 +27,7 @@ mod structs;
 
 pub use structs::IndexedValue;
 
+#[async_trait]
 pub trait GxEnc<EdxError: CallbackErrorTrait>: Sync + Send {
     /// Seed used to derive the key.
     type Seed: Sized + ZeroizeOnDrop + AsRef<[u8]> + Default + AsMut<[u8]> + Sync + Send;
@@ -45,10 +47,10 @@ pub trait GxEnc<EdxError: CallbackErrorTrait>: Sync + Send {
     /// Queries the encrypted graph for the given tags and returns the
     /// decrypted values.
     async fn get<
-        Tag: Debug + Hash + Eq + Clone + AsRef<[u8]> + From<Vec<u8>>,
-        Value: Hash + Eq + Clone + From<Vec<u8>>,
-        F: Future<Output = bool>,
-        Interrupt: Fn(HashMap<Tag, HashSet<IndexedValue<Tag, Value>>>) -> F,
+        Tag: Debug + Send + Sync + Hash + Eq + Clone + AsRef<[u8]> + From<Vec<u8>>,
+        Value: Hash + Send + Sync + Eq + Clone + From<Vec<u8>>,
+        F: Send + Sync + Future<Output = bool>,
+        Interrupt: Send + Sync + Fn(HashMap<Tag, HashSet<IndexedValue<Tag, Value>>>) -> F,
     >(
         &self,
         key: &Self::Key,
@@ -60,9 +62,9 @@ pub trait GxEnc<EdxError: CallbackErrorTrait>: Sync + Send {
     /// Encrypts and inserts the given items into the graph. Returns the set of
     /// tags added to the index.
     #[allow(clippy::type_complexity)]
-    async fn insert<Tag: Hash + Eq + AsRef<[u8]>, Value: AsRef<[u8]>>(
+    async fn insert<Tag: Send + Sync + Hash + Eq + AsRef<[u8]>, Value: Send + Sync + AsRef<[u8]>>(
         &mut self,
-        rng: Arc<Mutex<impl CryptoRngCore>>,
+        rng: Arc<Mutex<impl Send + Sync + CryptoRngCore>>,
         key: &Self::Key,
         items: HashMap<Tag, Vec<(Operation, IndexedValue<Tag, Value>)>>,
         label: &Label,
@@ -79,10 +81,10 @@ pub struct FindexGraph<
 }
 
 impl<
-    UserError: CallbackErrorTrait,
-    EntryTable: DxEnc<ENTRY_LENGTH, Error = Error<UserError>>,
-    ChainTable: DxEnc<LINK_LENGTH, Error = Error<UserError>>,
-> FindexGraph<UserError, EntryTable, ChainTable>
+        UserError: CallbackErrorTrait,
+        EntryTable: DxEnc<ENTRY_LENGTH, Error = Error<UserError>>,
+        ChainTable: DxEnc<LINK_LENGTH, Error = Error<UserError>>,
+    > FindexGraph<UserError, EntryTable, ChainTable>
 {
     pub fn new(entry_table: EntryTable, chain_table: ChainTable) -> Self {
         Self {

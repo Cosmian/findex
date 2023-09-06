@@ -1,7 +1,3 @@
-#![feature(async_fn_in_trait)]
-#![allow(incomplete_features)]
-#![feature(generic_const_exprs)]
-
 use std::{
     collections::{HashMap, HashSet},
     fs::File,
@@ -9,6 +5,7 @@ use std::{
     result::Result,
 };
 
+use async_trait::async_trait;
 use cosmian_crypto_core::{reexport::rand_core::SeedableRng, CsRng};
 use cosmian_findex::{
     ChainTable, DbCallback, DxEnc, EntryTable, Error, Findex, InMemoryEdx, Index, IndexedValue,
@@ -187,12 +184,10 @@ async fn test_progress_callback() -> Result<(), Error<KvStoreError>> {
 
     check_search_result(&rob_search, &rob_keyword, &robert_doe_location);
     check_search_result(&rob_search, &rob_keyword, &rob_location);
-    assert!(
-        rob_search
-            .get(&rob_keyword)
-            .unwrap()
-            .contains(&roberta_location)
-    );
+    assert!(rob_search
+        .get(&rob_keyword)
+        .unwrap()
+        .contains(&roberta_location));
 
     Ok(())
 }
@@ -214,6 +209,7 @@ impl Db {
     }
 }
 
+#[async_trait]
 impl DbCallback for Db {
     type Error = KvStoreError;
 

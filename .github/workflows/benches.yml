@@ -7,5 +7,5 @@ jobs:
   bench:
     uses: Cosmian/reusable_workflows/.github/workflows/cargo-bench.yml@develop
     with:
-      toolchain: nightly-2022-10-28
+      toolchain: stable
       force: true
