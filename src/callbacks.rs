@@ -1,5 +1,7 @@
 use std::collections::{HashMap, HashSet};
 
+use async_trait::async_trait;
+
 use crate::{
     chain_table::{ChainTableValue, KwiChainUids},
     structs::EncryptedMultiTable,
@@ -8,6 +10,7 @@ use crate::{
 };
 
 /// Trait implementing all callbacks needed by Findex.
+#[async_trait]
 pub trait FindexCallbacks<Error: std::error::Error + CallbackError, const UID_LENGTH: usize> {
     /// Returns partial results during a search. Stops the search if the
     /// returned value is `false`. This can be useful to stop the search when an
@@ -176,6 +179,7 @@ pub trait FindexCallbacks<Error: std::error::Error + CallbackError, const UID_LE
     async fn delete_chain(&mut self, uids: Uids<UID_LENGTH>) -> Result<(), Error>;
 }
 
+#[async_trait]
 pub trait FetchChains<
     const UID_LENGTH: usize,
     const BLOCK_LENGTH: usize,

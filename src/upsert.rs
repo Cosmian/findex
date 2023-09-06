@@ -3,6 +3,7 @@
 
 use std::collections::{HashMap, HashSet};
 
+use async_trait::async_trait;
 use cosmian_crypto_core::{reexport::rand_core::SeedableRng, CsRng};
 
 use crate::{
@@ -15,6 +16,7 @@ use crate::{
 };
 
 /// This the public trait exposed to the users of the Findex Upsert API.
+#[async_trait]
 pub trait FindexUpsert<
     const UID_LENGTH: usize,
     const BLOCK_LENGTH: usize,

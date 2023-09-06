@@ -4,6 +4,7 @@ use std::{
     sync::RwLock,
 };
 
+use async_trait::async_trait;
 use cosmian_crypto_core::{
     bytes_ser_de::{Deserializer, Serializer},
     reexport::rand_core::SeedableRng,
@@ -121,6 +122,7 @@ impl<const UID_LENGTH: usize> FindexInMemory<UID_LENGTH> {
     }
 }
 
+#[async_trait]
 impl<const UID_LENGTH: usize> FindexCallbacks<ExampleError, UID_LENGTH>
     for FindexInMemory<UID_LENGTH>
 {
