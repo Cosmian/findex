@@ -37,7 +37,7 @@ impl<const VALUE_LENGTH: usize, Edx: EdxStore<VALUE_LENGTH>> Deref
 
 const ENTRY_TABLE_KEY_DERIVATION_INFO: &[u8] = b"Entry Table key derivation info.";
 
-#[async_trait]
+#[async_trait(?Send)]
 impl<const VALUE_LENGTH: usize, Edx: EdxStore<VALUE_LENGTH>> DxEnc<VALUE_LENGTH>
     for EntryTable<VALUE_LENGTH, Edx>
 {
@@ -133,7 +133,7 @@ impl<const VALUE_LENGTH: usize, Edx: EdxStore<VALUE_LENGTH>> DxEnc<VALUE_LENGTH>
     }
 }
 
-#[async_trait]
+#[async_trait(?Send)]
 impl<const VALUE_LENGTH: usize, Edx: EdxStore<VALUE_LENGTH>> TokenDump
     for EntryTable<VALUE_LENGTH, Edx>
 {

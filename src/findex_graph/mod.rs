@@ -27,7 +27,7 @@ mod structs;
 
 pub use structs::IndexedValue;
 
-#[async_trait]
+#[async_trait(?Send)]
 pub trait GxEnc<EdxError: CallbackErrorTrait>: Sync + Send {
     /// Seed used to derive the key.
     type Seed: Sized + ZeroizeOnDrop + AsRef<[u8]> + Default + AsMut<[u8]> + Sync + Send;

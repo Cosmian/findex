@@ -241,7 +241,7 @@ impl<
     }
 }
 
-#[async_trait]
+#[async_trait(?Send)]
 impl<
         UserError: CallbackErrorTrait,
         EntryTable: DxEnc<ENTRY_LENGTH, Error = Error<UserError>>,

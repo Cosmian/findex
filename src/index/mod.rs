@@ -36,7 +36,7 @@ pub trait DbCallback {
     ) -> Result<HashSet<Location>, Self::Error>;
 }
 
-#[async_trait]
+#[async_trait(?Send)]
 pub trait Index<EntryTable: DxEnc<ENTRY_LENGTH>, ChainTable: DxEnc<LINK_LENGTH>> {
     /// Index key.
     type Key: SecretCBytes<{ USER_KEY_LENGTH }>;
@@ -94,7 +94,7 @@ pub struct Findex<
     rng: Arc<Mutex<CsRng>>,
 }
 
-#[async_trait]
+#[async_trait(?Send)]
 impl<
         UserError: CallbackErrorTrait,
         EntryTable: DxEnc<ENTRY_LENGTH, Error = Error<UserError>>,

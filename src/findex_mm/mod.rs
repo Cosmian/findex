@@ -40,7 +40,7 @@ mod structs;
 
 pub use structs::{CompactingData, Operation, ENTRY_LENGTH, LINK_LENGTH};
 
-#[async_trait]
+#[async_trait(?Send)]
 pub trait MmEnc<const SEED_LENGTH: usize, EdxError: CallbackErrorTrait>: Send + Sync {
     /// Seed used to derive the key.
     type Seed: Sized + ZeroizeOnDrop + AsRef<[u8]> + Default + AsMut<[u8]> + Sync + Sync;
