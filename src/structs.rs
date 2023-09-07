@@ -515,6 +515,7 @@ impl<const UID_LENGTH: usize> EncryptedTable<UID_LENGTH> {
         Self(HashMap::with_capacity(capacity))
     }
 
+    #[must_use]
     pub fn into_keys(self) -> IntoKeys<Uid<UID_LENGTH>, Vec<u8>> {
         self.0.into_keys()
     }

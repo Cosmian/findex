@@ -20,7 +20,7 @@ Findex is part of Cosmian Cloudproof Encryption.
 - [Getting started](#getting-started)
 - [Building and testing](#building-and-testing)
 - [Findex indexes](#findex-indexes)
-  - [Two indexing strategies](#two-indexing-strategies)
+  * [Two indexing strategies](#two-indexing-strategies)
 - [Benchmarks](#benchmarks)
 - [Documentation](#documentation)
 
