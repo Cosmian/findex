@@ -2,6 +2,8 @@
 
 use std::collections::{HashMap, HashSet};
 
+use async_trait::async_trait;
+
 use crate::{
     callbacks::{FetchChains, FindexCallbacks},
     chain_table::KwiChainUids,
@@ -13,6 +15,7 @@ use crate::{
 };
 
 /// Trait implementing the search functionality of Findex.
+#[async_trait]
 pub trait FindexSearch<
     const UID_LENGTH: usize,
     const BLOCK_LENGTH: usize,

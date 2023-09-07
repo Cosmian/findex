@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [5.0.2] - 2023-09-07
+
+### Bug Fixes
+
+- Remove the need of nightly toolchain (use `never` and `async-trait` crates)
+
 ## [5.0.1] - 2023-09-01
 
 ### Features
