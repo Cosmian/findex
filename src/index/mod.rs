@@ -13,7 +13,6 @@ use crate::{
     edx::TokenDump,
     findex_graph::{FindexGraph, GxEnc},
     findex_mm::{Operation, ENTRY_LENGTH, LINK_LENGTH},
-    parameters::USER_KEY_LENGTH,
     CallbackErrorTrait, DxEnc, Error, IndexedValue,
 };
 
@@ -21,9 +20,9 @@ mod structs;
 
 use cosmian_crypto_core::{
     reexport::rand_core::{RngCore, SeedableRng},
-    CsRng, RandomFixedSizeCBytes, SecretCBytes, SymmetricKey,
+    CsRng, RandomFixedSizeCBytes,
 };
-pub use structs::{Keyword, Label, Location};
+pub use structs::{Keyword, Label, Location, UserKey};
 
 #[async_trait]
 pub trait DbCallback {
@@ -38,9 +37,6 @@ pub trait DbCallback {
 
 #[async_trait(?Send)]
 pub trait Index<EntryTable: DxEnc<ENTRY_LENGTH>, ChainTable: DxEnc<LINK_LENGTH>> {
-    /// Index key.
-    type Key: SecretCBytes<{ USER_KEY_LENGTH }>;
-
     /// Index error type.
     type Error: std::error::Error + Sync + Send;
 
@@ -48,7 +44,7 @@ pub trait Index<EntryTable: DxEnc<ENTRY_LENGTH>, ChainTable: DxEnc<LINK_LENGTH>>
     fn new(et: EntryTable, ct: ChainTable) -> Self;
 
     /// Generates a new random cryptographic key.
-    fn keygen(&self) -> Self::Key;
+    fn keygen(&self) -> UserKey;
 
     /// Searches the index for the given keywords.
     ///
@@ -59,7 +55,7 @@ pub trait Index<EntryTable: DxEnc<ENTRY_LENGTH>, ChainTable: DxEnc<LINK_LENGTH>>
         Interrupt: Send + Sync + Fn(HashMap<Keyword, HashSet<IndexedValue<Keyword, Location>>>) -> F,
     >(
         &self,
-        key: &Self::Key,
+        key: &UserKey,
         label: &Label,
         keywords: HashSet<Keyword>,
         interrupt: &Interrupt,
@@ -69,7 +65,7 @@ pub trait Index<EntryTable: DxEnc<ENTRY_LENGTH>, ChainTable: DxEnc<LINK_LENGTH>>
     /// set of keywords added to the index.
     async fn add(
         &mut self,
-        key: &Self::Key,
+        key: &UserKey,
         label: &Label,
         keywords: HashMap<IndexedValue<Keyword, Location>, HashSet<Keyword>>,
     ) -> Result<HashSet<Keyword>, Self::Error>;
@@ -78,7 +74,7 @@ pub trait Index<EntryTable: DxEnc<ENTRY_LENGTH>, ChainTable: DxEnc<LINK_LENGTH>>
     /// `Keyword`s. Returns the set of keywords added to the index.
     async fn delete(
         &mut self,
-        key: &Self::Key,
+        key: &UserKey,
         label: &Label,
         keywords: HashMap<IndexedValue<Keyword, Location>, HashSet<Keyword>>,
     ) -> Result<HashSet<Keyword>, Self::Error>;
@@ -102,7 +98,6 @@ impl<
     > Index<EntryTable, ChainTable> for Findex<UserError, EntryTable, ChainTable>
 {
     type Error = Error<UserError>;
-    type Key = SymmetricKey<{ USER_KEY_LENGTH }>;
 
     fn new(et: EntryTable, ct: ChainTable) -> Self {
         Self {
@@ -111,8 +106,8 @@ impl<
         }
     }
 
-    fn keygen(&self) -> Self::Key {
-        Self::Key::new(&mut *self.rng.lock().expect("could not lock mutex"))
+    fn keygen(&self) -> UserKey {
+        UserKey::new(&mut *self.rng.lock().expect("could not lock mutex"))
     }
 
     async fn search<
@@ -120,7 +115,7 @@ impl<
         Interrupt: Send + Sync + Fn(HashMap<Keyword, HashSet<IndexedValue<Keyword, Location>>>) -> F,
     >(
         &self,
-        key: &Self::Key,
+        key: &UserKey,
         label: &Label,
         keywords: HashSet<Keyword>,
         interrupt: &Interrupt,
@@ -144,7 +139,7 @@ impl<
 
     async fn add(
         &mut self,
-        key: &Self::Key,
+        key: &UserKey,
         label: &Label,
         keywords: HashMap<IndexedValue<Keyword, Location>, HashSet<Keyword>>,
     ) -> Result<HashSet<Keyword>, Self::Error> {
@@ -170,7 +165,7 @@ impl<
 
     async fn delete(
         &mut self,
-        key: &Self::Key,
+        key: &UserKey,
         label: &Label,
         keywords: HashMap<IndexedValue<Keyword, Location>, HashSet<Keyword>>,
     ) -> Result<HashSet<Keyword>, Self::Error> {
@@ -313,8 +308,8 @@ impl<
     /// [`COMPACT_BATCH_SIZE`](Self::COMPACT_BATCH_SIZE).
     pub async fn compact<DbInterface: DbCallback<Error = UserError>>(
         &mut self,
-        old_key: &<Self as Index<EntryTable, ChainTable>>::Key,
-        new_key: &<Self as Index<EntryTable, ChainTable>>::Key,
+        old_key: &UserKey,
+        new_key: &UserKey,
         old_label: &Label,
         new_label: &Label,
         n_compact_to_full: usize,

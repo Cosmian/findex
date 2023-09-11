@@ -6,11 +6,11 @@ use std::{
 
 use cosmian_crypto_core::{
     bytes_ser_de::{Deserializer, Serializer},
-    FixedSizeCBytes, RandomFixedSizeCBytes, SymmetricKey,
+    FixedSizeCBytes, RandomFixedSizeCBytes,
 };
 use cosmian_findex::{
     ChainTable, DxEnc, EntryTable, Error, Findex, InMemoryEdx, Index, IndexedValue, Keyword,
-    KvStoreError, Label, Location, ENTRY_LENGTH, LINK_LENGTH,
+    KvStoreError, Label, Location, UserKey, ENTRY_LENGTH, LINK_LENGTH,
 };
 use rand::RngCore;
 
@@ -133,7 +133,7 @@ async fn test_non_regression() -> Result<(), Error<KvStoreError>> {
         findex.findex_graph.findex_mm.chain_table.size()
     );
 
-    let master_key = SymmetricKey::try_from_slice(&std::fs::read("datasets/key").unwrap())?;
+    let master_key = UserKey::try_from_slice(&std::fs::read("datasets/key").unwrap())?;
     let label = Label::from(std::fs::read("datasets/label").unwrap().as_slice());
 
     let keyword = Keyword::from("Abd");

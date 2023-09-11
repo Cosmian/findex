@@ -1,6 +1,10 @@
 //! Structures used by the `Index` interface of `Findex`.
 
-use cosmian_crypto_core::reexport::rand_core::CryptoRngCore;
+use cosmian_crypto_core::{reexport::rand_core::CryptoRngCore, SymmetricKey};
+
+use crate::USER_KEY_LENGTH;
+
+pub type UserKey = SymmetricKey<USER_KEY_LENGTH>;
 
 /// The label is used to provide additional public information to the hash
 /// algorithm when generating Entry Table UIDs.

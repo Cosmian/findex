@@ -28,7 +28,7 @@ pub use edx::{chain_table::ChainTable, entry_table::EntryTable, DxEnc, EdxStore,
 pub use error::{CallbackErrorTrait, CoreError, Error};
 pub use findex_graph::IndexedValue;
 pub use findex_mm::{ENTRY_LENGTH, LINK_LENGTH};
-pub use index::{DbCallback, Findex, Index, Keyword, Label, Location};
+pub use index::{DbCallback, Findex, Index, Keyword, Label, Location, UserKey};
 pub use parameters::*;
 
 #[cfg(test)]
