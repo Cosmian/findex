@@ -38,7 +38,7 @@ pub const fn check_parameter_constraints<
     const BLOCK_LENGTH: usize,
 >() {
     #[allow(clippy::let_unit_value)]
-    let _ = ChainTableValue::<CHAIN_TABLE_WIDTH, BLOCK_LENGTH>::CHECK_TABLE_WIDTH;
+    let () = ChainTableValue::<CHAIN_TABLE_WIDTH, BLOCK_LENGTH>::CHECK_TABLE_WIDTH;
     #[allow(clippy::let_unit_value)]
-    let _ = Block::<BLOCK_LENGTH>::CHECK_LENGTH;
+    let () = Block::<BLOCK_LENGTH>::CHECK_LENGTH;
 }
