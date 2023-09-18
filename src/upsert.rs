@@ -16,7 +16,7 @@ use crate::{
 };
 
 /// This the public trait exposed to the users of the Findex Upsert API.
-#[async_trait]
+#[async_trait(?Send)]
 pub trait FindexUpsert<
     const UID_LENGTH: usize,
     const BLOCK_LENGTH: usize,

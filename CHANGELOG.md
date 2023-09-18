@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
+## [5.0.3] - 2023-09-18
+
+### Bug Fixes
+
+- Relax `async_trait` requirements
+
+### Features
+
+- Support `crypto_core` v9.2.0
+
 ## [5.0.2] - 2023-09-07
 
 ### Bug Fixes

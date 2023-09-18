@@ -20,7 +20,7 @@ use crate::{
 /// The compact operation is required to remove old indexes from the Index
 /// Chain Table and to improve the security of the index by changing all the
 /// Index Entry Table.
-#[async_trait]
+#[async_trait(?Send)]
 pub trait FindexCompact<
     const UID_LENGTH: usize,
     const BLOCK_LENGTH: usize,

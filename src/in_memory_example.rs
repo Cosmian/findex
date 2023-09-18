@@ -122,7 +122,7 @@ impl<const UID_LENGTH: usize> FindexInMemory<UID_LENGTH> {
     }
 }
 
-#[async_trait]
+#[async_trait(?Send)]
 impl<const UID_LENGTH: usize> FindexCallbacks<ExampleError, UID_LENGTH>
     for FindexInMemory<UID_LENGTH>
 {
