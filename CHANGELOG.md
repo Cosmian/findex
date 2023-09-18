@@ -2,6 +2,10 @@
 
 All notable changes to this project will be documented in this file.
 
+## Unreleased
+
+- use `#[async_trait(?Send)]`
+
 ## [5.0.2] - 2023-09-07
 
 ### Bug Fixes
