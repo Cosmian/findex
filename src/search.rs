@@ -15,7 +15,7 @@ use crate::{
 };
 
 /// Trait implementing the search functionality of Findex.
-#[async_trait]
+#[async_trait(?Send)]
 pub trait FindexSearch<
     const UID_LENGTH: usize,
     const BLOCK_LENGTH: usize,

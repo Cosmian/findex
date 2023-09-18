@@ -1,6 +1,6 @@
 [package]
 name = "cosmian_findex"
-version = "5.0.2"
+version = "5.0.3"
 authors = [
   "Chloé Hébant <chloe.hebant@cosmian.com>",
   "Bruno Grieder <bruno.grieder@cosmian.com>",
