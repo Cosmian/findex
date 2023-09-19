@@ -31,8 +31,10 @@ fn prepare_locations_and_words(
     locations_and_words
 }
 
-async fn user_interrupt(_res: HashMap<Keyword, HashSet<IndexedValue<Keyword, Location>>>) -> bool {
-    false
+async fn user_interrupt(
+    _res: HashMap<Keyword, HashSet<IndexedValue<Keyword, Location>>>,
+) -> Result<bool, String> {
+    Ok(false)
 }
 
 fn main() {

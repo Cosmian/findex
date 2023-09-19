@@ -42,8 +42,8 @@ mod example {
 
     async fn user_interrupt(
         _res: HashMap<Keyword, HashSet<IndexedValue<Keyword, Location>>>,
-    ) -> bool {
-        false
+    ) -> Result<bool, String> {
+        Ok(false)
     }
 
     #[actix_rt::test]

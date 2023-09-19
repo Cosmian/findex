@@ -14,16 +14,18 @@ pub enum Error<T: std::error::Error> {
     CryptoCore(CryptoCoreError),
     Conversion(String),
     Callback(T),
+    Interrupt(String),
 }
 
 impl<T: std::error::Error> Display for Error<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Crypto(msg) | Self::Conversion(msg) => {
-                write!(f, "{msg}")
+                write!(f, "crypto error: {msg}")
             }
-            Self::CryptoCore(err) => write!(f, "{err}"),
-            Self::Callback(msg) => write!(f, "{msg}"),
+            Self::CryptoCore(err) => write!(f, "CryptoCore error: {err}"),
+            Self::Callback(msg) => write!(f, "callback error: {msg}"),
+            Self::Interrupt(error) => write!(f, "user interrupt error: {error}"),
         }
     }
 }
@@ -61,6 +63,7 @@ impl<T: CallbackErrorTrait> From<CoreError> for Error<T> {
             CoreError::Callback(_) => {
                 panic!("this cannot happen because CoreError uses the `Never` type");
             }
+            CoreError::Interrupt(err) => Self::Interrupt(err),
         }
     }
 }

@@ -9,8 +9,10 @@ use criterion::{criterion_group, criterion_main, Criterion};
 use futures::executor::block_on;
 use rand::SeedableRng;
 
-async fn user_interrupt(_res: HashMap<Keyword, HashSet<IndexedValue<Keyword, Location>>>) -> bool {
-    false
+async fn user_interrupt(
+    _res: HashMap<Keyword, HashSet<IndexedValue<Keyword, Location>>>,
+) -> Result<bool, String> {
+    Ok(false)
 }
 
 fn prepare_locations_and_words(

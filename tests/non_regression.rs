@@ -33,8 +33,10 @@ fn add_keyword_graph(
     }
 }
 
-async fn user_interrupt(_res: HashMap<Keyword, HashSet<IndexedValue<Keyword, Location>>>) -> bool {
-    false
+async fn user_interrupt(
+    _res: HashMap<Keyword, HashSet<IndexedValue<Keyword, Location>>>,
+) -> Result<bool, String> {
+    Ok(false)
 }
 
 #[allow(dead_code)]

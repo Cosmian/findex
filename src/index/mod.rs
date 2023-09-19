@@ -51,7 +51,7 @@ pub trait Index<EntryTable: DxEnc<ENTRY_LENGTH>, ChainTable: DxEnc<LINK_LENGTH>>
     /// The `interrupt` callback is fed with the results of each graph search
     /// iteration. Iterations are stopped if the `interrupt` return `true`.
     async fn search<
-        F: Send + Sync + Future<Output = bool>,
+        F: Send + Sync + Future<Output = Result<bool, String>>,
         Interrupt: Send + Sync + Fn(HashMap<Keyword, HashSet<IndexedValue<Keyword, Location>>>) -> F,
     >(
         &self,
@@ -111,7 +111,7 @@ impl<
     }
 
     async fn search<
-        F: Send + Sync + Future<Output = bool>,
+        F: Send + Sync + Future<Output = Result<bool, String>>,
         Interrupt: Send + Sync + Fn(HashMap<Keyword, HashSet<IndexedValue<Keyword, Location>>>) -> F,
     >(
         &self,

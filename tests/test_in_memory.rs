@@ -17,8 +17,8 @@ const MIN_KEYWORD_LENGTH: usize = 3;
 
 async fn dummy_search_callback(
     _res: HashMap<Keyword, HashSet<IndexedValue<Keyword, Location>>>,
-) -> bool {
-    false
+) -> Result<bool, String> {
+    Ok(false)
 }
 
 /// Converts the given strings as a `HashSet` of keywords.
@@ -152,7 +152,7 @@ async fn test_progress_callback() -> Result<(), Error<KvStoreError>> {
 
     async fn user_interrupt(
         local_results: HashMap<Keyword, HashSet<IndexedValue<Keyword, Location>>>,
-    ) -> bool {
+    ) -> Result<bool, String> {
         let mut is_correct = false;
         let mut is_last = false;
 
@@ -170,7 +170,7 @@ async fn test_progress_callback() -> Result<(), Error<KvStoreError>> {
             }
         }
 
-        is_last && !is_correct
+        Ok(is_last && !is_correct)
     }
 
     let rob_search = findex
