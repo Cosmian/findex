@@ -43,8 +43,8 @@ impl<
     async fn get<
         Tag: Debug + Send + Sync + Hash + Eq + Clone + AsRef<[u8]> + From<Vec<u8>>,
         Value: Hash + Send + Sync + Eq + Clone + From<Vec<u8>>,
-        F: Send + Sync + Future<Output = Result<bool, String>>,
-        Interrupt: Send + Sync + Fn(HashMap<Tag, HashSet<IndexedValue<Tag, Value>>>) -> F,
+        F: Future<Output = Result<bool, String>>,
+        Interrupt: Fn(HashMap<Tag, HashSet<IndexedValue<Tag, Value>>>) -> F,
     >(
         &self,
         key: &Self::Key,
