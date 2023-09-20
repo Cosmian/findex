@@ -6,7 +6,7 @@ use cosmian_crypto_core::CryptoCoreError;
 use never::Never;
 
 /// Marker trait indicating an error type is used as `CallbackError`.
-pub trait CallbackErrorTrait: std::error::Error + Send + Sync {}
+pub trait CallbackErrorTrait: std::error::Error {}
 
 #[derive(Debug)]
 pub enum Error<T: std::error::Error> {

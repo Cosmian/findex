@@ -28,15 +28,15 @@ mod structs;
 pub use structs::IndexedValue;
 
 #[async_trait(?Send)]
-pub trait GxEnc<EdxError: CallbackErrorTrait>: Sync + Send {
+pub trait GxEnc<EdxError: CallbackErrorTrait> {
     /// Seed used to derive the key.
-    type Seed: Sized + ZeroizeOnDrop + AsRef<[u8]> + Default + AsMut<[u8]> + Sync + Send;
+    type Seed: Sized + ZeroizeOnDrop + AsRef<[u8]> + Default + AsMut<[u8]>;
 
     /// Cryptographic key.
-    type Key: Sized + ZeroizeOnDrop + Sync + Send;
+    type Key: Sized + ZeroizeOnDrop;
 
     /// Error type returned by the GxEnc scheme.
-    type Error: std::error::Error + Sync + Send;
+    type Error: std::error::Error;
 
     /// Generates a new random seed.
     fn gen_seed(&self, rng: &mut impl CryptoRngCore) -> Self::Seed;
@@ -47,8 +47,8 @@ pub trait GxEnc<EdxError: CallbackErrorTrait>: Sync + Send {
     /// Queries the encrypted graph for the given tags and returns the
     /// decrypted values.
     async fn get<
-        Tag: Debug + Send + Sync + Hash + Eq + Clone + AsRef<[u8]> + From<Vec<u8>>,
-        Value: Hash + Send + Sync + Eq + Clone + From<Vec<u8>>,
+        Tag: Debug + Hash + Eq + Clone + AsRef<[u8]> + From<Vec<u8>>,
+        Value: Hash + Eq + Clone + From<Vec<u8>>,
         F: Future<Output = Result<bool, String>>,
         Interrupt: Fn(HashMap<Tag, HashSet<IndexedValue<Tag, Value>>>) -> F,
     >(
@@ -62,9 +62,9 @@ pub trait GxEnc<EdxError: CallbackErrorTrait>: Sync + Send {
     /// Encrypts and inserts the given items into the graph. Returns the set of
     /// tags added to the index.
     #[allow(clippy::type_complexity)]
-    async fn insert<Tag: Send + Sync + Hash + Eq + AsRef<[u8]>, Value: Send + Sync + AsRef<[u8]>>(
+    async fn insert<Tag: Hash + Eq + AsRef<[u8]>, Value: AsRef<[u8]>>(
         &mut self,
-        rng: Arc<Mutex<impl Send + Sync + CryptoRngCore>>,
+        rng: Arc<Mutex<impl CryptoRngCore>>,
         key: &Self::Key,
         items: HashMap<Tag, Vec<(Operation, IndexedValue<Tag, Value>)>>,
         label: &Label,

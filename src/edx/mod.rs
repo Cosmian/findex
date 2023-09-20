@@ -29,30 +29,22 @@ pub trait TokenDump {
 }
 
 #[async_trait(?Send)]
-pub trait DxEnc<const VALUE_LENGTH: usize>: Sync + Send {
+pub trait DxEnc<const VALUE_LENGTH: usize> {
     /// Seed used to derive the key.
-    type Seed: Sized + ZeroizeOnDrop + AsRef<[u8]> + Default + AsMut<[u8]> + Send + Sync;
+    type Seed: Sized + ZeroizeOnDrop + AsRef<[u8]> + Default + AsMut<[u8]>;
 
     /// Cryptographically secure key.
-    type Key: Sized + ZeroizeOnDrop + Send + Sync;
+    type Key: Sized + ZeroizeOnDrop;
 
     /// Type of error returned by the scheme.
-    type Error: std::error::Error + Sync + Send;
+    type Error: std::error::Error;
 
     /// Cryptographically secure token used to index values inside the encrypted
     /// dictionary.
-    type Token: Copy
-        + Debug
-        + Hash
-        + Eq
-        + Sized
-        + Send
-        + Sync
-        + From<[u8; TOKEN_LENGTH]>
-        + AsRef<[u8]>;
+    type Token: Copy + Debug + Hash + Eq + Sized + From<[u8; TOKEN_LENGTH]> + AsRef<[u8]>;
 
     /// Fixed length encrypted value stored inside the encrypted dictionary.
-    type EncryptedValue: Debug + Sized + Send + Sync + Clone;
+    type EncryptedValue: Debug + Sized + Clone;
 
     type Store: EdxStore<VALUE_LENGTH>;
 
@@ -137,17 +129,9 @@ pub trait DxEnc<const VALUE_LENGTH: usize>: Sync + Send {
 }
 
 #[async_trait(?Send)]
-pub trait EdxStore<const VALUE_LENGTH: usize>: Sync + Send {
+pub trait EdxStore<const VALUE_LENGTH: usize> {
     /// Token used as key to store values.
-    type Token: Sized
-        + Hash
-        + Eq
-        + Send
-        + Sync
-        + Debug
-        + Copy
-        + From<[u8; TOKEN_LENGTH]>
-        + AsRef<[u8]>;
+    type Token: Sized + Hash + Eq + Debug + Copy + From<[u8; TOKEN_LENGTH]> + AsRef<[u8]>;
 
     /// Type of error returned by the EDX.
     type Error: CallbackErrorTrait;

@@ -38,7 +38,7 @@ pub trait DbCallback {
 #[async_trait(?Send)]
 pub trait Index<EntryTable: DxEnc<ENTRY_LENGTH>, ChainTable: DxEnc<LINK_LENGTH>> {
     /// Index error type.
-    type Error: std::error::Error + Sync + Send;
+    type Error: std::error::Error;
 
     /// Instantiates a new index.
     fn new(et: EntryTable, ct: ChainTable) -> Self;

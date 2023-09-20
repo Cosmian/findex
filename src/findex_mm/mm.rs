@@ -261,7 +261,7 @@ impl<
         self.entry_table.derive_keys(seed)
     }
 
-    async fn get<Tag: Send + Sync + Debug + Hash + Eq + AsRef<[u8]>>(
+    async fn get<Tag: Debug + Hash + Eq + AsRef<[u8]>>(
         &self,
         key: &Self::Key,
         tags: HashSet<Tag>,
@@ -305,9 +305,9 @@ impl<
         Ok(indexed_values)
     }
 
-    async fn insert<Tag: Send + Sync + Hash + Eq + AsRef<[u8]>>(
+    async fn insert<Tag: Hash + Eq + AsRef<[u8]>>(
         &mut self,
-        rng: Arc<Mutex<impl Send + Sync + CryptoRngCore>>,
+        rng: Arc<Mutex<impl CryptoRngCore>>,
         key: &Self::Key,
         modifications: HashMap<Tag, Vec<(Operation, Self::Item)>>,
         label: &Label,

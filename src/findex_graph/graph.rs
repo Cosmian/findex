@@ -41,8 +41,8 @@ impl<
     }
 
     async fn get<
-        Tag: Debug + Send + Sync + Hash + Eq + Clone + AsRef<[u8]> + From<Vec<u8>>,
-        Value: Hash + Send + Sync + Eq + Clone + From<Vec<u8>>,
+        Tag: Debug + Hash + Eq + Clone + AsRef<[u8]> + From<Vec<u8>>,
+        Value: Hash + Eq + Clone + From<Vec<u8>>,
         F: Future<Output = Result<bool, String>>,
         Interrupt: Fn(HashMap<Tag, HashSet<IndexedValue<Tag, Value>>>) -> F,
     >(
@@ -99,12 +99,9 @@ impl<
         Ok(graph)
     }
 
-    async fn insert<
-        Tag: Send + Sync + Hash + Eq + AsRef<[u8]>,
-        Value: Send + Sync + AsRef<[u8]>,
-    >(
+    async fn insert<Tag: Hash + Eq + AsRef<[u8]>, Value: AsRef<[u8]>>(
         &mut self,
-        rng: Arc<Mutex<impl Send + Sync + CryptoRngCore>>,
+        rng: Arc<Mutex<impl CryptoRngCore>>,
         key: &Self::Key,
         items: HashMap<Tag, Vec<(Operation, IndexedValue<Tag, Value>)>>,
         label: &Label,
