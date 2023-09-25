@@ -15,6 +15,7 @@ pub enum Error<T: std::error::Error> {
     Conversion(String),
     Callback(T),
     Interrupt(String),
+    Filter(String),
 }
 
 impl<T: std::error::Error> Display for Error<T> {
@@ -26,6 +27,7 @@ impl<T: std::error::Error> Display for Error<T> {
             Self::CryptoCore(err) => write!(f, "CryptoCore error: {err}"),
             Self::Callback(msg) => write!(f, "callback error: {msg}"),
             Self::Interrupt(error) => write!(f, "user interrupt error: {error}"),
+            Self::Filter(error) => write!(f, "user filter error: {error}"),
         }
     }
 }
@@ -64,6 +66,7 @@ impl<T: CallbackErrorTrait> From<CoreError> for Error<T> {
                 panic!("this cannot happen because CoreError uses the `Never` type");
             }
             CoreError::Interrupt(err) => Self::Interrupt(err),
+            CoreError::Filter(err) => Self::Filter(err),
         }
     }
 }

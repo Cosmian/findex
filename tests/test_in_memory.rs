@@ -5,11 +5,10 @@ use std::{
     result::Result,
 };
 
-use async_trait::async_trait;
 use cosmian_crypto_core::{reexport::rand_core::SeedableRng, CsRng};
 use cosmian_findex::{
-    ChainTable, DbCallback, DxEnc, EntryTable, Error, Findex, InMemoryEdx, Index, IndexedValue,
-    Keyword, KvStoreError, Label, Location,
+    ChainTable, DxEnc, EntryTable, Error, Findex, InMemoryEdx, Index, IndexedValue, Keyword,
+    KvStoreError, Label, Location,
 };
 use rand::Rng;
 
@@ -192,41 +191,11 @@ async fn test_progress_callback() -> Result<(), Error<KvStoreError>> {
     Ok(())
 }
 
-struct Db {
-    removed_items: HashSet<Location>,
-}
-
-impl Db {
-    #[must_use]
-    fn new() -> Self {
-        Self {
-            removed_items: HashSet::new(),
-        }
-    }
-
-    fn remove_location(&mut self, location: Location) {
-        self.removed_items.insert(location);
-    }
-}
-
-#[async_trait]
-impl DbCallback for Db {
-    type Error = KvStoreError;
-
-    async fn filter_removed_locations(
-        &self,
-        locations: HashSet<Location>,
-    ) -> Result<HashSet<Location>, KvStoreError> {
-        Ok(locations
-            .into_iter()
-            .filter(|l| !self.removed_items.contains(l))
-            .collect())
-    }
-}
-
 #[actix_rt::test]
 async fn test_findex() -> Result<(), Error<KvStoreError>> {
     let mut rng = CsRng::from_entropy();
+
+    let mut removed_items: HashSet<Location> = HashSet::new();
 
     let robert_keyword = Keyword::from("robert");
     let rob_keyword = Keyword::from("rob");
@@ -415,7 +384,6 @@ async fn test_findex() -> Result<(), Error<KvStoreError>> {
 
     // If nothing is removed, a lot of small compact should not affect the
     // search results
-    let mut db = Db::new();
     for i in 1..=100 {
         println!("Compacting {i}/100");
         old_master_key = new_master_key;
@@ -429,7 +397,12 @@ async fn test_findex() -> Result<(), Error<KvStoreError>> {
                 &old_label,
                 &new_label,
                 i,
-                &db,
+                &|indexed_data| async {
+                    Ok(indexed_data
+                        .into_iter()
+                        .filter(|data| !removed_items.contains(data))
+                        .collect())
+                },
             )
             .await
             .unwrap();
@@ -450,7 +423,7 @@ async fn test_findex() -> Result<(), Error<KvStoreError>> {
 
     // Remove the location "Jane Doe" from the DB. The next compact operation should
     // remove it from the index.
-    db.remove_location(jane_doe_location);
+    removed_items.insert(jane_doe_location);
 
     old_master_key = new_master_key;
     new_master_key = findex.keygen();
@@ -463,7 +436,12 @@ async fn test_findex() -> Result<(), Error<KvStoreError>> {
             &old_label,
             &new_label,
             1,
-            &db,
+            &|indexed_data| async {
+                Ok(indexed_data
+                    .into_iter()
+                    .filter(|data| !removed_items.contains(data))
+                    .collect())
+            },
         )
         .await
         .unwrap();
@@ -520,7 +498,12 @@ async fn test_findex() -> Result<(), Error<KvStoreError>> {
                 &old_label,
                 &new_label,
                 i,
-                &db,
+                &|indexed_data| async {
+                    Ok(indexed_data
+                        .into_iter()
+                        .filter(|data| !removed_items.contains(data))
+                        .collect())
+                },
             )
             .await
             .unwrap();
@@ -563,7 +546,12 @@ async fn test_findex() -> Result<(), Error<KvStoreError>> {
                 &old_label,
                 &new_label,
                 i,
-                &db,
+                &|indexed_data| async {
+                    Ok(indexed_data
+                        .into_iter()
+                        .filter(|data| !removed_items.contains(data))
+                        .collect())
+                },
             )
             .await
             .unwrap();
@@ -832,13 +820,19 @@ async fn test_graph_compacting() {
     );
 
     // Compact then search
-    let db = Db::new();
     for i in 1..100 {
         let old_label = label;
         label = Label::random(&mut rng);
         let new_master_key = findex.keygen();
         findex
-            .compact(&master_key, &new_master_key, &old_label, &label, i, &db)
+            .compact(
+                &master_key,
+                &new_master_key,
+                &old_label,
+                &label,
+                i,
+                &|indexed_data| async { Ok(indexed_data) },
+            )
             .await
             .unwrap();
         master_key = new_master_key;

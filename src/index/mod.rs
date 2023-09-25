@@ -24,17 +24,6 @@ use cosmian_crypto_core::{
 };
 pub use structs::{Keyword, Label, Location, UserKey};
 
-#[async_trait]
-pub trait DbCallback {
-    type Error: CallbackErrorTrait;
-
-    /// Returns the locations that are still in use among the ones given.
-    async fn filter_removed_locations(
-        &self,
-        locations: HashSet<Location>,
-    ) -> Result<HashSet<Location>, Self::Error>;
-}
-
 #[async_trait(?Send)]
 pub trait Index<EntryTable: DxEnc<ENTRY_LENGTH>, ChainTable: DxEnc<LINK_LENGTH>> {
     /// Index error type.
@@ -78,6 +67,19 @@ pub trait Index<EntryTable: DxEnc<ENTRY_LENGTH>, ChainTable: DxEnc<LINK_LENGTH>>
         label: &Label,
         keywords: HashMap<IndexedValue<Keyword, Location>, HashSet<Keyword>>,
     ) -> Result<HashSet<Keyword>, Self::Error>;
+
+    async fn compact<
+        F: Future<Output = Result<HashSet<Location>, String>>,
+        Filter: Fn(HashSet<Location>) -> F,
+    >(
+        &mut self,
+        old_key: &UserKey,
+        new_key: &UserKey,
+        old_label: &Label,
+        new_label: &Label,
+        n_compact_to_full: usize,
+        db_interface: &Filter,
+    ) -> Result<(), Self::Error>;
 }
 
 #[derive(Debug)]
@@ -93,7 +95,8 @@ pub struct Findex<
 #[async_trait(?Send)]
 impl<
         UserError: CallbackErrorTrait,
-        EntryTable: DxEnc<ENTRY_LENGTH, Error = Error<UserError>>,
+        EntryTable: DxEnc<ENTRY_LENGTH, Error = Error<UserError>>
+            + TokenDump<Token = <EntryTable as DxEnc<ENTRY_LENGTH>>::Token, Error = Error<UserError>>,
         ChainTable: DxEnc<LINK_LENGTH, Error = Error<UserError>>,
     > Index<EntryTable, ChainTable> for Findex<UserError, EntryTable, ChainTable>
 {
@@ -188,6 +191,90 @@ impl<
             .insert(self.rng.clone(), &key, modifications, label)
             .await
     }
+
+    /// Process the entire Entry Table by batch. Compact a random portion of
+    /// the associated chains such that the Chain Table is entirely compacted
+    /// after `n_compact_to_full` operations in average. A new token is
+    /// generated for each entry and the entries are reencrypted using the
+    /// `new_key` and the `new_label`.
+    ///
+    /// A compact operation on a given chain:
+    /// - fetches and decrypts the chain;
+    /// - simplifies additions/deletions of the same values;
+    /// - writes the chains without internal padding;
+    /// - generates new keys for this chain
+    /// - encrypts the new chain using the new key
+    ///
+    /// The size of the batches is
+    /// [`COMPACT_BATCH_SIZE`](Self::COMPACT_BATCH_SIZE).
+    async fn compact<
+        F: Future<Output = Result<HashSet<Location>, String>>,
+        Filter: Fn(HashSet<Location>) -> F,
+    >(
+        &mut self,
+        old_key: &UserKey,
+        new_key: &UserKey,
+        old_label: &Label,
+        new_label: &Label,
+        n_compact_to_full: usize,
+        filter_obsolete_data: &Filter,
+    ) -> Result<(), Error<UserError>> {
+        if (old_key == new_key) && (old_label == new_label) {
+            return Err(Error::Crypto(
+                "both the same key and label can be used to compact".to_string(),
+            ));
+        }
+
+        let mut new_seed =
+            <FindexGraph<UserError, EntryTable, ChainTable> as GxEnc<UserError>>::Seed::default();
+        new_seed.as_mut().copy_from_slice(new_key);
+        //kdf256!(new_seed.as_mut(), new_label, new_key.as_ref());
+        let new_key = self.findex_graph.derive_keys(&new_seed);
+
+        let mut old_seed =
+            <FindexGraph<UserError, EntryTable, ChainTable> as GxEnc<UserError>>::Seed::default();
+        //kdf256!(old_seed.as_mut(), old_label, old_key.as_ref());
+        old_seed.as_mut().copy_from_slice(old_key);
+        let old_key = self.findex_graph.derive_keys(&old_seed);
+
+        let entry_tokens = self.findex_graph.list_indexed_encrypted_tags().await?;
+
+        let entries_to_compact = self.select_random_tokens(
+            self.get_compact_line_number(entry_tokens.len(), n_compact_to_full),
+            entry_tokens.as_slice(),
+        );
+
+        for i in 0..entry_tokens.len() / Self::COMPACT_BATCH_SIZE {
+            self.compact_batch(
+                &old_key,
+                &new_key,
+                new_label,
+                &entries_to_compact,
+                entry_tokens[i * Self::COMPACT_BATCH_SIZE..(i + 1) * Self::COMPACT_BATCH_SIZE]
+                    .iter()
+                    .cloned()
+                    .collect(),
+                filter_obsolete_data,
+            )
+            .await?;
+        }
+
+        self.compact_batch(
+            &old_key,
+            &new_key,
+            new_label,
+            &entries_to_compact,
+            entry_tokens
+                [(entry_tokens.len() / Self::COMPACT_BATCH_SIZE) * Self::COMPACT_BATCH_SIZE..]
+                .iter()
+                .cloned()
+                .collect(),
+            filter_obsolete_data,
+        )
+        .await?;
+
+        Ok(())
+    }
 }
 
 impl<
@@ -203,7 +290,7 @@ impl<
     /// the memory used by the compact operation is:
     ///
     /// N * 32 + BS * EB + f * BS * LB
-    pub const COMPACT_BATCH_SIZE: usize = 1_000_000;
+    const COMPACT_BATCH_SIZE: usize = 1_000_000;
 
     /// Draw `n` tokens at random among the given `tokens`. The same token may
     /// be drawn several times, thus the number of tokens returned may be
@@ -248,14 +335,17 @@ impl<
         (n_draws / n_compact_to_full as f64) as usize
     }
 
-    async fn compact_batch<DbInterface: DbCallback<Error = UserError>>(
+    async fn compact_batch<
+        F: Future<Output = Result<HashSet<Location>, String>>,
+        Filter: Fn(HashSet<Location>) -> F,
+    >(
         &mut self,
         old_key: &<FindexGraph<UserError, EntryTable, ChainTable> as GxEnc<UserError>>::Key,
         new_key: &<FindexGraph<UserError, EntryTable, ChainTable> as GxEnc<UserError>>::Key,
         new_label: &Label,
         compact_target: &HashSet<<EntryTable as DxEnc<ENTRY_LENGTH>>::Token>,
         tokens: HashSet<<EntryTable as DxEnc<ENTRY_LENGTH>>::Token>,
-        db_interface: &DbInterface,
+        filter_obsolete_data: &Filter,
     ) -> Result<(), Error<UserError>> {
         let (mut indexed_values, data) = self
             .findex_graph
@@ -269,7 +359,9 @@ impl<
             .cloned()
             .collect();
 
-        let remaining_locations = db_interface.filter_removed_locations(locations).await?;
+        let remaining_locations = filter_obsolete_data(locations)
+            .await
+            .map_err(<Self as Index<EntryTable, ChainTable>>::Error::Filter)?;
 
         for values in indexed_values.values_mut() {
             let res = values
@@ -289,86 +381,5 @@ impl<
         self.findex_graph
             .complete_compacting(self.rng.clone(), new_key, new_label, indexed_values, data)
             .await
-    }
-
-    /// Process the entire Entry Table by batch. Compact a random portion of
-    /// the associated chains such that the Chain Table is entirely compacted
-    /// after `n_compact_to_full` operations in average. A new token is
-    /// generated for each entry and the entries are reencrypted using the
-    /// `new_key` and the `new_label`.
-    ///
-    /// A compact operation on a given chain:
-    /// - fetches and decrypts the chain;
-    /// - simplifies additions/deletions of the same values;
-    /// - writes the chains without internal padding;
-    /// - generates new keys for this chain
-    /// - encrypts the new chain using the new key
-    ///
-    /// The size of the batches is
-    /// [`COMPACT_BATCH_SIZE`](Self::COMPACT_BATCH_SIZE).
-    pub async fn compact<DbInterface: DbCallback<Error = UserError>>(
-        &mut self,
-        old_key: &UserKey,
-        new_key: &UserKey,
-        old_label: &Label,
-        new_label: &Label,
-        n_compact_to_full: usize,
-        db_interface: &DbInterface,
-    ) -> Result<(), Error<UserError>> {
-        if (old_key == new_key) && (old_label == new_label) {
-            return Err(Error::Crypto(
-                "both the same key and label can be used to compact".to_string(),
-            ));
-        }
-
-        let mut new_seed =
-            <FindexGraph<UserError, EntryTable, ChainTable> as GxEnc<UserError>>::Seed::default();
-        new_seed.as_mut().copy_from_slice(new_key);
-        //kdf256!(new_seed.as_mut(), new_label, new_key.as_ref());
-        let new_key = self.findex_graph.derive_keys(&new_seed);
-
-        let mut old_seed =
-            <FindexGraph<UserError, EntryTable, ChainTable> as GxEnc<UserError>>::Seed::default();
-        //kdf256!(old_seed.as_mut(), old_label, old_key.as_ref());
-        old_seed.as_mut().copy_from_slice(old_key);
-        let old_key = self.findex_graph.derive_keys(&old_seed);
-
-        let entry_tokens = self.findex_graph.list_indexed_encrypted_tags().await?;
-
-        let entries_to_compact = self.select_random_tokens(
-            self.get_compact_line_number(entry_tokens.len(), n_compact_to_full),
-            entry_tokens.as_slice(),
-        );
-
-        for i in 0..entry_tokens.len() / Self::COMPACT_BATCH_SIZE {
-            self.compact_batch(
-                &old_key,
-                &new_key,
-                new_label,
-                &entries_to_compact,
-                entry_tokens[i * Self::COMPACT_BATCH_SIZE..(i + 1) * Self::COMPACT_BATCH_SIZE]
-                    .iter()
-                    .cloned()
-                    .collect(),
-                db_interface,
-            )
-            .await?;
-        }
-
-        self.compact_batch(
-            &old_key,
-            &new_key,
-            new_label,
-            &entries_to_compact,
-            entry_tokens
-                [(entry_tokens.len() / Self::COMPACT_BATCH_SIZE) * Self::COMPACT_BATCH_SIZE..]
-                .iter()
-                .cloned()
-                .collect(),
-            db_interface,
-        )
-        .await?;
-
-        Ok(())
     }
 }
