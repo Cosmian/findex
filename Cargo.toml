@@ -27,7 +27,7 @@ in_memory = ["cosmian_crypto_core/ser"]
 # Once available in stable Rust (presumably 1.74), use std async fn in trait
 # <https://rust-lang.github.io/rfcs/3185-static-async-fn-in-trait.html>
 async-trait = "0.1.73"
-cosmian_crypto_core = { git = "https://github.com/Cosmian/crypto_core", branch = "feature/signed_leb128_serialization", default-features = false, features = ["aes", "sha3"]}
+cosmian_crypto_core = { version = "9.2.0", default-features = false, features = ["aes", "sha3"]}
 # Once available in stable Rust, use `!` std primitive
 # <https://doc.rust-lang.org/std/primitive.never.html>
 never = "0.1.0"
