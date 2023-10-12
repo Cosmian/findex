@@ -37,7 +37,7 @@ fn main() {
     //
     // Prepare indexes to be search
     //
-    let mut findex = Findex::new(
+    let findex = Findex::new(
         EntryTable::setup(InMemoryEdx::default()),
         ChainTable::setup(InMemoryEdx::default()),
     );

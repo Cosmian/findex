@@ -103,7 +103,7 @@ impl<const VALUE_LENGTH: usize, Edx: EdxStore<VALUE_LENGTH>> DxEnc<VALUE_LENGTH>
     }
 
     async fn upsert(
-        &mut self,
+        &self,
         old_values: &HashMap<Self::Token, Self::EncryptedValue>,
         new_values: HashMap<Self::Token, Self::EncryptedValue>,
     ) -> Result<HashMap<Self::Token, Self::EncryptedValue>, Self::Error> {
@@ -114,7 +114,7 @@ impl<const VALUE_LENGTH: usize, Edx: EdxStore<VALUE_LENGTH>> DxEnc<VALUE_LENGTH>
     }
 
     async fn insert(
-        &mut self,
+        &self,
         _values: HashMap<Self::Token, Self::EncryptedValue>,
     ) -> Result<(), Self::Error> {
         panic!("The Entry Table does not do any insert.")
@@ -129,7 +129,7 @@ impl<const VALUE_LENGTH: usize, Edx: EdxStore<VALUE_LENGTH>> DxEnc<VALUE_LENGTH>
         Self::EncryptedValue::encrypt(rng, &key.value, value).map_err(Error::from)
     }
 
-    async fn delete(&mut self, items: HashSet<Self::Token>) -> Result<(), Self::Error> {
+    async fn delete(&self, items: HashSet<Self::Token>) -> Result<(), Self::Error> {
         self.0.delete(items).await.map_err(Self::Error::Callback)
     }
 }
@@ -162,7 +162,7 @@ mod tests {
     async fn test_edx() {
         let mut rng = CsRng::from_entropy();
 
-        let mut table = EntryTable::setup(InMemoryEdx::default());
+        let table = EntryTable::setup(InMemoryEdx::default());
         let seed = table.gen_seed(&mut rng);
         let key = table.derive_keys(&seed);
         let label = Label::random(&mut rng);

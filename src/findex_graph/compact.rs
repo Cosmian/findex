@@ -63,7 +63,7 @@ impl<
         Tag: Debug + Hash + Eq + Clone + AsRef<[u8]> + From<Vec<u8>>,
         Value: Hash + Eq + Clone + AsRef<[u8]> + From<Vec<u8>>,
     >(
-        &mut self,
+        &self,
         rng: Arc<Mutex<impl CryptoRngCore>>,
         key: &<Self as GxEnc<UserError>>::Key,
         label: &Label,

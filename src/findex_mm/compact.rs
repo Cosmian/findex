@@ -120,7 +120,7 @@ impl<
     /// 3. tries applying modifications, reverts modifications upon failure or
     ///    remove old data upon success
     pub async fn complete_compacting(
-        &mut self,
+        &self,
         rng: Arc<Mutex<impl CryptoRngCore>>,
         new_key: &<Self as MmEnc<SEED_LENGTH, UserError>>::Key,
         indexed_map: HashMap<<EntryTable as DxEnc<ENTRY_LENGTH>>::Token, HashSet<Vec<u8>>>,

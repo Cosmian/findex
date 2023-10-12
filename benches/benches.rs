@@ -46,7 +46,7 @@ fn bench_search(c: &mut Criterion) {
     //
     // Prepare indexes to be search
     //
-    let mut findex = Findex::new(
+    let findex = Findex::new(
         EntryTable::setup(InMemoryEdx::default()),
         ChainTable::setup(InMemoryEdx::default()),
     );

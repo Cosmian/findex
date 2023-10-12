@@ -72,7 +72,7 @@ pub trait MmEnc<const SEED_LENGTH: usize, EdxError: CallbackErrorTrait> {
     /// Applies the given modifications to the encrypted multi-map. Returns the
     /// set of Tags added to the Multi-Map.
     async fn insert<Tag: Hash + Eq + AsRef<[u8]>>(
-        &mut self,
+        &self,
         rng: Arc<Mutex<impl CryptoRngCore>>,
         key: &Self::Key,
         modifications: HashMap<Tag, Vec<(Operation, Self::Item)>>,
@@ -112,7 +112,7 @@ mod tests {
 
         let entry_table = EntryTable::setup(InMemoryEdx::default());
         let chain_table = ChainTable::setup(InMemoryEdx::default());
-        let mut findex = FindexMultiMap::new(entry_table, chain_table);
+        let findex = FindexMultiMap::new(entry_table, chain_table);
 
         // Generates 10 chains of 32 bytes values.
         let n = 10;

@@ -306,7 +306,7 @@ impl<
     }
 
     async fn insert<Tag: Hash + Eq + AsRef<[u8]>>(
-        &mut self,
+        &self,
         rng: Arc<Mutex<impl CryptoRngCore>>,
         key: &Self::Key,
         modifications: HashMap<Tag, Vec<(Operation, Self::Item)>>,

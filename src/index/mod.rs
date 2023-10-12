@@ -53,7 +53,7 @@ pub trait Index<EntryTable: DxEnc<ENTRY_LENGTH>, ChainTable: DxEnc<LINK_LENGTH>>
     /// Indexes the given `IndexedValue`s for the given `Keyword`s. Returns the
     /// set of keywords added as keys to the index.
     async fn add(
-        &mut self,
+        &self,
         key: &UserKey,
         label: &Label,
         keywords: HashMap<IndexedValue<Keyword, Location>, HashSet<Keyword>>,
@@ -62,7 +62,7 @@ pub trait Index<EntryTable: DxEnc<ENTRY_LENGTH>, ChainTable: DxEnc<LINK_LENGTH>>
     /// Removes the indexing of the given `IndexedValue`s for the given
     /// `Keyword`s. Returns the set of keywords added to the index.
     async fn delete(
-        &mut self,
+        &self,
         key: &UserKey,
         label: &Label,
         keywords: HashMap<IndexedValue<Keyword, Location>, HashSet<Keyword>>,
@@ -72,7 +72,7 @@ pub trait Index<EntryTable: DxEnc<ENTRY_LENGTH>, ChainTable: DxEnc<LINK_LENGTH>>
         F: Future<Output = Result<HashSet<Location>, String>>,
         Filter: Fn(HashSet<Location>) -> F,
     >(
-        &mut self,
+        &self,
         old_key: &UserKey,
         new_key: &UserKey,
         old_label: &Label,
@@ -141,7 +141,7 @@ impl<
     }
 
     async fn add(
-        &mut self,
+        &self,
         key: &UserKey,
         label: &Label,
         keywords: HashMap<IndexedValue<Keyword, Location>, HashSet<Keyword>>,
@@ -167,7 +167,7 @@ impl<
     }
 
     async fn delete(
-        &mut self,
+        &self,
         key: &UserKey,
         label: &Label,
         keywords: HashMap<IndexedValue<Keyword, Location>, HashSet<Keyword>>,
@@ -211,7 +211,7 @@ impl<
         F: Future<Output = Result<HashSet<Location>, String>>,
         Filter: Fn(HashSet<Location>) -> F,
     >(
-        &mut self,
+        &self,
         old_key: &UserKey,
         new_key: &UserKey,
         old_label: &Label,
@@ -339,7 +339,7 @@ impl<
         F: Future<Output = Result<HashSet<Location>, String>>,
         Filter: Fn(HashSet<Location>) -> F,
     >(
-        &mut self,
+        &self,
         old_key: &<FindexGraph<UserError, EntryTable, ChainTable> as GxEnc<UserError>>::Key,
         new_key: &<FindexGraph<UserError, EntryTable, ChainTable> as GxEnc<UserError>>::Key,
         new_label: &Label,

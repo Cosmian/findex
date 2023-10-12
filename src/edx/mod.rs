@@ -108,7 +108,7 @@ pub trait DxEnc<const VALUE_LENGTH: usize> {
     ///
     /// All modifications to the EDX are *atomic*.
     async fn upsert(
-        &mut self,
+        &self,
         old_values: &HashMap<Self::Token, Self::EncryptedValue>,
         new_values: HashMap<Self::Token, Self::EncryptedValue>,
     ) -> Result<HashMap<Self::Token, Self::EncryptedValue>, Self::Error>;
@@ -120,12 +120,12 @@ pub trait DxEnc<const VALUE_LENGTH: usize> {
     /// Returns an error without inserting any value if the EDX already contains
     /// a value for a given tokens.
     async fn insert(
-        &mut self,
+        &self,
         values: HashMap<Self::Token, Self::EncryptedValue>,
     ) -> Result<(), Self::Error>;
 
     /// Deletes the given items from the EDX.
-    async fn delete(&mut self, tokens: HashSet<Self::Token>) -> Result<(), Self::Error>;
+    async fn delete(&self, tokens: HashSet<Self::Token>) -> Result<(), Self::Error>;
 }
 
 #[async_trait(?Send)]
@@ -167,7 +167,7 @@ pub trait EdxStore<const VALUE_LENGTH: usize> {
     /// | Some("B")    | rejected | rejected  | upserted  |
     /// +--------------+----------+-----------+-----------+
     async fn upsert(
-        &mut self,
+        &self,
         old_values: &HashMap<Self::Token, EncryptedValue<VALUE_LENGTH>>,
         new_values: HashMap<Self::Token, EncryptedValue<VALUE_LENGTH>>,
     ) -> Result<HashMap<Self::Token, EncryptedValue<VALUE_LENGTH>>, Self::Error>;
@@ -179,12 +179,12 @@ pub trait EdxStore<const VALUE_LENGTH: usize> {
     /// If a value is already stored for one of these tokens, no new value
     /// should be inserted and an error should be returned.
     async fn insert(
-        &mut self,
+        &self,
         values: HashMap<Self::Token, EncryptedValue<VALUE_LENGTH>>,
     ) -> Result<(), Self::Error>;
 
     /// Deletes the lines associated to the given tokens from the EDX.
-    async fn delete(&mut self, tokens: HashSet<Self::Token>) -> Result<(), Self::Error>;
+    async fn delete(&self, tokens: HashSet<Self::Token>) -> Result<(), Self::Error>;
 }
 
 #[cfg(any(test, feature = "in_memory"))]
@@ -344,7 +344,7 @@ pub mod in_memory {
         }
 
         async fn upsert(
-            &mut self,
+            &self,
             old_values: &HashMap<Self::Token, EncryptedValue<VALUE_LENGTH>>,
             new_values: HashMap<Self::Token, EncryptedValue<VALUE_LENGTH>>,
         ) -> Result<HashMap<Self::Token, EncryptedValue<VALUE_LENGTH>>, KvStoreError> {
@@ -381,7 +381,7 @@ pub mod in_memory {
         }
 
         async fn insert(
-            &mut self,
+            &self,
             items: HashMap<Self::Token, EncryptedValue<VALUE_LENGTH>>,
         ) -> Result<(), Self::Error> {
             let mut edx = self.0.lock().expect("couldn't lock the table");
@@ -401,7 +401,7 @@ pub mod in_memory {
             Ok(())
         }
 
-        async fn delete(&mut self, items: HashSet<Self::Token>) -> Result<(), Self::Error> {
+        async fn delete(&self, items: HashSet<Self::Token>) -> Result<(), Self::Error> {
             let mut edx = self.0.lock().expect("could not lock mutex");
             for token in items {
                 edx.remove(&token);

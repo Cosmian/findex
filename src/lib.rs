@@ -56,7 +56,7 @@ mod example {
         let loc2 = Location::from("Location 2");
 
         // Let's create a new index using the in-memory EDX provided in the tests.
-        let mut index = Findex::new(
+        let index = Findex::new(
             EntryTable::setup(InMemoryEdx::default()),
             ChainTable::setup(InMemoryEdx::default()),
         );

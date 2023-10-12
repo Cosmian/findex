@@ -131,7 +131,7 @@ async fn test_progress_callback() -> Result<(), Error<KvStoreError>> {
         hashset_keywords(&["robert"]),
     );
 
-    let mut findex = Findex::new(
+    let findex = Findex::new(
         EntryTable::setup(InMemoryEdx::default()),
         ChainTable::setup(InMemoryEdx::default()),
     );
@@ -187,7 +187,7 @@ async fn test_progress_callback() -> Result<(), Error<KvStoreError>> {
 
 #[actix_rt::test]
 async fn test_deletions() -> Result<(), Error<KvStoreError>> {
-    let mut findex = Findex::new(
+    let findex = Findex::new(
         EntryTable::setup(InMemoryEdx::default()),
         ChainTable::setup(InMemoryEdx::default()),
     );
@@ -296,7 +296,7 @@ async fn test_deletions() -> Result<(), Error<KvStoreError>> {
 
 #[actix_rt::test]
 async fn test_double_add() -> Result<(), Error<KvStoreError>> {
-    let mut findex = Findex::new(
+    let findex = Findex::new(
         EntryTable::setup(InMemoryEdx::default()),
         ChainTable::setup(InMemoryEdx::default()),
     );
@@ -372,7 +372,7 @@ async fn test_findex() -> Result<(), Error<KvStoreError>> {
         hashset_keywords(&["rob"]),
     );
 
-    let mut findex = Findex::new(
+    let findex = Findex::new(
         EntryTable::setup(InMemoryEdx::default()),
         ChainTable::setup(InMemoryEdx::default()),
     );
@@ -748,12 +748,12 @@ async fn test_first_names() -> Result<(), Error<KvStoreError>> {
 
     let mut rng = rand::thread_rng();
 
-    let mut graph_findex = Findex::new(
+    let graph_findex = Findex::new(
         EntryTable::setup(InMemoryEdx::default()),
         ChainTable::setup(InMemoryEdx::default()),
     );
 
-    let mut naive_findex = Findex::new(
+    let naive_findex = Findex::new(
         EntryTable::setup(InMemoryEdx::default()),
         ChainTable::setup(InMemoryEdx::default()),
     );
@@ -897,7 +897,7 @@ async fn test_first_names() -> Result<(), Error<KvStoreError>> {
 async fn test_graph_compacting() {
     let mut rng = CsRng::from_entropy();
     let mut indexed_value_to_keywords = HashMap::new();
-    let mut findex = Findex::new(
+    let findex = Findex::new(
         EntryTable::setup(InMemoryEdx::default()),
         ChainTable::setup(InMemoryEdx::default()),
     );
@@ -1019,7 +1019,7 @@ async fn test_keyword_presence() -> Result<(), Error<KvStoreError>> {
         hashset_keywords(&["john", "doe"]),
     );
 
-    let mut findex = Findex::new(
+    let findex = Findex::new(
         EntryTable::setup(InMemoryEdx::default()),
         ChainTable::setup(InMemoryEdx::default()),
     );

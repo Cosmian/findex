@@ -42,7 +42,7 @@ fn main() {
         hashset_keywords(&["rob"]),
     );
 
-    let mut findex = Findex::new(
+    let findex = Findex::new(
         EntryTable::setup(InMemoryEdx::default()),
         ChainTable::setup(InMemoryEdx::default()),
     );

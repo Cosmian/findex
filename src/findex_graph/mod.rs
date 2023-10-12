@@ -63,7 +63,7 @@ pub trait GxEnc<EdxError: CallbackErrorTrait> {
     /// tags added to the index.
     #[allow(clippy::type_complexity)]
     async fn insert<Tag: Hash + Eq + AsRef<[u8]>, Value: AsRef<[u8]>>(
-        &mut self,
+        &self,
         rng: Arc<Mutex<impl CryptoRngCore>>,
         key: &Self::Key,
         items: HashMap<Tag, Vec<(Operation, IndexedValue<Tag, Value>)>>,
@@ -130,7 +130,7 @@ mod tests {
 
         let entry_table = EntryTable::setup(InMemoryEdx::default());
         let chain_table = ChainTable::setup(InMemoryEdx::default());
-        let mut findex = FindexGraph::new(entry_table, chain_table);
+        let findex = FindexGraph::new(entry_table, chain_table);
 
         let findex_seed = findex.gen_seed(&mut *rng.lock().expect("could not lock mutex"));
         let findex_key = findex.derive_keys(&findex_seed);

@@ -41,7 +41,7 @@ async fn write_index() -> Result<(), Error<KvStoreError>> {
 
     let mut rng = rand::thread_rng();
 
-    let mut findex = Findex::new(
+    let findex = Findex::new(
         EntryTable::setup(InMemoryEdx::default()),
         ChainTable::setup(InMemoryEdx::default()),
     );

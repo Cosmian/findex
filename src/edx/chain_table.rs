@@ -119,7 +119,7 @@ impl<const VALUE_LENGTH: usize, EdxScheme: EdxStore<VALUE_LENGTH>> DxEnc<VALUE_L
     }
 
     async fn upsert(
-        &mut self,
+        &self,
         _old_values: &HashMap<Self::Token, Self::EncryptedValue>,
         _new_values: HashMap<Self::Token, Self::EncryptedValue>,
     ) -> Result<HashMap<Self::Token, Self::EncryptedValue>, Self::Error> {
@@ -127,13 +127,13 @@ impl<const VALUE_LENGTH: usize, EdxScheme: EdxStore<VALUE_LENGTH>> DxEnc<VALUE_L
     }
 
     async fn insert(
-        &mut self,
+        &self,
         items: HashMap<Self::Token, Self::EncryptedValue>,
     ) -> Result<(), Self::Error> {
         self.0.insert(items).await.map_err(Error::Callback)
     }
 
-    async fn delete(&mut self, items: HashSet<Self::Token>) -> Result<(), Self::Error> {
+    async fn delete(&self, items: HashSet<Self::Token>) -> Result<(), Self::Error> {
         self.0.delete(items).await.map_err(Error::Callback)
     }
 }
@@ -155,7 +155,7 @@ mod tests {
     async fn test_edx() {
         let mut rng = CsRng::from_entropy();
 
-        let mut table = ChainTable::setup(InMemoryEdx::default());
+        let table = ChainTable::setup(InMemoryEdx::default());
         let seed = table.gen_seed(&mut rng);
         let key = table.derive_keys(&seed);
         let label = Label::random(&mut rng);
