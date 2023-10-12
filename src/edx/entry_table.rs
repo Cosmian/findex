@@ -23,6 +23,7 @@ use crate::{
 };
 
 /// Implementation of the Entry Table EDX.
+#[derive(Debug)]
 pub struct EntryTable<const VALUE_LENGTH: usize, Edx: EdxStore<VALUE_LENGTH>>(pub Edx);
 
 impl<const VALUE_LENGTH: usize, Edx: EdxStore<VALUE_LENGTH>> Deref

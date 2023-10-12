@@ -14,12 +14,6 @@ use rand::Rng;
 
 const MIN_KEYWORD_LENGTH: usize = 3;
 
-async fn dummy_search_callback(
-    _res: HashMap<Keyword, HashSet<IndexedValue<Keyword, Location>>>,
-) -> Result<bool, String> {
-    Ok(false)
-}
-
 /// Converts the given strings as a `HashSet` of keywords.
 ///
 /// - `keywords`    : strings to convert
@@ -192,6 +186,155 @@ async fn test_progress_callback() -> Result<(), Error<KvStoreError>> {
 }
 
 #[actix_rt::test]
+async fn test_deletions() -> Result<(), Error<KvStoreError>> {
+    let mut findex = Findex::new(
+        EntryTable::setup(InMemoryEdx::default()),
+        ChainTable::setup(InMemoryEdx::default()),
+    );
+
+    let master_key = findex.keygen();
+    let label = Label::from("First label.");
+
+    // Delete no keyword.
+    let res = findex
+        .delete(&master_key, &label, HashMap::new())
+        .await
+        .unwrap();
+    assert_eq!(res, HashSet::new());
+
+    // Indexed a location for a keyword.
+    let res = findex
+        .add(
+            &master_key,
+            &label,
+            HashMap::from([(
+                IndexedValue::Data(Location::from("location")),
+                HashSet::from_iter([Keyword::from("keyword")]),
+            )]),
+        )
+        .await
+        .unwrap();
+    assert_eq!(res, HashSet::from_iter([Keyword::from("keyword")]));
+
+    // Indexed another location for this keyword.
+    let res = findex
+        .delete(
+            &master_key,
+            &label,
+            HashMap::from([(
+                IndexedValue::Data(Location::from("another location")),
+                HashSet::from_iter([Keyword::from("keyword")]),
+            )]),
+        )
+        .await
+        .unwrap();
+    assert_eq!(res, HashSet::new());
+
+    // Indexed this location for another keyword.
+    let res = findex
+        .delete(
+            &master_key,
+            &label,
+            HashMap::from([(
+                IndexedValue::Data(Location::from("location")),
+                HashSet::from_iter([Keyword::from("another keyword")]),
+            )]),
+        )
+        .await
+        .unwrap();
+    assert_eq!(res, HashSet::from_iter([Keyword::from("another keyword")]));
+
+    // Indexed this location for this keyword.
+    let res = findex
+        .delete(
+            &master_key,
+            &label,
+            HashMap::from([(
+                IndexedValue::Data(Location::from("location")),
+                HashSet::from_iter([Keyword::from("keyword")]),
+            )]),
+        )
+        .await
+        .unwrap();
+    assert_eq!(res, HashSet::new());
+
+    // Nothing is indexed.
+    let res = findex
+        .search(
+            &master_key,
+            &label,
+            HashSet::from_iter([
+                Keyword::from("keyword"),
+                Keyword::from("another keyword"),
+                Keyword::from("keyword not indexed"),
+            ]),
+            &|_| async { Ok(false) },
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(
+        res.get(&Keyword::from("keyword")),
+        Some(HashSet::new()).as_ref()
+    );
+
+    assert_eq!(
+        res.get(&Keyword::from("another keyword")),
+        Some(HashSet::new()).as_ref()
+    );
+
+    // There is no difference between a keyword indexed and not indexed.
+    assert_eq!(
+        res.get(&Keyword::from("keyword not indexed")),
+        Some(HashSet::new()).as_ref()
+    );
+
+    assert_eq!(res.get(&Keyword::from("keyword not searched")), None);
+
+    Ok(())
+}
+
+#[actix_rt::test]
+async fn test_double_add() -> Result<(), Error<KvStoreError>> {
+    let mut findex = Findex::new(
+        EntryTable::setup(InMemoryEdx::default()),
+        ChainTable::setup(InMemoryEdx::default()),
+    );
+
+    let master_key = findex.keygen();
+    let label = Label::from("First label.");
+
+    // Indexed a first location for the single keyword.
+    let res = findex
+        .add(
+            &master_key,
+            &label,
+            HashMap::from([(
+                IndexedValue::Data(Location::from("first location")),
+                HashSet::from_iter([Keyword::from("single keyword")]),
+            )]),
+        )
+        .await
+        .unwrap();
+    assert_eq!(res, HashSet::from_iter([Keyword::from("single keyword")]));
+
+    // Indexed a second location for the single keyword.
+    let res = findex
+        .add(
+            &master_key,
+            &label,
+            HashMap::from([(
+                IndexedValue::Data(Location::from("second location")),
+                HashSet::from_iter([Keyword::from("single keyword")]),
+            )]),
+        )
+        .await
+        .unwrap();
+    assert_eq!(res, HashSet::new());
+    Ok(())
+}
+
+#[actix_rt::test]
 async fn test_findex() -> Result<(), Error<KvStoreError>> {
     let mut rng = CsRng::from_entropy();
 
@@ -248,7 +391,7 @@ async fn test_findex() -> Result<(), Error<KvStoreError>> {
             &master_key,
             &label,
             HashSet::from_iter([robert_keyword.clone()]),
-            &dummy_search_callback,
+            &|_| async { Ok(false) },
         )
         .await
         .unwrap();
@@ -260,7 +403,7 @@ async fn test_findex() -> Result<(), Error<KvStoreError>> {
             &master_key,
             &Label::random(&mut rng),
             HashSet::from_iter([robert_keyword.clone()]),
-            &dummy_search_callback,
+            &|_| async { Ok(false) },
         )
         .await
         .unwrap();
@@ -272,7 +415,7 @@ async fn test_findex() -> Result<(), Error<KvStoreError>> {
             &master_key,
             &label,
             HashSet::from_iter([doe_keyword.clone()]),
-            &dummy_search_callback,
+            &|_| async { Ok(false) },
         )
         .await
         .unwrap();
@@ -285,7 +428,7 @@ async fn test_findex() -> Result<(), Error<KvStoreError>> {
             &master_key,
             &label,
             HashSet::from_iter([rob_keyword.clone()]),
-            &dummy_search_callback,
+            &|_| async { Ok(false) },
         )
         .await
         .unwrap();
@@ -297,7 +440,7 @@ async fn test_findex() -> Result<(), Error<KvStoreError>> {
             &master_key,
             &label,
             HashSet::from_iter([rob_keyword.clone()]),
-            &dummy_search_callback,
+            &|_| async { Ok(false) },
         )
         .await
         .unwrap();
@@ -326,7 +469,7 @@ async fn test_findex() -> Result<(), Error<KvStoreError>> {
             &master_key,
             &label,
             HashSet::from_iter([jane_keyword.clone()]),
-            &dummy_search_callback,
+            &|_| async { Ok(false) },
         )
         .await
         .unwrap();
@@ -338,7 +481,7 @@ async fn test_findex() -> Result<(), Error<KvStoreError>> {
             &master_key,
             &label,
             HashSet::from_iter([robert_keyword.clone()]),
-            &dummy_search_callback,
+            &|_| async { Ok(false) },
         )
         .await
         .unwrap();
@@ -350,7 +493,7 @@ async fn test_findex() -> Result<(), Error<KvStoreError>> {
             &master_key,
             &label,
             HashSet::from_iter([doe_keyword.clone()]),
-            &dummy_search_callback,
+            &|_| async { Ok(false) },
         )
         .await
         .unwrap();
@@ -371,7 +514,7 @@ async fn test_findex() -> Result<(), Error<KvStoreError>> {
             &master_key,
             &label,
             HashSet::from_iter([rob_keyword.clone()]),
-            &dummy_search_callback,
+            &|_| async { Ok(false) },
         )
         .await
         .unwrap();
@@ -412,7 +555,7 @@ async fn test_findex() -> Result<(), Error<KvStoreError>> {
                 &new_master_key,
                 &new_label,
                 HashSet::from_iter([doe_keyword.clone()]),
-                &dummy_search_callback,
+                &|_| async { Ok(false) },
             )
             .await
             .unwrap();
@@ -452,7 +595,7 @@ async fn test_findex() -> Result<(), Error<KvStoreError>> {
             &new_master_key,
             &new_label,
             HashSet::from_iter([jane_keyword.clone()]),
-            &dummy_search_callback,
+            &|_| async { Ok(false) },
         )
         .await
         .unwrap();
@@ -466,7 +609,7 @@ async fn test_findex() -> Result<(), Error<KvStoreError>> {
             &new_master_key,
             &new_label,
             HashSet::from_iter([doe_keyword.clone()]),
-            &dummy_search_callback,
+            &|_| async { Ok(false) },
         )
         .await
         .unwrap();
@@ -479,7 +622,7 @@ async fn test_findex() -> Result<(), Error<KvStoreError>> {
             &new_master_key,
             &old_label,
             HashSet::from_iter([doe_keyword.clone()]),
-            &dummy_search_callback,
+            &|_| async { Ok(false) },
         )
         .await
         .unwrap();
@@ -515,7 +658,7 @@ async fn test_findex() -> Result<(), Error<KvStoreError>> {
             &new_master_key,
             &new_label,
             HashSet::from_iter([doe_keyword.clone()]),
-            &dummy_search_callback,
+            &|_| async { Ok(false) },
         )
         .await
         .unwrap();
@@ -528,7 +671,7 @@ async fn test_findex() -> Result<(), Error<KvStoreError>> {
             &new_master_key,
             &old_label,
             HashSet::from_iter([doe_keyword.clone()]),
-            &dummy_search_callback,
+            &|_| async { Ok(false) },
         )
         .await
         .unwrap();
@@ -562,7 +705,7 @@ async fn test_findex() -> Result<(), Error<KvStoreError>> {
                 &new_master_key,
                 &new_label,
                 HashSet::from_iter([doe_keyword.clone()]),
-                &dummy_search_callback,
+                &|_| async { Ok(false) },
             )
             .await
             .unwrap();
@@ -587,7 +730,7 @@ async fn test_findex() -> Result<(), Error<KvStoreError>> {
             &new_master_key,
             &new_label,
             HashSet::from_iter([doe_keyword.clone()]),
-            &dummy_search_callback,
+            &|_| async { Ok(false) },
         )
         .await
         .unwrap();
@@ -721,12 +864,9 @@ async fn test_first_names() -> Result<(), Error<KvStoreError>> {
     for s in searches {
         let keywords = HashSet::from_iter([Keyword::from(s.as_str())]);
         let graph_results = graph_findex
-            .search(
-                &master_key,
-                &label,
-                keywords.clone(),
-                &dummy_search_callback,
-            )
+            .search(&master_key, &label, keywords.clone(), &|_| async {
+                Ok(false)
+            })
             .await
             .unwrap();
         assert!(
@@ -736,7 +876,7 @@ async fn test_first_names() -> Result<(), Error<KvStoreError>> {
         total_results += graph_results.len();
         // naive search
         let naive_results = naive_findex
-            .search(&master_key, &label, keywords, &dummy_search_callback)
+            .search(&master_key, &label, keywords, &|_| async { Ok(false) })
             .await
             .unwrap();
         assert_eq!(
@@ -803,7 +943,7 @@ async fn test_graph_compacting() {
             &master_key,
             &label,
             HashSet::from_iter([rob_keyword.clone()]),
-            &dummy_search_callback,
+            &|_| async { Ok(false) },
         )
         .await
         .unwrap();
@@ -852,7 +992,7 @@ async fn test_graph_compacting() {
                 &master_key,
                 &label,
                 HashSet::from_iter([rob_keyword.clone()]),
-                &dummy_search_callback,
+                &|_| async { Ok(false) },
             )
             .await
             .unwrap();

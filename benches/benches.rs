@@ -9,12 +9,6 @@ use criterion::{criterion_group, criterion_main, Criterion};
 use futures::executor::block_on;
 use rand::SeedableRng;
 
-async fn user_interrupt(
-    _res: HashMap<Keyword, HashSet<IndexedValue<Keyword, Location>>>,
-) -> Result<bool, String> {
-    Ok(false)
-}
-
 fn prepare_locations_and_words(
     number: usize,
 ) -> HashMap<IndexedValue<Keyword, Location>, HashSet<Keyword>> {
@@ -82,8 +76,12 @@ fn bench_search(c: &mut Criterion) {
         let keywords = prepare_keywords(n_keywords);
         group.bench_function(format!("Searching {n_keywords} keyword(s)"), |b| {
             b.iter(|| {
-                block_on(findex.search(&master_key, &label, keywords.clone(), &user_interrupt))
-                    .expect("search failed");
+                block_on(
+                    findex.search(&master_key, &label, keywords.clone(), &|_| async {
+                        Ok(false)
+                    }),
+                )
+                .expect("search failed");
             });
         });
     }

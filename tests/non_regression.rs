@@ -33,12 +33,6 @@ fn add_keyword_graph(
     }
 }
 
-async fn user_interrupt(
-    _res: HashMap<Keyword, HashSet<IndexedValue<Keyword, Location>>>,
-) -> Result<bool, String> {
-    Ok(false)
-}
-
 #[allow(dead_code)]
 async fn write_index() -> Result<(), Error<KvStoreError>> {
     const MIN_KEYWORD_LENGTH: usize = 3;
@@ -89,7 +83,7 @@ async fn write_index() -> Result<(), Error<KvStoreError>> {
             &master_key,
             &label,
             HashSet::from_iter([keyword.clone()]),
-            &user_interrupt,
+            &|_| async { Ok(false) },
         )
         .await?;
 
@@ -144,7 +138,7 @@ async fn test_non_regression() -> Result<(), Error<KvStoreError>> {
             &master_key,
             &label,
             HashSet::from_iter([keyword.clone()]),
-            &user_interrupt,
+            &|_| async { Ok(false) },
         )
         .await?
         .remove(&keyword)

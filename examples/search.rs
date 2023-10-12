@@ -31,12 +31,6 @@ fn prepare_locations_and_words(
     locations_and_words
 }
 
-async fn user_interrupt(
-    _res: HashMap<Keyword, HashSet<IndexedValue<Keyword, Location>>>,
-) -> Result<bool, String> {
-    Ok(false)
-}
-
 fn main() {
     let locations_and_words = prepare_locations_and_words(10000);
 
@@ -57,7 +51,11 @@ fn main() {
     //
     let keywords = prepare_keywords(1000);
     for _ in 0..1000 {
-        block_on(findex.search(&master_key, &label, keywords.clone(), &user_interrupt))
-            .expect("search failed");
+        block_on(
+            findex.search(&master_key, &label, keywords.clone(), &|_| async {
+                Ok(false)
+            }),
+        )
+        .expect("search failed");
     }
 }

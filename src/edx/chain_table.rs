@@ -24,6 +24,7 @@ use crate::{
 };
 
 /// Chain Table representation.
+#[derive(Debug)]
 pub struct ChainTable<const VALUE_LENGTH: usize, Edx: EdxStore<VALUE_LENGTH>>(pub Edx);
 
 impl<const VALUE_LENGTH: usize, Edx: EdxStore<VALUE_LENGTH>> Deref

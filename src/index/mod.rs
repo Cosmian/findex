@@ -51,7 +51,7 @@ pub trait Index<EntryTable: DxEnc<ENTRY_LENGTH>, ChainTable: DxEnc<LINK_LENGTH>>
     ) -> Result<HashMap<Keyword, HashSet<Location>>, Self::Error>;
 
     /// Indexes the given `IndexedValue`s for the given `Keyword`s. Returns the
-    /// set of keywords added to the index.
+    /// set of keywords added as keys to the index.
     async fn add(
         &mut self,
         key: &UserKey,
