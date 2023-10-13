@@ -13,13 +13,13 @@ use tiny_keccak::{Hasher, Sha3};
 
 use crate::{
     edx::DxEnc,
-    error::{CoreError, Error},
+    error::Error,
     findex_mm::{
         structs::{Entry, Link, Operation},
         FindexMultiMap, MmEnc, ENTRY_LENGTH, LINK_LENGTH,
     },
     parameters::{BLOCK_LENGTH, HASH_LENGTH, LINE_WIDTH, SEED_LENGTH},
-    CallbackErrorTrait, Label,
+    CallbackErrorTrait, CoreError, Label,
 };
 
 impl<
@@ -60,7 +60,7 @@ impl<
         ct_key: &ChainTable::Key,
         mut last_token: ChainTable::Token,
         n: usize,
-    ) -> Result<Vec<ChainTable::Token>, Error<UserError>> {
+    ) -> Result<Vec<ChainTable::Token>, CoreError> {
         let mut res = Vec::with_capacity(n);
         for _ in 0..n {
             let new_token = self.chain_table.tokenize(ct_key, &last_token, None);
@@ -128,7 +128,7 @@ impl<
     pub(crate) fn decompose<const BLOCK_LENGTH: usize, const LINE_LENGTH: usize>(
         &self,
         modifications: &[(Operation, <Self as MmEnc<SEED_LENGTH, UserError>>::Item)],
-    ) -> Result<Vec<Link>, Error<UserError>> {
+    ) -> Result<Vec<Link>, CoreError> {
         // Allocate a lower bound on the number of chain links.
         let mut chain = Vec::with_capacity(modifications.len());
         let mut link = Link::new();
@@ -179,7 +179,7 @@ impl<
     pub(crate) fn recompose<const BLOCK_LENGTH: usize, const LINE_LENGTH: usize>(
         &self,
         chain: &[Link],
-    ) -> Result<HashSet<<Self as MmEnc<SEED_LENGTH, UserError>>::Item>, Error<UserError>> {
+    ) -> Result<HashSet<<Self as MmEnc<SEED_LENGTH, UserError>>::Item>, CoreError> {
         // Allocate an upper bound on the number of values.
         let mut indexed_values = HashSet::with_capacity(chain.len() * LINE_LENGTH);
         let mut stack = Vec::new();
@@ -191,7 +191,7 @@ impl<
                 let operation = ct_value.get_operation(pos)?;
 
                 if current_operation.is_some() && current_operation.as_ref() != Some(&operation) {
-                    return Err(Error::<UserError>::Crypto(
+                    return Err(CoreError::Crypto(
                         "findex value cannot be decomposed into blocks with different operations"
                             .to_string(),
                     ));
@@ -238,6 +238,123 @@ impl<
             .map(|last_token| self.unroll(&chain_key, &entry.tag_hash, last_token))
             .unwrap_or_default();
         (chain_key, chain_tokens)
+    }
+
+    /// Commits the given chain modifications into the Entry Table.
+    ///
+    /// Returns the chains to insert in the Chain Table.
+    async fn commit<Tag: Clone + Hash + Eq + AsRef<[u8]>>(
+        &self,
+        rng: Arc<Mutex<impl CryptoRngCore>>,
+        key: &EntryTable::Key,
+        label: &Label,
+        chain_additions: &HashMap<Tag, Vec<Link>>,
+    ) -> Result<
+        (
+            HashSet<Tag>,
+            HashMap<Tag, (ChainTable::Key, Vec<ChainTable::Token>)>,
+        ),
+        Error<UserError>,
+    > {
+        // Compute the token associated to the modifications.
+        let mut chain_additions = chain_additions
+            .iter()
+            .map(|(tag, links)| {
+                let mut tag_hash = [0; HASH_LENGTH];
+                let mut hasher = Sha3::v256();
+                hasher.update(tag.as_ref());
+                hasher.finalize(&mut tag_hash);
+                (
+                    tag,
+                    (
+                        self.entry_table.tokenize(key, &tag_hash, Some(label)),
+                        tag_hash,
+                        links.len(),
+                    ),
+                )
+            })
+            .collect::<HashMap<_, _>>();
+
+        let encrypted_entries = self
+            .entry_table
+            .get(
+                chain_additions
+                    .values()
+                    .map(|(token, _, _)| token)
+                    .copied()
+                    .collect(),
+            )
+            .await?;
+
+        // Assert only one old entry is found per token.
+        let mut encrypted_entries = encrypted_entries.into_iter().try_fold(
+            HashMap::with_capacity(chain_additions.len()),
+            |mut acc, (k, v)| {
+                let old_value = acc.insert(k, v);
+                if old_value.is_some() {
+                    Err(CoreError::Crypto(
+                        "multiple Entry Table values are not allowed in upsert mode".to_string(),
+                    ))
+                } else {
+                    Ok(acc)
+                }
+            },
+        )?;
+
+        let mut new_tags = HashSet::with_capacity(chain_additions.len());
+        let mut chain = HashMap::with_capacity(chain_additions.len());
+
+        while !chain_additions.is_empty() {
+            let mut new_entries = HashMap::with_capacity(chain_additions.len());
+            // Compute new chain tokens to insert modifications and update the associated
+            // entry. Create one if the associated tag was not indexed yet.
+            for (tag, (token, tag_hash, n_additions)) in &chain_additions {
+                let mut entry = if let Some(ciphertext) = encrypted_entries.get(token) {
+                    Entry::<ChainTable>::from(self.entry_table.resolve(key, ciphertext)?)
+                } else {
+                    // This tag is not indexed yet in the Entry table.
+                    new_tags.insert((*tag).clone());
+                    Entry {
+                        seed: self
+                            .chain_table
+                            .gen_seed(&mut *rng.lock().expect("could not lock mutex")),
+                        tag_hash: *tag_hash,
+                        chain_token: None,
+                    }
+                };
+
+                // TODO: a cache could be added to prevent computing the key at each loop
+                // iteration.
+                let chain_key = self.chain_table.derive_keys(&entry.seed);
+
+                let chain_tokens = self.derive_chain_tokens(
+                    &chain_key,
+                    entry.chain_token.unwrap_or_else(|| entry.tag_hash.into()),
+                    *n_additions,
+                )?;
+                entry.chain_token = chain_tokens.last().copied();
+
+                chain.insert((*tag).clone(), (chain_key, chain_tokens));
+                new_entries.insert(
+                    *token,
+                    self.entry_table.prepare(
+                        &mut *rng.lock().expect("could not lock mutex"),
+                        key,
+                        entry.into(),
+                    )?,
+                );
+            }
+
+            // 2 - Upsert new entries to the Entry Table.
+            encrypted_entries = self
+                .entry_table
+                .upsert(&encrypted_entries, new_entries)
+                .await?;
+            chain_additions.retain(|_, (k, _, _)| encrypted_entries.contains_key(k));
+            new_tags.retain(|tag| !chain_additions.contains_key(tag));
+        }
+
+        Ok((new_tags, chain))
     }
 }
 
@@ -305,167 +422,46 @@ impl<
         Ok(indexed_values)
     }
 
-    async fn insert<Tag: Hash + Eq + AsRef<[u8]>>(
+    async fn insert<Tag: Clone + Hash + Eq + AsRef<[u8]>>(
         &self,
         rng: Arc<Mutex<impl CryptoRngCore>>,
         key: &Self::Key,
         modifications: HashMap<Tag, Vec<(Operation, Self::Item)>>,
         label: &Label,
     ) -> Result<HashSet<Tag>, Self::Error> {
-        let mut token_to_tag = HashMap::with_capacity(modifications.len());
-        let mut chain_values = HashMap::with_capacity(modifications.len());
-        for (tag, chain) in modifications {
-            let mut tag_hash = [0; HASH_LENGTH];
-            let mut hasher = Sha3::v256();
-            hasher.update(tag.as_ref());
-            hasher.finalize(&mut tag_hash);
-            let entry_token = self.entry_table.tokenize(key, &tag_hash, Some(label));
+        let chain_additions = modifications
+            .into_iter()
+            .map(|(tag, new_values)| {
+                self.decompose::<BLOCK_LENGTH, LINE_WIDTH>(&new_values)
+                    .map(|links| (tag, links))
+            })
+            .collect::<Result<HashMap<Tag, Vec<Link>>, _>>()?;
 
-            token_to_tag.insert(entry_token, tag);
-            chain_values.insert(
-                tag_hash,
-                (
-                    entry_token,
-                    self.decompose::<BLOCK_LENGTH, LINE_WIDTH>(&chain)?,
-                ),
-            );
-        }
-
-        // 1. Upsert Entry Table values associated to the chains into which new values
-        //    are to be inserted.
-        let old_entries = self
-            .entry_table
-            .get(
-                chain_values
-                    .values()
-                    .map(|(et_token, _)| et_token)
-                    .copied()
-                    .collect(),
-            )
+        let (new_tags, mut chain_tokens) = self
+            .commit(rng.clone(), key, label, &chain_additions)
             .await?;
 
-        let n_entries = old_entries.len();
-        let old_entries = old_entries.into_iter().try_fold(
-            HashMap::with_capacity(n_entries),
-            |mut acc, (k, v)| {
-                let old_v = acc.insert(k, v);
-                if old_v.is_some() {
-                    Err(Error::<UserError>::Crypto(
-                        "Entry Table keys are not unique".to_string(),
-                    ))
-                } else {
-                    Ok(acc)
-                }
-            },
-        )?;
+        let mut encrypted_links = HashMap::with_capacity(
+            chain_tokens
+                .values()
+                .map(|(_, chain_tokens)| chain_tokens.len())
+                .sum(),
+        );
 
-        let new_tags = token_to_tag
-            .into_iter()
-            .filter(|(token, _)| !old_entries.contains_key(token))
-            .map(|(_, tag)| tag)
-            .collect();
-
-        let mut chain = HashMap::with_capacity(chain_values.len());
-        let mut new_entries = HashMap::with_capacity(chain_values.len());
-        for (tag_hash, (entry_token, chain_links)) in &chain_values {
-            let mut entry = if let Some(ciphertext) = old_entries.get(entry_token) {
-                Entry::<ChainTable>::from(self.entry_table.resolve(key, ciphertext)?)
-            } else {
-                Entry {
-                    seed: self
-                        .chain_table
-                        .gen_seed(&mut *rng.lock().expect("could not lock mutex")),
-                    tag_hash: *tag_hash,
-                    chain_token: None,
-                }
-            };
-
-            let chain_key = self.chain_table.derive_keys(&entry.seed);
-            let chain_tokens = self.derive_chain_tokens(
-                &chain_key,
-                entry.chain_token.unwrap_or_else(|| entry.tag_hash.into()),
-                chain_links.len(),
-            )?;
-            entry.chain_token = chain_tokens.last().copied();
-
-            chain.insert(*tag_hash, (chain_key, chain_tokens));
-            new_entries.insert(
-                *entry_token,
-                self.entry_table.prepare(
-                    &mut *rng.lock().expect("could not lock mutex"),
-                    key,
-                    entry.into(),
-                )?,
-            );
-        }
-
-        // 2 - Upsert modifications to the Entry Table.
-        let mut old_entries = self.entry_table.upsert(&old_entries, new_entries).await?;
-
-        // Retry until all modifications are upserted.
-        while !old_entries.is_empty() {
-            new_entries = HashMap::with_capacity(old_entries.len());
-            for (tag_hash, (entry_token, chain_links)) in &chain_values {
-                if let Some(ciphertext) = old_entries.get(entry_token) {
-                    let mut entry =
-                        Entry::<ChainTable>::from(self.entry_table.resolve(key, ciphertext)?);
-
-                    let chain_key = self.chain_table.derive_keys(&entry.seed);
-                    let chain_tokens = self.derive_chain_tokens(
-                        &chain_key,
-                        entry.chain_token.unwrap_or_else(|| entry.tag_hash.into()),
-                        chain_links.len(),
-                    )?;
-                    entry.chain_token = chain_tokens.last().copied();
-
-                    let encrypted_entry = self.entry_table.prepare(
-                        &mut *rng.lock().expect("could not lock mutex"),
-                        key,
-                        entry.into(),
-                    )?;
-
-                    if let Some(e) = chain.get_mut(tag_hash) {
-                        *e = (chain_key, chain_tokens);
-                    }
-
-                    if let Some(e) = new_entries.get_mut(entry_token) {
-                        *e = encrypted_entry;
-                    }
-                }
-            }
-
-            old_entries = self.entry_table.upsert(&old_entries, new_entries).await?;
-        }
-
-        let mut encrypted_links =
-            HashMap::with_capacity(chain_values.values().map(|(_, v)| v.len()).sum());
-        for (tag_hash, (_, chain_links)) in chain_values {
-            let (chain_key, new_tokens) = chain.remove(&tag_hash).ok_or_else(|| {
-                CoreError::Crypto(
-                    "Chain Table tags were generated for all findex tokens.".to_string(),
-                )
+        for (tag, links) in chain_additions {
+            let (chain_key, tokens) = chain_tokens.remove(&tag).ok_or_else(|| {
+                CoreError::Crypto("no token not found for tag {tag:?}".to_string())
             })?;
-
-            if chain_links.len() != new_tokens.len() {
-                return Err(CoreError::Crypto(format!(
-                    "{} new tags were generated when {} new Chain Table values are to be inserted",
-                    new_tokens.len(),
-                    chain_links.len()
-                ))
-                .into());
+            for (token, link) in tokens.into_iter().zip(links.into_iter()) {
+                encrypted_links.insert(
+                    token,
+                    self.chain_table.prepare(
+                        &mut *rng.lock().expect("could not lock mutex"),
+                        &chain_key,
+                        link.0,
+                    )?,
+                );
             }
-
-            let rng = &mut *rng.lock().expect("could not lock mutex");
-            let encrypted_chain_links = new_tokens
-                .into_iter()
-                .zip(chain_links)
-                .map(|(token, value)| {
-                    self.chain_table
-                        .prepare(rng, &chain_key, value.0)
-                        .map(|ciphertext| (token, ciphertext))
-                })
-                .collect::<Result<HashMap<_, _>, _>>()?;
-            encrypted_links.extend(encrypted_chain_links);
         }
 
         self.chain_table.insert(encrypted_links).await?;

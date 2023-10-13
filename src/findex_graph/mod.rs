@@ -62,7 +62,7 @@ pub trait GxEnc<EdxError: CallbackErrorTrait> {
     /// Encrypts and inserts the given items into the graph. Returns the set of
     /// tags added to the index.
     #[allow(clippy::type_complexity)]
-    async fn insert<Tag: Hash + Eq + AsRef<[u8]>, Value: AsRef<[u8]>>(
+    async fn insert<Tag: Clone + Hash + Eq + AsRef<[u8]>, Value: AsRef<[u8]>>(
         &self,
         rng: Arc<Mutex<impl CryptoRngCore>>,
         key: &Self::Key,

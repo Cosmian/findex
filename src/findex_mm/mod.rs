@@ -71,7 +71,7 @@ pub trait MmEnc<const SEED_LENGTH: usize, EdxError: CallbackErrorTrait> {
 
     /// Applies the given modifications to the encrypted multi-map. Returns the
     /// set of Tags added to the Multi-Map.
-    async fn insert<Tag: Hash + Eq + AsRef<[u8]>>(
+    async fn insert<Tag: Clone + Hash + Eq + AsRef<[u8]>>(
         &self,
         rng: Arc<Mutex<impl CryptoRngCore>>,
         key: &Self::Key,

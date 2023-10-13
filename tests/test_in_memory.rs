@@ -3,6 +3,7 @@ use std::{
     fs::File,
     io::{BufRead, BufReader},
     result::Result,
+    sync::Arc,
 };
 
 use cosmian_crypto_core::{reexport::rand_core::SeedableRng, CsRng};
@@ -10,6 +11,7 @@ use cosmian_findex::{
     ChainTable, DxEnc, EntryTable, Error, Findex, InMemoryEdx, Index, IndexedValue, Keyword,
     KvStoreError, Label, Location,
 };
+use futures::executor::block_on;
 use rand::Rng;
 
 const MIN_KEYWORD_LENGTH: usize = 3;
@@ -1075,6 +1077,72 @@ async fn test_keyword_presence() -> Result<(), Error<KvStoreError>> {
         .await?;
     // all should be present
     assert_eq!(new_keywords.len(), 0);
+
+    Ok(())
+}
+
+#[actix_rt::test]
+async fn test_concurrency() -> Result<(), Error<KvStoreError>> {
+    let findex = Arc::new(Findex::new(
+        EntryTable::setup(InMemoryEdx::default()),
+        ChainTable::setup(InMemoryEdx::default()),
+    ));
+    let key = Arc::new(findex.keygen());
+    let label = Arc::new(Label::from("First label."));
+    let keyword = Keyword::from("unique keyword");
+
+    let handles = (0..100)
+        .map(|id: usize| {
+            let findex = findex.clone();
+            let key = key.clone();
+            let label = label.clone();
+            let keyword = keyword.clone();
+
+            std::thread::spawn(move || {
+                let res = block_on(findex.add(
+                    &key,
+                    &label,
+                    HashMap::from_iter([(
+                        IndexedValue::Data(Location::from(id.to_be_bytes().as_slice())),
+                        HashSet::from_iter([keyword]),
+                    )]),
+                ));
+                (id, res)
+            })
+        })
+        .collect::<Vec<_>>();
+
+    let mut new_keywords = HashSet::new();
+    for h in handles {
+        let (id, res) = h.join().unwrap();
+        let res = res.unwrap();
+        for keyword in res {
+            if !new_keywords.insert(keyword) {
+                panic!("{id}: same keyword cannot be returned twice.")
+            }
+        }
+    }
+
+    assert_eq!(new_keywords, HashSet::from_iter([keyword.clone()]));
+
+    let res = findex
+        .search(
+            &key,
+            &label,
+            HashSet::from_iter([keyword.clone()]),
+            &|_| async { Ok(false) },
+        )
+        .await?;
+
+    assert_eq!(
+        res.get(&keyword),
+        Some(
+            (0..100)
+                .map(|id: usize| Location::from(id.to_be_bytes().as_slice()))
+                .collect()
+        )
+        .as_ref()
+    );
 
     Ok(())
 }
