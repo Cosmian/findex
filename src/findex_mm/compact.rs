@@ -7,7 +7,7 @@ use cosmian_crypto_core::reexport::rand_core::CryptoRngCore;
 
 use super::{structs::Entry, Operation};
 use crate::{
-    edx::TokenDump,
+    edx::{Token, TokenDump},
     findex_mm::{structs::Link, CompactingData, FindexMultiMap, MmEnc},
     parameters::{BLOCK_LENGTH, LINE_WIDTH, SEED_LENGTH},
     CallbackErrorTrait, DxEnc, Error, Label, ENTRY_LENGTH, LINK_LENGTH,
@@ -15,15 +15,12 @@ use crate::{
 
 impl<
         UserError: CallbackErrorTrait,
-        EntryTable: DxEnc<ENTRY_LENGTH, Error = Error<UserError>>
-            + TokenDump<Token = <EntryTable as DxEnc<ENTRY_LENGTH>>::Token, Error = Error<UserError>>,
+        EntryTable: DxEnc<ENTRY_LENGTH, Error = Error<UserError>> + TokenDump<Error = Error<UserError>>,
         ChainTable: DxEnc<LINK_LENGTH, Error = Error<UserError>>,
     > FindexMultiMap<UserError, EntryTable, ChainTable>
 {
     /// Returns the set of Entry Table tokens.
-    pub async fn dump_entry_tokens(
-        &self,
-    ) -> Result<Vec<<EntryTable as DxEnc<ENTRY_LENGTH>>::Token>, Error<UserError>> {
+    pub async fn dump_entry_tokens(&self) -> Result<Vec<Token>, Error<UserError>> {
         Ok(self.entry_table.dump_tokens().await?.into_iter().collect())
     }
 
@@ -33,15 +30,10 @@ impl<
     pub async fn prepare_compacting(
         &self,
         key: &<Self as MmEnc<SEED_LENGTH, UserError>>::Key,
-        tokens: HashSet<<EntryTable as DxEnc<ENTRY_LENGTH>>::Token>,
-        compact_target: &HashSet<<EntryTable as DxEnc<ENTRY_LENGTH>>::Token>,
-    ) -> Result<
-        (
-            HashMap<<EntryTable as DxEnc<ENTRY_LENGTH>>::Token, HashSet<Vec<u8>>>,
-            CompactingData<EntryTable, ChainTable>,
-        ),
-        Error<UserError>,
-    > {
+        tokens: HashSet<Token>,
+        compact_target: &HashSet<Token>,
+    ) -> Result<(HashMap<Token, HashSet<Vec<u8>>>, CompactingData<ChainTable>), Error<UserError>>
+    {
         let entries = self.fetch_entries(key, tokens).await?;
 
         let n_entries = entries.len();
@@ -123,8 +115,8 @@ impl<
         &self,
         rng: Arc<Mutex<impl CryptoRngCore>>,
         new_key: &<Self as MmEnc<SEED_LENGTH, UserError>>::Key,
-        indexed_map: HashMap<<EntryTable as DxEnc<ENTRY_LENGTH>>::Token, HashSet<Vec<u8>>>,
-        mut continuation: CompactingData<EntryTable, ChainTable>,
+        indexed_map: HashMap<Token, HashSet<Vec<u8>>>,
+        mut continuation: CompactingData<ChainTable>,
         new_label: &Label,
     ) -> Result<(), Error<UserError>> {
         //

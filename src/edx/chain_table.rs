@@ -13,6 +13,7 @@ use std::{
 use async_trait::async_trait;
 use cosmian_crypto_core::{kdf256, reexport::rand_core::CryptoRngCore, SymmetricKey};
 
+use super::structs::Token;
 use crate::{
     edx::{
         structs::{EdxKey, Seed},
@@ -48,7 +49,6 @@ impl<const VALUE_LENGTH: usize, EdxScheme: EdxStore<VALUE_LENGTH>> DxEnc<VALUE_L
     type Key = EdxKey;
     type Seed = Seed<SEED_LENGTH>;
     type Store = EdxScheme;
-    type Token = EdxScheme::Token;
 
     fn setup(edx: Self::Store) -> Self {
         Self(edx)
@@ -79,16 +79,11 @@ impl<const VALUE_LENGTH: usize, EdxScheme: EdxStore<VALUE_LENGTH>> DxEnc<VALUE_L
         }
     }
 
-    fn tokenize<Tag: ?Sized + AsRef<[u8]>>(
-        &self,
-        key: &Self::Key,
-        tag: &Tag,
-        _label: Option<&Label>,
-    ) -> Self::Token {
+    fn tokenize(&self, key: &Self::Key, bytes: &[u8], _label: Option<&Label>) -> Token {
         kmac!(
             TOKEN_LENGTH,
             &key.token,
-            tag.as_ref(),
+            bytes,
             CHAIN_TABLE_KEY_DERIVATION_INFO
         )
         .into()
@@ -96,8 +91,8 @@ impl<const VALUE_LENGTH: usize, EdxScheme: EdxStore<VALUE_LENGTH>> DxEnc<VALUE_L
 
     async fn get(
         &self,
-        tokens: HashSet<Self::Token>,
-    ) -> Result<Vec<(Self::Token, Self::EncryptedValue)>, Self::Error> {
+        tokens: HashSet<Token>,
+    ) -> Result<Vec<(Token, Self::EncryptedValue)>, Self::Error> {
         self.0.fetch(tokens).await.map_err(Error::Callback)
     }
 
@@ -120,20 +115,17 @@ impl<const VALUE_LENGTH: usize, EdxScheme: EdxStore<VALUE_LENGTH>> DxEnc<VALUE_L
 
     async fn upsert(
         &self,
-        _old_values: &HashMap<Self::Token, Self::EncryptedValue>,
-        _new_values: HashMap<Self::Token, Self::EncryptedValue>,
-    ) -> Result<HashMap<Self::Token, Self::EncryptedValue>, Self::Error> {
+        _old_values: &HashMap<Token, Self::EncryptedValue>,
+        _new_values: HashMap<Token, Self::EncryptedValue>,
+    ) -> Result<HashMap<Token, Self::EncryptedValue>, Self::Error> {
         panic!("The Chain Table does not do any upsert.")
     }
 
-    async fn insert(
-        &self,
-        items: HashMap<Self::Token, Self::EncryptedValue>,
-    ) -> Result<(), Self::Error> {
+    async fn insert(&self, items: HashMap<Token, Self::EncryptedValue>) -> Result<(), Self::Error> {
         self.0.insert(items).await.map_err(Error::Callback)
     }
 
-    async fn delete(&self, items: HashSet<Self::Token>) -> Result<(), Self::Error> {
+    async fn delete(&self, items: HashSet<Token>) -> Result<(), Self::Error> {
         self.0.delete(items).await.map_err(Error::Callback)
     }
 }
@@ -161,7 +153,7 @@ mod tests {
         let label = Label::random(&mut rng);
 
         let tag = "only value";
-        let token = table.tokenize(&key, tag, Some(&label));
+        let token = table.tokenize(&key, tag.as_bytes(), Some(&label));
 
         let mut value = [0; VALUE_LENGTH];
         rng.fill_bytes(&mut value);

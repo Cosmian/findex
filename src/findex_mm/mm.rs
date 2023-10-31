@@ -12,7 +12,7 @@ use cosmian_crypto_core::reexport::rand_core::CryptoRngCore;
 use tiny_keccak::{Hasher, Sha3};
 
 use crate::{
-    edx::DxEnc,
+    edx::{DxEnc, Token},
     error::Error,
     findex_mm::{
         structs::{Entry, Link, Operation},
@@ -41,8 +41,8 @@ impl<
         &self,
         key: &ChainTable::Key,
         seed: &[u8; HASH_LENGTH],
-        last_token: &ChainTable::Token,
-    ) -> Vec<ChainTable::Token> {
+        last_token: &Token,
+    ) -> Vec<Token> {
         let mut chain = Vec::new();
         chain.push(self.chain_table.tokenize(key, seed, None));
         while &chain[chain.len() - 1] != last_token {
@@ -58,9 +58,9 @@ impl<
     pub(crate) fn derive_chain_tokens(
         &self,
         ct_key: &ChainTable::Key,
-        mut last_token: ChainTable::Token,
+        mut last_token: Token,
         n: usize,
-    ) -> Vec<ChainTable::Token> {
+    ) -> Vec<Token> {
         let mut res = Vec::with_capacity(n);
         for _ in 0..n {
             let new_token = self.chain_table.tokenize(ct_key, &last_token, None);
@@ -103,8 +103,8 @@ impl<
     pub(crate) async fn fetch_entries(
         &self,
         key: &EntryTable::Key,
-        tokens: HashSet<EntryTable::Token>,
-    ) -> Result<Vec<(EntryTable::Token, Entry<ChainTable>)>, Error<UserError>> {
+        tokens: HashSet<Token>,
+    ) -> Result<Vec<(Token, Entry<ChainTable>)>, Error<UserError>> {
         self.entry_table
             .get(tokens)
             .await?
@@ -230,7 +230,7 @@ impl<
     pub(crate) fn derive_metadata(
         &self,
         entry: &Entry<ChainTable>,
-    ) -> (ChainTable::Key, Vec<ChainTable::Token>) {
+    ) -> (ChainTable::Key, Vec<Token>) {
         let chain_key = self.chain_table.derive_keys(&entry.seed);
         let chain_tokens = entry
             .chain_token
@@ -249,13 +249,7 @@ impl<
         key: &EntryTable::Key,
         label: &Label,
         chain_additions: &HashMap<Tag, Vec<Link>>,
-    ) -> Result<
-        (
-            HashSet<Tag>,
-            HashMap<Tag, (ChainTable::Key, Vec<ChainTable::Token>)>,
-        ),
-        Error<UserError>,
-    > {
+    ) -> Result<(HashSet<Tag>, HashMap<Tag, (ChainTable::Key, Vec<Token>)>), Error<UserError>> {
         // Compute the token associated to the modifications.
         let mut chain_additions = chain_additions
             .iter()

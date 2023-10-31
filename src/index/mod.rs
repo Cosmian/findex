@@ -10,7 +10,7 @@ use std::{
 use async_trait::async_trait;
 
 use crate::{
-    edx::TokenDump,
+    edx::{Token, TokenDump},
     findex_graph::{FindexGraph, GxEnc},
     findex_mm::{Operation, ENTRY_LENGTH, LINK_LENGTH},
     CallbackErrorTrait, DxEnc, Error, IndexedValue,
@@ -95,8 +95,7 @@ pub struct Findex<
 #[async_trait(?Send)]
 impl<
         UserError: CallbackErrorTrait,
-        EntryTable: DxEnc<ENTRY_LENGTH, Error = Error<UserError>>
-            + TokenDump<Token = <EntryTable as DxEnc<ENTRY_LENGTH>>::Token, Error = Error<UserError>>,
+        EntryTable: DxEnc<ENTRY_LENGTH, Error = Error<UserError>> + TokenDump<Error = Error<UserError>>,
         ChainTable: DxEnc<LINK_LENGTH, Error = Error<UserError>>,
     > Index<EntryTable, ChainTable> for Findex<UserError, EntryTable, ChainTable>
 {
@@ -279,8 +278,7 @@ impl<
 
 impl<
         UserError: CallbackErrorTrait,
-        EntryTable: DxEnc<ENTRY_LENGTH, Error = Error<UserError>>
-            + TokenDump<Token = <EntryTable as DxEnc<ENTRY_LENGTH>>::Token, Error = Error<UserError>>,
+        EntryTable: DxEnc<ENTRY_LENGTH, Error = Error<UserError>> + TokenDump<Error = Error<UserError>>,
         ChainTable: DxEnc<LINK_LENGTH, Error = Error<UserError>>,
     > Findex<UserError, EntryTable, ChainTable>
 {
@@ -297,11 +295,7 @@ impl<
     /// lower than `n`.
     ///
     /// TODO: update the formula used to select the number of lines to compact.
-    fn select_random_tokens(
-        &self,
-        n: usize,
-        tokens: &[<EntryTable as DxEnc<ENTRY_LENGTH>>::Token],
-    ) -> HashSet<<EntryTable as DxEnc<ENTRY_LENGTH>>::Token> {
+    fn select_random_tokens(&self, n: usize, tokens: &[Token]) -> HashSet<Token> {
         if tokens.len() <= n {
             return tokens.iter().copied().collect();
         }
@@ -344,8 +338,8 @@ impl<
         old_key: &<FindexGraph<UserError, EntryTable, ChainTable> as GxEnc<UserError>>::Key,
         new_key: &<FindexGraph<UserError, EntryTable, ChainTable> as GxEnc<UserError>>::Key,
         new_label: &Label,
-        compact_target: &HashSet<<EntryTable as DxEnc<ENTRY_LENGTH>>::Token>,
-        tokens: HashSet<<EntryTable as DxEnc<ENTRY_LENGTH>>::Token>,
+        compact_target: &HashSet<Token>,
+        tokens: HashSet<Token>,
         filter_obsolete_data: &Filter,
     ) -> Result<(), Error<UserError>> {
         let (mut indexed_values, data) = self

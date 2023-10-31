@@ -1,3 +1,6 @@
+use std::{fmt::Display, ops::Deref};
+
+use base64::engine::{general_purpose::STANDARD, Engine};
 use cosmian_crypto_core::{
     reexport::rand_core::CryptoRngCore, Aes256Gcm, DemInPlace, FixedSizeCBytes, Instantiable,
     Nonce, SymmetricKey,
@@ -7,7 +10,50 @@ use zeroize::{Zeroize, ZeroizeOnDrop};
 use crate::{
     error::CoreError,
     parameters::{MAC_LENGTH, NONCE_LENGTH, SYM_KEY_LENGTH},
+    TOKEN_LENGTH,
 };
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct Token([u8; TOKEN_LENGTH]);
+
+impl Token {
+    pub const LENGTH: usize = TOKEN_LENGTH;
+}
+
+impl Deref for Token {
+    type Target = [u8];
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl From<[u8; TOKEN_LENGTH]> for Token {
+    fn from(value: [u8; TOKEN_LENGTH]) -> Self {
+        Self(value)
+    }
+}
+
+impl TryFrom<&[u8]> for Token {
+    type Error = CoreError;
+
+    fn try_from(value: &[u8]) -> Result<Self, Self::Error> {
+        <[u8; TOKEN_LENGTH]>::try_from(value)
+            .map_err(|_| {
+                CoreError::Conversion(format!(
+                    "cannot create token from {} bytes, {TOKEN_LENGTH} expected",
+                    value.len(),
+                ))
+            })
+            .map(Into::into)
+    }
+}
+
+impl Display for Token {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", STANDARD.encode(self.deref()))
+    }
+}
 
 /// Seed used to derive a key.
 #[derive(Debug)]

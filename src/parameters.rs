@@ -14,7 +14,7 @@ pub const SEED_LENGTH: usize = 16;
 
 /// Size of the token used. It is 256 bits in order to allow more than 80 bits
 /// of post-quantum resistance.
-pub const TOKEN_LENGTH: usize = 32;
+pub(crate) const TOKEN_LENGTH: usize = 32;
 
 /// Length of the user key.
 pub const USER_KEY_LENGTH: usize = 16;

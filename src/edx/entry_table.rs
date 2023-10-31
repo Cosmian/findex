@@ -13,7 +13,7 @@ use async_trait::async_trait;
 use cosmian_crypto_core::{kdf256, reexport::rand_core::CryptoRngCore, SymmetricKey};
 
 use super::{
-    structs::{EdxKey, Seed},
+    structs::{EdxKey, Seed, Token},
     TokenDump,
 };
 use crate::{
@@ -47,7 +47,6 @@ impl<const VALUE_LENGTH: usize, Edx: EdxStore<VALUE_LENGTH>> DxEnc<VALUE_LENGTH>
     type Key = EdxKey;
     type Seed = Seed<SEED_LENGTH>;
     type Store = Edx;
-    type Token = Edx::Token;
 
     fn setup(edx: Self::Store) -> Self {
         Self(edx)
@@ -78,19 +77,14 @@ impl<const VALUE_LENGTH: usize, Edx: EdxStore<VALUE_LENGTH>> DxEnc<VALUE_LENGTH>
         }
     }
 
-    fn tokenize<Tag: ?Sized + AsRef<[u8]>>(
-        &self,
-        key: &Self::Key,
-        tag: &Tag,
-        label: Option<&Label>,
-    ) -> Self::Token {
-        kmac!(TOKEN_LENGTH, &key.token, tag.as_ref(), label.unwrap()).into()
+    fn tokenize(&self, key: &Self::Key, bytes: &[u8], label: Option<&Label>) -> Token {
+        kmac!(TOKEN_LENGTH, &key.token, bytes, label.unwrap()).into()
     }
 
     async fn get(
         &self,
-        tokens: HashSet<Self::Token>,
-    ) -> Result<Vec<(Self::Token, Self::EncryptedValue)>, Self::Error> {
+        tokens: HashSet<Token>,
+    ) -> Result<Vec<(Token, Self::EncryptedValue)>, Self::Error> {
         self.0.fetch(tokens).await.map_err(Self::Error::from)
     }
 
@@ -104,9 +98,9 @@ impl<const VALUE_LENGTH: usize, Edx: EdxStore<VALUE_LENGTH>> DxEnc<VALUE_LENGTH>
 
     async fn upsert(
         &self,
-        old_values: &HashMap<Self::Token, Self::EncryptedValue>,
-        new_values: HashMap<Self::Token, Self::EncryptedValue>,
-    ) -> Result<HashMap<Self::Token, Self::EncryptedValue>, Self::Error> {
+        old_values: &HashMap<Token, Self::EncryptedValue>,
+        new_values: HashMap<Token, Self::EncryptedValue>,
+    ) -> Result<HashMap<Token, Self::EncryptedValue>, Self::Error> {
         self.0
             .upsert(old_values, new_values)
             .await
@@ -115,7 +109,7 @@ impl<const VALUE_LENGTH: usize, Edx: EdxStore<VALUE_LENGTH>> DxEnc<VALUE_LENGTH>
 
     async fn insert(
         &self,
-        _values: HashMap<Self::Token, Self::EncryptedValue>,
+        _values: HashMap<Token, Self::EncryptedValue>,
     ) -> Result<(), Self::Error> {
         panic!("The Entry Table does not do any insert.")
     }
@@ -129,7 +123,7 @@ impl<const VALUE_LENGTH: usize, Edx: EdxStore<VALUE_LENGTH>> DxEnc<VALUE_LENGTH>
         Self::EncryptedValue::encrypt(rng, &key.value, value).map_err(Error::from)
     }
 
-    async fn delete(&self, items: HashSet<Self::Token>) -> Result<(), Self::Error> {
+    async fn delete(&self, items: HashSet<Token>) -> Result<(), Self::Error> {
         self.0.delete(items).await.map_err(Self::Error::Callback)
     }
 }
@@ -139,9 +133,8 @@ impl<const VALUE_LENGTH: usize, Edx: EdxStore<VALUE_LENGTH>> TokenDump
     for EntryTable<VALUE_LENGTH, Edx>
 {
     type Error = <Self as DxEnc<VALUE_LENGTH>>::Error;
-    type Token = <Self as DxEnc<VALUE_LENGTH>>::Token;
 
-    async fn dump_tokens(&self) -> Result<HashSet<Self::Token>, Self::Error> {
+    async fn dump_tokens(&self) -> Result<HashSet<Token>, Self::Error> {
         self.0.dump_tokens().await.map_err(Error::Callback)
     }
 }
@@ -168,7 +161,7 @@ mod tests {
         let label = Label::random(&mut rng);
 
         let tag = "only value";
-        let token = table.tokenize(&key, tag, Some(&label));
+        let token = table.tokenize(&key, tag.as_bytes(), Some(&label));
 
         let mut value = [0; VALUE_LENGTH];
         rng.fill_bytes(&mut value);
