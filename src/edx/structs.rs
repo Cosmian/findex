@@ -2,6 +2,7 @@ use std::{
     collections::{HashMap, HashSet},
     fmt::Display,
     ops::{Deref, DerefMut},
+    vec::IntoIter,
 };
 
 use base64::engine::{general_purpose::STANDARD, Engine};
@@ -299,6 +300,23 @@ impl<const VALUE_LENGTH: usize> From<TokenWithEncryptedValueList<VALUE_LENGTH>>
 {
     fn from(value: TokenWithEncryptedValueList<VALUE_LENGTH>) -> Self {
         value.0
+    }
+}
+
+impl<const VALUE_LENGTH: usize> FromIterator<(Token, EncryptedValue<VALUE_LENGTH>)>
+    for TokenWithEncryptedValueList<VALUE_LENGTH>
+{
+    fn from_iter<T: IntoIterator<Item = (Token, EncryptedValue<VALUE_LENGTH>)>>(iter: T) -> Self {
+        Self(Vec::from_iter(iter))
+    }
+}
+
+impl<const VALUE_LENGTH: usize> IntoIterator for TokenWithEncryptedValueList<VALUE_LENGTH> {
+    type IntoIter = IntoIter<(Token, EncryptedValue<VALUE_LENGTH>)>;
+    type Item = (Token, EncryptedValue<VALUE_LENGTH>);
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.into_iter()
     }
 }
 
