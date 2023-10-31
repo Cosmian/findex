@@ -33,6 +33,12 @@ impl Deref for Token {
     }
 }
 
+impl From<Token> for [u8; TOKEN_LENGTH] {
+    fn from(value: Token) -> Self {
+        value.0
+    }
+}
+
 impl From<[u8; TOKEN_LENGTH]> for Token {
     fn from(bytes: [u8; TOKEN_LENGTH]) -> Self {
         Self(bytes)
