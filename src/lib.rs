@@ -38,8 +38,9 @@ mod example {
     use std::collections::{HashMap, HashSet};
 
     use crate::{
-        index::Keywords, ChainTable, DxEnc, EntryTable, Findex, InMemoryEdx, Index, IndexedValue,
-        Keyword, Label, Location,
+        index::{KeywordToDataMap, Keywords},
+        ChainTable, DxEnc, EntryTable, Findex, InMemoryEdx, Index, IndexedValue,
+        IndexedValueToKeywordsMap, Keyword, Label, Location,
     };
 
     async fn user_interrupt(
@@ -74,7 +75,7 @@ mod example {
             .add(
                 &key,
                 &label,
-                HashMap::from_iter([
+                IndexedValueToKeywordsMap::from_iter([
                     (
                         IndexedValue::Data(loc1.clone()),
                         HashSet::from_iter([kwd1.clone()]),
@@ -87,8 +88,7 @@ mod example {
                         IndexedValue::Pointer(kwd2.clone()),
                         HashSet::from_iter([kwd1.clone()]),
                     ),
-                ])
-                .into(),
+                ]),
             )
             .await
             .expect("Error while indexing additions.");
@@ -97,7 +97,7 @@ mod example {
             .search(
                 &key,
                 &label,
-                HashSet::from_iter([kwd1.clone()]).into(),
+                Keywords::from_iter([kwd1.clone()]),
                 &user_interrupt,
             )
             .await
@@ -107,7 +107,7 @@ mod example {
         // `loc2`.
         assert_eq!(
             res,
-            HashMap::from_iter([(kwd1.clone(), HashSet::from_iter([loc1.clone(), loc2]))]).into()
+            KeywordToDataMap::from_iter([(kwd1.clone(), HashSet::from_iter([loc1.clone(), loc2]))])
         );
 
         // Let's delete the indexation of `kwd2` for `kwd1`.
@@ -115,11 +115,10 @@ mod example {
             .delete(
                 &key,
                 &label,
-                HashMap::from_iter([(
+                IndexedValueToKeywordsMap::from_iter([(
                     IndexedValue::Pointer(kwd2),
                     HashSet::from_iter([kwd1.clone()]),
-                )])
-                .into(),
+                )]),
             )
             .await
             .expect("Error while indexing deletions.");
@@ -138,7 +137,7 @@ mod example {
         // longer retrieves `loc2`.
         assert_eq!(
             res,
-            HashMap::from_iter([(kwd1, HashSet::from_iter([loc1]))]).into()
+            KeywordToDataMap::from_iter([(kwd1, HashSet::from_iter([loc1]))])
         );
     }
 }

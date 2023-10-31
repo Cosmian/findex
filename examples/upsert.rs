@@ -13,23 +13,26 @@ fn main() {
     let robert_doe_location = Location::from("robert doe DB location");
     indexed_value_to_keywords.insert(
         IndexedValue::Data(robert_doe_location),
-        Keywords::new(&["robert", "doe"]),
+        Keywords::from_iter(["robert", "doe"]),
     );
 
     // direct location john doe
     let john_doe_location = Location::from("john doe DB location");
     indexed_value_to_keywords.insert(
         IndexedValue::Data(john_doe_location),
-        Keywords::new(&["john", "doe"]),
+        Keywords::from_iter(["john", "doe"]),
     );
 
     // direct location for rob...
     let rob_location = Location::from("rob DB location");
-    indexed_value_to_keywords.insert(IndexedValue::Data(rob_location), Keywords::new(&["rob"]));
+    indexed_value_to_keywords.insert(
+        IndexedValue::Data(rob_location),
+        Keywords::from_iter(["rob"]),
+    );
     // ... and indirection to robert
     indexed_value_to_keywords.insert(
         IndexedValue::Pointer(Keyword::from("robert")),
-        Keywords::new(&["rob"]),
+        Keywords::from_iter(["rob"]),
     );
 
     let findex = Findex::new(

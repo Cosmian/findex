@@ -102,25 +102,25 @@ async fn test_progress_callback() -> Result<(), Error<KvStoreError>> {
     // Index locations.
     indexed_value_to_keywords.insert(
         IndexedValue::Data(robert_doe_location.clone()),
-        Keywords::new(&["robert", "doe"]),
+        Keywords::from_iter(["robert", "doe"]),
     );
     indexed_value_to_keywords.insert(
         IndexedValue::Data(rob_location.clone()),
-        Keywords::new(&["rob"]),
+        Keywords::from_iter(["rob"]),
     );
     indexed_value_to_keywords.insert(
         IndexedValue::Data(roberta_location.clone()),
-        Keywords::new(&["robert"]),
+        Keywords::from_iter(["robert"]),
     );
 
     // Index indirections.
     indexed_value_to_keywords.insert(
         IndexedValue::Pointer(robert_keyword.clone()),
-        Keywords::new(&["rob"]),
+        Keywords::from_iter(["rob"]),
     );
     indexed_value_to_keywords.insert(
         IndexedValue::Pointer(roberta_keyword),
-        Keywords::new(&["robert"]),
+        Keywords::from_iter(["robert"]),
     );
 
     let findex = Findex::new(
@@ -346,26 +346,26 @@ async fn test_findex() -> Result<(), Error<KvStoreError>> {
     let robert_doe_location = Location::from("robert doe DB location");
     indexed_value_to_keywords.insert(
         IndexedValue::Data(robert_doe_location.clone()),
-        Keywords::new(&["robert", "doe"]),
+        Keywords::from_iter(["robert", "doe"]),
     );
 
     // direct location john doe
     let john_doe_location = Location::from("john doe DB location");
     indexed_value_to_keywords.insert(
         IndexedValue::Data(john_doe_location.clone()),
-        Keywords::new(&["john", "doe"]),
+        Keywords::from_iter(["john", "doe"]),
     );
 
     // direct location for rob...
     let rob_location = Location::from("rob DB location");
     indexed_value_to_keywords.insert(
         IndexedValue::Data(rob_location.clone()),
-        Keywords::new(&["rob"]),
+        Keywords::from_iter(["rob"]),
     );
     // ... and indirection to robert
     indexed_value_to_keywords.insert(
         IndexedValue::Pointer(robert_keyword.clone()),
-        Keywords::new(&["rob"]),
+        Keywords::from_iter(["rob"]),
     );
 
     let findex = Findex::new(
@@ -456,7 +456,7 @@ async fn test_findex() -> Result<(), Error<KvStoreError>> {
     let jane_doe_location = Location::from("jane doe DB location");
     indexed_value_to_keywords.insert(
         IndexedValue::Data(jane_doe_location.clone()),
-        Keywords::new(&["jane", "doe"]),
+        Keywords::from_iter(["jane", "doe"]),
     );
     findex
         .add(
@@ -1028,14 +1028,14 @@ async fn test_keyword_presence() -> Result<(), Error<KvStoreError>> {
     let robert_doe_location = Location::from("robert doe DB location");
     indexed_value_to_keywords.insert(
         IndexedValue::Data(robert_doe_location.clone()),
-        Keywords::new(&["robert", "doe"]),
+        Keywords::from_iter(["robert", "doe"]),
     );
 
     // direct location john doe
     let john_doe_location = Location::from("john doe DB location");
     indexed_value_to_keywords.insert(
         IndexedValue::Data(john_doe_location.clone()),
-        Keywords::new(&["john", "doe"]),
+        Keywords::from_iter(["john", "doe"]),
     );
 
     let findex = Findex::new(
@@ -1065,7 +1065,7 @@ async fn test_keyword_presence() -> Result<(), Error<KvStoreError>> {
     let robert_smith_location = Location::from("robert smith DB location");
     indexed_value_to_keywords.insert(
         IndexedValue::Data(robert_smith_location),
-        Keywords::new(&["robert", "smith"]),
+        Keywords::from_iter(["robert", "smith"]),
     );
     let new_keywords = findex
         .add(
@@ -1084,7 +1084,7 @@ async fn test_keyword_presence() -> Result<(), Error<KvStoreError>> {
     let mut indexed_value_to_keywords = HashMap::new();
     indexed_value_to_keywords.insert(
         IndexedValue::Data(robert_smith_location.clone()),
-        Keywords::new(&["robert", "smith", "junior"]),
+        Keywords::from_iter(["robert", "smith", "junior"]),
     );
     let new_keywords = findex
         .delete(

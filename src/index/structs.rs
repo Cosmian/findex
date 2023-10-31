@@ -57,9 +57,22 @@ impl Deref for Keywords {
         &self.0
     }
 }
+
 impl DerefMut for Keywords {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.0
+    }
+}
+
+impl FromIterator<&'static str> for Keywords {
+    fn from_iter<T: IntoIterator<Item = &'static str>>(iter: T) -> Self {
+        Self(HashSet::from_iter(iter.into_iter().map(Keyword::from)))
+    }
+}
+
+impl FromIterator<Keyword> for Keywords {
+    fn from_iter<T: IntoIterator<Item = Keyword>>(iter: T) -> Self {
+        Self(HashSet::from_iter(iter))
     }
 }
 
@@ -89,24 +102,9 @@ impl From<HashSet<Keyword>> for Keywords {
     }
 }
 
-impl FromIterator<Keyword> for Keywords {
-    fn from_iter<T: IntoIterator<Item = Keyword>>(iter: T) -> Self {
-        Self(HashSet::from_iter(iter))
-    }
-}
-
-impl Keywords {
-    /// Converts the given strings as a `HashSet` of keywords.
-    ///
-    /// - `keywords`    : strings to convert
-    #[must_use]
-    pub fn new(keywords: &[&'static str]) -> Self {
-        Self(
-            keywords
-                .iter()
-                .map(|keyword| Keyword::from(*keyword))
-                .collect(),
-        )
+impl From<Keywords> for HashSet<Keyword> {
+    fn from(value: Keywords) -> Self {
+        value.0
     }
 }
 
@@ -143,6 +141,12 @@ impl Display for KeywordToDataMap {
             ));
         }
         write!(f, "[{output}]")
+    }
+}
+
+impl FromIterator<(Keyword, HashSet<Location>)> for KeywordToDataMap {
+    fn from_iter<T: IntoIterator<Item = (Keyword, HashSet<Location>)>>(iter: T) -> Self {
+        Self(HashMap::from_iter(iter))
     }
 }
 
@@ -200,11 +204,32 @@ impl IntoIterator for IndexedValueToKeywordsMap {
     }
 }
 
+impl FromIterator<(IndexedValue<Keyword, Location>, Keywords)> for IndexedValueToKeywordsMap {
+    fn from_iter<T: IntoIterator<Item = (IndexedValue<Keyword, Location>, Keywords)>>(
+        iter: T,
+    ) -> Self {
+        Self(HashMap::from_iter(iter))
+    }
+}
+
+impl FromIterator<(IndexedValue<Keyword, Location>, HashSet<Keyword>)>
+    for IndexedValueToKeywordsMap
+{
+    fn from_iter<T: IntoIterator<Item = (IndexedValue<Keyword, Location>, HashSet<Keyword>)>>(
+        iter: T,
+    ) -> Self {
+        Self(HashMap::from_iter(
+            iter.into_iter().map(|(k, v)| (k, Keywords::from(v))),
+        ))
+    }
+}
+
 impl From<HashMap<IndexedValue<Keyword, Location>, Keywords>> for IndexedValueToKeywordsMap {
     fn from(map: HashMap<IndexedValue<Keyword, Location>, Keywords>) -> Self {
         Self(map)
     }
 }
+
 impl From<HashMap<IndexedValue<Keyword, Location>, HashSet<Keyword>>>
     for IndexedValueToKeywordsMap
 {

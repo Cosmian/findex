@@ -55,7 +55,7 @@ impl TryFrom<&[u8]> for Token {
 
 impl Display for Token {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", STANDARD.encode(self.deref()))
+        write!(f, "{}", STANDARD.encode(&**self))
     }
 }
 
@@ -222,8 +222,7 @@ impl<const VALUE_LENGTH: usize> TryFrom<&[u8]> for EncryptedValue<VALUE_LENGTH> 
 impl<const VALUE_LENGTH: usize> EncryptedValue<VALUE_LENGTH> {
     pub const LENGTH: usize = MAC_LENGTH + NONCE_LENGTH + VALUE_LENGTH;
 
-    /// Encrypts the given value using AESGCM-256 and returns the EDX encrypted
-    /// value.
+    /// Encrypts the value using the given key.
     pub fn encrypt(
         rng: &mut impl CryptoRngCore,
         key: &SymmetricKey<SYM_KEY_LENGTH>,
@@ -243,6 +242,7 @@ impl<const VALUE_LENGTH: usize> EncryptedValue<VALUE_LENGTH> {
         Ok(res)
     }
 
+    /// Decrypts the value using the given key.
     pub fn decrypt(
         &self,
         key: &SymmetricKey<SYM_KEY_LENGTH>,

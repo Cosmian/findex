@@ -5,7 +5,6 @@ use std::{
     collections::{HashMap, HashSet},
     fmt::Debug,
     future::Future,
-    ops::Deref,
     sync::{Arc, Mutex},
 };
 
@@ -127,40 +126,46 @@ impl<
         keywords: Keywords,
         interrupt: &Interrupt,
     ) -> Result<KeywordToDataMap, Self::Error> {
+        // TODO: avoid this copy
         let mut seed =
             <FindexGraph<UserError, EntryTable, ChainTable> as GxEnc<UserError>>::Seed::default();
         seed.as_mut().copy_from_slice(key.as_bytes());
         let key = self.findex_graph.derive_keys(&seed);
+
         let graph = self
             .findex_graph
-            .get(&key, keywords.deref().clone(), label, interrupt)
+            .get(&key, keywords.clone().into(), label, interrupt)
             .await?;
 
-        let mut res = HashMap::with_capacity(keywords.len());
-        for tag in keywords.iter() {
-            let indexed_values = self.findex_graph.walk(&graph, tag, &mut HashSet::new());
-            res.insert(tag.to_owned(), indexed_values);
-        }
-        Ok(KeywordToDataMap::from(res))
+        let res = keywords
+            .into_iter()
+            .map(|tag| {
+                let locations = self.findex_graph.walk(&graph, &tag, &mut HashSet::new());
+                (tag, locations)
+            })
+            .collect();
+
+        Ok(res)
     }
 
-    #[tracing::instrument(level = "trace", fields(keywords = %keywords, label = %label), ret(Display), err, skip(self, key))]
+    #[tracing::instrument(level = "trace", fields(additions = %additions, label = %label), ret(Display), err, skip(self, key))]
     async fn add(
         &self,
         key: &UserKey,
         label: &Label,
-        keywords: IndexedValueToKeywordsMap,
+        additions: IndexedValueToKeywordsMap,
     ) -> Result<Keywords, Self::Error> {
+        // TODO: avoid this copy
         let mut seed =
             <FindexGraph<UserError, EntryTable, ChainTable> as GxEnc<UserError>>::Seed::default();
         seed.as_mut().copy_from_slice(key.as_bytes());
         let key = self.findex_graph.derive_keys(&seed);
 
         let mut modifications = HashMap::<_, Vec<_>>::new();
-        for (value, keywords) in keywords {
-            for keyword in &*keywords {
+        for (value, keywords) in additions {
+            for keyword in keywords {
                 modifications
-                    .entry(keyword.to_owned())
+                    .entry(keyword)
                     .or_default()
                     .push((Operation::Addition, value.clone()));
             }
@@ -173,26 +178,24 @@ impl<
         ))
     }
 
-    #[tracing::instrument(level = "trace", fields(keywords = %keywords, label = %label), ret(Display), err, skip(self, key))]
+    #[tracing::instrument(level = "trace", fields(deletions = %deletions, label = %label), ret(Display), err, skip(self, key))]
     async fn delete(
         &self,
         key: &UserKey,
         label: &Label,
-        keywords: IndexedValueToKeywordsMap,
+        deletions: IndexedValueToKeywordsMap,
     ) -> Result<Keywords, Self::Error> {
-        if keywords.is_empty() {
-            return Ok(Keywords::default());
-        }
+        // TODO: avoid this copy
         let mut seed =
             <FindexGraph<UserError, EntryTable, ChainTable> as GxEnc<UserError>>::Seed::default();
         seed.as_mut().copy_from_slice(key.as_bytes());
         let key = self.findex_graph.derive_keys(&seed);
 
         let mut modifications = HashMap::<_, Vec<_>>::new();
-        for (value, keywords) in keywords {
-            for keyword in keywords.iter() {
+        for (value, keywords) in deletions {
+            for keyword in keywords {
                 modifications
-                    .entry(keyword.to_owned())
+                    .entry(keyword)
                     .or_default()
                     .push((Operation::Deletion, value.clone()));
             }
