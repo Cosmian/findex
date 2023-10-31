@@ -24,12 +24,16 @@ mod parameters;
 
 #[cfg(any(test, feature = "in_memory"))]
 pub use edx::in_memory::{InMemoryEdx, KvStoreError};
-pub use edx::{chain_table::ChainTable, entry_table::EntryTable, DxEnc, EdxStore, EncryptedValue};
+pub use edx::{
+    chain_table::ChainTable, entry_table::EntryTable, DxEnc, EdxStore, EncryptedValue, Token,
+    TokenToEncryptedValueMap, TokenWithEncryptedValueList, Tokens,
+};
 pub use error::{CallbackErrorTrait, CoreError, Error};
 pub use findex_graph::IndexedValue;
 pub use findex_mm::{ENTRY_LENGTH, LINK_LENGTH};
 pub use index::{
-    Findex, Index, IndexedValueToKeywordsMap, Keyword, Keywords, Label, Location, UserKey,
+    Findex, Index, IndexedValueToKeywordsMap, Keyword, KeywordToDataMap, Keywords, Label, Location,
+    UserKey,
 };
 pub use parameters::*;
 
@@ -38,9 +42,8 @@ mod example {
     use std::collections::{HashMap, HashSet};
 
     use crate::{
-        index::{KeywordToDataMap, Keywords},
         ChainTable, DxEnc, EntryTable, Findex, InMemoryEdx, Index, IndexedValue,
-        IndexedValueToKeywordsMap, Keyword, Label, Location,
+        IndexedValueToKeywordsMap, Keyword, KeywordToDataMap, Keywords, Label, Location,
     };
 
     async fn user_interrupt(
