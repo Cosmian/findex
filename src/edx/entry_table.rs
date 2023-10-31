@@ -78,7 +78,11 @@ impl<const VALUE_LENGTH: usize, Edx: EdxStore<VALUE_LENGTH>> DxEnc<VALUE_LENGTH>
     }
 
     fn tokenize(&self, key: &Self::Key, bytes: &[u8], label: Option<&Label>) -> Token {
-        kmac!(TOKEN_LENGTH, &key.token, bytes, label.unwrap()).into()
+        if let Some(label) = label {
+            kmac!(TOKEN_LENGTH, &key.token, bytes, label).into()
+        } else {
+            kmac!(TOKEN_LENGTH, &key.token, bytes, &[]).into()
+        }
     }
 
     async fn get(

@@ -41,6 +41,7 @@ pub trait DxEnc<const VALUE_LENGTH: usize> {
     /// Fixed length encrypted value stored inside the encrypted dictionary.
     type EncryptedValue: Debug + Sized + Clone;
 
+    /// Backend storage.
     type Store: EdxStore<VALUE_LENGTH>;
 
     /// Instantiates a new Dx-Enc scheme.
