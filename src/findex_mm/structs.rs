@@ -2,6 +2,7 @@
 
 use std::{
     collections::HashMap,
+    fmt::Debug,
     hash::Hash,
     ops::{Deref, DerefMut},
 };
@@ -27,7 +28,7 @@ pub enum Operation {
 /// - counter (u32).
 pub const ENTRY_LENGTH: usize = SEED_LENGTH + HASH_LENGTH + TOKEN_LENGTH;
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct Entry<ChainTable: DxEnc<LINK_LENGTH>> {
     pub seed: ChainTable::Seed,
     pub tag_hash: [u8; HASH_LENGTH],

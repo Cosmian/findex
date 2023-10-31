@@ -28,7 +28,9 @@ pub use edx::{chain_table::ChainTable, entry_table::EntryTable, DxEnc, EdxStore,
 pub use error::{CallbackErrorTrait, CoreError, Error};
 pub use findex_graph::IndexedValue;
 pub use findex_mm::{ENTRY_LENGTH, LINK_LENGTH};
-pub use index::{Findex, Index, Keyword, Label, Location, UserKey};
+pub use index::{
+    Findex, Index, IndexedValueToKeywordsMap, Keyword, Keywords, Label, Location, UserKey,
+};
 pub use parameters::*;
 
 #[cfg(test)]
@@ -36,8 +38,8 @@ mod example {
     use std::collections::{HashMap, HashSet};
 
     use crate::{
-        ChainTable, DxEnc, EntryTable, Findex, InMemoryEdx, Index, IndexedValue, Keyword, Label,
-        Location,
+        index::Keywords, ChainTable, DxEnc, EntryTable, Findex, InMemoryEdx, Index, IndexedValue,
+        Keyword, Label, Location,
     };
 
     async fn user_interrupt(
@@ -85,7 +87,8 @@ mod example {
                         IndexedValue::Pointer(kwd2.clone()),
                         HashSet::from_iter([kwd1.clone()]),
                     ),
-                ]),
+                ])
+                .into(),
             )
             .await
             .expect("Error while indexing additions.");
@@ -94,7 +97,7 @@ mod example {
             .search(
                 &key,
                 &label,
-                HashSet::from_iter([kwd1.clone()]),
+                HashSet::from_iter([kwd1.clone()]).into(),
                 &user_interrupt,
             )
             .await
@@ -104,7 +107,7 @@ mod example {
         // `loc2`.
         assert_eq!(
             res,
-            HashMap::from_iter([(kwd1.clone(), HashSet::from_iter([loc1.clone(), loc2]))])
+            HashMap::from_iter([(kwd1.clone(), HashSet::from_iter([loc1.clone(), loc2]))]).into()
         );
 
         // Let's delete the indexation of `kwd2` for `kwd1`.
@@ -115,7 +118,8 @@ mod example {
                 HashMap::from_iter([(
                     IndexedValue::Pointer(kwd2),
                     HashSet::from_iter([kwd1.clone()]),
-                )]),
+                )])
+                .into(),
             )
             .await
             .expect("Error while indexing deletions.");
@@ -124,7 +128,7 @@ mod example {
             .search(
                 &key,
                 &label,
-                HashSet::from_iter([kwd1.clone()]),
+                Keywords::from_iter([kwd1.clone()]),
                 &user_interrupt,
             )
             .await
@@ -134,7 +138,7 @@ mod example {
         // longer retrieves `loc2`.
         assert_eq!(
             res,
-            HashMap::from_iter([(kwd1, HashSet::from_iter([loc1]))])
+            HashMap::from_iter([(kwd1, HashSet::from_iter([loc1]))]).into()
         );
     }
 }

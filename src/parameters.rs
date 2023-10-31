@@ -1,5 +1,5 @@
 //! Defines parameters used by the Findex SSE scheme. These are parameters that
-//! are not destined to be changed from one instanciation to another. Most of
+//! are not destined to be changed from one instantiation to another. Most of
 //! them are linked to security considerations or scheme correctness.
 
 use cosmian_crypto_core::Aes256Gcm;

@@ -342,7 +342,7 @@ impl<
             // 2 - Upsert new entries to the Entry Table.
             encrypted_entries = self
                 .entry_table
-                .upsert(&encrypted_entries, new_entries)
+                .upsert(encrypted_entries, new_entries)
                 .await?;
             chain_additions.retain(|_, (k, _, _)| encrypted_entries.contains_key(k));
             new_tags.retain(|tag| !chain_additions.contains_key(tag));

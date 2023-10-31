@@ -149,7 +149,7 @@ mod tests {
 
             for (op, value) in chain {
                 if Operation::Addition == op {
-                    assert!(res.contains(&value))
+                    assert!(res.contains(&value));
                 }
             }
         }

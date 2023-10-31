@@ -68,7 +68,7 @@ impl<const VALUE_LENGTH: usize, EdxScheme: EdxStore<VALUE_LENGTH>> DxEnc<VALUE_L
         );
         let mut aead_key = SymmetricKey::default();
         kdf256!(
-            &mut aead_key,
+            &mut *aead_key,
             seed.as_ref(),
             CHAIN_TABLE_KEY_DERIVATION_INFO,
             b"DEM key"
@@ -93,7 +93,11 @@ impl<const VALUE_LENGTH: usize, EdxScheme: EdxStore<VALUE_LENGTH>> DxEnc<VALUE_L
         &self,
         tokens: HashSet<Token>,
     ) -> Result<Vec<(Token, Self::EncryptedValue)>, Self::Error> {
-        self.0.fetch(tokens).await.map_err(Error::Callback)
+        self.0
+            .fetch(tokens.into())
+            .await
+            .map_err(Error::Callback)
+            .map(Into::into)
     }
 
     fn resolve(
@@ -115,18 +119,18 @@ impl<const VALUE_LENGTH: usize, EdxScheme: EdxStore<VALUE_LENGTH>> DxEnc<VALUE_L
 
     async fn upsert(
         &self,
-        _old_values: &HashMap<Token, Self::EncryptedValue>,
+        _old_values: HashMap<Token, Self::EncryptedValue>,
         _new_values: HashMap<Token, Self::EncryptedValue>,
     ) -> Result<HashMap<Token, Self::EncryptedValue>, Self::Error> {
         panic!("The Chain Table does not do any upsert.")
     }
 
     async fn insert(&self, items: HashMap<Token, Self::EncryptedValue>) -> Result<(), Self::Error> {
-        self.0.insert(items).await.map_err(Error::Callback)
+        self.0.insert(items.into()).await.map_err(Error::Callback)
     }
 
     async fn delete(&self, items: HashSet<Token>) -> Result<(), Self::Error> {
-        self.0.delete(items).await.map_err(Error::Callback)
+        self.0.delete(items.into()).await.map_err(Error::Callback)
     }
 }
 

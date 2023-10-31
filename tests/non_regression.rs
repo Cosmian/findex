@@ -9,8 +9,9 @@ use cosmian_crypto_core::{
     FixedSizeCBytes, RandomFixedSizeCBytes,
 };
 use cosmian_findex::{
-    ChainTable, DxEnc, EntryTable, Error, Findex, InMemoryEdx, Index, IndexedValue, Keyword,
-    KvStoreError, Label, Location, UserKey, ENTRY_LENGTH, LINK_LENGTH,
+    ChainTable, DxEnc, EntryTable, Error, Findex, InMemoryEdx, Index, IndexedValue,
+    IndexedValueToKeywordsMap, Keyword, Keywords, KvStoreError, Label, Location, UserKey,
+    ENTRY_LENGTH, LINK_LENGTH,
 };
 use rand::RngCore;
 
@@ -24,7 +25,7 @@ use rand::RngCore;
 fn add_keyword_graph(
     keyword: &Keyword,
     min_keyword_length: usize,
-    map: &mut HashMap<IndexedValue<Keyword, Location>, HashSet<Keyword>>,
+    map: &mut HashMap<IndexedValue<Keyword, Location>, Keywords>,
 ) {
     for i in min_keyword_length..keyword.len() {
         map.entry(IndexedValue::Pointer(Keyword::from(&keyword[..i])))
@@ -60,13 +61,15 @@ async fn write_index() -> Result<(), Error<KvStoreError>> {
         for i in 0..n_locations {
             map.insert(
                 IndexedValue::Data(Location::from(format!("{first_name}_{i}").as_bytes())),
-                HashSet::from_iter([Keyword::from(first_name)]),
+                Keywords::from_iter([Keyword::from(first_name)]),
             );
         }
 
         add_keyword_graph(&Keyword::from(first_name), MIN_KEYWORD_LENGTH, &mut map);
 
-        findex.add(&master_key, &label, map).await?;
+        findex
+            .add(&master_key, &label, IndexedValueToKeywordsMap::from(map))
+            .await?;
     }
 
     let mut ser = Serializer::new();
@@ -82,7 +85,7 @@ async fn write_index() -> Result<(), Error<KvStoreError>> {
         .search(
             &master_key,
             &label,
-            HashSet::from_iter([keyword.clone()]),
+            Keywords::from_iter([keyword.clone()]),
             &|_| async { Ok(false) },
         )
         .await?;
@@ -137,7 +140,7 @@ async fn test_non_regression() -> Result<(), Error<KvStoreError>> {
         .search(
             &master_key,
             &label,
-            HashSet::from_iter([keyword.clone()]),
+            Keywords::from_iter([keyword.clone()]),
             &|_| async { Ok(false) },
         )
         .await?

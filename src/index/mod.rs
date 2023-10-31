@@ -3,14 +3,16 @@
 
 use std::{
     collections::{HashMap, HashSet},
+    fmt::Debug,
     future::Future,
+    ops::Deref,
     sync::{Arc, Mutex},
 };
 
 use async_trait::async_trait;
 
 use crate::{
-    edx::{Token, TokenDump},
+    edx::{Token, TokenDump, Tokens},
     findex_graph::{FindexGraph, GxEnc},
     findex_mm::{Operation, ENTRY_LENGTH, LINK_LENGTH},
     CallbackErrorTrait, DxEnc, Error, IndexedValue,
@@ -22,7 +24,9 @@ use cosmian_crypto_core::{
     reexport::rand_core::{RngCore, SeedableRng},
     CsRng, RandomFixedSizeCBytes,
 };
-pub use structs::{Keyword, Label, Location, UserKey};
+pub use structs::{
+    IndexedValueToKeywordsMap, Keyword, KeywordToDataMap, Keywords, Label, Location, UserKey,
+};
 
 #[async_trait(?Send)]
 pub trait Index<EntryTable: DxEnc<ENTRY_LENGTH>, ChainTable: DxEnc<LINK_LENGTH>> {
@@ -46,9 +50,9 @@ pub trait Index<EntryTable: DxEnc<ENTRY_LENGTH>, ChainTable: DxEnc<LINK_LENGTH>>
         &self,
         key: &UserKey,
         label: &Label,
-        keywords: HashSet<Keyword>,
+        keywords: Keywords,
         interrupt: &Interrupt,
-    ) -> Result<HashMap<Keyword, HashSet<Location>>, Self::Error>;
+    ) -> Result<KeywordToDataMap, Self::Error>;
 
     /// Indexes the given `IndexedValue`s for the given `Keyword`s. Returns the
     /// set of keywords added as keys to the index.
@@ -56,8 +60,8 @@ pub trait Index<EntryTable: DxEnc<ENTRY_LENGTH>, ChainTable: DxEnc<LINK_LENGTH>>
         &self,
         key: &UserKey,
         label: &Label,
-        keywords: HashMap<IndexedValue<Keyword, Location>, HashSet<Keyword>>,
-    ) -> Result<HashSet<Keyword>, Self::Error>;
+        keywords: IndexedValueToKeywordsMap,
+    ) -> Result<Keywords, Self::Error>;
 
     /// Removes the indexing of the given `IndexedValue`s for the given
     /// `Keyword`s. Returns the set of keywords added to the index.
@@ -65,8 +69,8 @@ pub trait Index<EntryTable: DxEnc<ENTRY_LENGTH>, ChainTable: DxEnc<LINK_LENGTH>>
         &self,
         key: &UserKey,
         label: &Label,
-        keywords: HashMap<IndexedValue<Keyword, Location>, HashSet<Keyword>>,
-    ) -> Result<HashSet<Keyword>, Self::Error>;
+        keywords: IndexedValueToKeywordsMap,
+    ) -> Result<Keywords, Self::Error>;
 
     async fn compact<
         F: Future<Output = Result<HashSet<Location>, String>>,
@@ -78,7 +82,7 @@ pub trait Index<EntryTable: DxEnc<ENTRY_LENGTH>, ChainTable: DxEnc<LINK_LENGTH>>
         old_label: &Label,
         new_label: &Label,
         n_compact_to_full: usize,
-        db_interface: &Filter,
+        filter: &Filter,
     ) -> Result<(), Self::Error>;
 }
 
@@ -112,6 +116,7 @@ impl<
         UserKey::new(&mut *self.rng.lock().expect("could not lock mutex"))
     }
 
+    #[tracing::instrument(level = "trace", fields(keywords = %keywords, label = %label), ret(Display), err, skip(self, key, interrupt))]
     async fn search<
         F: Future<Output = Result<bool, String>>,
         Interrupt: Fn(HashMap<Keyword, HashSet<IndexedValue<Keyword, Location>>>) -> F,
@@ -119,32 +124,33 @@ impl<
         &self,
         key: &UserKey,
         label: &Label,
-        keywords: HashSet<Keyword>,
+        keywords: Keywords,
         interrupt: &Interrupt,
-    ) -> Result<HashMap<Keyword, HashSet<Location>>, Self::Error> {
+    ) -> Result<KeywordToDataMap, Self::Error> {
         let mut seed =
             <FindexGraph<UserError, EntryTable, ChainTable> as GxEnc<UserError>>::Seed::default();
         seed.as_mut().copy_from_slice(key.as_bytes());
         let key = self.findex_graph.derive_keys(&seed);
         let graph = self
             .findex_graph
-            .get(&key, keywords.clone(), label, interrupt)
+            .get(&key, keywords.deref().clone(), label, interrupt)
             .await?;
 
         let mut res = HashMap::with_capacity(keywords.len());
-        for tag in keywords {
-            let indexed_values = self.findex_graph.walk(&graph, &tag, &mut HashSet::new());
-            res.insert(tag, indexed_values);
+        for tag in keywords.iter() {
+            let indexed_values = self.findex_graph.walk(&graph, tag, &mut HashSet::new());
+            res.insert(tag.to_owned(), indexed_values);
         }
-        Ok(res)
+        Ok(KeywordToDataMap::from(res))
     }
 
+    #[tracing::instrument(level = "trace", fields(keywords = %keywords, label = %label), ret(Display), err, skip(self, key))]
     async fn add(
         &self,
         key: &UserKey,
         label: &Label,
-        keywords: HashMap<IndexedValue<Keyword, Location>, HashSet<Keyword>>,
-    ) -> Result<HashSet<Keyword>, Self::Error> {
+        keywords: IndexedValueToKeywordsMap,
+    ) -> Result<Keywords, Self::Error> {
         let mut seed =
             <FindexGraph<UserError, EntryTable, ChainTable> as GxEnc<UserError>>::Seed::default();
         seed.as_mut().copy_from_slice(key.as_bytes());
@@ -152,25 +158,31 @@ impl<
 
         let mut modifications = HashMap::<_, Vec<_>>::new();
         for (value, keywords) in keywords {
-            for keyword in keywords {
+            for keyword in &*keywords {
                 modifications
-                    .entry(keyword)
+                    .entry(keyword.to_owned())
                     .or_default()
                     .push((Operation::Addition, value.clone()));
             }
         }
 
-        self.findex_graph
-            .insert(self.rng.clone(), &key, modifications, label)
-            .await
+        Ok(Keywords::from(
+            self.findex_graph
+                .insert(self.rng.clone(), &key, modifications, label)
+                .await?,
+        ))
     }
 
+    #[tracing::instrument(level = "trace", fields(keywords = %keywords, label = %label), ret(Display), err, skip(self, key))]
     async fn delete(
         &self,
         key: &UserKey,
         label: &Label,
-        keywords: HashMap<IndexedValue<Keyword, Location>, HashSet<Keyword>>,
-    ) -> Result<HashSet<Keyword>, Self::Error> {
+        keywords: IndexedValueToKeywordsMap,
+    ) -> Result<Keywords, Self::Error> {
+        if keywords.is_empty() {
+            return Ok(Keywords::default());
+        }
         let mut seed =
             <FindexGraph<UserError, EntryTable, ChainTable> as GxEnc<UserError>>::Seed::default();
         seed.as_mut().copy_from_slice(key.as_bytes());
@@ -178,23 +190,25 @@ impl<
 
         let mut modifications = HashMap::<_, Vec<_>>::new();
         for (value, keywords) in keywords {
-            for keyword in keywords {
+            for keyword in keywords.iter() {
                 modifications
-                    .entry(keyword)
+                    .entry(keyword.to_owned())
                     .or_default()
                     .push((Operation::Deletion, value.clone()));
             }
         }
 
-        self.findex_graph
-            .insert(self.rng.clone(), &key, modifications, label)
-            .await
+        Ok(Keywords::from(
+            self.findex_graph
+                .insert(self.rng.clone(), &key, modifications, label)
+                .await?,
+        ))
     }
 
     /// Process the entire Entry Table by batch. Compact a random portion of
     /// the associated chains such that the Chain Table is entirely compacted
     /// after `n_compact_to_full` operations in average. A new token is
-    /// generated for each entry and the entries are reencrypted using the
+    /// generated for each entry and the entries are re-encrypted using the
     /// `new_key` and the `new_label`.
     ///
     /// A compact operation on a given chain:
@@ -206,6 +220,7 @@ impl<
     ///
     /// The size of the batches is
     /// [`COMPACT_BATCH_SIZE`](Self::COMPACT_BATCH_SIZE).
+    #[tracing::instrument(level = "trace", fields(old_label = %old_label, new_label = %new_label),ret, err, skip(self, old_key, new_key, filter))]
     async fn compact<
         F: Future<Output = Result<HashSet<Location>, String>>,
         Filter: Fn(HashSet<Location>) -> F,
@@ -216,7 +231,7 @@ impl<
         old_label: &Label,
         new_label: &Label,
         n_compact_to_full: usize,
-        filter_obsolete_data: &Filter,
+        filter: &Filter,
     ) -> Result<(), Error<UserError>> {
         if (old_key == new_key) && (old_label == new_label) {
             return Err(Error::Crypto(
@@ -227,21 +242,21 @@ impl<
         let mut new_seed =
             <FindexGraph<UserError, EntryTable, ChainTable> as GxEnc<UserError>>::Seed::default();
         new_seed.as_mut().copy_from_slice(new_key);
-        //kdf256!(new_seed.as_mut(), new_label, new_key.as_ref());
         let new_key = self.findex_graph.derive_keys(&new_seed);
 
         let mut old_seed =
             <FindexGraph<UserError, EntryTable, ChainTable> as GxEnc<UserError>>::Seed::default();
-        //kdf256!(old_seed.as_mut(), old_label, old_key.as_ref());
         old_seed.as_mut().copy_from_slice(old_key);
         let old_key = self.findex_graph.derive_keys(&old_seed);
 
         let entry_tokens = self.findex_graph.list_indexed_encrypted_tags().await?;
 
-        let entries_to_compact = self.select_random_tokens(
-            self.get_compact_line_number(entry_tokens.len(), n_compact_to_full),
-            entry_tokens.as_slice(),
-        );
+        let entries_to_compact = self
+            .select_random_tokens(
+                self.get_compact_line_number(entry_tokens.len(), n_compact_to_full),
+                entry_tokens.as_slice(),
+            )
+            .into();
 
         for i in 0..entry_tokens.len() / Self::COMPACT_BATCH_SIZE {
             self.compact_batch(
@@ -253,7 +268,7 @@ impl<
                     .iter()
                     .copied()
                     .collect(),
-                filter_obsolete_data,
+                filter,
             )
             .await?;
         }
@@ -268,7 +283,7 @@ impl<
                 .iter()
                 .copied()
                 .collect(),
-            filter_obsolete_data,
+            filter,
         )
         .await?;
 
@@ -325,11 +340,12 @@ impl<
         let length = entry_table_length as f64;
         // Number of draws needed to get the whole batch, see the
         // [coupon collector's problem](https://en.wikipedia.org/wiki/Coupon_collector%27s_problem).
-        let n_draws = 0.5 + length * (length.log2() + GAMMA);
+        let n_draws = length.mul_add(length.log2() + GAMMA, 0.5);
         // Split this number among the given number of compact operations.
         (n_draws / n_compact_to_full as f64) as usize
     }
 
+    #[tracing::instrument(level = "trace", fields(compact_target = %compact_target, tokens = %tokens, new_label = %new_label),ret, err, skip(self, old_key, new_key, filter_obsolete_data))]
     async fn compact_batch<
         F: Future<Output = Result<HashSet<Location>, String>>,
         Filter: Fn(HashSet<Location>) -> F,
@@ -338,13 +354,13 @@ impl<
         old_key: &<FindexGraph<UserError, EntryTable, ChainTable> as GxEnc<UserError>>::Key,
         new_key: &<FindexGraph<UserError, EntryTable, ChainTable> as GxEnc<UserError>>::Key,
         new_label: &Label,
-        compact_target: &HashSet<Token>,
-        tokens: HashSet<Token>,
+        compact_target: &Tokens,
+        tokens: Tokens,
         filter_obsolete_data: &Filter,
     ) -> Result<(), Error<UserError>> {
         let (mut indexed_values, data) = self
             .findex_graph
-            .prepare_compact::<Keyword, Location>(old_key, tokens, compact_target)
+            .prepare_compact::<Keyword, Location>(old_key, tokens.into(), compact_target)
             .await?;
 
         let locations = indexed_values

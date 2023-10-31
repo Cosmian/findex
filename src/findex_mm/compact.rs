@@ -4,6 +4,7 @@ use std::{
 };
 
 use cosmian_crypto_core::reexport::rand_core::CryptoRngCore;
+use tracing::debug;
 
 use super::{structs::Entry, Operation};
 use crate::{
@@ -111,6 +112,7 @@ impl<
     /// 2. uses the `new_key` to generate a new token and encrypt each entry
     /// 3. tries applying modifications, reverts modifications upon failure or
     ///    remove old data upon success
+    #[tracing::instrument(skip_all)]
     pub async fn complete_compacting(
         &self,
         rng: Arc<Mutex<impl CryptoRngCore>>,
@@ -119,10 +121,10 @@ impl<
         mut continuation: CompactingData<ChainTable>,
         new_label: &Label,
     ) -> Result<(), Error<UserError>> {
-        //
-        // 1. computes new chains from the given `indexed_map` and updates associated
-        //    entries.
-        //
+        debug!(
+            "Step 1: computes new chains from the given `indexed_map` and updates associated \
+             entries."
+        );
 
         // Allocates a lower bound on the number of links.
         let mut new_links = HashMap::with_capacity(indexed_map.len());
@@ -164,9 +166,7 @@ impl<
             .copied()
             .collect();
 
-        //
-        // 2. uses the `new_key` to generate a new token and encrypt each entry
-        //
+        debug!("Step 2: uses the `new_key` to generate a new token and encrypt each entry");
 
         let mut old_entries = HashSet::with_capacity(continuation.entries.len());
         let mut new_entries = HashMap::with_capacity(continuation.entries.len());
@@ -184,20 +184,20 @@ impl<
         let new_links_tokens = new_links.keys().copied().collect();
         let new_entry_tokens = new_entries.keys().copied().collect();
 
-        //
-        // 3. tries applying modifications, reverts modifications upon failure or
-        //    removes old data upon success
-        //
+        debug!(
+            "Step 3: tries applying modifications, reverts modifications upon failure or removes \
+             old data upon success"
+        );
 
         let res = self.chain_table.insert(new_links).await;
         if res.is_err() {
             self.chain_table.delete(new_links_tokens).await?;
             return Err(Error::Crypto(format!(
-                "An error occured during the compact operation. All modifications were reverted. \
+                "An error occurred during the compact operation. All modifications were reverted. \
                  ({res:?})"
             )));
         };
-        let res = self.entry_table.upsert(&HashMap::new(), new_entries).await;
+        let res = self.entry_table.upsert(HashMap::new(), new_entries).await;
         if res.as_ref().map(HashMap::is_empty).unwrap_or(false) {
             self.chain_table.delete(old_links).await?;
             self.entry_table.delete(old_entries).await?;
@@ -206,7 +206,7 @@ impl<
             self.chain_table.delete(new_links_tokens).await?;
             self.entry_table.delete(new_entry_tokens).await?;
             Err(Error::Crypto(format!(
-                "An error occured during the compact operation. All modifications were reverted. \
+                "An error occurred during the compact operation. All modifications were reverted. \
                  ({res:?})"
             )))
         }
