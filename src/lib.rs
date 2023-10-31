@@ -2,7 +2,7 @@
 //! encrypted index.
 //!
 //! It uses a generic Dictionary Encryption Scheme (Dx-Enc) as building block to
-//! implement a MultiMap Encryption Scheme (MM-Enc). A Graph Encryption Scheme
+//! implement a Multi-Map Encryption Scheme (MM-Enc). A Graph Encryption Scheme
 //! (Gx-Enc) is then built on top of the MM-Enc scheme and finally an `Index`
 //! trait built on top of this Gx-Enc scheme allows indexing both `Location`s
 //! and `Keyword`s.

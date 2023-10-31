@@ -142,9 +142,9 @@ impl<
         if visited.contains(&entry) {
             // Results associated to this tag have already been recovered.
             return HashSet::new();
-        } else {
-            visited.insert(entry);
         }
+
+        visited.insert(entry);
 
         let indexed_values = match graph.get(entry) {
             Some(values) => values,

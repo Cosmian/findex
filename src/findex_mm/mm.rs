@@ -60,14 +60,14 @@ impl<
         ct_key: &ChainTable::Key,
         mut last_token: ChainTable::Token,
         n: usize,
-    ) -> Result<Vec<ChainTable::Token>, CoreError> {
+    ) -> Vec<ChainTable::Token> {
         let mut res = Vec::with_capacity(n);
         for _ in 0..n {
             let new_token = self.chain_table.tokenize(ct_key, &last_token, None);
             res.push(new_token);
             last_token = new_token;
         }
-        Ok(res)
+        res
     }
 
     /// Fetches the entries associated to the given tags.
@@ -144,7 +144,7 @@ impl<
                 if pos == LINE_LENGTH {
                     chain.push(link);
                     link = Link::new();
-                    pos = 0
+                    pos = 0;
                 }
             }
 
@@ -154,7 +154,7 @@ impl<
             if pos == LINE_LENGTH {
                 chain.push(link);
                 link = Link::new();
-                pos = 0
+                pos = 0;
             }
         }
 
@@ -185,7 +185,7 @@ impl<
         let mut stack = Vec::new();
         let mut current_operation = None;
 
-        for ct_value in chain.iter() {
+        for ct_value in chain {
             for pos in 0..LINE_LENGTH {
                 let (is_terminating, data) = ct_value.get_block(pos)?;
                 let operation = ct_value.get_operation(pos)?;
@@ -331,7 +331,7 @@ impl<
                     &chain_key,
                     entry.chain_token.unwrap_or_else(|| entry.tag_hash.into()),
                     *n_additions,
-                )?;
+                );
                 entry.chain_token = chain_tokens.last().copied();
 
                 chain.insert((*tag).clone(), (chain_key, chain_tokens));

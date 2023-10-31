@@ -71,7 +71,7 @@ impl<
                 metadata
                     .iter()
                     .flat_map(|(_, (_, chain_tokens))| chain_tokens)
-                    .cloned()
+                    .copied()
                     .collect(),
             )
             .await?;
@@ -154,7 +154,7 @@ impl<
 
             let chain_key = self.chain_table.derive_keys(&new_entry.seed);
             let chain_tokens =
-                self.derive_chain_tokens(&chain_key, new_entry.tag_hash.into(), chain_links.len())?;
+                self.derive_chain_tokens(&chain_key, new_entry.tag_hash.into(), chain_links.len());
             new_entry.chain_token = chain_tokens.last().copied();
             for (token, link) in chain_tokens.into_iter().zip(chain_links) {
                 new_links.insert(
@@ -206,7 +206,7 @@ impl<
             )));
         };
         let res = self.entry_table.upsert(&HashMap::new(), new_entries).await;
-        if res.as_ref().map(|set| set.is_empty()).unwrap_or(false) {
+        if res.as_ref().map(HashMap::is_empty).unwrap_or(false) {
             self.chain_table.delete(old_links).await?;
             self.entry_table.delete(old_entries).await?;
             Ok(())

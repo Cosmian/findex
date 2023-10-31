@@ -7,7 +7,7 @@
 
 use std::{
     collections::{HashMap, HashSet},
-    ops::{Deref, DerefMut},
+    ops::Deref,
 };
 
 use async_trait::async_trait;
@@ -61,14 +61,14 @@ impl<const VALUE_LENGTH: usize, EdxScheme: EdxStore<VALUE_LENGTH>> DxEnc<VALUE_L
     fn derive_keys(&self, seed: &Self::Seed) -> Self::Key {
         let mut kmac_key = SymmetricKey::default();
         kdf256!(
-            kmac_key.deref_mut(),
+            &mut *kmac_key,
             seed.as_ref(),
             CHAIN_TABLE_KEY_DERIVATION_INFO,
             b"KMAC key"
         );
         let mut aead_key = SymmetricKey::default();
         kdf256!(
-            aead_key.deref_mut(),
+            &mut aead_key,
             seed.as_ref(),
             CHAIN_TABLE_KEY_DERIVATION_INFO,
             b"DEM key"

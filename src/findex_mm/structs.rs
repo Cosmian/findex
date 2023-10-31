@@ -145,7 +145,7 @@ impl Link {
         if is_terminating {
             block[0] = u8::try_from(data.len())?;
         } else {
-            block[0] = 255
+            block[0] = 255;
         }
         block[1..=data.len()].copy_from_slice(data);
         Ok(())

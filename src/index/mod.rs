@@ -252,7 +252,7 @@ impl<
                 &entries_to_compact,
                 entry_tokens[i * Self::COMPACT_BATCH_SIZE..(i + 1) * Self::COMPACT_BATCH_SIZE]
                     .iter()
-                    .cloned()
+                    .copied()
                     .collect(),
                 filter_obsolete_data,
             )
@@ -267,7 +267,7 @@ impl<
             entry_tokens
                 [(entry_tokens.len() / Self::COMPACT_BATCH_SIZE) * Self::COMPACT_BATCH_SIZE..]
                 .iter()
-                .cloned()
+                .copied()
                 .collect(),
             filter_obsolete_data,
         )
@@ -303,7 +303,7 @@ impl<
         tokens: &[<EntryTable as DxEnc<ENTRY_LENGTH>>::Token],
     ) -> HashSet<<EntryTable as DxEnc<ENTRY_LENGTH>>::Token> {
         if tokens.len() <= n {
-            return tokens.iter().cloned().collect();
+            return tokens.iter().copied().collect();
         }
 
         let mut rng = self.rng.lock().expect("could not lock mutex");
@@ -325,9 +325,10 @@ impl<
         entry_table_length: usize,
         n_compact_to_full: usize,
     ) -> usize {
-        let length = entry_table_length as f64;
         // [Euler's gamma constant](https://en.wikipedia.org/wiki/Euler%E2%80%93Mascheroni_constant).
         const GAMMA: f64 = 0.5772;
+
+        let length = entry_table_length as f64;
         // Number of draws needed to get the whole batch, see the
         // [coupon collector's problem](https://en.wikipedia.org/wiki/Coupon_collector%27s_problem).
         let n_draws = 0.5 + length * (length.log2() + GAMMA);

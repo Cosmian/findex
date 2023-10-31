@@ -47,13 +47,13 @@ impl<const LENGTH: usize> AsMut<[u8]> for Seed<LENGTH> {
 
 impl<const LENGTH: usize> Zeroize for Seed<LENGTH> {
     fn zeroize(&mut self) {
-        self.0.zeroize()
+        self.0.zeroize();
     }
 }
 
 impl<const LENGTH: usize> Drop for Seed<LENGTH> {
     fn drop(&mut self) {
-        self.zeroize()
+        self.zeroize();
     }
 }
 
@@ -114,9 +114,9 @@ impl<const VALUE_LENGTH: usize> TryFrom<&[u8]> for EncryptedValue<VALUE_LENGTH> 
         let tag = <[u8; MAC_LENGTH]>::try_from(&value[NONCE_LENGTH + VALUE_LENGTH..])
             .map_err(|e| Self::Error::Conversion(e.to_string()))?;
         Ok(Self {
-            nonce,
             ciphertext,
             tag,
+            nonce,
         })
     }
 }
