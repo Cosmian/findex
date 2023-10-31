@@ -3,7 +3,7 @@ use std::{fmt::Display, ops::Deref};
 use base64::engine::{general_purpose::STANDARD, Engine};
 use cosmian_crypto_core::{
     reexport::rand_core::CryptoRngCore, Aes256Gcm, DemInPlace, FixedSizeCBytes, Instantiable,
-    Nonce, SymmetricKey,
+    Nonce, RandomFixedSizeCBytes, SymmetricKey,
 };
 use zeroize::{Zeroize, ZeroizeOnDrop};
 
@@ -200,5 +200,13 @@ impl<const VALUE_LENGTH: usize> EncryptedValue<VALUE_LENGTH> {
         aead.decrypt_in_place_detached(&self.nonce, &mut res, &self.tag, None)
             .map_err(CoreError::CryptoCore)?;
         Ok(res)
+    }
+}
+
+impl<const LENGTH: usize> Display for EncryptedValue<LENGTH> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "ciphertext {}", STANDARD.encode(self.ciphertext))?;
+        write!(f, "tag {}", STANDARD.encode(self.tag))?;
+        write!(f, "nonce {}", STANDARD.encode(self.nonce.as_bytes()))
     }
 }
