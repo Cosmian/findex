@@ -161,6 +161,12 @@ impl From<HashMap<Keyword, HashSet<Location>>> for KeywordToDataMap {
     }
 }
 
+impl From<KeywordToDataMap> for HashMap<Keyword, HashSet<Location>> {
+    fn from(value: KeywordToDataMap) -> Self {
+        value.0
+    }
+}
+
 #[derive(Debug, Clone, Default)]
 pub struct IndexedValueToKeywordsMap(HashMap<IndexedValue<Keyword, Location>, Keywords>);
 
