@@ -62,7 +62,7 @@ pub trait MmEnc<const SEED_LENGTH: usize, EdxError: CallbackErrorTrait> {
 
     /// Queries the encrypted multi-map for the given tags and returns the
     /// decrypted values.
-    async fn get<Tag: Debug + Hash + Eq + AsRef<[u8]>>(
+    async fn get<Tag: Debug + Clone + Hash + Eq + AsRef<[u8]>>(
         &self,
         key: &Self::Key,
         tags: HashSet<Tag>,
