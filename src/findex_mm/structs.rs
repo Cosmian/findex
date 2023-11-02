@@ -2,10 +2,12 @@
 
 use std::{
     collections::HashMap,
-    fmt::Debug,
+    fmt::{Debug, Display},
     hash::Hash,
     ops::{Deref, DerefMut},
 };
+
+use base64::engine::{general_purpose::STANDARD, Engine};
 
 use crate::{
     edx::{DxEnc, Token},
@@ -48,6 +50,7 @@ impl<ChainTable: DxEnc<LINK_LENGTH>> Entry<ChainTable> {
         }
     }
 }
+
 impl<ChainTable: DxEnc<LINK_LENGTH>> From<Entry<ChainTable>> for [u8; ENTRY_LENGTH] {
     fn from(value: Entry<ChainTable>) -> Self {
         let mut res = [0; ENTRY_LENGTH];
@@ -84,6 +87,24 @@ where
                 Some(Token::from(chain_token))
             },
         }
+    }
+}
+
+impl<ChainTable: DxEnc<LINK_LENGTH>> Display for Entry<ChainTable>
+where
+    [(); 1 + (BLOCK_LENGTH + 1) * LINE_WIDTH]:,
+{
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{{ seed: '{}', tag: '{}', token: '{}' }}",
+            STANDARD.encode(&self.seed),
+            STANDARD.encode(self.tag_hash),
+            self.chain_token
+                .as_ref()
+                .map(|token| token.to_string())
+                .unwrap_or_default()
+        )
     }
 }
 

@@ -88,11 +88,11 @@ impl IntoIterator for Keywords {
 
 impl Display for Keywords {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let mut output = String::new();
+        writeln!(f, "Keywords: [")?;
         for keyword in &self.0 {
-            output.push_str(&format!("{},", String::from_utf8_lossy(keyword)));
+            writeln!(f, "  {keyword},")?;
         }
-        write!(f, "[{output}]")
+        writeln!(f, "]")
     }
 }
 
@@ -127,20 +127,15 @@ impl DerefMut for KeywordToDataMap {
 
 impl Display for KeywordToDataMap {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let mut output = String::new();
+        writeln!(f, "Keyword to Data map: {{")?;
         for (keyword, locations) in &self.0 {
-            let mut output_locations = String::new();
-
+            writeln!(f, "  '{keyword}': [")?;
             for location in locations {
-                output_locations.push_str(&format!("{}", String::from_utf8_lossy(location)));
+                writeln!(f, "      '{location}',")?;
             }
-
-            output.push_str(&format!(
-                "\nkeyword: {} -> locations: [{output_locations}]",
-                String::from_utf8_lossy(keyword)
-            ));
+            writeln!(f, "    ]")?;
         }
-        write!(f, "[{output}]")
+        write!(f, "}}")
     }
 }
 
@@ -179,18 +174,11 @@ impl Deref for IndexedValueToKeywordsMap {
 
 impl Display for IndexedValueToKeywordsMap {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let mut output = String::new();
+        writeln!(f, "IndexedValue to Keyword map: {{")?;
         for (iv, keywords) in &self.0 {
-            match iv {
-                IndexedValue::Pointer(keyword) => output.push_str(&format!(
-                    "\nindexedValue(pointer): {keyword} -> keywords: {keywords}"
-                )),
-                IndexedValue::Data(location) => output.push_str(&format!(
-                    "\nindexedValue(location): {location} -> keywords: {keywords}"
-                )),
-            }
+            writeln!(f, "'{iv}': {keywords},")?;
         }
-        write!(f, "[{output}]")
+        write!(f, "}}")
     }
 }
 

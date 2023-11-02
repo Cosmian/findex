@@ -79,11 +79,11 @@ impl Deref for Tokens {
 
 impl Display for Tokens {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let mut output = String::new();
+        writeln!(f, "[")?;
         for token in &self.0 {
-            output.push_str(&format!("\n{token}"));
+            writeln!(f, "  {token},")?;
         }
-        write!(f, "{output}")
+        write!(f, "]")
     }
 }
 
@@ -264,9 +264,13 @@ impl<const VALUE_LENGTH: usize> EncryptedValue<VALUE_LENGTH> {
 
 impl<const LENGTH: usize> Display for EncryptedValue<LENGTH> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "ciphertext {}", STANDARD.encode(self.ciphertext))?;
-        write!(f, "tag {}", STANDARD.encode(self.tag))?;
-        write!(f, "nonce {}", STANDARD.encode(self.nonce.as_bytes()))
+        write!(
+            f,
+            "{{ ciphertext: '{}', tag: '{}', nonce: '{}' }}",
+            STANDARD.encode(self.ciphertext),
+            STANDARD.encode(self.tag),
+            STANDARD.encode(self.nonce.as_bytes())
+        )
     }
 }
 
@@ -285,11 +289,11 @@ impl<const VALUE_LENGTH: usize> Deref for TokenWithEncryptedValueList<VALUE_LENG
 
 impl<const VALUE_LENGTH: usize> Display for TokenWithEncryptedValueList<VALUE_LENGTH> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Token with EncryptedValue list:")?;
+        writeln!(f, "Token with EncryptedValue list: [")?;
         for (token, encrypted_value) in self.iter() {
-            write!(f, "\n({token}, {encrypted_value})")?;
+            writeln!(f, "  ({token}, {encrypted_value})")?;
         }
-        Ok(())
+        writeln!(f, "]")
     }
 }
 
@@ -347,11 +351,11 @@ impl<const VALUE_LENGTH: usize> DerefMut for TokenToEncryptedValueMap<VALUE_LENG
 
 impl<const VALUE_LENGTH: usize> Display for TokenToEncryptedValueMap<VALUE_LENGTH> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Token to EncryptedValue map:")?;
+        write!(f, "Token to EncryptedValue map: {{")?;
         for (token, encrypted_value) in self.iter() {
-            write!(f, "\n{token} -> {encrypted_value}")?;
+            writeln!(f, "  '{token}': {encrypted_value}")?;
         }
-        Ok(())
+        writeln!(f, "}}")
     }
 }
 

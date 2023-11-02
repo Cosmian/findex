@@ -10,6 +10,7 @@ use std::{
 use async_trait::async_trait;
 use cosmian_crypto_core::reexport::rand_core::CryptoRngCore;
 use tiny_keccak::{Hasher, Sha3};
+use tracing::debug;
 
 use crate::{
     edx::{DxEnc, Token},
@@ -380,10 +381,28 @@ impl<
     ) -> Result<HashMap<Tag, HashSet<Self::Item>>, Self::Error> {
         let entries = self.fetch_entries_by_tag(key, tags, label).await?;
 
+        debug!("Entries fetched:\n");
+        for (tag, entry) in &entries {
+            debug!("{{\n  tag: {tag:?},\n  entry: {entry}}}");
+        }
+
         let chain_metadata = entries
             .into_iter()
             .map(|(tag, entry)| (tag, self.derive_metadata(&entry)))
             .collect::<Vec<_>>();
+
+        debug!("Metadata extracted:\n");
+        for (tag, (_, chain_tokens)) in &chain_metadata {
+            let formated_tokens: String = chain_tokens.iter().map(|token| token.to_string()).fold(
+                String::new(),
+                |mut acc, e| {
+                    acc.push_str(&e);
+                    acc.push_str(", ");
+                    acc
+                },
+            );
+            debug!("{{\n  tag: {tag:?},\n  chain_tokens: {formated_tokens}",);
+        }
 
         let links = self
             .chain_table
