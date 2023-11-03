@@ -1,22 +1,20 @@
 use std::collections::{HashMap, HashSet};
 
 use cosmian_findex::{
-    ChainTable, DxEnc, EntryTable, Findex, InMemoryEdx, Index, IndexedValue, Keyword, Label,
-    Location,
+    ChainTable, DxEnc, EntryTable, Findex, InMemoryEdx, Index, IndexedValue,
+    IndexedValueToKeywordsMap, Keyword, Keywords, Label, Location,
 };
 use futures::executor::block_on;
 
-fn prepare_keywords(number: i64) -> HashSet<Keyword> {
+fn prepare_keywords(number: i64) -> Keywords {
     let mut keywords = HashSet::new();
     for idx in 0..number {
         keywords.insert(Keyword::from(format!("name_{idx}").as_str()));
     }
-    keywords
+    Keywords::from(keywords)
 }
 
-fn prepare_locations_and_words(
-    number: i64,
-) -> HashMap<IndexedValue<Keyword, Location>, HashSet<Keyword>> {
+fn prepare_locations_and_words(number: i64) -> IndexedValueToKeywordsMap {
     let mut locations_and_words = HashMap::new();
     for idx in 0..number {
         let mut words = HashSet::new();
@@ -25,10 +23,10 @@ fn prepare_locations_and_words(
 
         locations_and_words.insert(
             IndexedValue::Data(Location::from(idx.to_be_bytes().as_slice())),
-            words.clone(),
+            Keywords::from(words.clone()),
         );
     }
-    locations_and_words
+    IndexedValueToKeywordsMap::from(locations_and_words)
 }
 
 fn main() {

@@ -1,20 +1,10 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 
 use cosmian_findex::{
-    ChainTable, DxEnc, EntryTable, Findex, InMemoryEdx, Index, IndexedValue, Keyword, Label,
-    Location,
+    ChainTable, DxEnc, EntryTable, Findex, InMemoryEdx, Index, IndexedValue,
+    IndexedValueToKeywordsMap, Keyword, Keywords, Label, Location,
 };
 use futures::executor::block_on;
-
-/// Converts the given strings as a `HashSet` of Keywords.
-///
-/// - `keywords`    : strings to convert
-fn hashset_keywords(keywords: &[&'static str]) -> HashSet<Keyword> {
-    keywords
-        .iter()
-        .map(|keyword| Keyword::from(*keyword))
-        .collect()
-}
 
 fn main() {
     let mut indexed_value_to_keywords = HashMap::new();
@@ -23,23 +13,26 @@ fn main() {
     let robert_doe_location = Location::from("robert doe DB location");
     indexed_value_to_keywords.insert(
         IndexedValue::Data(robert_doe_location),
-        hashset_keywords(&["robert", "doe"]),
+        Keywords::from_iter(["robert", "doe"]),
     );
 
     // direct location john doe
     let john_doe_location = Location::from("john doe DB location");
     indexed_value_to_keywords.insert(
         IndexedValue::Data(john_doe_location),
-        hashset_keywords(&["john", "doe"]),
+        Keywords::from_iter(["john", "doe"]),
     );
 
     // direct location for rob...
     let rob_location = Location::from("rob DB location");
-    indexed_value_to_keywords.insert(IndexedValue::Data(rob_location), hashset_keywords(&["rob"]));
+    indexed_value_to_keywords.insert(
+        IndexedValue::Data(rob_location),
+        Keywords::from_iter(["rob"]),
+    );
     // ... and indirection to robert
     indexed_value_to_keywords.insert(
         IndexedValue::Pointer(Keyword::from("robert")),
-        hashset_keywords(&["rob"]),
+        Keywords::from_iter(["rob"]),
     );
 
     let findex = Findex::new(
@@ -51,6 +44,11 @@ fn main() {
     let label = Label::from("label");
 
     for _ in 0..1_000_000 {
-        block_on(findex.add(&master_key, &label, indexed_value_to_keywords.clone())).unwrap();
+        block_on(findex.add(
+            &master_key,
+            &label,
+            IndexedValueToKeywordsMap::from(indexed_value_to_keywords.clone()),
+        ))
+        .unwrap();
     }
 }

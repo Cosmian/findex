@@ -6,6 +6,7 @@ use std::{
 };
 
 use cosmian_crypto_core::reexport::rand_core::CryptoRngCore;
+use tracing::debug;
 
 use super::{FindexGraph, GxEnc};
 use crate::{
@@ -67,6 +68,10 @@ impl<
         indexed_values: HashMap<Token, HashSet<IndexedValue<Tag, Value>>>,
         continuation: CompactingData<ChainTable>,
     ) -> Result<(), Error<UserError>> {
+        debug!(
+            "complete_compacting: entering: indexed_values number: {}",
+            indexed_values.len()
+        );
         let indexed_values = indexed_values
             .into_iter()
             .map(|(token, value)| (token, value.into_iter().map(Into::into).collect()))

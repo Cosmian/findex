@@ -1,4 +1,9 @@
-use std::{fmt::Display, ops::Deref};
+use std::{
+    collections::{HashMap, HashSet},
+    fmt::Display,
+    ops::{Deref, DerefMut},
+    vec::IntoIter,
+};
 
 use base64::engine::{general_purpose::STANDARD, Engine};
 use cosmian_crypto_core::{
@@ -28,9 +33,15 @@ impl Deref for Token {
     }
 }
 
+impl From<Token> for [u8; TOKEN_LENGTH] {
+    fn from(value: Token) -> Self {
+        value.0
+    }
+}
+
 impl From<[u8; TOKEN_LENGTH]> for Token {
-    fn from(value: [u8; TOKEN_LENGTH]) -> Self {
-        Self(value)
+    fn from(bytes: [u8; TOKEN_LENGTH]) -> Self {
+        Self(bytes)
     }
 }
 
@@ -51,7 +62,55 @@ impl TryFrom<&[u8]> for Token {
 
 impl Display for Token {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", STANDARD.encode(self.deref()))
+        write!(f, "{}", STANDARD.encode(&**self))
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct Tokens(pub HashSet<Token>);
+
+impl Deref for Tokens {
+    type Target = HashSet<Token>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl Display for Tokens {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        writeln!(f, "[")?;
+        for token in &self.0 {
+            writeln!(f, "  {token},")?;
+        }
+        write!(f, "]")
+    }
+}
+
+impl FromIterator<Token> for Tokens {
+    fn from_iter<T: IntoIterator<Item = Token>>(iter: T) -> Self {
+        Self(HashSet::from_iter(iter))
+    }
+}
+
+impl IntoIterator for Tokens {
+    type IntoIter = <<Self as Deref>::Target as IntoIterator>::IntoIter;
+    type Item = Token;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.into_iter()
+    }
+}
+
+impl From<HashSet<Token>> for Tokens {
+    fn from(value: HashSet<Token>) -> Self {
+        Self(value)
+    }
+}
+
+impl From<Tokens> for HashSet<Token> {
+    fn from(value: Tokens) -> Self {
+        value.0
     }
 }
 
@@ -170,8 +229,7 @@ impl<const VALUE_LENGTH: usize> TryFrom<&[u8]> for EncryptedValue<VALUE_LENGTH> 
 impl<const VALUE_LENGTH: usize> EncryptedValue<VALUE_LENGTH> {
     pub const LENGTH: usize = MAC_LENGTH + NONCE_LENGTH + VALUE_LENGTH;
 
-    /// Encrypts the given value using AESGCM-256 and returns the EDX encrypted
-    /// value.
+    /// Encrypts the value using the given key.
     pub fn encrypt(
         rng: &mut impl CryptoRngCore,
         key: &SymmetricKey<SYM_KEY_LENGTH>,
@@ -191,6 +249,7 @@ impl<const VALUE_LENGTH: usize> EncryptedValue<VALUE_LENGTH> {
         Ok(res)
     }
 
+    /// Decrypts the value using the given key.
     pub fn decrypt(
         &self,
         key: &SymmetricKey<SYM_KEY_LENGTH>,
@@ -205,8 +264,130 @@ impl<const VALUE_LENGTH: usize> EncryptedValue<VALUE_LENGTH> {
 
 impl<const LENGTH: usize> Display for EncryptedValue<LENGTH> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "ciphertext {}", STANDARD.encode(self.ciphertext))?;
-        write!(f, "tag {}", STANDARD.encode(self.tag))?;
-        write!(f, "nonce {}", STANDARD.encode(self.nonce.as_bytes()))
+        write!(
+            f,
+            "{{ ciphertext: '{}', tag: '{}', nonce: '{}' }}",
+            STANDARD.encode(self.ciphertext),
+            STANDARD.encode(self.tag),
+            STANDARD.encode(self.nonce.as_bytes())
+        )
+    }
+}
+
+#[derive(Debug, Default)]
+pub struct TokenWithEncryptedValueList<const VALUE_LENGTH: usize>(
+    pub Vec<(Token, EncryptedValue<VALUE_LENGTH>)>,
+);
+
+impl<const VALUE_LENGTH: usize> Deref for TokenWithEncryptedValueList<VALUE_LENGTH> {
+    type Target = [(Token, EncryptedValue<VALUE_LENGTH>)];
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl<const VALUE_LENGTH: usize> Display for TokenWithEncryptedValueList<VALUE_LENGTH> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        writeln!(f, "Token with EncryptedValue list: [")?;
+        for (token, encrypted_value) in self.iter() {
+            writeln!(f, "  ({token}, {encrypted_value})")?;
+        }
+        writeln!(f, "]")
+    }
+}
+
+impl<const VALUE_LENGTH: usize> From<Vec<(Token, EncryptedValue<VALUE_LENGTH>)>>
+    for TokenWithEncryptedValueList<VALUE_LENGTH>
+{
+    fn from(value: Vec<(Token, EncryptedValue<VALUE_LENGTH>)>) -> Self {
+        Self(value)
+    }
+}
+
+impl<const VALUE_LENGTH: usize> From<TokenWithEncryptedValueList<VALUE_LENGTH>>
+    for Vec<(Token, EncryptedValue<VALUE_LENGTH>)>
+{
+    fn from(value: TokenWithEncryptedValueList<VALUE_LENGTH>) -> Self {
+        value.0
+    }
+}
+
+impl<const VALUE_LENGTH: usize> FromIterator<(Token, EncryptedValue<VALUE_LENGTH>)>
+    for TokenWithEncryptedValueList<VALUE_LENGTH>
+{
+    fn from_iter<T: IntoIterator<Item = (Token, EncryptedValue<VALUE_LENGTH>)>>(iter: T) -> Self {
+        Self(Vec::from_iter(iter))
+    }
+}
+
+impl<const VALUE_LENGTH: usize> IntoIterator for TokenWithEncryptedValueList<VALUE_LENGTH> {
+    type IntoIter = IntoIter<(Token, EncryptedValue<VALUE_LENGTH>)>;
+    type Item = (Token, EncryptedValue<VALUE_LENGTH>);
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.into_iter()
+    }
+}
+
+#[derive(Default, Debug, Clone)]
+pub struct TokenToEncryptedValueMap<const VALUE_LENGTH: usize>(
+    pub HashMap<Token, EncryptedValue<VALUE_LENGTH>>,
+);
+
+impl<const VALUE_LENGTH: usize> Deref for TokenToEncryptedValueMap<VALUE_LENGTH> {
+    type Target = HashMap<Token, EncryptedValue<VALUE_LENGTH>>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl<const VALUE_LENGTH: usize> DerefMut for TokenToEncryptedValueMap<VALUE_LENGTH> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
+
+impl<const VALUE_LENGTH: usize> Display for TokenToEncryptedValueMap<VALUE_LENGTH> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Token to EncryptedValue map: {{")?;
+        for (token, encrypted_value) in self.iter() {
+            writeln!(f, "  '{token}': {encrypted_value}")?;
+        }
+        writeln!(f, "}}")
+    }
+}
+
+impl<const VALUE_LENGTH: usize> From<HashMap<Token, EncryptedValue<VALUE_LENGTH>>>
+    for TokenToEncryptedValueMap<VALUE_LENGTH>
+{
+    fn from(value: HashMap<Token, EncryptedValue<VALUE_LENGTH>>) -> Self {
+        Self(value)
+    }
+}
+
+impl<const VALUE_LENGTH: usize> From<TokenToEncryptedValueMap<VALUE_LENGTH>>
+    for HashMap<Token, EncryptedValue<VALUE_LENGTH>>
+{
+    fn from(value: TokenToEncryptedValueMap<VALUE_LENGTH>) -> Self {
+        value.0
+    }
+}
+
+impl<const VALUE_LENGTH: usize> FromIterator<(Token, EncryptedValue<VALUE_LENGTH>)>
+    for TokenToEncryptedValueMap<VALUE_LENGTH>
+{
+    fn from_iter<T: IntoIterator<Item = (Token, EncryptedValue<VALUE_LENGTH>)>>(iter: T) -> Self {
+        Self(HashMap::from_iter(iter))
+    }
+}
+
+impl<const VALUE_LENGTH: usize> IntoIterator for TokenToEncryptedValueMap<VALUE_LENGTH> {
+    type IntoIter = <<Self as Deref>::Target as IntoIterator>::IntoIter;
+    type Item = <<Self as Deref>::Target as IntoIterator>::Item;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.into_iter()
     }
 }

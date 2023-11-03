@@ -78,14 +78,22 @@ impl<const VALUE_LENGTH: usize, Edx: EdxStore<VALUE_LENGTH>> DxEnc<VALUE_LENGTH>
     }
 
     fn tokenize(&self, key: &Self::Key, bytes: &[u8], label: Option<&Label>) -> Token {
-        kmac!(TOKEN_LENGTH, &key.token, bytes, label.unwrap()).into()
+        if let Some(label) = label {
+            kmac!(TOKEN_LENGTH, &key.token, bytes, label).into()
+        } else {
+            kmac!(TOKEN_LENGTH, &key.token, bytes, &[]).into()
+        }
     }
 
     async fn get(
         &self,
         tokens: HashSet<Token>,
     ) -> Result<Vec<(Token, Self::EncryptedValue)>, Self::Error> {
-        self.0.fetch(tokens).await.map_err(Self::Error::from)
+        self.0
+            .fetch(tokens.into())
+            .await
+            .map_err(Self::Error::from)
+            .map(Into::into)
     }
 
     fn resolve(
@@ -98,13 +106,14 @@ impl<const VALUE_LENGTH: usize, Edx: EdxStore<VALUE_LENGTH>> DxEnc<VALUE_LENGTH>
 
     async fn upsert(
         &self,
-        old_values: &HashMap<Token, Self::EncryptedValue>,
+        old_values: HashMap<Token, Self::EncryptedValue>,
         new_values: HashMap<Token, Self::EncryptedValue>,
     ) -> Result<HashMap<Token, Self::EncryptedValue>, Self::Error> {
         self.0
-            .upsert(old_values, new_values)
+            .upsert(old_values.into(), new_values.into())
             .await
             .map_err(Self::Error::from)
+            .map(Into::into)
     }
 
     async fn insert(
@@ -124,7 +133,10 @@ impl<const VALUE_LENGTH: usize, Edx: EdxStore<VALUE_LENGTH>> DxEnc<VALUE_LENGTH>
     }
 
     async fn delete(&self, items: HashSet<Token>) -> Result<(), Self::Error> {
-        self.0.delete(items).await.map_err(Self::Error::Callback)
+        self.0
+            .delete(items.into())
+            .await
+            .map_err(Self::Error::Callback)
     }
 }
 
@@ -135,7 +147,11 @@ impl<const VALUE_LENGTH: usize, Edx: EdxStore<VALUE_LENGTH>> TokenDump
     type Error = <Self as DxEnc<VALUE_LENGTH>>::Error;
 
     async fn dump_tokens(&self) -> Result<HashSet<Token>, Self::Error> {
-        self.0.dump_tokens().await.map_err(Error::Callback)
+        self.0
+            .dump_tokens()
+            .await
+            .map_err(Error::Callback)
+            .map(Into::into)
     }
 }
 
@@ -169,7 +185,7 @@ mod tests {
         let encrypted_value = table.prepare(&mut rng, &key, value).unwrap();
         table
             .upsert(
-                &HashMap::new(),
+                HashMap::new(),
                 HashMap::from_iter([(token, encrypted_value)]),
             )
             .await

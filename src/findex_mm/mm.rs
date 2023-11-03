@@ -71,13 +71,13 @@ impl<
     }
 
     /// Fetches the entries associated to the given tags.
-    async fn fetch_entries_by_tag<Tag: Hash + Eq + AsRef<[u8]>>(
+    async fn fetch_entries_by_tag<Tag: Hash + Clone + Eq + AsRef<[u8]>>(
         &self,
         key: &EntryTable::Key,
         tags: HashSet<Tag>,
         label: &Label,
     ) -> Result<Vec<(Tag, Entry<ChainTable>)>, Error<UserError>> {
-        let mut tokens = tags
+        let tokens = tags
             .into_iter()
             .map(|tag| {
                 let mut tag_hash = [0; HASH_LENGTH];
@@ -94,7 +94,7 @@ impl<
 
         Ok(entries
             .into_iter()
-            .filter_map(|(token, entry)| tokens.remove(&token).map(|tag| (tag, entry)))
+            .filter_map(|(token, entry)| tokens.get(&token).cloned().map(|tag| (tag, entry)))
             .collect())
     }
 
@@ -342,7 +342,7 @@ impl<
             // 2 - Upsert new entries to the Entry Table.
             encrypted_entries = self
                 .entry_table
-                .upsert(&encrypted_entries, new_entries)
+                .upsert(encrypted_entries, new_entries)
                 .await?;
             chain_additions.retain(|_, (k, _, _)| encrypted_entries.contains_key(k));
             new_tags.retain(|tag| !chain_additions.contains_key(tag));
@@ -372,7 +372,7 @@ impl<
         self.entry_table.derive_keys(seed)
     }
 
-    async fn get<Tag: Debug + Hash + Eq + AsRef<[u8]>>(
+    async fn get<Tag: Debug + Clone + Hash + Eq + AsRef<[u8]>>(
         &self,
         key: &Self::Key,
         tags: HashSet<Tag>,
