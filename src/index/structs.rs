@@ -167,7 +167,7 @@ impl From<KeywordToDataMap> for HashMap<Keyword, HashSet<Location>> {
     }
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct IndexedValueToKeywordsMap(HashMap<IndexedValue<Keyword, Location>, Keywords>);
 
 impl Deref for IndexedValueToKeywordsMap {

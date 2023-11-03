@@ -330,7 +330,7 @@ impl<const VALUE_LENGTH: usize> IntoIterator for TokenWithEncryptedValueList<VAL
     }
 }
 
-#[derive(Default, Debug, Clone)]
+#[derive(Default, Debug, Clone, PartialEq, Eq)]
 pub struct TokenToEncryptedValueMap<const VALUE_LENGTH: usize>(
     pub HashMap<Token, EncryptedValue<VALUE_LENGTH>>,
 );
