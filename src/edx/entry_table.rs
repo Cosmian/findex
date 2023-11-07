@@ -106,11 +106,10 @@ impl<const VALUE_LENGTH: usize, Edx: EdxStore<VALUE_LENGTH>> DxEnc<VALUE_LENGTH>
 
     async fn upsert(
         &self,
-        old_values: HashMap<Token, Self::EncryptedValue>,
-        new_values: HashMap<Token, Self::EncryptedValue>,
+        modifications: HashMap<Token, (Option<Self::EncryptedValue>, Self::EncryptedValue)>,
     ) -> Result<HashMap<Token, Self::EncryptedValue>, Self::Error> {
         self.0
-            .upsert(old_values.into(), new_values.into())
+            .upsert(modifications.into())
             .await
             .map_err(Self::Error::from)
             .map(Into::into)
@@ -184,10 +183,7 @@ mod tests {
 
         let encrypted_value = table.prepare(&mut rng, &key, value).unwrap();
         table
-            .upsert(
-                HashMap::new(),
-                HashMap::from_iter([(token, encrypted_value)]),
-            )
+            .upsert(HashMap::from_iter([(token, (None, encrypted_value))]))
             .await
             .unwrap();
 

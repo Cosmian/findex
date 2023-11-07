@@ -177,7 +177,7 @@ pub struct EdxKey {
 impl ZeroizeOnDrop for EdxKey {}
 
 /// Value stored inside the EDX. It is composed of:
-/// - a AESGCM-256 ciphertext;
+/// - a AES256-GCM ciphertext;
 /// - a nonce;
 /// - a MAC tag.
 ///
@@ -384,6 +384,127 @@ impl<const VALUE_LENGTH: usize> FromIterator<(Token, EncryptedValue<VALUE_LENGTH
 }
 
 impl<const VALUE_LENGTH: usize> IntoIterator for TokenToEncryptedValueMap<VALUE_LENGTH> {
+    type IntoIter = <<Self as Deref>::Target as IntoIterator>::IntoIter;
+    type Item = <<Self as Deref>::Target as IntoIterator>::Item;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.into_iter()
+    }
+}
+
+#[derive(Default, Debug, Clone, PartialEq, Eq)]
+pub struct Modifications<const VALUE_LENGTH: usize>(
+    HashMap<
+        Token,
+        (
+            Option<EncryptedValue<VALUE_LENGTH>>,
+            EncryptedValue<VALUE_LENGTH>,
+        ),
+    >,
+);
+
+impl<const VALUE_LENGTH: usize> Deref for Modifications<VALUE_LENGTH> {
+    type Target = HashMap<
+        Token,
+        (
+            Option<EncryptedValue<VALUE_LENGTH>>,
+            EncryptedValue<VALUE_LENGTH>,
+        ),
+    >;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl<const VALUE_LENGTH: usize> DerefMut for Modifications<VALUE_LENGTH> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
+
+impl<const VALUE_LENGTH: usize> Display for Modifications<VALUE_LENGTH> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Modifications: {{")?;
+        for (token, (old_value, new_value)) in self.iter() {
+            writeln!(
+                f,
+                "  '{token}': '{}' -> '{new_value}'",
+                old_value
+                    .as_ref()
+                    .map(|value| value.to_string())
+                    .unwrap_or_default()
+            )?;
+        }
+        writeln!(f, "}}")
+    }
+}
+
+impl<const VALUE_LENGTH: usize>
+    From<
+        HashMap<
+            Token,
+            (
+                Option<EncryptedValue<VALUE_LENGTH>>,
+                EncryptedValue<VALUE_LENGTH>,
+            ),
+        >,
+    > for Modifications<VALUE_LENGTH>
+{
+    fn from(
+        value: HashMap<
+            Token,
+            (
+                Option<EncryptedValue<VALUE_LENGTH>>,
+                EncryptedValue<VALUE_LENGTH>,
+            ),
+        >,
+    ) -> Self {
+        Self(value)
+    }
+}
+
+impl<const VALUE_LENGTH: usize> From<Modifications<VALUE_LENGTH>>
+    for HashMap<
+        Token,
+        (
+            Option<EncryptedValue<VALUE_LENGTH>>,
+            EncryptedValue<VALUE_LENGTH>,
+        ),
+    >
+{
+    fn from(value: Modifications<VALUE_LENGTH>) -> Self {
+        value.0
+    }
+}
+
+impl<const VALUE_LENGTH: usize>
+    FromIterator<(
+        Token,
+        (
+            Option<EncryptedValue<VALUE_LENGTH>>,
+            EncryptedValue<VALUE_LENGTH>,
+        ),
+    )> for Modifications<VALUE_LENGTH>
+{
+    fn from_iter<
+        T: IntoIterator<
+            Item = (
+                Token,
+                (
+                    Option<EncryptedValue<VALUE_LENGTH>>,
+                    EncryptedValue<VALUE_LENGTH>,
+                ),
+            ),
+        >,
+    >(
+        iter: T,
+    ) -> Self {
+        Self(HashMap::from_iter(iter))
+    }
+}
+
+impl<const VALUE_LENGTH: usize> IntoIterator for Modifications<VALUE_LENGTH> {
     type IntoIter = <<Self as Deref>::Target as IntoIterator>::IntoIter;
     type Item = <<Self as Deref>::Target as IntoIterator>::Item;
 

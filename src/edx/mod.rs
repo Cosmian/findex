@@ -18,6 +18,7 @@ pub use structs::{
     EncryptedValue, Seed, Token, TokenToEncryptedValueMap, TokenWithEncryptedValueList, Tokens,
 };
 
+use self::structs::Modifications;
 use crate::{CallbackErrorTrait, Label};
 
 #[async_trait(?Send)]
@@ -100,8 +101,7 @@ pub trait DxEnc<const VALUE_LENGTH: usize> {
     /// All modifications to the EDX are *atomic*.
     async fn upsert(
         &self,
-        old_values: HashMap<Token, Self::EncryptedValue>,
-        new_values: HashMap<Token, Self::EncryptedValue>,
+        modifications: HashMap<Token, (Option<Self::EncryptedValue>, Self::EncryptedValue)>,
     ) -> Result<HashMap<Token, Self::EncryptedValue>, Self::Error>;
 
     /// Inserts the given items into the EDX.
@@ -111,7 +111,7 @@ pub trait DxEnc<const VALUE_LENGTH: usize> {
     /// Returns an error without inserting any value if the EDX already contains
     /// a value for a given tokens.
     async fn insert(&self, values: HashMap<Token, Self::EncryptedValue>)
-        -> Result<(), Self::Error>;
+    -> Result<(), Self::Error>;
 
     /// Deletes the given items from the EDX.
     async fn delete(&self, tokens: HashSet<Token>) -> Result<(), Self::Error>;
@@ -154,8 +154,7 @@ pub trait EdxStore<const VALUE_LENGTH: usize> {
     /// +--------------+----------+-----------+-----------+
     async fn upsert(
         &self,
-        old_values: TokenToEncryptedValueMap<VALUE_LENGTH>,
-        new_values: TokenToEncryptedValueMap<VALUE_LENGTH>,
+        modifications: Modifications<VALUE_LENGTH>,
     ) -> Result<TokenToEncryptedValueMap<VALUE_LENGTH>, Self::Error>;
 
     /// Inserts the given values into the Edx for the given tokens.
@@ -187,7 +186,10 @@ pub mod in_memory {
     #[cfg(feature = "in_memory")]
     use cosmian_crypto_core::{bytes_ser_de::Serializable, Nonce};
 
-    use super::{EdxStore, Token, TokenToEncryptedValueMap, TokenWithEncryptedValueList, Tokens};
+    use super::{
+        structs::Modifications, EdxStore, Token, TokenToEncryptedValueMap,
+        TokenWithEncryptedValueList, Tokens,
+    };
     #[cfg(feature = "in_memory")]
     use crate::parameters::{MAC_LENGTH, NONCE_LENGTH};
     use crate::{error::CallbackErrorTrait, EncryptedValue};
@@ -339,35 +341,16 @@ pub mod in_memory {
 
         async fn upsert(
             &self,
-            old_values: TokenToEncryptedValueMap<VALUE_LENGTH>,
-            new_values: TokenToEncryptedValueMap<VALUE_LENGTH>,
+            modifications: Modifications<VALUE_LENGTH>,
         ) -> Result<TokenToEncryptedValueMap<VALUE_LENGTH>, KvStoreError> {
-            let edx = &mut self.lock().expect("couldn't lock the table");
-            // Ensures an value is present inside the EDX for each given old value.
-            if old_values.keys().any(|token| !edx.contains_key(token)) {
-                return Err(KvStoreError(format!(
-                    "missing EDX tokens {:?}",
-                    old_values
-                        .keys()
-                        .filter(|token| !edx.contains_key(*token))
-                        .collect::<Vec<_>>()
-                )));
-            }
-
             let mut res = HashMap::new();
-            for (token, new_ciphertext) in new_values.into_iter() {
-                let old_ciphertext = old_values.get(&token);
-                let edx_ciphertext = edx.get(&token);
-
-                if old_ciphertext == edx_ciphertext {
-                    edx.insert(token, new_ciphertext.clone());
-                } else {
-                    res.insert(
-                        token,
-                        edx_ciphertext
-                            .cloned()
-                            .expect("above check ensures this cannot happen"),
-                    );
+            for (token, (old_value, new_value)) in modifications.into_iter() {
+                let edx = &mut self.lock().expect("couldn't lock the table");
+                let cur_value = edx.get(&token);
+                if old_value.as_ref() == cur_value {
+                    edx.insert(token, new_value.clone());
+                } else if let Some(cur_value) = cur_value {
+                    res.insert(token, cur_value.clone());
                 }
             }
 

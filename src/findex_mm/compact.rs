@@ -15,10 +15,10 @@ use crate::{
 };
 
 impl<
-        UserError: CallbackErrorTrait,
-        EntryTable: DxEnc<ENTRY_LENGTH, Error = Error<UserError>> + TokenDump<Error = Error<UserError>>,
-        ChainTable: DxEnc<LINK_LENGTH, Error = Error<UserError>>,
-    > FindexMultiMap<UserError, EntryTable, ChainTable>
+    UserError: CallbackErrorTrait,
+    EntryTable: DxEnc<ENTRY_LENGTH, Error = Error<UserError>> + TokenDump<Error = Error<UserError>>,
+    ChainTable: DxEnc<LINK_LENGTH, Error = Error<UserError>>,
+> FindexMultiMap<UserError, EntryTable, ChainTable>
 {
     /// Returns the set of Entry Table tokens.
     pub async fn dump_entry_tokens(&self) -> Result<Vec<Token>, Error<UserError>> {
@@ -168,16 +168,16 @@ impl<
 
         debug!("Step 2: uses the `new_key` to generate a new token and encrypt each entry");
 
-        let mut old_entries = HashSet::with_capacity(continuation.entries.len());
+        let mut old_entry_tokens = HashSet::with_capacity(continuation.entries.len());
         let mut new_entries = HashMap::with_capacity(continuation.entries.len());
         {
             let rng = &mut *rng.lock().expect("could not lock mutex");
             for (token, entry) in continuation.entries {
-                old_entries.insert(token);
+                old_entry_tokens.insert(token);
                 new_entries.insert(
                     self.entry_table
                         .tokenize(new_key, &entry.tag_hash, Some(new_label)),
-                    self.entry_table.prepare(rng, new_key, entry.into())?,
+                    (None, self.entry_table.prepare(rng, new_key, entry.into())?),
                 );
             }
         }
@@ -197,10 +197,10 @@ impl<
                  ({res:?})"
             )));
         };
-        let res = self.entry_table.upsert(HashMap::new(), new_entries).await;
+        let res = self.entry_table.upsert(new_entries).await;
         if res.as_ref().map(HashMap::is_empty).unwrap_or(false) {
             self.chain_table.delete(old_links).await?;
-            self.entry_table.delete(old_entries).await?;
+            self.entry_table.delete(old_entry_tokens).await?;
             Ok(())
         } else {
             self.chain_table.delete(new_links_tokens).await?;

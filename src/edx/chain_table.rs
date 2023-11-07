@@ -119,8 +119,7 @@ impl<const VALUE_LENGTH: usize, EdxScheme: EdxStore<VALUE_LENGTH>> DxEnc<VALUE_L
 
     async fn upsert(
         &self,
-        _old_values: HashMap<Token, Self::EncryptedValue>,
-        _new_values: HashMap<Token, Self::EncryptedValue>,
+        _modifications: HashMap<Token, (Option<Self::EncryptedValue>, Self::EncryptedValue)>,
     ) -> Result<HashMap<Token, Self::EncryptedValue>, Self::Error> {
         panic!("The Chain Table does not do any upsert.")
     }

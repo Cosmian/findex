@@ -23,10 +23,10 @@ use crate::{
 };
 
 impl<
-        UserError: CallbackErrorTrait,
-        EntryTable: DxEnc<ENTRY_LENGTH, Error = Error<UserError>>,
-        ChainTable: DxEnc<LINK_LENGTH, Error = Error<UserError>>,
-    > FindexMultiMap<UserError, EntryTable, ChainTable>
+    UserError: CallbackErrorTrait,
+    EntryTable: DxEnc<ENTRY_LENGTH, Error = Error<UserError>>,
+    ChainTable: DxEnc<LINK_LENGTH, Error = Error<UserError>>,
+> FindexMultiMap<UserError, EntryTable, ChainTable>
 {
     /// Instantiates a new `FindexMultiMap`.
     pub fn new(entry_table: EntryTable, chain_table: ChainTable) -> Self {
@@ -299,11 +299,12 @@ impl<
         let mut chain = HashMap::with_capacity(chain_additions.len());
 
         while !chain_additions.is_empty() {
-            let mut new_entries = HashMap::with_capacity(chain_additions.len());
+            let mut modifications = HashMap::with_capacity(chain_additions.len());
             // Compute new chain tokens to insert modifications and update the associated
             // entry. Create one if the associated tag was not indexed yet.
             for (tag, (token, tag_hash, n_additions)) in &chain_additions {
-                let mut entry = if let Some(ciphertext) = encrypted_entries.get(token) {
+                let old_entry = encrypted_entries.remove(token);
+                let mut entry = if let Some(ciphertext) = &old_entry {
                     Entry::<ChainTable>::from(self.entry_table.resolve(key, ciphertext)?)
                 } else {
                     // This tag is not indexed yet in the Entry table.
@@ -329,21 +330,21 @@ impl<
                 entry.chain_token = chain_tokens.last().copied();
 
                 chain.insert((*tag).clone(), (chain_key, chain_tokens));
-                new_entries.insert(
+                modifications.insert(
                     *token,
-                    self.entry_table.prepare(
-                        &mut *rng.lock().expect("could not lock mutex"),
-                        key,
-                        entry.into(),
-                    )?,
+                    (
+                        old_entry,
+                        self.entry_table.prepare(
+                            &mut *rng.lock().expect("could not lock mutex"),
+                            key,
+                            entry.into(),
+                        )?,
+                    ),
                 );
             }
 
             // 2 - Upsert new entries to the Entry Table.
-            encrypted_entries = self
-                .entry_table
-                .upsert(encrypted_entries, new_entries)
-                .await?;
+            encrypted_entries = self.entry_table.upsert(modifications).await?;
             chain_additions.retain(|_, (k, _, _)| encrypted_entries.contains_key(k));
             new_tags.retain(|tag| !chain_additions.contains_key(tag));
         }
@@ -354,10 +355,10 @@ impl<
 
 #[async_trait(?Send)]
 impl<
-        UserError: CallbackErrorTrait,
-        EntryTable: DxEnc<ENTRY_LENGTH, Error = Error<UserError>>,
-        ChainTable: DxEnc<LINK_LENGTH, Error = Error<UserError>>,
-    > MmEnc<SEED_LENGTH, UserError> for FindexMultiMap<UserError, EntryTable, ChainTable>
+    UserError: CallbackErrorTrait,
+    EntryTable: DxEnc<ENTRY_LENGTH, Error = Error<UserError>>,
+    ChainTable: DxEnc<LINK_LENGTH, Error = Error<UserError>>,
+> MmEnc<SEED_LENGTH, UserError> for FindexMultiMap<UserError, EntryTable, ChainTable>
 {
     type Error = Error<UserError>;
     type Item = Vec<u8>;
