@@ -111,7 +111,7 @@ impl<
             .map(|(tag, modifications)| {
                 let modifications = modifications
                     .into_iter()
-                    .map(|(op, value)| (op, value.into()))
+                    .map(|(op, value)| (op, (&value).into()))
                     .collect();
                 (tag, modifications)
             })

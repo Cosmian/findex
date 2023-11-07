@@ -74,7 +74,7 @@ impl<
         );
         let indexed_values = indexed_values
             .into_iter()
-            .map(|(token, value)| (token, value.into_iter().map(Into::into).collect()))
+            .map(|(token, value)| (token, value.iter().map(Into::into).collect()))
             .collect();
         self.findex_mm
             .complete_compacting(rng, key, indexed_values, continuation, label)

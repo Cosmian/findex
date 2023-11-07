@@ -39,8 +39,8 @@ impl<Tag, Value> IndexedValue<Tag, Value> {
     }
 }
 
-impl<Tag: AsRef<[u8]>, Value: AsRef<[u8]>> From<IndexedValue<Tag, Value>> for Vec<u8> {
-    fn from(value: IndexedValue<Tag, Value>) -> Self {
+impl<Tag: AsRef<[u8]>, Value: AsRef<[u8]>> From<&IndexedValue<Tag, Value>> for Vec<u8> {
+    fn from(value: &IndexedValue<Tag, Value>) -> Self {
         match value {
             IndexedValue::Pointer(pointer) => {
                 let pointer = pointer.as_ref();
