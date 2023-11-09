@@ -142,5 +142,11 @@ mod example {
             res,
             KeywordToDataMap::from_iter([(kwd1, HashSet::from_iter([loc1]))])
         );
+
+        let res = index
+            .compact(&key, &key, &label, &label, 1, &|res| async { Ok(res) })
+            .await;
+
+        assert!(res.is_err());
     }
 }

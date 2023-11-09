@@ -238,7 +238,9 @@ impl<
     ) -> Result<(), Error<UserError>> {
         if (old_key == new_key) && (old_label == new_label) {
             return Err(Error::Crypto(
-                "both the same key and label can be used to compact".to_string(),
+                "at least one from the new key or the new label should be changed during the \
+                 compact operation"
+                    .to_string(),
             ));
         }
 
@@ -348,7 +350,7 @@ impl<
         (n_draws / n_compact_to_full as f64) as usize
     }
 
-    #[tracing::instrument(level = "trace", fields(compact_target = %compact_target, tokens = %tokens, new_label = %new_label),ret, err, skip(self, old_key, new_key, filter_obsolete_data))]
+    #[tracing::instrument(level = "trace", fields(tokens_to_compact = %tokens_to_compact, tokens_to_fetch = %tokens_to_fetch, new_label = %new_label),ret, err, skip(self, old_key, new_key, filter_obsolete_data))]
     async fn compact_batch<
         F: Future<Output = Result<HashSet<Location>, String>>,
         Filter: Fn(HashSet<Location>) -> F,
@@ -357,43 +359,50 @@ impl<
         old_key: &<FindexGraph<UserError, EntryTable, ChainTable> as GxEnc<UserError>>::Key,
         new_key: &<FindexGraph<UserError, EntryTable, ChainTable> as GxEnc<UserError>>::Key,
         new_label: &Label,
-        compact_target: &Tokens,
-        tokens: Tokens,
+        tokens_to_compact: &Tokens,
+        tokens_to_fetch: Tokens,
         filter_obsolete_data: &Filter,
     ) -> Result<(), Error<UserError>> {
-        let (mut indexed_values, data) = self
+        let (indexed_values, data) = self
             .findex_graph
-            .prepare_compact::<Keyword, Location>(old_key, tokens.into(), compact_target)
+            .prepare_compact::<Keyword, Location>(
+                old_key,
+                tokens_to_fetch.into(),
+                tokens_to_compact,
+            )
             .await?;
 
-        let locations = indexed_values
+        let indexed_locations = indexed_values
             .values()
             .flatten()
             .filter_map(IndexedValue::get_data)
             .cloned()
             .collect();
 
-        let remaining_locations = filter_obsolete_data(locations)
+        let remaining_locations = filter_obsolete_data(indexed_locations)
             .await
             .map_err(<Self as Index<EntryTable, ChainTable>>::Error::Filter)?;
 
-        for values in indexed_values.values_mut() {
-            let res = values
-                .iter()
-                .filter(|v| {
-                    if let Some(location) = v.get_data() {
-                        remaining_locations.contains(location)
-                    } else {
-                        true
-                    }
-                })
-                .cloned()
-                .collect();
-            *values = res;
-        }
+        let remaining_values = indexed_values
+            .into_iter()
+            .map(|(entry_token, associated_values)| {
+                let remaining_values = associated_values
+                    .into_iter()
+                    .filter(|value| {
+                        if let Some(location) = value.get_data() {
+                            remaining_locations.contains(location)
+                        } else {
+                            true
+                        }
+                    })
+                    .collect::<HashSet<_>>();
+                (entry_token, remaining_values)
+            })
+            .filter(|(_, remaining_values)| !remaining_values.is_empty())
+            .collect::<HashMap<_, _>>();
 
         self.findex_graph
-            .complete_compacting(self.rng.clone(), new_key, new_label, indexed_values, data)
+            .complete_compacting(self.rng.clone(), new_key, new_label, remaining_values, data)
             .await
     }
 }

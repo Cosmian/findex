@@ -176,6 +176,7 @@ impl<
     /// - merges the data from the stacked block and fill the stack;
     /// - if this value was an addition, adds it to the set, otherwise removes
     ///   any matching value from the set.
+    // TODO (TBZ): take an iterator as input to avoid needless collections.
     pub(crate) fn recompose<const BLOCK_LENGTH: usize, const LINE_LENGTH: usize>(
         &self,
         chain: &[Link],

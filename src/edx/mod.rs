@@ -326,12 +326,12 @@ pub mod in_memory {
             Ok(TokenWithEncryptedValueList::from(
                 tokens
                     .into_iter()
-                    .filter_map(|uid| {
+                    .filter_map(|token| {
                         self.lock()
                             .expect("couldn't lock the table")
-                            .get(&uid)
+                            .get(&token)
                             .cloned()
-                            .map(|v| (uid, v))
+                            .map(|v| (token, v))
                     })
                     .collect::<Vec<_>>(),
             ))

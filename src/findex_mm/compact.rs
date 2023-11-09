@@ -25,9 +25,11 @@ impl<
         Ok(self.entry_table.dump_tokens().await?.into_iter().collect())
     }
 
-    /// Fetches all data needed to compact targeted chains among the ones
-    /// associated with the given tokens. Returns the indexed values in these
-    /// chains along with data used to finish the compacting operation.
+    /// Fetches all chains associated to the given tokens.
+    ///
+    /// # Returns
+    ///
+    /// All the data needed to compact targeted chains only.
     pub async fn prepare_compacting(
         &self,
         key: &<Self as MmEnc<SEED_LENGTH, UserError>>::Key,
@@ -52,7 +54,7 @@ impl<
             },
         )?;
 
-        let metadata = entries
+        let chain_metadata = entries
             .iter()
             .filter(|(token, _)| compact_target.contains(token))
             .map(|(token, entry)| (*token, self.derive_metadata(entry)))
@@ -61,7 +63,7 @@ impl<
         let encrypted_links = self
             .chain_table
             .get(
-                metadata
+                chain_metadata
                     .iter()
                     .flat_map(|(_, (_, chain_tokens))| chain_tokens)
                     .copied()
@@ -84,26 +86,34 @@ impl<
             },
         )?;
 
-        let mut indexed_values = HashMap::with_capacity(metadata.len());
-        for (entry_token, (chain_key, chain_tokens)) in &metadata {
-            let links = chain_tokens
-                .iter()
-                .filter_map(|token| {
-                    encrypted_links.get(token).map(|encrypted_link| {
+        let indexed_chains = chain_metadata
+            .iter()
+            .map(|(entry_token, (chain_key, chain_tokens))| {
+                let links = chain_tokens
+                    .iter()
+                    .filter_map(|token| encrypted_links.get(token))
+                    .map(|encrypted_link| {
                         self.chain_table
                             .resolve(chain_key, encrypted_link)
                             .map(Link)
                     })
-                })
-                .collect::<Result<Vec<_>, _>>()?;
+                    // Collect in a vector to preserve the chain order.
+                    .collect::<Result<Vec<_>, _>>()?;
 
-            indexed_values.insert(
-                *entry_token,
-                self.recompose::<BLOCK_LENGTH, LINE_WIDTH>(&links)?,
-            );
-        }
+                Ok((
+                    *entry_token,
+                    self.recompose::<BLOCK_LENGTH, LINE_WIDTH>(&links)?,
+                ))
+            })
+            .collect::<Result<_, Error<UserError>>>()?;
 
-        Ok((indexed_values, CompactingData { metadata, entries }))
+        Ok((
+            indexed_chains,
+            CompactingData {
+                metadata: chain_metadata,
+                entries,
+            },
+        ))
     }
 
     /// Completes the compacting operation:
@@ -193,22 +203,37 @@ impl<
         if res.is_err() {
             self.chain_table.delete(new_links_tokens).await?;
             return Err(Error::Crypto(format!(
-                "An error occurred during the compact operation. All modifications were reverted. \
+                "An error occurred during the insert operation. All modifications were reverted. \
                  ({res:?})"
             )));
         };
-        let res = self.entry_table.upsert(HashMap::new(), new_entries).await;
-        if res.as_ref().map(HashMap::is_empty).unwrap_or(false) {
+
+        let upsert_results = self.entry_table.upsert(HashMap::new(), new_entries).await;
+
+        let res = if let Ok(upsert_results) = upsert_results {
+            if upsert_results.is_empty() {
+                Ok(())
+            } else {
+                Err(Error::Crypto(format!(
+                    "A conflict occurred during the upsert operation. All modifications were \
+                     reverted. ({upsert_results:?})"
+                )))
+            }
+        } else {
+            Err(Error::Crypto(
+                "An error occurred during the upsert operation. All modifications were reverted."
+                    .to_string(),
+            ))
+        };
+
+        if res.is_ok() {
             self.chain_table.delete(old_links).await?;
             self.entry_table.delete(old_entries).await?;
-            Ok(())
         } else {
             self.chain_table.delete(new_links_tokens).await?;
             self.entry_table.delete(new_entry_tokens).await?;
-            Err(Error::Crypto(format!(
-                "An error occurred during the compact operation. All modifications were reverted. \
-                 ({res:?})"
-            )))
         }
+
+        res
     }
 }
