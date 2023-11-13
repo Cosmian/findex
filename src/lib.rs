@@ -39,18 +39,12 @@ pub use parameters::*;
 
 #[cfg(test)]
 mod example {
-    use std::collections::{HashMap, HashSet};
+    use std::collections::HashSet;
 
     use crate::{
         ChainTable, DxEnc, EntryTable, Findex, InMemoryEdx, Index, IndexedValue,
         IndexedValueToKeywordsMap, Keyword, KeywordToDataMap, Keywords, Label, Location,
     };
-
-    async fn user_interrupt(
-        _res: HashMap<Keyword, HashSet<IndexedValue<Keyword, Location>>>,
-    ) -> Result<bool, String> {
-        Ok(false)
-    }
 
     #[actix_rt::test]
     async fn index_and_search() {
@@ -101,7 +95,7 @@ mod example {
                 &key,
                 &label,
                 Keywords::from_iter([kwd1.clone()]),
-                &user_interrupt,
+                &|_| async { Ok(false) },
             )
             .await
             .expect("Error while searching.");
@@ -131,7 +125,7 @@ mod example {
                 &key,
                 &label,
                 Keywords::from_iter([kwd1.clone()]),
-                &user_interrupt,
+                &|_| async { Ok(false) },
             )
             .await
             .expect("Error while searching.");
