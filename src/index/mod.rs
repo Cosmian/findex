@@ -9,6 +9,7 @@ use std::{
 };
 
 use async_trait::async_trait;
+use tracing::{instrument, trace};
 
 use crate::{
     edx::{Token, TokenDump, Tokens},
@@ -115,7 +116,7 @@ impl<
         UserKey::new(&mut *self.rng.lock().expect("could not lock mutex"))
     }
 
-    #[tracing::instrument(level = "trace", fields(keywords = %keywords, label = %label), ret(Display), err, skip(self, key, interrupt))]
+    #[instrument(ret(Display), err, skip_all)]
     async fn search<
         F: Future<Output = Result<bool, String>>,
         Interrupt: Fn(HashMap<Keyword, HashSet<IndexedValue<Keyword, Location>>>) -> F,
@@ -126,6 +127,8 @@ impl<
         keywords: Keywords,
         interrupt: &Interrupt,
     ) -> Result<KeywordToDataMap, Self::Error> {
+        trace!("search: entering: label: {label}");
+        trace!("search: entering: keywords: {keywords}");
         // TODO: avoid this copy
         let mut seed =
             <FindexGraph<UserError, EntryTable, ChainTable> as GxEnc<UserError>>::Seed::default();
@@ -148,13 +151,15 @@ impl<
         Ok(res)
     }
 
-    #[tracing::instrument(level = "trace", fields(additions = %additions, label = %label), ret(Display), err, skip(self, key))]
+    #[instrument(ret(Display), err, skip_all)]
     async fn add(
         &self,
         key: &UserKey,
         label: &Label,
         additions: IndexedValueToKeywordsMap,
     ) -> Result<Keywords, Self::Error> {
+        trace!("add: entering: label: {label}");
+        trace!("add: entering: additions: {additions}");
         // TODO: avoid this copy
         let mut seed =
             <FindexGraph<UserError, EntryTable, ChainTable> as GxEnc<UserError>>::Seed::default();
@@ -178,13 +183,15 @@ impl<
         ))
     }
 
-    #[tracing::instrument(level = "trace", fields(deletions = %deletions, label = %label), ret(Display), err, skip(self, key))]
+    #[instrument(ret(Display), err, skip_all)]
     async fn delete(
         &self,
         key: &UserKey,
         label: &Label,
         deletions: IndexedValueToKeywordsMap,
     ) -> Result<Keywords, Self::Error> {
+        trace!("delete: entering: label: {label}");
+        trace!("delete: entering: deletions: {deletions}");
         // TODO: avoid this copy
         let mut seed =
             <FindexGraph<UserError, EntryTable, ChainTable> as GxEnc<UserError>>::Seed::default();
@@ -223,7 +230,7 @@ impl<
     ///
     /// The size of the batches is
     /// [`COMPACT_BATCH_SIZE`](Self::COMPACT_BATCH_SIZE).
-    #[tracing::instrument(level = "trace", fields(old_label = %old_label, new_label = %new_label),ret, err, skip(self, old_key, new_key, filter))]
+    #[instrument(ret, err, skip_all)]
     async fn compact<
         F: Future<Output = Result<HashSet<Location>, String>>,
         Filter: Fn(HashSet<Location>) -> F,
@@ -236,6 +243,8 @@ impl<
         n_compact_to_full: usize,
         filter: &Filter,
     ) -> Result<(), Error<UserError>> {
+        trace!("compact: entering: old_label: {old_label}");
+        trace!("compact: entering: new_label: {new_label}");
         if (old_key == new_key) && (old_label == new_label) {
             return Err(Error::Crypto(
                 "at least one from the new key or the new label should be changed during the \
@@ -350,7 +359,7 @@ impl<
         (n_draws / n_compact_to_full as f64) as usize
     }
 
-    #[tracing::instrument(level = "trace", fields(tokens_to_compact = %tokens_to_compact, tokens_to_fetch = %tokens_to_fetch, new_label = %new_label),ret, err, skip(self, old_key, new_key, filter_obsolete_data))]
+    #[instrument(ret, err, skip_all)]
     async fn compact_batch<
         F: Future<Output = Result<HashSet<Location>, String>>,
         Filter: Fn(HashSet<Location>) -> F,
@@ -363,6 +372,9 @@ impl<
         tokens_to_fetch: Tokens,
         filter_obsolete_data: &Filter,
     ) -> Result<(), Error<UserError>> {
+        trace!("compact_batch: entering: new_label: {new_label}");
+        trace!("compact_batch: entering: tokens_to_compact: {tokens_to_compact}");
+        trace!("compact_batch: entering: tokens_to_fetch: {tokens_to_fetch}");
         let (indexed_values, data) = self
             .findex_graph
             .prepare_compact::<Keyword, Location>(

@@ -15,7 +15,7 @@ pub mod entry_table;
 mod structs;
 
 pub use structs::{
-    EncryptedValue, Seed, Token, TokenToEncryptedValueMap, TokenWithEncryptedValueList, Tokens,
+    EncryptedValue, Token, TokenToEncryptedValueMap, TokenWithEncryptedValueList, Tokens,
 };
 
 use crate::{CallbackErrorTrait, Label};
