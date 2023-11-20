@@ -7,11 +7,13 @@
 
 use std::{
     collections::{HashMap, HashSet},
-    ops::{Deref, DerefMut},
+    ops::Deref,
 };
 
+use async_trait::async_trait;
 use cosmian_crypto_core::{kdf256, reexport::rand_core::CryptoRngCore, SymmetricKey};
 
+use super::structs::Token;
 use crate::{
     edx::{
         structs::{EdxKey, Seed},
@@ -23,6 +25,7 @@ use crate::{
 };
 
 /// Chain Table representation.
+#[derive(Debug)]
 pub struct ChainTable<const VALUE_LENGTH: usize, Edx: EdxStore<VALUE_LENGTH>>(pub Edx);
 
 impl<const VALUE_LENGTH: usize, Edx: EdxStore<VALUE_LENGTH>> Deref
@@ -37,17 +40,15 @@ impl<const VALUE_LENGTH: usize, Edx: EdxStore<VALUE_LENGTH>> Deref
 
 const CHAIN_TABLE_KEY_DERIVATION_INFO: &[u8] = b"Chain Table key derivation info.";
 
-impl<
-    const VALUE_LENGTH: usize,
-    EdxScheme: EdxStore<VALUE_LENGTH, EncryptedValue = EncryptedValue<VALUE_LENGTH>>,
-> DxEnc<VALUE_LENGTH> for ChainTable<VALUE_LENGTH, EdxScheme>
+#[async_trait(?Send)]
+impl<const VALUE_LENGTH: usize, EdxScheme: EdxStore<VALUE_LENGTH>> DxEnc<VALUE_LENGTH>
+    for ChainTable<VALUE_LENGTH, EdxScheme>
 {
     type EncryptedValue = EncryptedValue<VALUE_LENGTH>;
     type Error = Error<EdxScheme::Error>;
     type Key = EdxKey;
     type Seed = Seed<SEED_LENGTH>;
     type Store = EdxScheme;
-    type Token = EdxScheme::Token;
 
     fn setup(edx: Self::Store) -> Self {
         Self(edx)
@@ -60,14 +61,14 @@ impl<
     fn derive_keys(&self, seed: &Self::Seed) -> Self::Key {
         let mut kmac_key = SymmetricKey::default();
         kdf256!(
-            kmac_key.deref_mut(),
+            &mut *kmac_key,
             seed.as_ref(),
             CHAIN_TABLE_KEY_DERIVATION_INFO,
             b"KMAC key"
         );
         let mut aead_key = SymmetricKey::default();
         kdf256!(
-            aead_key.deref_mut(),
+            &mut *aead_key,
             seed.as_ref(),
             CHAIN_TABLE_KEY_DERIVATION_INFO,
             b"DEM key"
@@ -78,16 +79,11 @@ impl<
         }
     }
 
-    fn tokenize<Tag: ?Sized + AsRef<[u8]>>(
-        &self,
-        key: &Self::Key,
-        tag: &Tag,
-        _label: Option<&Label>,
-    ) -> Self::Token {
+    fn tokenize(&self, key: &Self::Key, bytes: &[u8], _label: Option<&Label>) -> Token {
         kmac!(
             TOKEN_LENGTH,
             &key.token,
-            tag.as_ref(),
+            bytes,
             CHAIN_TABLE_KEY_DERIVATION_INFO
         )
         .into()
@@ -95,9 +91,13 @@ impl<
 
     async fn get(
         &self,
-        tokens: HashSet<Self::Token>,
-    ) -> Result<Vec<(Self::Token, Self::EncryptedValue)>, Self::Error> {
-        self.0.fetch(tokens).await.map_err(Error::Callback)
+        tokens: HashSet<Token>,
+    ) -> Result<Vec<(Token, Self::EncryptedValue)>, Self::Error> {
+        self.0
+            .fetch(tokens.into())
+            .await
+            .map_err(Error::Callback)
+            .map(Into::into)
     }
 
     fn resolve(
@@ -118,22 +118,19 @@ impl<
     }
 
     async fn upsert(
-        &mut self,
-        _old_values: &HashMap<Self::Token, Self::EncryptedValue>,
-        _new_values: HashMap<Self::Token, Self::EncryptedValue>,
-    ) -> Result<HashMap<Self::Token, Self::EncryptedValue>, Self::Error> {
+        &self,
+        _old_values: HashMap<Token, Self::EncryptedValue>,
+        _new_values: HashMap<Token, Self::EncryptedValue>,
+    ) -> Result<HashMap<Token, Self::EncryptedValue>, Self::Error> {
         panic!("The Chain Table does not do any upsert.")
     }
 
-    async fn insert(
-        &mut self,
-        items: HashMap<Self::Token, Self::EncryptedValue>,
-    ) -> Result<(), Self::Error> {
-        self.0.insert(items).await.map_err(Error::Callback)
+    async fn insert(&self, items: HashMap<Token, Self::EncryptedValue>) -> Result<(), Self::Error> {
+        self.0.insert(items.into()).await.map_err(Error::Callback)
     }
 
-    async fn delete(&mut self, items: HashSet<Self::Token>) -> Result<(), Self::Error> {
-        self.0.delete(items).await.map_err(Error::Callback)
+    async fn delete(&self, items: HashSet<Token>) -> Result<(), Self::Error> {
+        self.0.delete(items.into()).await.map_err(Error::Callback)
     }
 }
 
@@ -154,13 +151,13 @@ mod tests {
     async fn test_edx() {
         let mut rng = CsRng::from_entropy();
 
-        let mut table = ChainTable::setup(InMemoryEdx::default());
+        let table = ChainTable::setup(InMemoryEdx::default());
         let seed = table.gen_seed(&mut rng);
         let key = table.derive_keys(&seed);
         let label = Label::random(&mut rng);
 
         let tag = "only value";
-        let token = table.tokenize(&key, tag, Some(&label));
+        let token = table.tokenize(&key, tag.as_bytes(), Some(&label));
 
         let mut value = [0; VALUE_LENGTH];
         rng.fill_bytes(&mut value);

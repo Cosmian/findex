@@ -6,13 +6,14 @@
 
 use std::{
     collections::{HashMap, HashSet},
-    ops::{Deref, DerefMut},
+    ops::Deref,
 };
 
+use async_trait::async_trait;
 use cosmian_crypto_core::{kdf256, reexport::rand_core::CryptoRngCore, SymmetricKey};
 
 use super::{
-    structs::{EdxKey, Seed},
+    structs::{EdxKey, Seed, Token},
     TokenDump,
 };
 use crate::{
@@ -22,6 +23,7 @@ use crate::{
 };
 
 /// Implementation of the Entry Table EDX.
+#[derive(Debug)]
 pub struct EntryTable<const VALUE_LENGTH: usize, Edx: EdxStore<VALUE_LENGTH>>(pub Edx);
 
 impl<const VALUE_LENGTH: usize, Edx: EdxStore<VALUE_LENGTH>> Deref
@@ -36,17 +38,15 @@ impl<const VALUE_LENGTH: usize, Edx: EdxStore<VALUE_LENGTH>> Deref
 
 const ENTRY_TABLE_KEY_DERIVATION_INFO: &[u8] = b"Entry Table key derivation info.";
 
-impl<
-    const VALUE_LENGTH: usize,
-    Edx: EdxStore<VALUE_LENGTH, EncryptedValue = EncryptedValue<VALUE_LENGTH>>,
-> DxEnc<VALUE_LENGTH> for EntryTable<VALUE_LENGTH, Edx>
+#[async_trait(?Send)]
+impl<const VALUE_LENGTH: usize, Edx: EdxStore<VALUE_LENGTH>> DxEnc<VALUE_LENGTH>
+    for EntryTable<VALUE_LENGTH, Edx>
 {
-    type EncryptedValue = Edx::EncryptedValue;
+    type EncryptedValue = EncryptedValue<VALUE_LENGTH>;
     type Error = Error<Edx::Error>;
     type Key = EdxKey;
     type Seed = Seed<SEED_LENGTH>;
     type Store = Edx;
-    type Token = Edx::Token;
 
     fn setup(edx: Self::Store) -> Self {
         Self(edx)
@@ -59,14 +59,14 @@ impl<
     fn derive_keys(&self, seed: &Self::Seed) -> Self::Key {
         let mut kmac_key = SymmetricKey::default();
         kdf256!(
-            kmac_key.deref_mut(),
+            &mut *kmac_key,
             seed.as_ref(),
             ENTRY_TABLE_KEY_DERIVATION_INFO,
             b"KMAC key"
         );
         let mut aead_key = SymmetricKey::default();
         kdf256!(
-            aead_key.deref_mut(),
+            &mut *aead_key,
             seed.as_ref(),
             ENTRY_TABLE_KEY_DERIVATION_INFO,
             b"DEM key"
@@ -77,20 +77,23 @@ impl<
         }
     }
 
-    fn tokenize<Tag: ?Sized + AsRef<[u8]>>(
-        &self,
-        key: &Self::Key,
-        tag: &Tag,
-        label: Option<&Label>,
-    ) -> Self::Token {
-        kmac!(TOKEN_LENGTH, &key.token, tag.as_ref(), label.unwrap()).into()
+    fn tokenize(&self, key: &Self::Key, bytes: &[u8], label: Option<&Label>) -> Token {
+        if let Some(label) = label {
+            kmac!(TOKEN_LENGTH, &key.token, bytes, label).into()
+        } else {
+            kmac!(TOKEN_LENGTH, &key.token, bytes, &[]).into()
+        }
     }
 
     async fn get(
         &self,
-        tokens: HashSet<Self::Token>,
-    ) -> Result<Vec<(Self::Token, Self::EncryptedValue)>, Self::Error> {
-        self.0.fetch(tokens).await.map_err(Self::Error::from)
+        tokens: HashSet<Token>,
+    ) -> Result<Vec<(Token, Self::EncryptedValue)>, Self::Error> {
+        self.0
+            .fetch(tokens.into())
+            .await
+            .map_err(Self::Error::from)
+            .map(Into::into)
     }
 
     fn resolve(
@@ -102,19 +105,20 @@ impl<
     }
 
     async fn upsert(
-        &mut self,
-        old_values: &HashMap<Self::Token, Self::EncryptedValue>,
-        new_values: HashMap<Self::Token, Self::EncryptedValue>,
-    ) -> Result<HashMap<Self::Token, Self::EncryptedValue>, Self::Error> {
+        &self,
+        old_values: HashMap<Token, Self::EncryptedValue>,
+        new_values: HashMap<Token, Self::EncryptedValue>,
+    ) -> Result<HashMap<Token, Self::EncryptedValue>, Self::Error> {
         self.0
-            .upsert(old_values, new_values)
+            .upsert(old_values.into(), new_values.into())
             .await
             .map_err(Self::Error::from)
+            .map(Into::into)
     }
 
     async fn insert(
-        &mut self,
-        _values: HashMap<Self::Token, Self::EncryptedValue>,
+        &self,
+        _values: HashMap<Token, Self::EncryptedValue>,
     ) -> Result<(), Self::Error> {
         panic!("The Entry Table does not do any insert.")
     }
@@ -128,21 +132,26 @@ impl<
         Self::EncryptedValue::encrypt(rng, &key.value, value).map_err(Error::from)
     }
 
-    async fn delete(&mut self, items: HashSet<Self::Token>) -> Result<(), Self::Error> {
-        self.0.delete(items).await.map_err(Self::Error::Callback)
+    async fn delete(&self, items: HashSet<Token>) -> Result<(), Self::Error> {
+        self.0
+            .delete(items.into())
+            .await
+            .map_err(Self::Error::Callback)
     }
 }
 
-impl<
-    const VALUE_LENGTH: usize,
-    Edx: EdxStore<VALUE_LENGTH, EncryptedValue = EncryptedValue<VALUE_LENGTH>>,
-> TokenDump for EntryTable<VALUE_LENGTH, Edx>
+#[async_trait(?Send)]
+impl<const VALUE_LENGTH: usize, Edx: EdxStore<VALUE_LENGTH>> TokenDump
+    for EntryTable<VALUE_LENGTH, Edx>
 {
     type Error = <Self as DxEnc<VALUE_LENGTH>>::Error;
-    type Token = <Self as DxEnc<VALUE_LENGTH>>::Token;
 
-    async fn dump_tokens(&self) -> Result<HashSet<Self::Token>, Self::Error> {
-        self.0.dump_tokens().await.map_err(Error::Callback)
+    async fn dump_tokens(&self) -> Result<HashSet<Token>, Self::Error> {
+        self.0
+            .dump_tokens()
+            .await
+            .map_err(Error::Callback)
+            .map(Into::into)
     }
 }
 
@@ -162,13 +171,13 @@ mod tests {
     async fn test_edx() {
         let mut rng = CsRng::from_entropy();
 
-        let mut table = EntryTable::setup(InMemoryEdx::default());
+        let table = EntryTable::setup(InMemoryEdx::default());
         let seed = table.gen_seed(&mut rng);
         let key = table.derive_keys(&seed);
         let label = Label::random(&mut rng);
 
         let tag = "only value";
-        let token = table.tokenize(&key, tag, Some(&label));
+        let token = table.tokenize(&key, tag.as_bytes(), Some(&label));
 
         let mut value = [0; VALUE_LENGTH];
         rng.fill_bytes(&mut value);
@@ -176,7 +185,7 @@ mod tests {
         let encrypted_value = table.prepare(&mut rng, &key, value).unwrap();
         table
             .upsert(
-                &HashMap::new(),
+                HashMap::new(),
                 HashMap::from_iter([(token, encrypted_value)]),
             )
             .await

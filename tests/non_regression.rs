@@ -6,11 +6,12 @@ use std::{
 
 use cosmian_crypto_core::{
     bytes_ser_de::{Deserializer, Serializer},
-    FixedSizeCBytes, RandomFixedSizeCBytes, SymmetricKey,
+    FixedSizeCBytes, RandomFixedSizeCBytes,
 };
 use cosmian_findex::{
-    ChainTable, DxEnc, EntryTable, Error, Findex, InMemoryEdx, Index, IndexedValue, Keyword,
-    KvStoreError, Label, Location, ENTRY_LENGTH, LINK_LENGTH,
+    ChainTable, DxEnc, EntryTable, Error, Findex, InMemoryEdx, Index, IndexedValue,
+    IndexedValueToKeywordsMap, Keyword, Keywords, KvStoreError, Label, Location, UserKey,
+    ENTRY_LENGTH, LINK_LENGTH,
 };
 use rand::RngCore;
 
@@ -24,17 +25,13 @@ use rand::RngCore;
 fn add_keyword_graph(
     keyword: &Keyword,
     min_keyword_length: usize,
-    map: &mut HashMap<IndexedValue<Keyword, Location>, HashSet<Keyword>>,
+    map: &mut HashMap<IndexedValue<Keyword, Location>, Keywords>,
 ) {
     for i in min_keyword_length..keyword.len() {
         map.entry(IndexedValue::Pointer(Keyword::from(&keyword[..i])))
             .or_default()
             .insert(Keyword::from(&keyword[..i - 1]));
     }
-}
-
-async fn user_interrupt(_res: HashMap<Keyword, HashSet<IndexedValue<Keyword, Location>>>) -> bool {
-    false
 }
 
 #[allow(dead_code)]
@@ -45,7 +42,7 @@ async fn write_index() -> Result<(), Error<KvStoreError>> {
 
     let mut rng = rand::thread_rng();
 
-    let mut findex = Findex::new(
+    let findex = Findex::new(
         EntryTable::setup(InMemoryEdx::default()),
         ChainTable::setup(InMemoryEdx::default()),
     );
@@ -64,13 +61,15 @@ async fn write_index() -> Result<(), Error<KvStoreError>> {
         for i in 0..n_locations {
             map.insert(
                 IndexedValue::Data(Location::from(format!("{first_name}_{i}").as_bytes())),
-                HashSet::from_iter([Keyword::from(first_name)]),
+                Keywords::from_iter([Keyword::from(first_name)]),
             );
         }
 
         add_keyword_graph(&Keyword::from(first_name), MIN_KEYWORD_LENGTH, &mut map);
 
-        findex.add(&master_key, &label, map).await?;
+        findex
+            .add(&master_key, &label, IndexedValueToKeywordsMap::from(map))
+            .await?;
     }
 
     let mut ser = Serializer::new();
@@ -86,8 +85,8 @@ async fn write_index() -> Result<(), Error<KvStoreError>> {
         .search(
             &master_key,
             &label,
-            HashSet::from_iter([keyword.clone()]),
-            &user_interrupt,
+            Keywords::from_iter([keyword.clone()]),
+            &|_| async { Ok(false) },
         )
         .await?;
 
@@ -133,7 +132,7 @@ async fn test_non_regression() -> Result<(), Error<KvStoreError>> {
         findex.findex_graph.findex_mm.chain_table.size()
     );
 
-    let master_key = SymmetricKey::try_from_slice(&std::fs::read("datasets/key").unwrap())?;
+    let master_key = UserKey::try_from_slice(&std::fs::read("datasets/key").unwrap())?;
     let label = Label::from(std::fs::read("datasets/label").unwrap().as_slice());
 
     let keyword = Keyword::from("Abd");
@@ -141,8 +140,8 @@ async fn test_non_regression() -> Result<(), Error<KvStoreError>> {
         .search(
             &master_key,
             &label,
-            HashSet::from_iter([keyword.clone()]),
-            &user_interrupt,
+            Keywords::from_iter([keyword.clone()]),
+            &|_| async { Ok(false) },
         )
         .await?
         .remove(&keyword)

@@ -1,11 +1,22 @@
 //! Structures used by `FindexGraph`.
 
+use std::fmt::Display;
+
 use crate::error::CoreError;
 
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
 pub enum IndexedValue<Tag, Value> {
     Pointer(Tag),
     Data(Value),
+}
+
+impl<Tag: Display, Value: Display> Display for IndexedValue<Tag, Value> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            IndexedValue::Pointer(keyword) => write!(f, "IndexedValue::Pointer({keyword})"),
+            IndexedValue::Data(location) => write!(f, "IndexedValue::Data({location})"),
+        }
+    }
 }
 
 impl<Tag, Value> IndexedValue<Tag, Value> {
@@ -28,8 +39,8 @@ impl<Tag, Value> IndexedValue<Tag, Value> {
     }
 }
 
-impl<Tag: AsRef<[u8]>, Value: AsRef<[u8]>> From<IndexedValue<Tag, Value>> for Vec<u8> {
-    fn from(value: IndexedValue<Tag, Value>) -> Self {
+impl<Tag: AsRef<[u8]>, Value: AsRef<[u8]>> From<&IndexedValue<Tag, Value>> for Vec<u8> {
+    fn from(value: &IndexedValue<Tag, Value>) -> Self {
         match value {
             IndexedValue::Pointer(pointer) => {
                 let pointer = pointer.as_ref();

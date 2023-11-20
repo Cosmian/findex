@@ -2,12 +2,15 @@
 
 use std::{
     collections::HashMap,
+    fmt::{Debug, Display},
     hash::Hash,
     ops::{Deref, DerefMut},
 };
 
+use base64::engine::{general_purpose::STANDARD, Engine};
+
 use crate::{
-    edx::DxEnc,
+    edx::{DxEnc, Token},
     error::CoreError,
     parameters::{BLOCK_LENGTH, HASH_LENGTH, LINE_WIDTH, SEED_LENGTH, TOKEN_LENGTH},
 };
@@ -27,18 +30,18 @@ pub enum Operation {
 /// - counter (u32).
 pub const ENTRY_LENGTH: usize = SEED_LENGTH + HASH_LENGTH + TOKEN_LENGTH;
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct Entry<ChainTable: DxEnc<LINK_LENGTH>> {
     pub seed: ChainTable::Seed,
     pub tag_hash: [u8; HASH_LENGTH],
-    pub chain_token: Option<ChainTable::Token>,
+    pub chain_token: Option<Token>,
 }
 
 impl<ChainTable: DxEnc<LINK_LENGTH>> Entry<ChainTable> {
     pub fn new(
         seed: ChainTable::Seed,
         tag_hash: [u8; HASH_LENGTH],
-        chain_token: Option<ChainTable::Token>,
+        chain_token: Option<Token>,
     ) -> Self {
         Self {
             seed,
@@ -47,13 +50,14 @@ impl<ChainTable: DxEnc<LINK_LENGTH>> Entry<ChainTable> {
         }
     }
 }
+
 impl<ChainTable: DxEnc<LINK_LENGTH>> From<Entry<ChainTable>> for [u8; ENTRY_LENGTH] {
     fn from(value: Entry<ChainTable>) -> Self {
         let mut res = [0; ENTRY_LENGTH];
         res[..TOKEN_LENGTH].copy_from_slice(
             value
                 .chain_token
-                .unwrap_or_else(|| ChainTable::Token::from([0; TOKEN_LENGTH]))
+                .unwrap_or_else(|| Token::from([0; TOKEN_LENGTH]))
                 .as_ref(),
         );
         res[TOKEN_LENGTH..TOKEN_LENGTH + SEED_LENGTH].copy_from_slice(value.seed.as_ref());
@@ -80,9 +84,27 @@ where
             chain_token: if [0; TOKEN_LENGTH] == chain_token {
                 None
             } else {
-                Some(ChainTable::Token::from(chain_token))
+                Some(Token::from(chain_token))
             },
         }
+    }
+}
+
+impl<ChainTable: DxEnc<LINK_LENGTH>> Display for Entry<ChainTable>
+where
+    [(); 1 + (BLOCK_LENGTH + 1) * LINE_WIDTH]:,
+{
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{{ seed: '{}', tag: '{}', token: '{}' }}",
+            STANDARD.encode(&self.seed),
+            STANDARD.encode(self.tag_hash),
+            self.chain_token
+                .as_ref()
+                .map(|token| token.to_string())
+                .unwrap_or_default()
+        )
     }
 }
 
@@ -145,7 +167,7 @@ impl Link {
         if is_terminating {
             block[0] = u8::try_from(data.len())?;
         } else {
-            block[0] = 255
+            block[0] = 255;
         }
         block[1..=data.len()].copy_from_slice(data);
         Ok(())
@@ -193,11 +215,8 @@ impl DerefMut for Link {
     }
 }
 
-pub struct CompactingData<EntryTable: DxEnc<ENTRY_LENGTH>, ChainTable: DxEnc<LINK_LENGTH>> {
+pub struct CompactingData<ChainTable: DxEnc<LINK_LENGTH>> {
     #[allow(clippy::type_complexity)]
-    pub(crate) metadata: HashMap<
-        <EntryTable as DxEnc<ENTRY_LENGTH>>::Token,
-        (ChainTable::Key, Vec<ChainTable::Token>),
-    >,
-    pub(crate) entries: HashMap<<EntryTable as DxEnc<ENTRY_LENGTH>>::Token, Entry<ChainTable>>,
+    pub(crate) metadata: HashMap<Token, (ChainTable::Key, Vec<Token>)>,
+    pub(crate) entries: HashMap<Token, Entry<ChainTable>>,
 }

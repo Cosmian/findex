@@ -8,6 +8,7 @@ use std::{
     sync::{Arc, Mutex},
 };
 
+use async_trait::async_trait;
 use cosmian_crypto_core::reexport::rand_core::CryptoRngCore;
 
 use crate::{
@@ -17,11 +18,12 @@ use crate::{
     CallbackErrorTrait, DxEnc, Error, Label,
 };
 
+#[async_trait(?Send)]
 impl<
-    UserError: CallbackErrorTrait,
-    EntryTable: DxEnc<ENTRY_LENGTH, Error = Error<UserError>>,
-    ChainTable: DxEnc<LINK_LENGTH, Error = Error<UserError>>,
-> GxEnc<UserError> for FindexGraph<UserError, EntryTable, ChainTable>
+        UserError: CallbackErrorTrait,
+        EntryTable: DxEnc<ENTRY_LENGTH, Error = Error<UserError>>,
+        ChainTable: DxEnc<LINK_LENGTH, Error = Error<UserError>>,
+    > GxEnc<UserError> for FindexGraph<UserError, EntryTable, ChainTable>
 {
     type Error =
         <FindexMultiMap<UserError, EntryTable, ChainTable> as MmEnc<SEED_LENGTH, UserError>>::Error;
@@ -41,7 +43,7 @@ impl<
     async fn get<
         Tag: Debug + Hash + Eq + Clone + AsRef<[u8]> + From<Vec<u8>>,
         Value: Hash + Eq + Clone + From<Vec<u8>>,
-        F: Future<Output = bool>,
+        F: Future<Output = Result<bool, String>>,
         Interrupt: Fn(HashMap<Tag, HashSet<IndexedValue<Tag, Value>>>) -> F,
     >(
         &self,
@@ -83,7 +85,11 @@ impl<
                 }
             }
 
-            if interrupt(local_graph.clone()).await {
+            let is_interrupted = interrupt(local_graph.clone())
+                .await
+                .map_err(Self::Error::Interrupt)?;
+
+            if is_interrupted {
                 tags = HashSet::new();
             }
 
@@ -93,8 +99,8 @@ impl<
         Ok(graph)
     }
 
-    async fn insert<Tag: Hash + Eq + AsRef<[u8]>, Value: AsRef<[u8]>>(
-        &mut self,
+    async fn insert<Tag: Clone + Hash + Eq + AsRef<[u8]>, Value: AsRef<[u8]>>(
+        &self,
         rng: Arc<Mutex<impl CryptoRngCore>>,
         key: &Self::Key,
         items: HashMap<Tag, Vec<(Operation, IndexedValue<Tag, Value>)>>,
@@ -105,7 +111,7 @@ impl<
             .map(|(tag, modifications)| {
                 let modifications = modifications
                     .into_iter()
-                    .map(|(op, value)| (op, value.into()))
+                    .map(|(op, value)| (op, (&value).into()))
                     .collect();
                 (tag, modifications)
             })
@@ -116,10 +122,10 @@ impl<
 }
 
 impl<
-    UserError: CallbackErrorTrait,
-    EntryTable: DxEnc<ENTRY_LENGTH, Error = Error<UserError>>,
-    ChainTable: DxEnc<LINK_LENGTH, Error = Error<UserError>>,
-> FindexGraph<UserError, EntryTable, ChainTable>
+        UserError: CallbackErrorTrait,
+        EntryTable: DxEnc<ENTRY_LENGTH, Error = Error<UserError>>,
+        ChainTable: DxEnc<LINK_LENGTH, Error = Error<UserError>>,
+    > FindexGraph<UserError, EntryTable, ChainTable>
 {
     /// Walks through the given graph from the given entry. Returns the set of
     /// values found during the walk.
@@ -136,9 +142,9 @@ impl<
         if visited.contains(&entry) {
             // Results associated to this tag have already been recovered.
             return HashSet::new();
-        } else {
-            visited.insert(entry);
         }
+
+        visited.insert(entry);
 
         let indexed_values = match graph.get(entry) {
             Some(values) => values,

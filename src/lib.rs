@@ -2,7 +2,7 @@
 //! encrypted index.
 //!
 //! It uses a generic Dictionary Encryption Scheme (Dx-Enc) as building block to
-//! implement a MultiMap Encryption Scheme (MM-Enc). A Graph Encryption Scheme
+//! implement a Multi-Map Encryption Scheme (MM-Enc). A Graph Encryption Scheme
 //! (Gx-Enc) is then built on top of the MM-Enc scheme and finally an `Index`
 //! trait built on top of this Gx-Enc scheme allows indexing both `Location`s
 //! and `Keyword`s.
@@ -11,13 +11,9 @@
 //! the interface and to hide the cryptographic details of the implementation
 //! when it is possible.
 
-#![feature(never_type)]
-#![allow(incomplete_features)]
-#![feature(async_fn_in_trait)]
-
 // Macro declarations should come first.
 #[macro_use]
-mod macros;
+pub mod macros;
 
 mod edx;
 mod error;
@@ -28,11 +24,17 @@ mod parameters;
 
 #[cfg(any(test, feature = "in_memory"))]
 pub use edx::in_memory::{InMemoryEdx, KvStoreError};
-pub use edx::{chain_table::ChainTable, entry_table::EntryTable, DxEnc, EdxStore, EncryptedValue};
+pub use edx::{
+    chain_table::ChainTable, entry_table::EntryTable, DxEnc, EdxStore, EncryptedValue, Token,
+    TokenToEncryptedValueMap, TokenWithEncryptedValueList, Tokens,
+};
 pub use error::{CallbackErrorTrait, CoreError, Error};
 pub use findex_graph::IndexedValue;
 pub use findex_mm::{ENTRY_LENGTH, LINK_LENGTH};
-pub use index::{DbCallback, Findex, Index, Keyword, Label, Location};
+pub use index::{
+    Findex, Index, IndexedValueToKeywordsMap, Keyword, KeywordToDataMap, Keywords, Label, Location,
+    UserKey,
+};
 pub use parameters::*;
 
 #[cfg(test)]
@@ -40,14 +42,14 @@ mod example {
     use std::collections::{HashMap, HashSet};
 
     use crate::{
-        ChainTable, DxEnc, EntryTable, Findex, InMemoryEdx, Index, IndexedValue, Keyword, Label,
-        Location,
+        ChainTable, DxEnc, EntryTable, Findex, InMemoryEdx, Index, IndexedValue,
+        IndexedValueToKeywordsMap, Keyword, KeywordToDataMap, Keywords, Label, Location,
     };
 
     async fn user_interrupt(
         _res: HashMap<Keyword, HashSet<IndexedValue<Keyword, Location>>>,
-    ) -> bool {
-        false
+    ) -> Result<bool, String> {
+        Ok(false)
     }
 
     #[actix_rt::test]
@@ -60,7 +62,7 @@ mod example {
         let loc2 = Location::from("Location 2");
 
         // Let's create a new index using the in-memory EDX provided in the tests.
-        let mut index = Findex::new(
+        let index = Findex::new(
             EntryTable::setup(InMemoryEdx::default()),
             ChainTable::setup(InMemoryEdx::default()),
         );
@@ -76,7 +78,7 @@ mod example {
             .add(
                 &key,
                 &label,
-                HashMap::from_iter([
+                IndexedValueToKeywordsMap::from_iter([
                     (
                         IndexedValue::Data(loc1.clone()),
                         HashSet::from_iter([kwd1.clone()]),
@@ -98,7 +100,7 @@ mod example {
             .search(
                 &key,
                 &label,
-                HashSet::from_iter([kwd1.clone()]),
+                Keywords::from_iter([kwd1.clone()]),
                 &user_interrupt,
             )
             .await
@@ -108,7 +110,7 @@ mod example {
         // `loc2`.
         assert_eq!(
             res,
-            HashMap::from_iter([(kwd1.clone(), HashSet::from_iter([loc1.clone(), loc2]))])
+            KeywordToDataMap::from_iter([(kwd1.clone(), HashSet::from_iter([loc1.clone(), loc2]))])
         );
 
         // Let's delete the indexation of `kwd2` for `kwd1`.
@@ -116,7 +118,7 @@ mod example {
             .delete(
                 &key,
                 &label,
-                HashMap::from_iter([(
+                IndexedValueToKeywordsMap::from_iter([(
                     IndexedValue::Pointer(kwd2),
                     HashSet::from_iter([kwd1.clone()]),
                 )]),
@@ -128,7 +130,7 @@ mod example {
             .search(
                 &key,
                 &label,
-                HashSet::from_iter([kwd1.clone()]),
+                Keywords::from_iter([kwd1.clone()]),
                 &user_interrupt,
             )
             .await
@@ -138,7 +140,13 @@ mod example {
         // longer retrieves `loc2`.
         assert_eq!(
             res,
-            HashMap::from_iter([(kwd1, HashSet::from_iter([loc1]))])
+            KeywordToDataMap::from_iter([(kwd1, HashSet::from_iter([loc1]))])
         );
+
+        let res = index
+            .compact(&key, &key, &label, &label, 1, &|res| async { Ok(res) })
+            .await;
+
+        assert!(res.is_err());
     }
 }

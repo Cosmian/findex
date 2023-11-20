@@ -24,13 +24,23 @@ path = "src/lib.rs"
 in_memory = ["cosmian_crypto_core/ser"]
 
 [dependencies]
-cosmian_crypto_core = { version = "9.2.0", default-features = false, features = ["aes", "sha3"]}
+# Once available in stable Rust (presumably 1.74), use std async fn in trait
+# <https://rust-lang.github.io/rfcs/3185-static-async-fn-in-trait.html>
+async-trait = "0.1.74"
+base64 = "0.21.5"
+cosmian_crypto_core = { version = "9.3.0", default-features = false, features = [
+  "aes",
+  "sha3",
+] }
+# Once available in stable Rust, use `!` std primitive
+# <https://doc.rust-lang.org/std/primitive.never.html>
+never = "0.1.0"
 tiny-keccak = { version = "2.0.2", features = ["kmac", "sha3"] }
+tracing = "0.1"
 zeroize = "1.6.0"
 
 [dev-dependencies]
-cosmian_crypto_core = { version = "9.0.1", default-features = false, features = ["aes", "sha3", "ser"]}
-actix-rt = "2.8.0"
+actix-rt = "2.9.0"
 criterion = "0.5.1"
 futures = "0.3.28"
 rand = "0.8.5"

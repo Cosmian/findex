@@ -4,9 +4,9 @@
 use std::{
     collections::{HashMap, HashSet},
     fmt::Debug,
-    hash::Hash,
 };
 
+use async_trait::async_trait;
 use cosmian_crypto_core::reexport::rand_core::CryptoRngCore;
 use zeroize::ZeroizeOnDrop;
 
@@ -14,43 +14,34 @@ pub mod chain_table;
 pub mod entry_table;
 mod structs;
 
-pub use structs::{EncryptedValue, Seed};
+pub use structs::{
+    EncryptedValue, Token, TokenToEncryptedValueMap, TokenWithEncryptedValueList, Tokens,
+};
 
-use crate::{CallbackErrorTrait, Label, TOKEN_LENGTH};
+use crate::{CallbackErrorTrait, Label};
 
+#[async_trait(?Send)]
 pub trait TokenDump {
-    type Token;
-
     type Error;
 
-    async fn dump_tokens(&self) -> Result<HashSet<Self::Token>, Self::Error>;
+    async fn dump_tokens(&self) -> Result<HashSet<Token>, Self::Error>;
 }
 
-pub trait DxEnc<const VALUE_LENGTH: usize>: Sync + Send {
+#[async_trait(?Send)]
+pub trait DxEnc<const VALUE_LENGTH: usize> {
     /// Seed used to derive the key.
-    type Seed: Sized + ZeroizeOnDrop + AsRef<[u8]> + Default + AsMut<[u8]> + Send + Sync;
+    type Seed: Sized + ZeroizeOnDrop + AsRef<[u8]> + Default + AsMut<[u8]>;
 
     /// Cryptographically secure key.
-    type Key: Sized + ZeroizeOnDrop + Send + Sync;
+    type Key: Sized + ZeroizeOnDrop;
 
     /// Type of error returned by the scheme.
-    type Error: std::error::Error + Sync + Send;
-
-    /// Cryptographically secure token used to index values inside the encrypted
-    /// dictionary.
-    type Token: Copy
-        + Debug
-        + Hash
-        + Eq
-        + Sized
-        + Send
-        + Sync
-        + From<[u8; TOKEN_LENGTH]>
-        + AsRef<[u8]>;
+    type Error: std::error::Error;
 
     /// Fixed length encrypted value stored inside the encrypted dictionary.
-    type EncryptedValue: Debug + Sized + Send + Sync + Clone;
+    type EncryptedValue: Debug + Sized + Clone;
 
+    /// Backend storage.
     type Store: EdxStore<VALUE_LENGTH>;
 
     /// Instantiates a new Dx-Enc scheme.
@@ -62,20 +53,15 @@ pub trait DxEnc<const VALUE_LENGTH: usize>: Sync + Send {
     /// Deterministically derives a cryptographic key from the given seed.
     fn derive_keys(&self, seed: &Self::Seed) -> Self::Key;
 
-    /// Deterministically transforms the given tag into a cryptographically
+    /// Deterministically transforms the given bytes into a cryptographically
     /// secure token using the given key.
-    fn tokenize<Tag: ?Sized + AsRef<[u8]>>(
-        &self,
-        key: &Self::Key,
-        tag: &Tag,
-        label: Option<&Label>,
-    ) -> Self::Token;
+    fn tokenize(&self, key: &Self::Key, bytes: &[u8], label: Option<&Label>) -> Token;
 
     /// Queries the given tokens and returns the encrypted values.
     async fn get(
         &self,
-        tokens: HashSet<Self::Token>,
-    ) -> Result<Vec<(Self::Token, Self::EncryptedValue)>, Self::Error>;
+        tokens: HashSet<Token>,
+    ) -> Result<Vec<(Token, Self::EncryptedValue)>, Self::Error>;
 
     /// Decrypts the given encrypted value with the given key.
     fn resolve(
@@ -113,10 +99,10 @@ pub trait DxEnc<const VALUE_LENGTH: usize>: Sync + Send {
     ///
     /// All modifications to the EDX are *atomic*.
     async fn upsert(
-        &mut self,
-        old_values: &HashMap<Self::Token, Self::EncryptedValue>,
-        new_values: HashMap<Self::Token, Self::EncryptedValue>,
-    ) -> Result<HashMap<Self::Token, Self::EncryptedValue>, Self::Error>;
+        &self,
+        old_values: HashMap<Token, Self::EncryptedValue>,
+        new_values: HashMap<Token, Self::EncryptedValue>,
+    ) -> Result<HashMap<Token, Self::EncryptedValue>, Self::Error>;
 
     /// Inserts the given items into the EDX.
     ///
@@ -124,42 +110,27 @@ pub trait DxEnc<const VALUE_LENGTH: usize>: Sync + Send {
     ///
     /// Returns an error without inserting any value if the EDX already contains
     /// a value for a given tokens.
-    async fn insert(
-        &mut self,
-        values: HashMap<Self::Token, Self::EncryptedValue>,
-    ) -> Result<(), Self::Error>;
+    async fn insert(&self, values: HashMap<Token, Self::EncryptedValue>)
+        -> Result<(), Self::Error>;
 
     /// Deletes the given items from the EDX.
-    async fn delete(&mut self, tokens: HashSet<Self::Token>) -> Result<(), Self::Error>;
+    async fn delete(&self, tokens: HashSet<Token>) -> Result<(), Self::Error>;
 }
 
-pub trait EdxStore<const VALUE_LENGTH: usize>: Sync + Send {
-    /// Token used as key to store values.
-    type Token: Sized
-        + Hash
-        + Eq
-        + Send
-        + Sync
-        + Debug
-        + Copy
-        + From<[u8; TOKEN_LENGTH]>
-        + AsRef<[u8]>;
-
-    /// Value stored in the EDX.
-    type EncryptedValue: Sized + Send + Sync;
-
+#[async_trait(?Send)]
+pub trait EdxStore<const VALUE_LENGTH: usize> {
     /// Type of error returned by the EDX.
     type Error: CallbackErrorTrait;
 
     /// Queries the EDX for all tokens stored.
-    async fn dump_tokens(&self) -> Result<HashSet<Self::Token>, Self::Error>;
+    async fn dump_tokens(&self) -> Result<Tokens, Self::Error>;
 
     /// Queries an Edx for the given tokens. Only returns a value for the tokens
     /// that are present in the store.
     async fn fetch(
         &self,
-        tokens: HashSet<Self::Token>,
-    ) -> Result<Vec<(Self::Token, Self::EncryptedValue)>, Self::Error>;
+        tokens: Tokens,
+    ) -> Result<TokenWithEncryptedValueList<VALUE_LENGTH>, Self::Error>;
 
     /// Upserts the given values into the Edx for the given tokens.
     ///
@@ -182,10 +153,10 @@ pub trait EdxStore<const VALUE_LENGTH: usize>: Sync + Send {
     /// | Some("B")    | rejected | rejected  | upserted  |
     /// +--------------+----------+-----------+-----------+
     async fn upsert(
-        &mut self,
-        old_values: &HashMap<Self::Token, Self::EncryptedValue>,
-        new_values: HashMap<Self::Token, Self::EncryptedValue>,
-    ) -> Result<HashMap<Self::Token, Self::EncryptedValue>, Self::Error>;
+        &self,
+        old_values: TokenToEncryptedValueMap<VALUE_LENGTH>,
+        new_values: TokenToEncryptedValueMap<VALUE_LENGTH>,
+    ) -> Result<TokenToEncryptedValueMap<VALUE_LENGTH>, Self::Error>;
 
     /// Inserts the given values into the Edx for the given tokens.
     ///
@@ -194,29 +165,32 @@ pub trait EdxStore<const VALUE_LENGTH: usize>: Sync + Send {
     /// If a value is already stored for one of these tokens, no new value
     /// should be inserted and an error should be returned.
     async fn insert(
-        &mut self,
-        tokens: HashMap<Self::Token, Self::EncryptedValue>,
+        &self,
+        values: TokenToEncryptedValueMap<VALUE_LENGTH>,
     ) -> Result<(), Self::Error>;
 
-    async fn delete(&mut self, tokens: HashSet<Self::Token>) -> Result<(), Self::Error>;
+    /// Deletes the lines associated to the given tokens from the EDX.
+    async fn delete(&self, tokens: Tokens) -> Result<(), Self::Error>;
 }
 
 #[cfg(any(test, feature = "in_memory"))]
 pub mod in_memory {
     use std::{
+        collections::HashMap,
         fmt::{Debug, Display},
-        mem::size_of,
+        ops::Deref,
         sync::{Arc, Mutex},
     };
 
-    use cosmian_crypto_core::{bytes_ser_de::Serializable, CryptoCoreError, Nonce};
+    use async_trait::async_trait;
+    use cosmian_crypto_core::CryptoCoreError;
+    #[cfg(feature = "in_memory")]
+    use cosmian_crypto_core::{bytes_ser_de::Serializable, Nonce};
 
-    use super::{EdxStore, HashMap, HashSet};
-    use crate::{
-        error::CallbackErrorTrait,
-        parameters::{MAC_LENGTH, NONCE_LENGTH, TOKEN_LENGTH},
-        EncryptedValue,
-    };
+    use super::{EdxStore, Token, TokenToEncryptedValueMap, TokenWithEncryptedValueList, Tokens};
+    #[cfg(feature = "in_memory")]
+    use crate::parameters::{MAC_LENGTH, NONCE_LENGTH};
+    use crate::{error::CallbackErrorTrait, EncryptedValue};
 
     #[derive(Debug)]
     pub struct KvStoreError(String);
@@ -238,8 +212,16 @@ pub mod in_memory {
 
     #[derive(Debug)]
     pub struct InMemoryEdx<const VALUE_LENGTH: usize>(
-        Arc<Mutex<HashMap<[u8; TOKEN_LENGTH], EncryptedValue<VALUE_LENGTH>>>>,
+        Arc<Mutex<TokenToEncryptedValueMap<VALUE_LENGTH>>>,
     );
+
+    impl<const VALUE_LENGTH: usize> Deref for InMemoryEdx<VALUE_LENGTH> {
+        type Target = Arc<Mutex<TokenToEncryptedValueMap<VALUE_LENGTH>>>;
+
+        fn deref(&self) -> &Self::Target {
+            &self.0
+        }
+    }
 
     impl<const VALUE_LENGTH: usize> Default for InMemoryEdx<VALUE_LENGTH> {
         fn default() -> Self {
@@ -248,50 +230,46 @@ pub mod in_memory {
     }
 
     impl<const VALUE_LENGTH: usize> InMemoryEdx<VALUE_LENGTH> {
+        #[must_use]
         pub fn is_empty(&self) -> bool {
-            self.0.lock().expect("could not lock mutex").is_empty()
+            self.lock().expect("could not lock mutex").is_empty()
         }
 
+        #[must_use]
         pub fn len(&self) -> usize {
-            self.0.lock().expect("could not lock mutex").len()
+            self.lock().expect("could not lock mutex").len()
         }
 
+        #[must_use]
         pub fn size(&self) -> usize {
-            self.len()
-                * (size_of::<<Self as EdxStore<VALUE_LENGTH>>::Token>()
-                    + size_of::<<Self as EdxStore<VALUE_LENGTH>>::EncryptedValue>())
+            self.len() * (Token::LENGTH + EncryptedValue::<VALUE_LENGTH>::LENGTH)
         }
 
         pub fn flush(&mut self) {
-            *self.0.lock().expect("could not lock mutex") = HashMap::new();
+            *self.lock().expect("could not lock mutex") = TokenToEncryptedValueMap::default();
         }
 
-        pub fn load(
-            &mut self,
-            table: HashMap<
-                <Self as EdxStore<VALUE_LENGTH>>::Token,
-                <Self as EdxStore<VALUE_LENGTH>>::EncryptedValue,
-            >,
-        ) {
-            *self.0.lock().expect("could not lock mutex") = table;
+        pub fn load(&mut self, table: TokenToEncryptedValueMap<VALUE_LENGTH>) {
+            *self.lock().expect("could not lock mutex") = table;
         }
     }
 
+    #[cfg(feature = "in_memory")]
     impl<const VALUE_LENGTH: usize> Serializable for InMemoryEdx<VALUE_LENGTH> {
         type Error = KvStoreError;
 
         fn length(&self) -> usize {
-            self.0.lock().expect("could not lock mutex").len()
-                * (TOKEN_LENGTH + NONCE_LENGTH + MAC_LENGTH + VALUE_LENGTH)
+            (self.lock().expect("could not lock mutex").deref()).len()
+                * (Token::LENGTH + NONCE_LENGTH + MAC_LENGTH + VALUE_LENGTH)
         }
 
         fn write(
             &self,
             ser: &mut cosmian_crypto_core::bytes_ser_de::Serializer,
         ) -> Result<usize, Self::Error> {
-            let table = &*self.0.lock().expect("could not lock mutex");
+            let table = &*self.lock().expect("could not lock mutex");
             let mut n = ser.write_leb128_u64(table.len() as u64)?;
-            for (k, v) in table {
+            for (k, v) in table.iter() {
                 n += ser.write_array(k)?;
                 n += ser.write_array(&v.nonce.0)?;
                 n += ser.write_array(&v.ciphertext)?;
@@ -306,64 +284,65 @@ pub mod in_memory {
             let n = de.read_leb128_u64()? as usize;
             let mut table = HashMap::with_capacity(n);
             for _ in 0..n {
-                let k = de.read_array::<TOKEN_LENGTH>()?;
+                let k = de.read_array::<{ Token::LENGTH }>()?;
                 // previous version used to write the size of the value.
                 let _ = de.read_leb128_u64();
                 let nonce = Nonce::from(de.read_array::<NONCE_LENGTH>()?);
                 let ciphertext = de.read_array::<VALUE_LENGTH>()?;
                 let tag = de.read_array::<MAC_LENGTH>()?;
                 table.insert(
-                    k,
+                    Token::from(k),
                     EncryptedValue {
-                        nonce,
-                        tag,
                         ciphertext,
+                        tag,
+                        nonce,
                     },
                 );
             }
 
-            Ok(Self(Arc::new(Mutex::new(table))))
+            Ok(Self(Arc::new(Mutex::new(TokenToEncryptedValueMap::from(
+                table,
+            )))))
         }
     }
 
+    #[async_trait(?Send)]
     impl<const VALUE_LENGTH: usize> EdxStore<VALUE_LENGTH> for InMemoryEdx<VALUE_LENGTH> {
-        type EncryptedValue = EncryptedValue<VALUE_LENGTH>;
         type Error = KvStoreError;
-        type Token = [u8; TOKEN_LENGTH];
 
-        async fn dump_tokens(&self) -> Result<HashSet<Self::Token>, Self::Error> {
+        async fn dump_tokens(&self) -> Result<Tokens, Self::Error> {
             Ok(self
-                .0
                 .lock()
                 .expect("could not lock table")
                 .keys()
-                .cloned()
+                .copied()
                 .collect())
         }
 
         async fn fetch(
             &self,
-            tokens: HashSet<Self::Token>,
-        ) -> Result<Vec<(Self::Token, Self::EncryptedValue)>, KvStoreError> {
-            Ok(tokens
-                .into_iter()
-                .filter_map(|uid| {
-                    self.0
-                        .lock()
-                        .expect("couldn't lock the table")
-                        .get(&uid)
-                        .cloned()
-                        .map(|v| (uid, v))
-                })
-                .collect())
+            tokens: Tokens,
+        ) -> Result<TokenWithEncryptedValueList<VALUE_LENGTH>, KvStoreError> {
+            Ok(TokenWithEncryptedValueList::from(
+                tokens
+                    .into_iter()
+                    .filter_map(|token| {
+                        self.lock()
+                            .expect("couldn't lock the table")
+                            .get(&token)
+                            .cloned()
+                            .map(|v| (token, v))
+                    })
+                    .collect::<Vec<_>>(),
+            ))
         }
 
         async fn upsert(
-            &mut self,
-            old_values: &HashMap<Self::Token, Self::EncryptedValue>,
-            new_values: HashMap<Self::Token, Self::EncryptedValue>,
-        ) -> Result<HashMap<Self::Token, Self::EncryptedValue>, KvStoreError> {
-            let mut edx = self.0.lock().expect("couldn't lock the table");
+            &self,
+            old_values: TokenToEncryptedValueMap<VALUE_LENGTH>,
+            new_values: TokenToEncryptedValueMap<VALUE_LENGTH>,
+        ) -> Result<TokenToEncryptedValueMap<VALUE_LENGTH>, KvStoreError> {
+            let edx = &mut self.lock().expect("couldn't lock the table");
             // Ensures an value is present inside the EDX for each given old value.
             if old_values.keys().any(|token| !edx.contains_key(token)) {
                 return Err(KvStoreError(format!(
@@ -376,7 +355,7 @@ pub mod in_memory {
             }
 
             let mut res = HashMap::new();
-            for (token, new_ciphertext) in new_values {
+            for (token, new_ciphertext) in new_values.into_iter() {
                 let old_ciphertext = old_values.get(&token);
                 let edx_ciphertext = edx.get(&token);
 
@@ -392,14 +371,14 @@ pub mod in_memory {
                 }
             }
 
-            Ok(res)
+            Ok(TokenToEncryptedValueMap::from(res))
         }
 
         async fn insert(
-            &mut self,
-            items: HashMap<Self::Token, Self::EncryptedValue>,
+            &self,
+            items: TokenToEncryptedValueMap<VALUE_LENGTH>,
         ) -> Result<(), Self::Error> {
-            let mut edx = self.0.lock().expect("couldn't lock the table");
+            let edx = &mut self.lock().expect("couldn't lock the table");
 
             if items.keys().any(|token| edx.contains_key(token)) {
                 return Err(KvStoreError(format!(
@@ -416,10 +395,10 @@ pub mod in_memory {
             Ok(())
         }
 
-        async fn delete(&mut self, items: HashSet<Self::Token>) -> Result<(), Self::Error> {
-            let mut edx = self.0.lock().expect("could not lock mutex");
-            for token in items {
-                edx.remove(&token);
+        async fn delete(&self, items: Tokens) -> Result<(), Self::Error> {
+            let edx = &mut self.lock().expect("could not lock mutex");
+            for token in &*items {
+                edx.remove(token);
             }
             Ok(())
         }

@@ -1,5 +1,5 @@
 //! Defines parameters used by the Findex SSE scheme. These are parameters that
-//! are not destined to be changed from one instanciation to another. Most of
+//! are not destined to be changed from one instantiation to another. Most of
 //! them are linked to security considerations or scheme correctness.
 
 use cosmian_crypto_core::Aes256Gcm;
@@ -14,7 +14,7 @@ pub const SEED_LENGTH: usize = 16;
 
 /// Size of the token used. It is 256 bits in order to allow more than 80 bits
 /// of post-quantum resistance.
-pub const TOKEN_LENGTH: usize = 32;
+pub(crate) const TOKEN_LENGTH: usize = 32;
 
 /// Length of the user key.
 pub const USER_KEY_LENGTH: usize = 16;

@@ -28,6 +28,7 @@ use std::{
     sync::{Arc, Mutex},
 };
 
+use async_trait::async_trait;
 use cosmian_crypto_core::reexport::rand_core::CryptoRngCore;
 use zeroize::ZeroizeOnDrop;
 
@@ -39,18 +40,19 @@ mod structs;
 
 pub use structs::{CompactingData, Operation, ENTRY_LENGTH, LINK_LENGTH};
 
-pub trait MmEnc<const SEED_LENGTH: usize, EdxError: CallbackErrorTrait>: Send + Sync {
+#[async_trait(?Send)]
+pub trait MmEnc<const SEED_LENGTH: usize, EdxError: CallbackErrorTrait> {
     /// Seed used to derive the key.
-    type Seed: Sized + ZeroizeOnDrop + AsRef<[u8]> + Default + AsMut<[u8]> + Sync + Sync;
+    type Seed: Sized + ZeroizeOnDrop + AsRef<[u8]> + Default + AsMut<[u8]>;
 
     /// Cryptographic key.
-    type Key: Sized + ZeroizeOnDrop + Sync + Sync;
+    type Key: Sized + ZeroizeOnDrop;
 
     /// Type of the values stored inside the multi-map.
     type Item;
 
     /// Error returned by the multi-map encryption scheme.
-    type Error: std::error::Error + Sync + Send;
+    type Error: std::error::Error;
 
     /// Generates a new random seed.
     fn gen_seed(&self, rng: &mut impl CryptoRngCore) -> Self::Seed;
@@ -60,7 +62,7 @@ pub trait MmEnc<const SEED_LENGTH: usize, EdxError: CallbackErrorTrait>: Send + 
 
     /// Queries the encrypted multi-map for the given tags and returns the
     /// decrypted values.
-    async fn get<Tag: Debug + Hash + Eq + AsRef<[u8]>>(
+    async fn get<Tag: Debug + Clone + Hash + Eq + AsRef<[u8]>>(
         &self,
         key: &Self::Key,
         tags: HashSet<Tag>,
@@ -69,8 +71,8 @@ pub trait MmEnc<const SEED_LENGTH: usize, EdxError: CallbackErrorTrait>: Send + 
 
     /// Applies the given modifications to the encrypted multi-map. Returns the
     /// set of Tags added to the Multi-Map.
-    async fn insert<Tag: Hash + Eq + AsRef<[u8]>>(
-        &mut self,
+    async fn insert<Tag: Clone + Hash + Eq + AsRef<[u8]>>(
+        &self,
         rng: Arc<Mutex<impl CryptoRngCore>>,
         key: &Self::Key,
         modifications: HashMap<Tag, Vec<(Operation, Self::Item)>>,
@@ -110,7 +112,7 @@ mod tests {
 
         let entry_table = EntryTable::setup(InMemoryEdx::default());
         let chain_table = ChainTable::setup(InMemoryEdx::default());
-        let mut findex = FindexMultiMap::new(entry_table, chain_table);
+        let findex = FindexMultiMap::new(entry_table, chain_table);
 
         // Generates 10 chains of 32 bytes values.
         let n = 10;
@@ -147,7 +149,7 @@ mod tests {
 
             for (op, value) in chain {
                 if Operation::Addition == op {
-                    assert!(res.contains(&value))
+                    assert!(res.contains(&value));
                 }
             }
         }

@@ -1,24 +1,15 @@
-#![allow(incomplete_features)]
-#![feature(generic_const_exprs)]
-
 use std::collections::{HashMap, HashSet};
 
 use cosmian_crypto_core::CsRng;
 use cosmian_findex::{
-    ChainTable, DxEnc, EntryTable, Findex, InMemoryEdx, Index, IndexedValue, Keyword, Label,
-    Location,
+    ChainTable, DxEnc, EntryTable, Findex, InMemoryEdx, Index, IndexedValue,
+    IndexedValueToKeywordsMap, Keyword, Keywords, Label, Location,
 };
 use criterion::{criterion_group, criterion_main, Criterion};
 use futures::executor::block_on;
 use rand::SeedableRng;
 
-async fn user_interrupt(_res: HashMap<Keyword, HashSet<IndexedValue<Keyword, Location>>>) -> bool {
-    false
-}
-
-fn prepare_locations_and_words(
-    number: usize,
-) -> HashMap<IndexedValue<Keyword, Location>, HashSet<Keyword>> {
+fn prepare_locations_and_words(number: usize) -> IndexedValueToKeywordsMap {
     let mut locations_and_words = HashMap::with_capacity(number);
     for idx in 0..number {
         let mut words = HashSet::new();
@@ -26,10 +17,10 @@ fn prepare_locations_and_words(
         words.insert(Keyword::from(format!("name_{idx}").as_bytes()));
         locations_and_words.insert(
             IndexedValue::Data(Location::from(idx.to_be_bytes().as_slice())),
-            words.clone(),
+            Keywords::from(words.clone()),
         );
     }
-    locations_and_words
+    IndexedValueToKeywordsMap::from(locations_and_words)
 }
 
 fn prepare_keywords(number: usize) -> HashSet<Keyword> {
@@ -53,7 +44,7 @@ fn bench_search(c: &mut Criterion) {
     //
     // Prepare indexes to be search
     //
-    let mut findex = Findex::new(
+    let findex = Findex::new(
         EntryTable::setup(InMemoryEdx::default()),
         ChainTable::setup(InMemoryEdx::default()),
     );
@@ -83,8 +74,13 @@ fn bench_search(c: &mut Criterion) {
         let keywords = prepare_keywords(n_keywords);
         group.bench_function(format!("Searching {n_keywords} keyword(s)"), |b| {
             b.iter(|| {
-                block_on(findex.search(&master_key, &label, keywords.clone(), &user_interrupt))
-                    .expect("search failed");
+                block_on(findex.search(
+                    &master_key,
+                    &label,
+                    Keywords::from(keywords.clone()),
+                    &|_| async { Ok(false) },
+                ))
+                .expect("search failed");
             });
         });
     }

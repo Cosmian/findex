@@ -12,6 +12,7 @@ use std::{
     sync::{Arc, Mutex},
 };
 
+use async_trait::async_trait;
 use cosmian_crypto_core::reexport::rand_core::CryptoRngCore;
 use zeroize::ZeroizeOnDrop;
 
@@ -26,15 +27,16 @@ mod structs;
 
 pub use structs::IndexedValue;
 
-pub trait GxEnc<EdxError: CallbackErrorTrait>: Sync + Send {
+#[async_trait(?Send)]
+pub trait GxEnc<EdxError: CallbackErrorTrait> {
     /// Seed used to derive the key.
-    type Seed: Sized + ZeroizeOnDrop + AsRef<[u8]> + Default + AsMut<[u8]> + Sync + Send;
+    type Seed: Sized + ZeroizeOnDrop + AsRef<[u8]> + Default + AsMut<[u8]>;
 
     /// Cryptographic key.
-    type Key: Sized + ZeroizeOnDrop + Sync + Send;
+    type Key: Sized + ZeroizeOnDrop;
 
     /// Error type returned by the GxEnc scheme.
-    type Error: std::error::Error + Sync + Send;
+    type Error: std::error::Error;
 
     /// Generates a new random seed.
     fn gen_seed(&self, rng: &mut impl CryptoRngCore) -> Self::Seed;
@@ -47,7 +49,7 @@ pub trait GxEnc<EdxError: CallbackErrorTrait>: Sync + Send {
     async fn get<
         Tag: Debug + Hash + Eq + Clone + AsRef<[u8]> + From<Vec<u8>>,
         Value: Hash + Eq + Clone + From<Vec<u8>>,
-        F: Future<Output = bool>,
+        F: Future<Output = Result<bool, String>>,
         Interrupt: Fn(HashMap<Tag, HashSet<IndexedValue<Tag, Value>>>) -> F,
     >(
         &self,
@@ -60,8 +62,8 @@ pub trait GxEnc<EdxError: CallbackErrorTrait>: Sync + Send {
     /// Encrypts and inserts the given items into the graph. Returns the set of
     /// tags added to the index.
     #[allow(clippy::type_complexity)]
-    async fn insert<Tag: Hash + Eq + AsRef<[u8]>, Value: AsRef<[u8]>>(
-        &mut self,
+    async fn insert<Tag: Clone + Hash + Eq + AsRef<[u8]>, Value: AsRef<[u8]>>(
+        &self,
         rng: Arc<Mutex<impl CryptoRngCore>>,
         key: &Self::Key,
         items: HashMap<Tag, Vec<(Operation, IndexedValue<Tag, Value>)>>,
@@ -79,10 +81,10 @@ pub struct FindexGraph<
 }
 
 impl<
-    UserError: CallbackErrorTrait,
-    EntryTable: DxEnc<ENTRY_LENGTH, Error = Error<UserError>>,
-    ChainTable: DxEnc<LINK_LENGTH, Error = Error<UserError>>,
-> FindexGraph<UserError, EntryTable, ChainTable>
+        UserError: CallbackErrorTrait,
+        EntryTable: DxEnc<ENTRY_LENGTH, Error = Error<UserError>>,
+        ChainTable: DxEnc<LINK_LENGTH, Error = Error<UserError>>,
+    > FindexGraph<UserError, EntryTable, ChainTable>
 {
     pub fn new(entry_table: EntryTable, chain_table: ChainTable) -> Self {
         Self {
@@ -117,8 +119,8 @@ mod tests {
         Value: Hash + Eq + Clone + From<Vec<u8>>,
     >(
         _res: HashMap<Tag, HashSet<IndexedValue<Tag, Value>>>,
-    ) -> bool {
-        false
+    ) -> Result<bool, String> {
+        Ok(false)
     }
 
     #[actix_rt::test]
@@ -128,7 +130,7 @@ mod tests {
 
         let entry_table = EntryTable::setup(InMemoryEdx::default());
         let chain_table = ChainTable::setup(InMemoryEdx::default());
-        let mut findex = FindexGraph::new(entry_table, chain_table);
+        let findex = FindexGraph::new(entry_table, chain_table);
 
         let findex_seed = findex.gen_seed(&mut *rng.lock().expect("could not lock mutex"));
         let findex_key = findex.derive_keys(&findex_seed);

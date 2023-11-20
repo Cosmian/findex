@@ -4,44 +4,39 @@ use std::{
 };
 
 use cosmian_crypto_core::reexport::rand_core::CryptoRngCore;
+use tracing::debug;
 
 use super::{structs::Entry, Operation};
 use crate::{
-    edx::TokenDump,
+    edx::{Token, TokenDump},
     findex_mm::{structs::Link, CompactingData, FindexMultiMap, MmEnc},
     parameters::{BLOCK_LENGTH, LINE_WIDTH, SEED_LENGTH},
     CallbackErrorTrait, DxEnc, Error, Label, ENTRY_LENGTH, LINK_LENGTH,
 };
 
 impl<
-    UserError: CallbackErrorTrait,
-    EntryTable: DxEnc<ENTRY_LENGTH, Error = Error<UserError>>
-        + TokenDump<Token = <EntryTable as DxEnc<ENTRY_LENGTH>>::Token, Error = Error<UserError>>,
-    ChainTable: DxEnc<LINK_LENGTH, Error = Error<UserError>>,
-> FindexMultiMap<UserError, EntryTable, ChainTable>
+        UserError: CallbackErrorTrait,
+        EntryTable: DxEnc<ENTRY_LENGTH, Error = Error<UserError>> + TokenDump<Error = Error<UserError>>,
+        ChainTable: DxEnc<LINK_LENGTH, Error = Error<UserError>>,
+    > FindexMultiMap<UserError, EntryTable, ChainTable>
 {
     /// Returns the set of Entry Table tokens.
-    pub async fn dump_entry_tokens(
-        &self,
-    ) -> Result<Vec<<EntryTable as DxEnc<ENTRY_LENGTH>>::Token>, Error<UserError>> {
+    pub async fn dump_entry_tokens(&self) -> Result<Vec<Token>, Error<UserError>> {
         Ok(self.entry_table.dump_tokens().await?.into_iter().collect())
     }
 
-    /// Fetches all data needed to compact targeted chains among the ones
-    /// associated with the given tokens. Returns the indexed values in these
-    /// chains along with data used to finish the compacting operation.
+    /// Fetches all chains associated to the given tokens.
+    ///
+    /// # Returns
+    ///
+    /// All the data needed to compact targeted chains only.
     pub async fn prepare_compacting(
         &self,
         key: &<Self as MmEnc<SEED_LENGTH, UserError>>::Key,
-        tokens: HashSet<<EntryTable as DxEnc<ENTRY_LENGTH>>::Token>,
-        compact_target: &HashSet<<EntryTable as DxEnc<ENTRY_LENGTH>>::Token>,
-    ) -> Result<
-        (
-            HashMap<<EntryTable as DxEnc<ENTRY_LENGTH>>::Token, HashSet<Vec<u8>>>,
-            CompactingData<EntryTable, ChainTable>,
-        ),
-        Error<UserError>,
-    > {
+        tokens: HashSet<Token>,
+        compact_target: &HashSet<Token>,
+    ) -> Result<(HashMap<Token, HashSet<Vec<u8>>>, CompactingData<ChainTable>), Error<UserError>>
+    {
         let entries = self.fetch_entries(key, tokens).await?;
 
         let n_entries = entries.len();
@@ -59,7 +54,7 @@ impl<
             },
         )?;
 
-        let metadata = entries
+        let chain_metadata = entries
             .iter()
             .filter(|(token, _)| compact_target.contains(token))
             .map(|(token, entry)| (*token, self.derive_metadata(entry)))
@@ -68,10 +63,10 @@ impl<
         let encrypted_links = self
             .chain_table
             .get(
-                metadata
+                chain_metadata
                     .iter()
                     .flat_map(|(_, (_, chain_tokens))| chain_tokens)
-                    .cloned()
+                    .copied()
                     .collect(),
             )
             .await?;
@@ -91,26 +86,34 @@ impl<
             },
         )?;
 
-        let mut indexed_values = HashMap::with_capacity(metadata.len());
-        for (entry_token, (chain_key, chain_tokens)) in &metadata {
-            let links = chain_tokens
-                .iter()
-                .filter_map(|token| {
-                    encrypted_links.get(token).map(|encrypted_link| {
+        let indexed_chains = chain_metadata
+            .iter()
+            .map(|(entry_token, (chain_key, chain_tokens))| {
+                let links = chain_tokens
+                    .iter()
+                    .filter_map(|token| encrypted_links.get(token))
+                    .map(|encrypted_link| {
                         self.chain_table
                             .resolve(chain_key, encrypted_link)
                             .map(Link)
                     })
-                })
-                .collect::<Result<Vec<_>, _>>()?;
+                    // Collect in a vector to preserve the chain order.
+                    .collect::<Result<Vec<_>, _>>()?;
 
-            indexed_values.insert(
-                *entry_token,
-                self.recompose::<BLOCK_LENGTH, LINE_WIDTH>(&links)?,
-            );
-        }
+                Ok((
+                    *entry_token,
+                    self.recompose::<BLOCK_LENGTH, LINE_WIDTH>(&links)?,
+                ))
+            })
+            .collect::<Result<_, Error<UserError>>>()?;
 
-        Ok((indexed_values, CompactingData { metadata, entries }))
+        Ok((
+            indexed_chains,
+            CompactingData {
+                metadata: chain_metadata,
+                entries,
+            },
+        ))
     }
 
     /// Completes the compacting operation:
@@ -119,18 +122,19 @@ impl<
     /// 2. uses the `new_key` to generate a new token and encrypt each entry
     /// 3. tries applying modifications, reverts modifications upon failure or
     ///    remove old data upon success
+    #[tracing::instrument(skip_all)]
     pub async fn complete_compacting(
-        &mut self,
+        &self,
         rng: Arc<Mutex<impl CryptoRngCore>>,
         new_key: &<Self as MmEnc<SEED_LENGTH, UserError>>::Key,
-        indexed_map: HashMap<<EntryTable as DxEnc<ENTRY_LENGTH>>::Token, HashSet<Vec<u8>>>,
-        mut continuation: CompactingData<EntryTable, ChainTable>,
+        indexed_map: HashMap<Token, HashSet<Vec<u8>>>,
+        mut continuation: CompactingData<ChainTable>,
         new_label: &Label,
     ) -> Result<(), Error<UserError>> {
-        //
-        // 1. computes new chains from the given `indexed_map` and updates associated
-        //    entries.
-        //
+        debug!(
+            "Step 1: computes new chains from the given `indexed_map` and updates associated \
+             entries."
+        );
 
         // Allocates a lower bound on the number of links.
         let mut new_links = HashMap::with_capacity(indexed_map.len());
@@ -154,7 +158,7 @@ impl<
 
             let chain_key = self.chain_table.derive_keys(&new_entry.seed);
             let chain_tokens =
-                self.derive_chain_tokens(&chain_key, new_entry.tag_hash.into(), chain_links.len())?;
+                self.derive_chain_tokens(&chain_key, new_entry.tag_hash.into(), chain_links.len());
             new_entry.chain_token = chain_tokens.last().copied();
             for (token, link) in chain_tokens.into_iter().zip(chain_links) {
                 new_links.insert(
@@ -172,9 +176,7 @@ impl<
             .copied()
             .collect();
 
-        //
-        // 2. uses the `new_key` to generate a new token and encrypt each entry
-        //
+        debug!("Step 2: uses the `new_key` to generate a new token and encrypt each entry");
 
         let mut old_entries = HashSet::with_capacity(continuation.entries.len());
         let mut new_entries = HashMap::with_capacity(continuation.entries.len());
@@ -192,31 +194,46 @@ impl<
         let new_links_tokens = new_links.keys().copied().collect();
         let new_entry_tokens = new_entries.keys().copied().collect();
 
-        //
-        // 3. tries applying modifications, reverts modifications upon failure or
-        //    removes old data upon success
-        //
+        debug!(
+            "Step 3: tries applying modifications, reverts modifications upon failure or removes \
+             old data upon success"
+        );
 
         let res = self.chain_table.insert(new_links).await;
         if res.is_err() {
             self.chain_table.delete(new_links_tokens).await?;
             return Err(Error::Crypto(format!(
-                "An error occured during the compact operation. All modifications were reverted. \
+                "An error occurred during the insert operation. All modifications were reverted. \
                  ({res:?})"
             )));
         };
-        let res = self.entry_table.upsert(&HashMap::new(), new_entries).await;
-        if res.as_ref().map(|set| set.is_empty()).unwrap_or(false) {
+
+        let upsert_results = self.entry_table.upsert(HashMap::new(), new_entries).await;
+
+        let res = if let Ok(upsert_results) = upsert_results {
+            if upsert_results.is_empty() {
+                Ok(())
+            } else {
+                Err(Error::Crypto(format!(
+                    "A conflict occurred during the upsert operation. All modifications were \
+                     reverted. ({upsert_results:?})"
+                )))
+            }
+        } else {
+            Err(Error::Crypto(
+                "An error occurred during the upsert operation. All modifications were reverted."
+                    .to_string(),
+            ))
+        };
+
+        if res.is_ok() {
             self.chain_table.delete(old_links).await?;
             self.entry_table.delete(old_entries).await?;
-            Ok(())
         } else {
             self.chain_table.delete(new_links_tokens).await?;
             self.entry_table.delete(new_entry_tokens).await?;
-            Err(Error::Crypto(format!(
-                "An error occured during the compact operation. All modifications were reverted. \
-                 ({res:?})"
-            )))
         }
+
+        res
     }
 }
