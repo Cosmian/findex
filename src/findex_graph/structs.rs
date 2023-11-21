@@ -13,8 +13,8 @@ pub enum IndexedValue<Tag, Value> {
 impl<Tag: Display, Value: Display> Display for IndexedValue<Tag, Value> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            IndexedValue::Pointer(keyword) => write!(f, "IndexedValue::Pointer({keyword})"),
-            IndexedValue::Data(location) => write!(f, "IndexedValue::Data({location})"),
+            Self::Pointer(keyword) => write!(f, "IndexedValue::Pointer({keyword})"),
+            Self::Data(location) => write!(f, "IndexedValue::Data({location})"),
         }
     }
 }

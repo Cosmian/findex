@@ -355,7 +355,7 @@ pub mod in_memory {
             }
 
             let mut res = HashMap::new();
-            for (token, new_ciphertext) in new_values.into_iter() {
+            for (token, new_ciphertext) in new_values {
                 let old_ciphertext = old_values.get(&token);
                 let edx_ciphertext = edx.get(&token);
 

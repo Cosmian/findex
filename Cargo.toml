@@ -37,12 +37,12 @@ cosmian_crypto_core = { version = "9.3.0", default-features = false, features = 
 never = "0.1.0"
 tiny-keccak = { version = "2.0.2", features = ["kmac", "sha3"] }
 tracing = "0.1"
-zeroize = "1.6.0"
+zeroize = "1.7.0"
 
 [dev-dependencies]
 actix-rt = "2.9.0"
 criterion = "0.5.1"
-futures = "0.3.28"
+futures = "0.3.29"
 rand = "0.8.5"
 
 [[bench]]

@@ -102,7 +102,7 @@ where
             STANDARD.encode(self.tag_hash),
             self.chain_token
                 .as_ref()
-                .map(|token| token.to_string())
+                .map(std::string::ToString::to_string)
                 .unwrap_or_default()
         )
     }
