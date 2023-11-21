@@ -2,9 +2,47 @@
 
 All notable changes to this project will be documented in this file.
 
-## Unreleased
+## [6.0.0] - 2023-11-21
 
-Global refactoring.
+### Features
+
+Findex v6 implements new look following the work on the Findex formalization with @chloehebant.
+
+In order to ease the reading, fix some vocabulary first:
+
+- Encrypted Dictionary (EDX): a key value store which values are of constant size;
+- Encrypted Multi-Map (EMM): a key value store which values are of variable size;
+- Encrypted Graph (EGX): an encrypted graph which nodes contain data and pointers to other nodes;
+- Encrypted Dictionary Scheme (DX-Enc): a scheme managing an EDX;
+- Encrypted Multi-Map Scheme (MM-Enc): a scheme managing an EMM;
+- Encrypted Graph Scheme (GX-Enc): a scheme managing an EGX;
+- tag: bytes (may be a meaningful piece of information) used to point to a value in an map (H(w) in the Entry Table)
+- token: _non-meaningful_ bytes used to index a value in a map (it corresponds to the UIDs)
+
+Findex (as the product) is now composed of three algorithms:
+
+- Findex: an index interface to hide the cryptographic details of Findex Graph;
+- Findex Graph: a GX-Enc scheme using a MM-Enc scheme;
+- Findex Multi-Map: a MM-Enc scheme using two DX-Enc schemes.
+
+Two generic DX-Enc schemes are used by Findex Multi-Map:
+
+- Entry Table: an EDX scheme in charge of storing metadata about the chains: counter, key seed (Kwi), corresponding tag (H(w_i));
+- Chain Table: an EMM used to store the actual chain data; it's implementation is actually done using an EDX.
+
+**HAS BEEN DONE**:
+
+- [x] decide which constant to fix and which constant to use as generic (e.g. `BLOCK_LENGTH`/`LINE_LENGTH`)
+- [x] add compact operation
+- [x] pass all old tests
+- [x] pass regression tests on database:
+  - [x] add regression tests inside the repo (serialize in-memory database)
+  - [x] change counter back to the hash chain
+- [x] make findex types `Sync + Send`
+- [x] add encryption scheme to manage encryption
+- [x] update CryptoCore version
+- [x] add `progress` callback (injection)
+- [x] add CATS compatibility
 
 ## [5.0.3] - 2023-09-18
 
