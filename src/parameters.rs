@@ -1,44 +1,35 @@
-//! Defines generic parameters used in Findex interfaces.
+//! Defines parameters used by the Findex SSE scheme. These are parameters that
+//! are not destined to be changed from one instantiation to another. Most of
+//! them are linked to security considerations or scheme correctness.
 
-use cosmian_crypto_core::{Aes256Gcm, SymmetricKey};
+use cosmian_crypto_core::Aes256Gcm;
 
-use crate::{chain_table::ChainTableValue, structs::Block};
+/// Size of the Findex tag hash used. Only collision resistance is needed: 128
+/// bits should be enough.
+pub const HASH_LENGTH: usize = 32;
 
-/// Length of an index table UID in bytes.
-pub const UID_LENGTH: usize = 32;
+/// Seed used to derive the keys. Only collision resistance is needed: 128 bits
+/// should be enough.
+pub const SEED_LENGTH: usize = 16;
 
-/// Length of the blocks in the Chain Table in bytes.
+/// Size of the token used. It is 256 bits in order to allow more than 80 bits
+/// of post-quantum resistance.
+pub(crate) const TOKEN_LENGTH: usize = 32;
+
+/// Length of the user key.
+pub const USER_KEY_LENGTH: usize = 16;
+
+/// Length of the symmetric encryption keys used.
+pub const SYM_KEY_LENGTH: usize = Aes256Gcm::KEY_LENGTH;
+
+/// Length of the MAC tags used.
+pub const MAC_LENGTH: usize = Aes256Gcm::MAC_LENGTH;
+
+/// Length of the nonces used.
+pub const NONCE_LENGTH: usize = Aes256Gcm::NONCE_LENGTH;
+
+/// Length of the blocks stored in the Chain Table.
 pub const BLOCK_LENGTH: usize = 16;
 
-/// Number of blocks per Chain Table value.
-/// This parameter should be *smaller* than 8.
-pub const CHAIN_TABLE_WIDTH: usize = 5;
-
-/// Length of the Findex master key in bytes.
-pub const MASTER_KEY_LENGTH: usize = 16;
-
-/// Length of the chain keying material (`K_wi`) in bytes.
-pub const KWI_LENGTH: usize = 16;
-
-/// Length of a KMAC key in bytes.
-pub const KMAC_KEY_LENGTH: usize = 32;
-
-/// KMAC key type.
-pub type KmacKey = SymmetricKey<KMAC_KEY_LENGTH>;
-
-/// Findex uses Aes256 GCM as DEM.
-pub type DemKey = SymmetricKey<{ Aes256Gcm::KEY_LENGTH }>;
-
-/// Symmetric overhead size.
-pub const ENCRYPTION_OVERHEAD: usize = Aes256Gcm::NONCE_LENGTH + Aes256Gcm::MAC_LENGTH;
-
-/// Checks some constraints on constant generics at compile time.
-pub const fn check_parameter_constraints<
-    const CHAIN_TABLE_WIDTH: usize,
-    const BLOCK_LENGTH: usize,
->() {
-    #[allow(clippy::let_unit_value)]
-    let () = ChainTableValue::<CHAIN_TABLE_WIDTH, BLOCK_LENGTH>::CHECK_TABLE_WIDTH;
-    #[allow(clippy::let_unit_value)]
-    let () = Block::<BLOCK_LENGTH>::CHECK_LENGTH;
-}
+/// Number of blocks stored per line of the Chain Table.
+pub const LINE_WIDTH: usize = 5;

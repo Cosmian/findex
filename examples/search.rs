@@ -1,25 +1,20 @@
-#[cfg(not(feature = "in_memory"))]
-compile_error!("Examples require the `in_memory` feature.");
-
 use std::collections::{HashMap, HashSet};
 
-use cosmian_crypto_core::CsRng;
 use cosmian_findex::{
-    in_memory_example::FindexInMemory, FindexSearch, FindexUpsert, IndexedValue, KeyingMaterial,
-    Keyword, Label, Location,
+    ChainTable, DxEnc, EntryTable, Findex, InMemoryEdx, Index, IndexedValue,
+    IndexedValueToKeywordsMap, Keyword, Keywords, Label, Location,
 };
 use futures::executor::block_on;
-use rand::SeedableRng;
 
-fn prepare_keywords(number: i64) -> HashSet<Keyword> {
+fn prepare_keywords(number: i64) -> Keywords {
     let mut keywords = HashSet::new();
     for idx in 0..number {
         keywords.insert(Keyword::from(format!("name_{idx}").as_str()));
     }
-    keywords
+    Keywords::from(keywords)
 }
 
-fn prepare_locations_and_words(number: i64) -> HashMap<IndexedValue, HashSet<Keyword>> {
+fn prepare_locations_and_words(number: i64) -> IndexedValueToKeywordsMap {
     let mut locations_and_words = HashMap::new();
     for idx in 0..number {
         let mut words = HashSet::new();
@@ -27,24 +22,26 @@ fn prepare_locations_and_words(number: i64) -> HashMap<IndexedValue, HashSet<Key
         words.insert(Keyword::from(format!("name_{idx}").as_bytes()));
 
         locations_and_words.insert(
-            IndexedValue::Location(Location::from(idx.to_be_bytes().as_slice())),
-            words.clone(),
+            IndexedValue::Data(Location::from(idx.to_be_bytes().as_slice())),
+            Keywords::from(words.clone()),
         );
     }
-    locations_and_words
+    IndexedValueToKeywordsMap::from(locations_and_words)
 }
 
 fn main() {
-    let mut rng = CsRng::from_entropy();
-    let label = Label::random(&mut rng);
-    let master_key = KeyingMaterial::new(&mut rng);
-
     let locations_and_words = prepare_locations_and_words(10000);
 
     //
     // Prepare indexes to be search
     //
-    let findex = FindexInMemory::default();
+    let findex = Findex::new(
+        EntryTable::setup(InMemoryEdx::default()),
+        ChainTable::setup(InMemoryEdx::default()),
+    );
+
+    let master_key = findex.keygen();
+    let label = Label::from("label");
     block_on(findex.add(&master_key, &label, locations_and_words)).expect("msg");
 
     //
@@ -52,6 +49,11 @@ fn main() {
     //
     let keywords = prepare_keywords(1000);
     for _ in 0..1000 {
-        block_on(findex.search(&master_key, &label, keywords.clone())).expect("search failed");
+        block_on(
+            findex.search(&master_key, &label, keywords.clone(), &|_| async {
+                Ok(false)
+            }),
+        )
+        .expect("search failed");
     }
 }

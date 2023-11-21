@@ -1,44 +1,152 @@
-//! Findex allows for searching an encrypted data base. It is based on two
-//! tables, namely the Entry Table and the Chain Table.
+//! Findex is a cryptographic algorithm allowing to securely maintain an
+//! encrypted index.
 //!
-//! The source code is structured as follows:
-//! - the `core` module contains all the cryptographic APIs;
-//! - the `interfaces` module contains interfaces with other languages.
+//! It uses a generic Dictionary Encryption Scheme (Dx-Enc) as building block to
+//! implement a Multi-Map Encryption Scheme (MM-Enc). A Graph Encryption Scheme
+//! (Gx-Enc) is then built on top of the MM-Enc scheme and finally an `Index`
+//! trait built on top of this Gx-Enc scheme allows indexing both `Location`s
+//! and `Keyword`s.
+//!
+//! The `Index` traits is not a cryptographic algorithm, It is used to simplify
+//! the interface and to hide the cryptographic details of the implementation
+//! when it is possible.
 
-// Rule MEM-FORGET (<https://anssi-fr.github.io/rust-guide/05_memory.html>):
-// > In a secure Rust development, the forget function of std::mem (core::mem)
-// must not be used.
-#![deny(clippy::mem_forget)]
-
-const ENTRY_TABLE_KEY_DERIVATION_INFO: &[u8] = b"Entry Table key derivation info.";
-const CHAIN_TABLE_KEY_DERIVATION_INFO: &[u8] = b"Chain Table key derivation info.";
-
-// Macros should be defined first in order to be available for other modules
+// Macro declarations should come first.
 #[macro_use]
 pub mod macros;
 
-mod callbacks;
-mod chain_table;
-mod compact;
-mod entry_table;
+mod edx;
 mod error;
-mod keys;
-mod search;
-mod structs;
-mod upsert;
+mod findex_graph;
+mod findex_mm;
+mod index;
+mod parameters;
 
-pub mod parameters;
-
-#[cfg(feature = "in_memory")]
-pub mod in_memory_example;
-
-pub use callbacks::{FetchChains, FindexCallbacks};
-pub use compact::FindexCompact;
-pub use error::{CallbackError, CoreError, Error};
-pub use keys::KeyingMaterial;
-pub use search::FindexSearch;
-pub use structs::{
-    EncryptedMultiTable, EncryptedTable, IndexedValue, Keyword, Label, Location, Uid, Uids,
-    UpsertData,
+#[cfg(any(test, feature = "in_memory"))]
+pub use edx::in_memory::{InMemoryEdx, KvStoreError};
+pub use edx::{
+    chain_table::ChainTable, entry_table::EntryTable, DxEnc, EdxStore, EncryptedValue, Token,
+    TokenToEncryptedValueMap, TokenWithEncryptedValueList, Tokens,
 };
-pub use upsert::FindexUpsert;
+pub use error::{CallbackErrorTrait, CoreError, Error};
+pub use findex_graph::IndexedValue;
+pub use findex_mm::{ENTRY_LENGTH, LINK_LENGTH};
+pub use index::{
+    Findex, Index, IndexedValueToKeywordsMap, Keyword, KeywordToDataMap, Keywords, Label, Location,
+    UserKey,
+};
+pub use parameters::*;
+
+#[cfg(test)]
+mod example {
+    use std::collections::{HashMap, HashSet};
+
+    use crate::{
+        ChainTable, DxEnc, EntryTable, Findex, InMemoryEdx, Index, IndexedValue,
+        IndexedValueToKeywordsMap, Keyword, KeywordToDataMap, Keywords, Label, Location,
+    };
+
+    async fn user_interrupt(
+        _res: HashMap<Keyword, HashSet<IndexedValue<Keyword, Location>>>,
+    ) -> Result<bool, String> {
+        Ok(false)
+    }
+
+    #[actix_rt::test]
+    async fn index_and_search() {
+        // Values to index.
+        let kwd1 = Keyword::from("Keyword 1");
+        let kwd2 = Keyword::from("Keyword 2");
+
+        let loc1 = Location::from("Location 1");
+        let loc2 = Location::from("Location 2");
+
+        // Let's create a new index using the in-memory EDX provided in the tests.
+        let index = Findex::new(
+            EntryTable::setup(InMemoryEdx::default()),
+            ChainTable::setup(InMemoryEdx::default()),
+        );
+
+        // Let's create a new key for our index.
+        let key = index.keygen();
+
+        // Findex uses a public label with the private key. Let's generate a new label.
+        let label = Label::from("My public label");
+
+        // Let's index `loc1` for `kwd1`, `loc2` for `kwd2` and `kwd2` for `kwd1`.
+        index
+            .add(
+                &key,
+                &label,
+                IndexedValueToKeywordsMap::from_iter([
+                    (
+                        IndexedValue::Data(loc1.clone()),
+                        HashSet::from_iter([kwd1.clone()]),
+                    ),
+                    (
+                        IndexedValue::Data(loc2.clone()),
+                        HashSet::from_iter([kwd2.clone()]),
+                    ),
+                    (
+                        IndexedValue::Pointer(kwd2.clone()),
+                        HashSet::from_iter([kwd1.clone()]),
+                    ),
+                ]),
+            )
+            .await
+            .expect("Error while indexing additions.");
+
+        let res = index
+            .search(
+                &key,
+                &label,
+                Keywords::from_iter([kwd1.clone()]),
+                &user_interrupt,
+            )
+            .await
+            .expect("Error while searching.");
+
+        // Since `kw2` was indexed for `kwd1`, searching for `kwd1` also retrieves
+        // `loc2`.
+        assert_eq!(
+            res,
+            KeywordToDataMap::from_iter([(kwd1.clone(), HashSet::from_iter([loc1.clone(), loc2]))])
+        );
+
+        // Let's delete the indexation of `kwd2` for `kwd1`.
+        index
+            .delete(
+                &key,
+                &label,
+                IndexedValueToKeywordsMap::from_iter([(
+                    IndexedValue::Pointer(kwd2),
+                    HashSet::from_iter([kwd1.clone()]),
+                )]),
+            )
+            .await
+            .expect("Error while indexing deletions.");
+
+        let res = index
+            .search(
+                &key,
+                &label,
+                Keywords::from_iter([kwd1.clone()]),
+                &user_interrupt,
+            )
+            .await
+            .expect("Error while searching.");
+
+        // Since the indexation of `kw2` for `kwd1` was deleted, searching for `kwd1` no
+        // longer retrieves `loc2`.
+        assert_eq!(
+            res,
+            KeywordToDataMap::from_iter([(kwd1, HashSet::from_iter([loc1]))])
+        );
+
+        let res = index
+            .compact(&key, &key, &label, &label, 1, &|res| async { Ok(res) })
+            .await;
+
+        assert!(res.is_err());
+    }
+}

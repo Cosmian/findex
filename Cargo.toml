@@ -1,6 +1,6 @@
 [package]
 name = "cosmian_findex"
-version = "5.0.3"
+version = "6.0.0"
 authors = [
   "Chloé Hébant <chloe.hebant@cosmian.com>",
   "Bruno Grieder <bruno.grieder@cosmian.com>",
@@ -21,26 +21,29 @@ name = "cosmian_findex"
 path = "src/lib.rs"
 
 [features]
-in_memory = []
+in_memory = ["cosmian_crypto_core/ser"]
 
 [dependencies]
 # Once available in stable Rust (presumably 1.74), use std async fn in trait
 # <https://rust-lang.github.io/rfcs/3185-static-async-fn-in-trait.html>
-async-trait = "0.1"
-base64 = "0.21.4"
-cosmian_crypto_core = { version = "9.2.0", features = ["aes", "sha3", "ser"], default-features = false }
+async-trait = "0.1.74"
+base64 = "0.21.5"
+cosmian_crypto_core = { version = "9.3.0", default-features = false, features = [
+  "aes",
+  "sha3",
+] }
 # Once available in stable Rust, use `!` std primitive
 # <https://doc.rust-lang.org/std/primitive.never.html>
-never = "0.1"
-rand = "0.8"
+never = "0.1.0"
 tiny-keccak = { version = "2.0.2", features = ["kmac", "sha3"] }
-zeroize = "1.6"
+tracing = "0.1"
+zeroize = "1.7.0"
 
 [dev-dependencies]
-actix-rt = "2.9"
-criterion = { version = "0.5", features = ["html_reports", "async_futures"], default-features = false }
-futures = "0.3"
-serde_json = "1.0"
+actix-rt = "2.9.0"
+criterion = "0.5.1"
+futures = "0.3.29"
+rand = "0.8.5"
 
 [[bench]]
 harness = false

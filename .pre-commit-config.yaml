@@ -73,11 +73,6 @@ repos:
     hooks:
       - id: shellcheck
 
-  - repo: https://github.com/doublify/pre-commit-rust
-    rev: v1.0
-    hooks:
-      - id: cargo-check
-
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v4.4.0
     hooks:
@@ -119,8 +114,7 @@ repos:
   - repo: https://github.com/Cosmian/git-hooks.git
     rev: v1.0.16
     hooks:
-      - id: dprint-toml-fix
-      - id: cargo-format
+      - id: stable-cargo-format
       - id: cargo-upgrade
       - id: cargo-update
       - id: cargo-machete
@@ -130,9 +124,8 @@ repos:
       - id: cargo-test-doc
       - id: clippy-autofix-all
       - id: clippy-autofix-pedantic
-      - id: clippy-autofix-nursery
       - id: clippy-autofix-others
       - id: clippy-all-targets-all-features
-      - id: clippy-all-targets-all-features-release
+      - id: stable-cargo-format
       - id: cargo-dry-publish
         args: [--allow-dirty]
