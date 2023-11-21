@@ -40,20 +40,16 @@ fn main() {
         ChainTable::setup(InMemoryEdx::default()),
     );
 
-    let master_key = findex.keygen();
+    let key = findex.keygen();
     let label = Label::from("label");
-    block_on(findex.add(&master_key, &label, locations_and_words)).expect("msg");
+    block_on(findex.add(&key, &label, locations_and_words)).expect("msg");
 
     //
     // Search 1000 words
     //
     let keywords = prepare_keywords(1000);
     for _ in 0..1000 {
-        block_on(
-            findex.search(&master_key, &label, keywords.clone(), &|_| async {
-                Ok(false)
-            }),
-        )
-        .expect("search failed");
+        block_on(findex.search(&key, &label, keywords.clone(), &|_| async { Ok(false) }))
+            .expect("search failed");
     }
 }

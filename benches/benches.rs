@@ -49,8 +49,8 @@ fn bench_search(c: &mut Criterion) {
         ChainTable::setup(InMemoryEdx::default()),
     );
 
-    let master_key = findex.keygen();
-    block_on(findex.add(&master_key, &label, locations_and_words)).expect("msg");
+    let key = findex.keygen();
+    block_on(findex.add(&key, &label, locations_and_words)).expect("msg");
 
     println!(
         "Entry Table length: {}",
@@ -75,7 +75,7 @@ fn bench_search(c: &mut Criterion) {
         group.bench_function(format!("Searching {n_keywords} keyword(s)"), |b| {
             b.iter(|| {
                 block_on(findex.search(
-                    &master_key,
+                    &key,
                     &label,
                     Keywords::from(keywords.clone()),
                     &|_| async { Ok(false) },
@@ -99,14 +99,14 @@ fn bench_upsert(c: &mut Criterion) {
         EntryTable::setup(InMemoryEdx::default()),
         ChainTable::setup(InMemoryEdx::default()),
     );
-    let master_key = findex.keygen();
+    let key = findex.keygen();
 
     for power in 1..=3 {
         let n_keywords = 10usize.pow(power);
         let locations_and_words = prepare_locations_and_words(n_keywords);
         group.bench_function(format!("Upserting {n_keywords} keyword(s)"), |b| {
             b.iter(|| {
-                block_on(findex.add(&master_key, &label, locations_and_words.clone()))
+                block_on(findex.add(&key, &label, locations_and_words.clone()))
                     .expect("upsert failed");
                 findex.findex_graph.findex_mm.entry_table.0.flush();
                 findex.findex_graph.findex_mm.chain_table.0.flush();

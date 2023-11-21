@@ -47,7 +47,7 @@ async fn write_index() -> Result<(), Error<KvStoreError>> {
         ChainTable::setup(InMemoryEdx::default()),
     );
 
-    let master_key = findex.keygen();
+    let key = findex.keygen();
     let label = Label::random(&mut rng);
 
     let reader = BufReader::new(File::open("datasets/first_names.txt").unwrap());
@@ -68,7 +68,7 @@ async fn write_index() -> Result<(), Error<KvStoreError>> {
         add_keyword_graph(&Keyword::from(first_name), MIN_KEYWORD_LENGTH, &mut map);
 
         findex
-            .add(&master_key, &label, IndexedValueToKeywordsMap::from(map))
+            .add(&key, &label, IndexedValueToKeywordsMap::from(map))
             .await?;
     }
 
@@ -77,13 +77,13 @@ async fn write_index() -> Result<(), Error<KvStoreError>> {
     ser.write(&findex.findex_graph.findex_mm.chain_table.0)?;
 
     std::fs::write("datasets/serialized_index", ser.finalize()).unwrap();
-    std::fs::write("datasets/key", master_key.as_bytes()).unwrap();
+    std::fs::write("datasets/key", key.as_bytes()).unwrap();
     std::fs::write("datasets/label", label.as_ref()).unwrap();
 
     let keyword = Keyword::from("Abd");
     let res = findex
         .search(
-            &master_key,
+            &key,
             &label,
             Keywords::from_iter([keyword.clone()]),
             &|_| async { Ok(false) },
@@ -132,13 +132,13 @@ async fn test_non_regression() -> Result<(), Error<KvStoreError>> {
         findex.findex_graph.findex_mm.chain_table.size()
     );
 
-    let master_key = UserKey::try_from_slice(&std::fs::read("datasets/key").unwrap())?;
+    let key = UserKey::try_from_slice(&std::fs::read("datasets/key").unwrap())?;
     let label = Label::from(std::fs::read("datasets/label").unwrap().as_slice());
 
     let keyword = Keyword::from("Abd");
     let res = findex
         .search(
-            &master_key,
+            &key,
             &label,
             Keywords::from_iter([keyword.clone()]),
             &|_| async { Ok(false) },

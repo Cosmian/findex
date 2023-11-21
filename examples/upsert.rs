@@ -40,12 +40,12 @@ fn main() {
         ChainTable::setup(InMemoryEdx::default()),
     );
 
-    let master_key = findex.keygen();
+    let key = findex.keygen();
     let label = Label::from("label");
 
     for _ in 0..1_000_000 {
         block_on(findex.add(
-            &master_key,
+            &key,
             &label,
             IndexedValueToKeywordsMap::from(indexed_value_to_keywords.clone()),
         ))
