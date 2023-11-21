@@ -127,18 +127,30 @@ impl<
         &self,
         rng: Arc<Mutex<impl CryptoRngCore>>,
         new_key: &<Self as MmEnc<SEED_LENGTH, UserError>>::Key,
-        indexed_map: HashMap<Token, HashSet<Vec<u8>>>,
+        remaining_associations: HashMap<Token, HashSet<Vec<u8>>>,
         mut continuation: CompactingData<ChainTable>,
         new_label: &Label,
     ) -> Result<(), Error<UserError>> {
+        let remaining_entry_tokens = continuation
+            .entries
+            .keys()
+            .filter(|token| {
+                remaining_associations
+                    .get(token)
+                    .map(|associated_values| !associated_values.is_empty())
+                    .unwrap_or(true)
+            })
+            .copied()
+            .collect::<HashSet<_>>();
+
         debug!(
             "Step 1: computes new chains from the given `indexed_map` and updates associated \
              entries."
         );
 
         // Allocates a lower bound on the number of links.
-        let mut new_links = HashMap::with_capacity(indexed_map.len());
-        for (entry_token, chain_values) in indexed_map {
+        let mut new_links = HashMap::with_capacity(remaining_associations.len());
+        for (entry_token, chain_values) in remaining_associations {
             let chain_links = self.decompose::<BLOCK_LENGTH, LINE_WIDTH>(
                 &chain_values
                     .into_iter()
@@ -184,11 +196,13 @@ impl<
             let rng = &mut *rng.lock().expect("could not lock mutex");
             for (token, entry) in continuation.entries {
                 old_entries.insert(token);
-                new_entries.insert(
-                    self.entry_table
-                        .tokenize(new_key, &entry.tag_hash, Some(new_label)),
-                    self.entry_table.prepare(rng, new_key, entry.into())?,
-                );
+                if remaining_entry_tokens.get(&token).is_some() {
+                    new_entries.insert(
+                        self.entry_table
+                            .tokenize(new_key, &entry.tag_hash, Some(new_label)),
+                        self.entry_table.prepare(rng, new_key, entry.into())?,
+                    );
+                }
             }
         }
         let new_links_tokens = new_links.keys().copied().collect();

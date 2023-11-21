@@ -62,20 +62,18 @@ fn check_search_result(
     search_results: &HashMap<Keyword, HashSet<Location>>,
     keyword: &Keyword,
     location: &Location,
-) {
-    let results = search_results
-        .get(keyword)
-        .ok_or_else(|| {
-            Error::<KvStoreError>::Crypto(format!(
-                "keyword '{}' is not present in the given set",
-                String::from_utf8(keyword.to_vec()).unwrap()
-            ))
-        })
-        .unwrap();
-    assert!(
-        results.contains(location),
-        "{location:?} not found for keyword {keyword:?}"
-    );
+) -> Result<(), String> {
+    let results = search_results.get(keyword).ok_or_else(|| {
+        format!(
+            "keyword '{}' is not present in the given set",
+            String::from_utf8(keyword.to_vec()).unwrap()
+        )
+    })?;
+    if results.contains(location) {
+        Ok(())
+    } else {
+        Err(format!("{location:?} not found for keyword {keyword:?}"))
+    }
 }
 
 /// Checks the `progress` callback works.
@@ -171,8 +169,8 @@ async fn test_progress_callback() -> Result<(), Error<KvStoreError>> {
         )
         .await?;
 
-    check_search_result(&rob_search, &rob_keyword, &robert_doe_location);
-    check_search_result(&rob_search, &rob_keyword, &rob_location);
+    check_search_result(&rob_search, &rob_keyword, &robert_doe_location).unwrap();
+    check_search_result(&rob_search, &rob_keyword, &rob_location).unwrap();
     assert!(rob_search
         .get(&rob_keyword)
         .unwrap()
@@ -395,7 +393,7 @@ async fn test_findex() -> Result<(), Error<KvStoreError>> {
         )
         .await
         .unwrap();
-    check_search_result(&robert_search, &robert_keyword, &robert_doe_location);
+    check_search_result(&robert_search, &robert_keyword, &robert_doe_location).unwrap();
 
     // cannot find robert with wrong label
     let robert_search = findex
@@ -419,8 +417,8 @@ async fn test_findex() -> Result<(), Error<KvStoreError>> {
         )
         .await
         .unwrap();
-    check_search_result(&doe_search, &doe_keyword, &robert_doe_location);
-    check_search_result(&doe_search, &doe_keyword, &john_doe_location);
+    check_search_result(&doe_search, &doe_keyword, &robert_doe_location).unwrap();
+    check_search_result(&doe_search, &doe_keyword, &john_doe_location).unwrap();
 
     // search rob without graph search
     let rob_search = findex
@@ -432,7 +430,7 @@ async fn test_findex() -> Result<(), Error<KvStoreError>> {
         )
         .await
         .unwrap();
-    check_search_result(&rob_search, &rob_keyword, &rob_location);
+    check_search_result(&rob_search, &rob_keyword, &rob_location).unwrap();
 
     // search rob with graph search
     let rob_search = findex
@@ -444,8 +442,8 @@ async fn test_findex() -> Result<(), Error<KvStoreError>> {
         )
         .await
         .unwrap();
-    check_search_result(&rob_search, &rob_keyword, &robert_doe_location);
-    check_search_result(&rob_search, &rob_keyword, &rob_location);
+    check_search_result(&rob_search, &rob_keyword, &robert_doe_location).unwrap();
+    check_search_result(&rob_search, &rob_keyword, &rob_location).unwrap();
 
     //
     // Add Jane Doe to indexes
@@ -477,7 +475,7 @@ async fn test_findex() -> Result<(), Error<KvStoreError>> {
         )
         .await
         .unwrap();
-    check_search_result(&jane_search, &jane_keyword, &jane_doe_location);
+    check_search_result(&jane_search, &jane_keyword, &jane_doe_location).unwrap();
 
     // search robert (no change)
     let robert_search = findex
@@ -489,7 +487,7 @@ async fn test_findex() -> Result<(), Error<KvStoreError>> {
         )
         .await
         .unwrap();
-    check_search_result(&robert_search, &robert_keyword, &robert_doe_location);
+    check_search_result(&robert_search, &robert_keyword, &robert_doe_location).unwrap();
 
     // search doe (jane added)
     let doe_search = findex
@@ -508,9 +506,9 @@ async fn test_findex() -> Result<(), Error<KvStoreError>> {
             .unwrap_or_default(),
         3
     );
-    check_search_result(&doe_search, &doe_keyword, &jane_doe_location);
-    check_search_result(&doe_search, &doe_keyword, &robert_doe_location);
-    check_search_result(&doe_search, &doe_keyword, &john_doe_location);
+    check_search_result(&doe_search, &doe_keyword, &jane_doe_location).unwrap();
+    check_search_result(&doe_search, &doe_keyword, &robert_doe_location).unwrap();
+    check_search_result(&doe_search, &doe_keyword, &john_doe_location).unwrap();
 
     // search rob (no change)
     let rob_search = findex
@@ -522,7 +520,7 @@ async fn test_findex() -> Result<(), Error<KvStoreError>> {
         )
         .await
         .unwrap();
-    check_search_result(&rob_search, &rob_keyword, &rob_location);
+    check_search_result(&rob_search, &rob_keyword, &rob_location).unwrap();
 
     let mut old_master_key;
     let mut old_label;
@@ -563,9 +561,9 @@ async fn test_findex() -> Result<(), Error<KvStoreError>> {
             )
             .await
             .unwrap();
-        check_search_result(&doe_search, &doe_keyword, &robert_doe_location);
-        check_search_result(&doe_search, &doe_keyword, &john_doe_location);
-        check_search_result(&doe_search, &doe_keyword, &jane_doe_location);
+        check_search_result(&doe_search, &doe_keyword, &robert_doe_location).unwrap();
+        check_search_result(&doe_search, &doe_keyword, &john_doe_location).unwrap();
+        check_search_result(&doe_search, &doe_keyword, &jane_doe_location).unwrap();
     }
 
     // Remove the location "Jane Doe" from the DB. The next compact operation should
@@ -617,8 +615,8 @@ async fn test_findex() -> Result<(), Error<KvStoreError>> {
         )
         .await
         .unwrap();
-    check_search_result(&doe_search, &doe_keyword, &robert_doe_location);
-    check_search_result(&doe_search, &doe_keyword, &john_doe_location);
+    check_search_result(&doe_search, &doe_keyword, &robert_doe_location).unwrap();
+    check_search_result(&doe_search, &doe_keyword, &john_doe_location).unwrap();
 
     // Cannot search doe with the old label
     let doe_search = findex
@@ -666,8 +664,8 @@ async fn test_findex() -> Result<(), Error<KvStoreError>> {
         )
         .await
         .unwrap();
-    check_search_result(&doe_search, &doe_keyword, &robert_doe_location);
-    check_search_result(&doe_search, &doe_keyword, &john_doe_location);
+    check_search_result(&doe_search, &doe_keyword, &robert_doe_location).unwrap();
+    check_search_result(&doe_search, &doe_keyword, &john_doe_location).unwrap();
 
     // Cannot search doe with the old label
     let doe_search = findex
@@ -713,8 +711,8 @@ async fn test_findex() -> Result<(), Error<KvStoreError>> {
             )
             .await
             .unwrap();
-        check_search_result(&doe_search, &doe_keyword, &robert_doe_location);
-        check_search_result(&doe_search, &doe_keyword, &john_doe_location);
+        check_search_result(&doe_search, &doe_keyword, &robert_doe_location).unwrap();
+        check_search_result(&doe_search, &doe_keyword, &john_doe_location).unwrap();
     }
 
     // Try deleting John Doe from the `doe_keyword`.
@@ -742,7 +740,7 @@ async fn test_findex() -> Result<(), Error<KvStoreError>> {
         )
         .await
         .unwrap();
-    check_search_result(&doe_search, &doe_keyword, &robert_doe_location);
+    check_search_result(&doe_search, &doe_keyword, &robert_doe_location).unwrap();
     let doe_search = doe_search.get(&doe_keyword).unwrap();
     assert!(!doe_search.contains(&john_doe_location));
     Ok(())
@@ -967,7 +965,7 @@ async fn test_graph_compacting() {
         .await
         .unwrap();
     assert_eq!(res.len(), 1);
-    check_search_result(&res, &rob_keyword, &robert_doe_location);
+    check_search_result(&res, &rob_keyword, &robert_doe_location).unwrap();
 
     println!(
         "Length of the Entry Table: {}",
@@ -1016,7 +1014,7 @@ async fn test_graph_compacting() {
             .await
             .unwrap();
         assert_eq!(res.len(), 1);
-        check_search_result(&res, &rob_keyword, &robert_doe_location);
+        check_search_result(&res, &rob_keyword, &robert_doe_location).unwrap();
     }
 }
 
