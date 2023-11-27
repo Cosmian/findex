@@ -20,12 +20,12 @@ mod index;
 mod parameters;
 
 #[cfg(any(test, feature = "in_memory"))]
-pub use edx::in_memory::{InMemoryEdx, KvStoreError};
+pub use edx::in_memory::{InMemoryBackend, InMemoryBackendError};
 pub use edx::{
-    chain_table::ChainTable, entry_table::EntryTable, DxEnc, EdxStore, EncryptedValue, Token,
+    chain_table::ChainTable, entry_table::EntryTable, DxEnc, EdxBackend, EncryptedValue, Token,
     TokenToEncryptedValueMap, TokenWithEncryptedValueList, Tokens,
 };
-pub use error::{CallbackErrorTrait, CoreError, Error};
+pub use error::{BackendErrorTrait, CoreError, Error};
 pub use findex_graph::IndexedValue;
 pub use findex_mm::{ENTRY_LENGTH, LINK_LENGTH};
 pub use index::{
@@ -41,7 +41,7 @@ mod example {
     use cosmian_crypto_core::{reexport::rand_core::SeedableRng, CsRng, RandomFixedSizeCBytes};
 
     use crate::{
-        ChainTable, DxEnc, EntryTable, Findex, InMemoryEdx, Index, IndexedValue,
+        ChainTable, DxEnc, EntryTable, Findex, InMemoryBackend, Index, IndexedValue,
         IndexedValueToKeywordsMap, Keyword, KeywordToDataMap, Keywords, Label, Location, UserKey,
     };
 
@@ -60,8 +60,8 @@ mod example {
         // Let's create a new index using the provided Entry and Chain table implementation and the
         // in-memory EDX implementation provided for test purpose.
         let index = Findex::new(
-            EntryTable::setup(InMemoryEdx::default()),
-            ChainTable::setup(InMemoryEdx::default()),
+            EntryTable::setup(InMemoryBackend::default()),
+            ChainTable::setup(InMemoryBackend::default()),
         );
 
         ////////////////////////////////////////////////////////////////////////////////

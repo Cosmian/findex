@@ -18,7 +18,7 @@ pub use structs::{
     EncryptedValue, Token, TokenToEncryptedValueMap, TokenWithEncryptedValueList, Tokens,
 };
 
-use crate::{CallbackErrorTrait, Label};
+use crate::{BackendErrorTrait, Label};
 
 #[async_trait(?Send)]
 pub trait TokenDump {
@@ -42,10 +42,10 @@ pub trait DxEnc<const VALUE_LENGTH: usize> {
     type EncryptedValue: Debug + Sized + Clone;
 
     /// Backend storage.
-    type Store: EdxStore<VALUE_LENGTH>;
+    type Backend: EdxBackend<VALUE_LENGTH>;
 
     /// Instantiates a new Dx-Enc scheme.
-    fn setup(edx: Self::Store) -> Self;
+    fn setup(edx: Self::Backend) -> Self;
 
     /// Generates a new random seed.
     fn gen_seed(&self, rng: &mut impl CryptoRngCore) -> Self::Seed;
@@ -78,26 +78,7 @@ pub trait DxEnc<const VALUE_LENGTH: usize> {
         values: [u8; VALUE_LENGTH],
     ) -> Result<Self::EncryptedValue, Self::Error>;
 
-    /// Conditionally upsert the given items into the EDX.
-    ///
-    /// For each new token:
-    /// 1. if there is no old value and no EDX value, inserts the new value;
-    /// 2. if the old value is equal to the EDX value, updates the EDX value
-    /// with the new value;
-    /// 3. if the old value is different from the EDX value, returns the EDX
-    /// value;
-    ///
-    /// A summary of the different cases is presented in the following table:
-    ///
-    /// +--------------+----------+-----------+-----------+
-    /// | stored \ old | None     | Some("A") | Some("B") |
-    /// +--------------+----------+-----------+-----------+
-    /// | None         | upserted | rejected  | rejected  |
-    /// | Some("A")    | rejected | upserted  | rejected  |
-    /// | Some("B")    | rejected | rejected  | upserted  |
-    /// +--------------+----------+-----------+-----------+
-    ///
-    /// All modifications to the EDX are *atomic*.
+    /// Conditionally upserts the given items into the EDX.
     async fn upsert(
         &self,
         old_values: HashMap<Token, Self::EncryptedValue>,
@@ -118,9 +99,9 @@ pub trait DxEnc<const VALUE_LENGTH: usize> {
 }
 
 #[async_trait(?Send)]
-pub trait EdxStore<const VALUE_LENGTH: usize> {
+pub trait EdxBackend<const VALUE_LENGTH: usize> {
     /// Type of error returned by the EDX.
-    type Error: CallbackErrorTrait;
+    type Error: BackendErrorTrait;
 
     /// Queries the EDX for all tokens stored.
     async fn dump_tokens(&self) -> Result<Tokens, Self::Error>;
@@ -132,26 +113,26 @@ pub trait EdxStore<const VALUE_LENGTH: usize> {
         tokens: Tokens,
     ) -> Result<TokenWithEncryptedValueList<VALUE_LENGTH>, Self::Error>;
 
-    /// Upserts the given values into the Edx for the given tokens.
+    /// Upserts the given values into the backend for the given tokens.
     ///
-    /// The upsert operation should be *atomic* and *conditional*.
-    ///
-    /// For each token:
-    /// 1. if there is no old value and no stored value, inserts the new value;
-    /// 2. if the old value is equal to the stored value, updates the stored
-    /// value with the new value;
-    /// 3. if the old value is different from the stored value returns the
-    /// stored value;
+    /// For each new token:
+    /// 1. if there is no old value and no value stored, inserts the new value;
+    /// 2. if there is an old value but no value stored, returns an error;
+    /// 3. if the old value is equal to the value stored, updates the value stored
+    /// with the new value;
+    /// 4. else returns the value stored with its associated token.
     ///
     /// A summary of the different cases is presented in the following table:
     ///
     /// +--------------+----------+-----------+-----------+
     /// | stored \ old | None     | Some("A") | Some("B") |
     /// +--------------+----------+-----------+-----------+
-    /// | None         | upserted | rejected  | rejected  |
+    /// | None         | upserted | *error*   | *error*   |
     /// | Some("A")    | rejected | upserted  | rejected  |
     /// | Some("B")    | rejected | rejected  | upserted  |
     /// +--------------+----------+-----------+-----------+
+    ///
+    /// All modifications of the EDX should be *atomic*.
     async fn upsert(
         &self,
         old_values: TokenToEncryptedValueMap<VALUE_LENGTH>,
@@ -187,35 +168,35 @@ pub mod in_memory {
     #[cfg(feature = "in_memory")]
     use cosmian_crypto_core::{bytes_ser_de::Serializable, Nonce};
 
-    use super::{EdxStore, Token, TokenToEncryptedValueMap, TokenWithEncryptedValueList, Tokens};
+    use super::{EdxBackend, Token, TokenToEncryptedValueMap, TokenWithEncryptedValueList, Tokens};
     #[cfg(feature = "in_memory")]
     use crate::parameters::{MAC_LENGTH, NONCE_LENGTH};
-    use crate::{error::CallbackErrorTrait, EncryptedValue};
+    use crate::{error::BackendErrorTrait, EncryptedValue};
 
     #[derive(Debug)]
-    pub struct KvStoreError(String);
+    pub struct InMemoryBackendError(String);
 
-    impl From<CryptoCoreError> for KvStoreError {
+    impl From<CryptoCoreError> for InMemoryBackendError {
         fn from(value: CryptoCoreError) -> Self {
             Self(value.to_string())
         }
     }
 
-    impl Display for KvStoreError {
+    impl Display for InMemoryBackendError {
         fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
             write!(f, "callback error")
         }
     }
 
-    impl std::error::Error for KvStoreError {}
-    impl CallbackErrorTrait for KvStoreError {}
+    impl std::error::Error for InMemoryBackendError {}
+    impl BackendErrorTrait for InMemoryBackendError {}
 
     #[derive(Debug)]
-    pub struct InMemoryEdx<const VALUE_LENGTH: usize>(
+    pub struct InMemoryBackend<const VALUE_LENGTH: usize>(
         Arc<Mutex<TokenToEncryptedValueMap<VALUE_LENGTH>>>,
     );
 
-    impl<const VALUE_LENGTH: usize> Deref for InMemoryEdx<VALUE_LENGTH> {
+    impl<const VALUE_LENGTH: usize> Deref for InMemoryBackend<VALUE_LENGTH> {
         type Target = Arc<Mutex<TokenToEncryptedValueMap<VALUE_LENGTH>>>;
 
         fn deref(&self) -> &Self::Target {
@@ -223,13 +204,13 @@ pub mod in_memory {
         }
     }
 
-    impl<const VALUE_LENGTH: usize> Default for InMemoryEdx<VALUE_LENGTH> {
+    impl<const VALUE_LENGTH: usize> Default for InMemoryBackend<VALUE_LENGTH> {
         fn default() -> Self {
             Self(Default::default())
         }
     }
 
-    impl<const VALUE_LENGTH: usize> InMemoryEdx<VALUE_LENGTH> {
+    impl<const VALUE_LENGTH: usize> InMemoryBackend<VALUE_LENGTH> {
         #[must_use]
         pub fn is_empty(&self) -> bool {
             self.lock().expect("could not lock mutex").is_empty()
@@ -255,8 +236,8 @@ pub mod in_memory {
     }
 
     #[cfg(feature = "in_memory")]
-    impl<const VALUE_LENGTH: usize> Serializable for InMemoryEdx<VALUE_LENGTH> {
-        type Error = KvStoreError;
+    impl<const VALUE_LENGTH: usize> Serializable for InMemoryBackend<VALUE_LENGTH> {
+        type Error = InMemoryBackendError;
 
         fn length(&self) -> usize {
             (self.lock().expect("could not lock mutex").deref()).len()
@@ -307,8 +288,8 @@ pub mod in_memory {
     }
 
     #[async_trait(?Send)]
-    impl<const VALUE_LENGTH: usize> EdxStore<VALUE_LENGTH> for InMemoryEdx<VALUE_LENGTH> {
-        type Error = KvStoreError;
+    impl<const VALUE_LENGTH: usize> EdxBackend<VALUE_LENGTH> for InMemoryBackend<VALUE_LENGTH> {
+        type Error = InMemoryBackendError;
 
         async fn dump_tokens(&self) -> Result<Tokens, Self::Error> {
             Ok(self
@@ -322,7 +303,7 @@ pub mod in_memory {
         async fn fetch(
             &self,
             tokens: Tokens,
-        ) -> Result<TokenWithEncryptedValueList<VALUE_LENGTH>, KvStoreError> {
+        ) -> Result<TokenWithEncryptedValueList<VALUE_LENGTH>, InMemoryBackendError> {
             Ok(TokenWithEncryptedValueList::from(
                 tokens
                     .into_iter()
@@ -341,11 +322,11 @@ pub mod in_memory {
             &self,
             old_values: TokenToEncryptedValueMap<VALUE_LENGTH>,
             new_values: TokenToEncryptedValueMap<VALUE_LENGTH>,
-        ) -> Result<TokenToEncryptedValueMap<VALUE_LENGTH>, KvStoreError> {
+        ) -> Result<TokenToEncryptedValueMap<VALUE_LENGTH>, InMemoryBackendError> {
             let edx = &mut self.lock().expect("couldn't lock the table");
             // Ensures an value is present inside the EDX for each given old value.
             if old_values.keys().any(|token| !edx.contains_key(token)) {
-                return Err(KvStoreError(format!(
+                return Err(InMemoryBackendError(format!(
                     "missing EDX tokens {:?}",
                     old_values
                         .keys()
@@ -381,7 +362,7 @@ pub mod in_memory {
             let edx = &mut self.lock().expect("couldn't lock the table");
 
             if items.keys().any(|token| edx.contains_key(token)) {
-                return Err(KvStoreError(format!(
+                return Err(InMemoryBackendError(format!(
                     "cannot insert value for used tokens ({:?})",
                     items
                         .keys()

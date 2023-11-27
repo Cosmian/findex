@@ -1,7 +1,7 @@
 use std::collections::{HashMap, HashSet};
 
 use cosmian_findex::{
-    ChainTable, DxEnc, EntryTable, Findex, InMemoryEdx, Index, IndexedValue,
+    ChainTable, DxEnc, EntryTable, Findex, InMemoryBackend, Index, IndexedValue,
     IndexedValueToKeywordsMap, Keyword, Keywords, Label, Location,
 };
 use futures::executor::block_on;
@@ -36,8 +36,8 @@ fn main() {
     // Prepare indexes to be search
     //
     let findex = Findex::new(
-        EntryTable::setup(InMemoryEdx::default()),
-        ChainTable::setup(InMemoryEdx::default()),
+        EntryTable::setup(InMemoryBackend::default()),
+        ChainTable::setup(InMemoryBackend::default()),
     );
 
     let key = findex.keygen();

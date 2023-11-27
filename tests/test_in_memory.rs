@@ -8,8 +8,8 @@ use std::{
 
 use cosmian_crypto_core::{reexport::rand_core::SeedableRng, CsRng};
 use cosmian_findex::{
-    ChainTable, DxEnc, EntryTable, Error, Findex, InMemoryEdx, Index, IndexedValue,
-    IndexedValueToKeywordsMap, Keyword, Keywords, KvStoreError, Label, Location,
+    ChainTable, DxEnc, EntryTable, Error, Findex, InMemoryBackend, InMemoryBackendError, Index,
+    IndexedValue, IndexedValueToKeywordsMap, Keyword, Keywords, Label, Location,
 };
 use futures::executor::block_on;
 use rand::Rng;
@@ -87,7 +87,7 @@ fn check_search_result(
 /// Hence the location associated to the keyword "roberta" should not be
 /// returned by `search`.
 #[actix_rt::test]
-async fn test_progress_callback() -> Result<(), Error<KvStoreError>> {
+async fn test_progress_callback() -> Result<(), Error<InMemoryBackendError>> {
     let mut indexed_value_to_keywords = HashMap::new();
 
     let robert_doe_location = Location::from("Robert Doe's location");
@@ -122,8 +122,8 @@ async fn test_progress_callback() -> Result<(), Error<KvStoreError>> {
     );
 
     let findex = Findex::new(
-        EntryTable::setup(InMemoryEdx::default()),
-        ChainTable::setup(InMemoryEdx::default()),
+        EntryTable::setup(InMemoryBackend::default()),
+        ChainTable::setup(InMemoryBackend::default()),
     );
 
     let key = findex.keygen();
@@ -180,10 +180,10 @@ async fn test_progress_callback() -> Result<(), Error<KvStoreError>> {
 }
 
 #[actix_rt::test]
-async fn test_deletions() -> Result<(), Error<KvStoreError>> {
+async fn test_deletions() -> Result<(), Error<InMemoryBackendError>> {
     let findex = Findex::new(
-        EntryTable::setup(InMemoryEdx::default()),
-        ChainTable::setup(InMemoryEdx::default()),
+        EntryTable::setup(InMemoryBackend::default()),
+        ChainTable::setup(InMemoryBackend::default()),
     );
 
     let key = findex.keygen();
@@ -289,10 +289,10 @@ async fn test_deletions() -> Result<(), Error<KvStoreError>> {
 }
 
 #[actix_rt::test]
-async fn test_double_add() -> Result<(), Error<KvStoreError>> {
+async fn test_double_add() -> Result<(), Error<InMemoryBackendError>> {
     let findex = Findex::new(
-        EntryTable::setup(InMemoryEdx::default()),
-        ChainTable::setup(InMemoryEdx::default()),
+        EntryTable::setup(InMemoryBackend::default()),
+        ChainTable::setup(InMemoryBackend::default()),
     );
 
     let key = findex.keygen();
@@ -329,7 +329,7 @@ async fn test_double_add() -> Result<(), Error<KvStoreError>> {
 }
 
 #[actix_rt::test]
-async fn test_findex() -> Result<(), Error<KvStoreError>> {
+async fn test_findex() -> Result<(), Error<InMemoryBackendError>> {
     let mut rng = CsRng::from_entropy();
 
     let mut removed_items: HashSet<Location> = HashSet::new();
@@ -367,8 +367,8 @@ async fn test_findex() -> Result<(), Error<KvStoreError>> {
     );
 
     let findex = Findex::new(
-        EntryTable::setup(InMemoryEdx::default()),
-        ChainTable::setup(InMemoryEdx::default()),
+        EntryTable::setup(InMemoryBackend::default()),
+        ChainTable::setup(InMemoryBackend::default()),
     );
 
     let key = findex.keygen();
@@ -747,7 +747,7 @@ async fn test_findex() -> Result<(), Error<KvStoreError>> {
 }
 
 #[actix_rt::test]
-async fn test_first_names() -> Result<(), Error<KvStoreError>> {
+async fn test_first_names() -> Result<(), Error<InMemoryBackendError>> {
     const NUM_LOCATIONS: usize = 5;
     // change this to usize::MAX to run a full test
     const MAX_FIRST_NAMES: usize = 1000;
@@ -755,13 +755,13 @@ async fn test_first_names() -> Result<(), Error<KvStoreError>> {
     let mut rng = rand::thread_rng();
 
     let graph_findex = Findex::new(
-        EntryTable::setup(InMemoryEdx::default()),
-        ChainTable::setup(InMemoryEdx::default()),
+        EntryTable::setup(InMemoryBackend::default()),
+        ChainTable::setup(InMemoryBackend::default()),
     );
 
     let naive_findex = Findex::new(
-        EntryTable::setup(InMemoryEdx::default()),
-        ChainTable::setup(InMemoryEdx::default()),
+        EntryTable::setup(InMemoryBackend::default()),
+        ChainTable::setup(InMemoryBackend::default()),
     );
 
     let key = graph_findex.keygen();
@@ -905,8 +905,8 @@ async fn test_graph_compacting() {
     let mut rng = CsRng::from_entropy();
     let mut indexed_value_to_keywords = HashMap::new();
     let findex = Findex::new(
-        EntryTable::setup(InMemoryEdx::default()),
-        ChainTable::setup(InMemoryEdx::default()),
+        EntryTable::setup(InMemoryBackend::default()),
+        ChainTable::setup(InMemoryBackend::default()),
     );
 
     let mut key = findex.keygen();
@@ -1013,7 +1013,7 @@ async fn test_graph_compacting() {
 }
 
 #[actix_rt::test]
-async fn test_keyword_presence() -> Result<(), Error<KvStoreError>> {
+async fn test_keyword_presence() -> Result<(), Error<InMemoryBackendError>> {
     let mut indexed_value_to_keywords = HashMap::new();
 
     // direct location robert doe
@@ -1031,8 +1031,8 @@ async fn test_keyword_presence() -> Result<(), Error<KvStoreError>> {
     );
 
     let findex = Findex::new(
-        EntryTable::setup(InMemoryEdx::default()),
-        ChainTable::setup(InMemoryEdx::default()),
+        EntryTable::setup(InMemoryBackend::default()),
+        ChainTable::setup(InMemoryBackend::default()),
     );
 
     let key = findex.keygen();
@@ -1107,10 +1107,10 @@ async fn test_keyword_presence() -> Result<(), Error<KvStoreError>> {
 }
 
 #[actix_rt::test]
-async fn test_concurrency() -> Result<(), Error<KvStoreError>> {
+async fn test_concurrency() -> Result<(), Error<InMemoryBackendError>> {
     let findex = Arc::new(Findex::new(
-        EntryTable::setup(InMemoryEdx::default()),
-        ChainTable::setup(InMemoryEdx::default()),
+        EntryTable::setup(InMemoryBackend::default()),
+        ChainTable::setup(InMemoryBackend::default()),
     ));
     let key = Arc::new(findex.keygen());
     let label = Arc::new(Label::from("First label."));

@@ -2,7 +2,7 @@ use std::collections::{HashMap, HashSet};
 
 use cosmian_crypto_core::CsRng;
 use cosmian_findex::{
-    ChainTable, DxEnc, EntryTable, Findex, InMemoryEdx, Index, IndexedValue,
+    ChainTable, DxEnc, EntryTable, Findex, InMemoryBackend, Index, IndexedValue,
     IndexedValueToKeywordsMap, Keyword, Keywords, Label, Location,
 };
 use criterion::{criterion_group, criterion_main, Criterion};
@@ -45,8 +45,8 @@ fn bench_search(c: &mut Criterion) {
     // Prepare indexes to be search
     //
     let findex = Findex::new(
-        EntryTable::setup(InMemoryEdx::default()),
-        ChainTable::setup(InMemoryEdx::default()),
+        EntryTable::setup(InMemoryBackend::default()),
+        ChainTable::setup(InMemoryBackend::default()),
     );
 
     let key = findex.keygen();
@@ -96,8 +96,8 @@ fn bench_upsert(c: &mut Criterion) {
     let mut rng = CsRng::from_entropy();
     let label = Label::random(&mut rng);
     let mut findex = Findex::new(
-        EntryTable::setup(InMemoryEdx::default()),
-        ChainTable::setup(InMemoryEdx::default()),
+        EntryTable::setup(InMemoryBackend::default()),
+        ChainTable::setup(InMemoryBackend::default()),
     );
     let key = findex.keygen();
 

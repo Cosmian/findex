@@ -1,8 +1,8 @@
 //! Findex Graph Encryption Scheme (GX-Enc).
 //!
-//! Uses the Findex MM-Enc scheme in order to sec0ly store a graph. This graph
-//! stores `IndexedValue`s for `Tag`s. An `IndexedValue` can be ei0r a
-//! `Pointer` to another `Tag` or a `Data` containing a `Value`.
+//! Uses the Findex MM-Enc scheme in order to securely store a graph. This graph stores
+//! `IndexedValue`s for `Tag`s. An `IndexedValue` can be either a `Pointer` to another `Tag` or a
+//! `Data` containing a `Value`.
 
 use std::{
     collections::{HashMap, HashSet},
@@ -18,7 +18,7 @@ use zeroize::ZeroizeOnDrop;
 
 use crate::{
     findex_mm::{FindexMultiMap, Operation, ENTRY_LENGTH, LINK_LENGTH},
-    CallbackErrorTrait, DxEnc, Error, Label,
+    BackendErrorTrait, DxEnc, Error, Label,
 };
 
 mod compact;
@@ -28,7 +28,7 @@ mod structs;
 pub use structs::IndexedValue;
 
 #[async_trait(?Send)]
-pub trait GxEnc<EdxError: CallbackErrorTrait> {
+pub trait GxEnc<EdxError: BackendErrorTrait> {
     /// Seed used to derive the key.
     type Seed: Sized + ZeroizeOnDrop + AsRef<[u8]> + Default + AsMut<[u8]>;
 
@@ -73,7 +73,7 @@ pub trait GxEnc<EdxError: CallbackErrorTrait> {
 
 #[derive(Debug)]
 pub struct FindexGraph<
-    UserError: CallbackErrorTrait,
+    UserError: BackendErrorTrait,
     EntryTable: DxEnc<ENTRY_LENGTH, Error = Error<UserError>>,
     ChainTable: DxEnc<LINK_LENGTH, Error = Error<UserError>>,
 > {
@@ -81,7 +81,7 @@ pub struct FindexGraph<
 }
 
 impl<
-        UserError: CallbackErrorTrait,
+        UserError: BackendErrorTrait,
         EntryTable: DxEnc<ENTRY_LENGTH, Error = Error<UserError>>,
         ChainTable: DxEnc<LINK_LENGTH, Error = Error<UserError>>,
     > FindexGraph<UserError, EntryTable, ChainTable>
@@ -108,7 +108,7 @@ mod tests {
     use cosmian_crypto_core::{reexport::rand_core::SeedableRng, CsRng};
 
     use crate::{
-        edx::in_memory::InMemoryEdx,
+        edx::in_memory::InMemoryBackend,
         findex_graph::{FindexGraph, GxEnc, IndexedValue},
         findex_mm::Operation,
         ChainTable, DxEnc, EntryTable, Label,
@@ -128,8 +128,8 @@ mod tests {
         let rng = Arc::new(Mutex::new(CsRng::from_entropy()));
         let label = Label::random(&mut *rng.lock().expect(""));
 
-        let entry_table = EntryTable::setup(InMemoryEdx::default());
-        let chain_table = ChainTable::setup(InMemoryEdx::default());
+        let entry_table = EntryTable::setup(InMemoryBackend::default());
+        let chain_table = ChainTable::setup(InMemoryBackend::default());
         let findex = FindexGraph::new(entry_table, chain_table);
 
         let findex_seed = findex.gen_seed(&mut *rng.lock().expect("could not lock mutex"));

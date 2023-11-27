@@ -5,15 +5,15 @@ use core::fmt::{Debug, Display};
 use cosmian_crypto_core::CryptoCoreError;
 use never::Never;
 
-/// Marker trait indicating an error type is used as `CallbackError`.
-pub trait CallbackErrorTrait: std::error::Error {}
+/// Marker trait for `Backend` errors.
+pub trait BackendErrorTrait: std::error::Error {}
 
 #[derive(Debug)]
 pub enum Error<T: std::error::Error> {
     Crypto(String),
     CryptoCore(CryptoCoreError),
     Conversion(String),
-    Callback(T),
+    Backend(T),
     Interrupt(String),
     Filter(String),
 }
@@ -25,7 +25,7 @@ impl<T: std::error::Error> Display for Error<T> {
                 write!(f, "crypto error: {msg}")
             }
             Self::CryptoCore(err) => write!(f, "CryptoCore error: {err}"),
-            Self::Callback(msg) => write!(f, "callback error: {msg}"),
+            Self::Backend(msg) => write!(f, "backend error: {msg}"),
             Self::Interrupt(error) => write!(f, "user interrupt error: {error}"),
             Self::Filter(error) => write!(f, "user filter error: {error}"),
         }
@@ -44,9 +44,9 @@ impl<T: std::error::Error> From<CryptoCoreError> for Error<T> {
     }
 }
 
-impl<T: CallbackErrorTrait> From<T> for Error<T> {
+impl<T: BackendErrorTrait> From<T> for Error<T> {
     fn from(value: T) -> Self {
-        Self::Callback(value)
+        Self::Backend(value)
     }
 }
 
@@ -56,13 +56,13 @@ impl<T: std::error::Error> std::error::Error for Error<T> {}
 /// callback.
 pub type CoreError = Error<Never>;
 
-impl<T: CallbackErrorTrait> From<CoreError> for Error<T> {
+impl<T: BackendErrorTrait> From<CoreError> for Error<T> {
     fn from(value: CoreError) -> Self {
         match value {
             CoreError::Crypto(err) => Self::Crypto(err),
             CoreError::CryptoCore(err) => Self::CryptoCore(err),
             CoreError::Conversion(err) => Self::Conversion(err),
-            CoreError::Callback(_) => {
+            CoreError::Backend(_) => {
                 panic!("this cannot happen because CoreError uses the `Never` type");
             }
             CoreError::Interrupt(err) => Self::Interrupt(err),

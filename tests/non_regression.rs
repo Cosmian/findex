@@ -9,8 +9,8 @@ use cosmian_crypto_core::{
     FixedSizeCBytes, RandomFixedSizeCBytes,
 };
 use cosmian_findex::{
-    ChainTable, DxEnc, EntryTable, Error, Findex, InMemoryEdx, Index, IndexedValue,
-    IndexedValueToKeywordsMap, Keyword, Keywords, KvStoreError, Label, Location, UserKey,
+    ChainTable, DxEnc, EntryTable, Error, Findex, InMemoryBackend, InMemoryBackendError, Index,
+    IndexedValue, IndexedValueToKeywordsMap, Keyword, Keywords, Label, Location, UserKey,
     ENTRY_LENGTH, LINK_LENGTH,
 };
 use rand::RngCore;
@@ -35,7 +35,7 @@ fn add_keyword_graph(
 }
 
 #[allow(dead_code)]
-async fn write_index() -> Result<(), Error<KvStoreError>> {
+async fn write_index() -> Result<(), Error<InMemoryBackendError>> {
     const MIN_KEYWORD_LENGTH: usize = 3;
     const MAX_NUM_LOCATIONS: usize = 20;
     const MAX_FIRST_NAMES: usize = 1000;
@@ -43,8 +43,8 @@ async fn write_index() -> Result<(), Error<KvStoreError>> {
     let mut rng = rand::thread_rng();
 
     let findex = Findex::new(
-        EntryTable::setup(InMemoryEdx::default()),
-        ChainTable::setup(InMemoryEdx::default()),
+        EntryTable::setup(InMemoryBackend::default()),
+        ChainTable::setup(InMemoryBackend::default()),
     );
 
     let key = findex.keygen();
@@ -101,19 +101,19 @@ async fn write_index() -> Result<(), Error<KvStoreError>> {
 }
 
 #[actix_rt::test]
-async fn test_non_regression() -> Result<(), Error<KvStoreError>> {
+async fn test_non_regression() -> Result<(), Error<InMemoryBackendError>> {
     // Uncomment to generate new test data.
     // write_index().await?;
 
     let mut findex = Findex::new(
-        EntryTable::setup(InMemoryEdx::default()),
-        ChainTable::setup(InMemoryEdx::default()),
+        EntryTable::setup(InMemoryBackend::default()),
+        ChainTable::setup(InMemoryBackend::default()),
     );
 
     let serialized_index = std::fs::read("datasets/serialized_index").unwrap();
     let mut de = Deserializer::new(&serialized_index);
-    findex.findex_graph.findex_mm.entry_table.0 = de.read::<InMemoryEdx<ENTRY_LENGTH>>()?;
-    findex.findex_graph.findex_mm.chain_table.0 = de.read::<InMemoryEdx<LINK_LENGTH>>()?;
+    findex.findex_graph.findex_mm.entry_table.0 = de.read::<InMemoryBackend<ENTRY_LENGTH>>()?;
+    findex.findex_graph.findex_mm.chain_table.0 = de.read::<InMemoryBackend<LINK_LENGTH>>()?;
 
     println!(
         "Entry Table length: {}",

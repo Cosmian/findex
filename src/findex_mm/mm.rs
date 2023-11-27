@@ -19,11 +19,11 @@ use crate::{
         FindexMultiMap, MmEnc, ENTRY_LENGTH, LINK_LENGTH,
     },
     parameters::{BLOCK_LENGTH, HASH_LENGTH, LINE_WIDTH, SEED_LENGTH},
-    CallbackErrorTrait, CoreError, Label,
+    BackendErrorTrait, CoreError, Label,
 };
 
 impl<
-        UserError: CallbackErrorTrait,
+        UserError: BackendErrorTrait,
         EntryTable: DxEnc<ENTRY_LENGTH, Error = Error<UserError>>,
         ChainTable: DxEnc<LINK_LENGTH, Error = Error<UserError>>,
     > FindexMultiMap<UserError, EntryTable, ChainTable>
@@ -355,7 +355,7 @@ impl<
 
 #[async_trait(?Send)]
 impl<
-        UserError: CallbackErrorTrait,
+        UserError: BackendErrorTrait,
         EntryTable: DxEnc<ENTRY_LENGTH, Error = Error<UserError>>,
         ChainTable: DxEnc<LINK_LENGTH, Error = Error<UserError>>,
     > MmEnc<SEED_LENGTH, UserError> for FindexMultiMap<UserError, EntryTable, ChainTable>
@@ -473,14 +473,16 @@ mod tests {
     };
 
     use super::*;
-    use crate::edx::{chain_table::ChainTable, entry_table::EntryTable, in_memory::InMemoryEdx};
+    use crate::edx::{
+        chain_table::ChainTable, entry_table::EntryTable, in_memory::InMemoryBackend,
+    };
 
     #[actix_rt::test]
     async fn test_decompose_recompose() {
         let mut rng = CsRng::from_entropy();
 
-        let entry_table = EntryTable::setup(InMemoryEdx::default());
-        let chain_table = ChainTable::setup(InMemoryEdx::default());
+        let entry_table = EntryTable::setup(InMemoryBackend::default());
+        let chain_table = ChainTable::setup(InMemoryBackend::default());
         let findex = FindexMultiMap::new(entry_table, chain_table);
 
         let n = 10;

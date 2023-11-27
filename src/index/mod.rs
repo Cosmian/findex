@@ -15,7 +15,7 @@ use crate::{
     edx::{Token, TokenDump, Tokens},
     findex_graph::{FindexGraph, GxEnc},
     findex_mm::{Operation, ENTRY_LENGTH, LINK_LENGTH},
-    CallbackErrorTrait, DxEnc, Error, IndexedValue,
+    BackendErrorTrait, DxEnc, Error, IndexedValue,
 };
 
 mod structs;
@@ -115,7 +115,7 @@ pub trait Index<EntryTable: DxEnc<ENTRY_LENGTH>, ChainTable: DxEnc<LINK_LENGTH>>
 /// Findex type implements the Findex algorithm.
 #[derive(Debug)]
 pub struct Findex<
-    UserError: CallbackErrorTrait,
+    UserError: BackendErrorTrait,
     EntryTable: DxEnc<ENTRY_LENGTH, Error = Error<UserError>>,
     ChainTable: DxEnc<LINK_LENGTH, Error = Error<UserError>>,
 > {
@@ -125,7 +125,7 @@ pub struct Findex<
 
 #[async_trait(?Send)]
 impl<
-        UserError: CallbackErrorTrait,
+        UserError: BackendErrorTrait,
         EntryTable: DxEnc<ENTRY_LENGTH, Error = Error<UserError>> + TokenDump<Error = Error<UserError>>,
         ChainTable: DxEnc<LINK_LENGTH, Error = Error<UserError>>,
     > Index<EntryTable, ChainTable> for Findex<UserError, EntryTable, ChainTable>
@@ -333,7 +333,7 @@ impl<
 }
 
 impl<
-        UserError: CallbackErrorTrait,
+        UserError: BackendErrorTrait,
         EntryTable: DxEnc<ENTRY_LENGTH, Error = Error<UserError>> + TokenDump<Error = Error<UserError>>,
         ChainTable: DxEnc<LINK_LENGTH, Error = Error<UserError>>,
     > Findex<UserError, EntryTable, ChainTable>

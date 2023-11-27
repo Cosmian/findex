@@ -3,7 +3,7 @@ Findex sequence diagrams
 
 This documents describes the Findex operations using sequence diagrams. Refer
 to the [functional documentation](functional.md) in order to understand the
-roles of the different components of the following flows.
+roles of the different participants.
 
 ## Search
 
@@ -62,11 +62,13 @@ sequenceDiagram
         Findex->>+CT: fetch({ token })
         CT->>-Findex: return { token->value }
 
-        Findex->>+CT: insert({ token->value })
-        CT->>-Findex: return
-
-        Findex->>+ET: insert({ token->value })
-        ET->>-Findex: return
+        par
+            Findex->>+CT: insert({ token->value })
+            CT->>-Findex: return
+        and
+            Findex->>+ET: insert({ token->value })
+            ET->>-Findex: return
+        end
 
         par
             Findex->>+ET: delete({ token })
