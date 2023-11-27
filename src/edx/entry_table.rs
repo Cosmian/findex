@@ -116,11 +116,8 @@ impl<const VALUE_LENGTH: usize, Edx: EdxStore<VALUE_LENGTH>> DxEnc<VALUE_LENGTH>
             .map(Into::into)
     }
 
-    async fn insert(
-        &self,
-        _values: HashMap<Token, Self::EncryptedValue>,
-    ) -> Result<(), Self::Error> {
-        panic!("The Entry Table does not do any insert.")
+    async fn insert(&self, items: HashMap<Token, Self::EncryptedValue>) -> Result<(), Self::Error> {
+        self.0.insert(items.into()).await.map_err(Error::Callback)
     }
 
     fn prepare(

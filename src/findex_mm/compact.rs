@@ -222,23 +222,11 @@ impl<
             )));
         };
 
-        let upsert_results = self.entry_table.upsert(HashMap::new(), new_entries).await;
-
-        let res = if let Ok(upsert_results) = upsert_results {
-            if upsert_results.is_empty() {
-                Ok(())
-            } else {
-                Err(Error::Crypto(format!(
-                    "A conflict occurred during the upsert operation. All modifications were \
-                     reverted. ({upsert_results:?})"
-                )))
-            }
-        } else {
-            Err(Error::Crypto(
-                "An error occurred during the upsert operation. All modifications were reverted."
-                    .to_string(),
+        let res = self.entry_table.insert(new_entries).await.map_err(|e| {
+            Error::Crypto(format!(
+                "An error occurred during the `insert` operation, all modifications were reverted: {e}"
             ))
-        };
+        });
 
         if res.is_ok() {
             self.chain_table.delete(old_links).await?;

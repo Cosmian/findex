@@ -43,7 +43,7 @@ pub trait Index<EntryTable: DxEnc<ENTRY_LENGTH>, ChainTable: DxEnc<LINK_LENGTH>>
     /// Searches the index for the given keywords.
     ///
     /// The `interrupt` callback is fed with the results of each graph search
-    /// iteration. Iterations are stopped if the `interrupt` return `true`.
+    /// iteration. Iterations are stopped if the `interrupt` returns `true`.
     async fn search<
         F: Future<Output = Result<bool, String>>,
         Interrupt: Fn(HashMap<Keyword, HashSet<IndexedValue<Keyword, Location>>>) -> F,
@@ -57,7 +57,7 @@ pub trait Index<EntryTable: DxEnc<ENTRY_LENGTH>, ChainTable: DxEnc<LINK_LENGTH>>
 
     /// Adds the given associations to the index.
     ///
-    /// Returns the set of keywords added as keys to the index.
+    /// Returns the set of keywords added as new keys to the index.
     async fn add(
         &self,
         key: &UserKey,
@@ -71,7 +71,7 @@ pub trait Index<EntryTable: DxEnc<ENTRY_LENGTH>, ChainTable: DxEnc<LINK_LENGTH>>
     /// effectively increasing the index size. The compact operation is in charge of removing
     /// associations that have been negated.
     ///
-    /// Returns the set of keywords added to the index.
+    /// Returns the set of keywords added as new keys to the index.
     async fn delete(
         &self,
         key: &UserKey,

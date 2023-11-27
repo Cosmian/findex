@@ -38,9 +38,11 @@ pub use parameters::*;
 mod example {
     use std::collections::HashSet;
 
+    use cosmian_crypto_core::{reexport::rand_core::SeedableRng, CsRng, RandomFixedSizeCBytes};
+
     use crate::{
         ChainTable, DxEnc, EntryTable, Findex, InMemoryEdx, Index, IndexedValue,
-        IndexedValueToKeywordsMap, Keyword, KeywordToDataMap, Keywords, Label, Location,
+        IndexedValueToKeywordsMap, Keyword, KeywordToDataMap, Keywords, Label, Location, UserKey,
     };
 
     #[actix_rt::test]
@@ -49,6 +51,12 @@ mod example {
          * Findex instantiation.
          */
 
+        let mut rng = CsRng::from_entropy();
+        // Let's create a new key for our index.
+        let key = UserKey::new(&mut rng);
+        // Findex uses a public label with the private key. Let's generate a new label.
+        let label = Label::from("My public label");
+
         // Let's create a new index using the provided Entry and Chain table implementation and the
         // in-memory EDX implementation provided for test purpose.
         let index = Findex::new(
@@ -56,16 +64,10 @@ mod example {
             ChainTable::setup(InMemoryEdx::default()),
         );
 
-        // Let's create a new key for our index.
-        let key = index.keygen();
-
-        // Findex uses a public label with the private key. Let's generate a new label.
-        let label = Label::from("My public label");
-
         ////////////////////////////////////////////////////////////////////////////////
         //                                                                            //
         //  Let's associate `loc1` to `kwd1`, `loc2` to `kwd2` and `kwd2` to `kwd1`.  //
-        //  The futur state of the index can be represented as a JSON:                //
+        //  The future state of the index can be represented as a JSON:               //
         //                                                                            //
         //  ```json                                                                   //
         //  {                                                                         //
@@ -128,8 +130,8 @@ mod example {
 
         ////////////////////////////////////////////////////////////////////////////////
         //                                                                            //
-        //  Let's delete the association `kwd1` -> `kwd2`. This actually associates   //
-        //  the negation of `kwd2` to `kwd1`.                                         //
+        //  Let's delete the association `kwd1`->`kwd2`. This actually associates the //
+        //  negation of `kwd2` to `kwd1`.                                             //
         //                                                                            //
         //  ```json                                                                   //
         //  {                                                                         //
@@ -225,8 +227,8 @@ mod example {
         ////////////////////////////////////////////////////////////////////////////////
         //                                                                            //
         //  Let's delete the association `loc2`->`kwd2` and compact the index in      //
-        //  order to collapse the negation. Since `kwd2` indexes no more keyword, it  //
-        //  should be removed from the index:                                         //
+        //  order to collapse the negation. Since `kwd2` indexes no more keyword,     //
+        //  it should be removed from the index:                                      //
         //                                                                            //
         //  ```json                                                                   //
         //  {                                                                         //
