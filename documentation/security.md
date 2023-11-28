@@ -15,6 +15,24 @@ succeeds in dumping the database storing the Findex indexes.
 Findex aims to provide the snapshot security level (the proof is a work in
 progress).
 
+The index stored is composed of:
+- tokens (UIDs) that are the result of a cryptographic hash function with at
+  least 256 bits of security;
+- encrypted values produced using AES256-GCM.
+
+As such, it provides 256 bits of classic security and 128 bits of post-quantum
+security against decryption and brute-force attack on the tokens.
+
+The indexed values stored in the Chain Table values are therefore secured.
+
+Another security concept is the *volume*. It describes the number of data
+associated to a given keyword.
+
+Since the data associated to each keyword are stored inside constant-size
+values in the Chain Table and that the security levels listed above prevent
+attackers from grouping these values per keyword, the index stored does not
+leak the volume.
+
 ## Multi-snapshot security
 
 The multi-snapshot security means that no information is leaked if an attacker
