@@ -6,8 +6,8 @@ Findex functional documentation
 This documents describes in details the functionalities of Findex.
 
 The goal of Findex is to allow users to securely manage an index. To know more
-about the security guarantees of Findex, see the [security
-documentation](security.md).
+about the security guarantees of Findex, see the [security][sec_doc]
+documentation.
 
 ### An index as a graph
 
@@ -77,7 +77,7 @@ some keywords).
 ### An index as a couple of dictionaries
 
 Each multi-map value can be split into values of equal sizes called links, as
-described in the [serialization](serialization.md) documentation. The sequence
+described in the [serialization][ser_doc] documentation. The sequence
 of links that is generated from a given multi-map value is called a chain. This
 allows representing the multi-map using two dictionary encryption schemes:
 - the first DX-Enc is called *Chain Table*: it contains all the chains
@@ -85,9 +85,8 @@ allows representing the multi-map using two dictionary encryption schemes:
 - the second DX-Enc is called *Entry Table*: it contains for each keyword all
   the metadata needed to retrieve the entire chain from the Chain Table.
 
-The role of Findex is therefore to transform [index](../src/index/mod.rs#33)
-requests into [DX-Enc](../src/edx/mod.rs#30) requests, without leaking
-information.
+The role of Findex is therefore to transform [index][index_trait] requests into
+[DX-Enc][edx_trait] requests, without leaking information.
 
 ## A generic construction
 
@@ -96,3 +95,16 @@ DX-Enc used to represent the Entry and the Chain tables. In practice, an
 implementation is provided but it uses a generic backend interface used to
 abstract the storage technology used. This allows users to use Findex on top of
 any database.
+
+See the [Cosmian documentation][pub_doc] for more details on how to
+implement the backend interface.
+
+<!--
+   -# References
+   -->
+
+[pub_doc](https://docs.cosmian.com/cloudproof_encryption/encrypted_search/)
+[sec_doc](security.md)
+[ser_doc](serialization.md)
+[index_trait](../src/index/mod.rs#33)
+[edx_trait](../src/edx/mod.rs#30)

@@ -43,7 +43,7 @@ defined in [`parameters.rs`](./src/parameters.rs).
 
 Findex delegates to the user the implementation of _callbacks_ to manipulate
 the indexes. This makes Findex compatible with any database technology since no database-specific code is part of it. Implementation is done via the
-`FindexCallbacks` trait. See [`callbacks.md`](./callbacks.md) for details on
+`FindexCallbacks` trait. See [`callbacks.md`](./documentation/callbacks.md) for details on
 the implementation of the callbacks.
 
 See `in_memory_example.rs` for an example of implementation.
@@ -296,8 +296,9 @@ The benchmarks presented in this section are run on an Intel(R) Xeon(R) Platinum
 
 ## Documentation
 
-Findex supporting paper can be found [Findex.pdf](./documentation/Findex.pdf).
-Documentation on callback implementation details can be found in
-[`callbacks.md`](./callbacks.md).
+Findex supporting paper can be found the Findex
+[whitepaper](./documentation/whitepaper.pdf). Documentation on callback
+implementation details can be found in
+[`callbacks.md`](./documentation/callbacks.md).
 
 The developer documentation can be found on [doc.rs](https://docs.rs/cosmian_findex/latest/cosmian_findex/index.html)
