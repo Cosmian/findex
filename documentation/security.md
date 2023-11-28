@@ -94,4 +94,4 @@ knowledge gained by the server over the time: the compact operation.
    -# References
    -->
 
-[whitepaper](./whitepaper.pdf)
+[whitepaper]: ./whitepaper.pdf "Findex whitepaper"

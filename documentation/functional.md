@@ -103,8 +103,8 @@ implement the backend interface.
    -# References
    -->
 
-[pub_doc](https://docs.cosmian.com/cloudproof_encryption/encrypted_search/)
-[sec_doc](security.md)
-[ser_doc](serialization.md)
-[index_trait](../src/index/mod.rs#33)
-[edx_trait](../src/edx/mod.rs#30)
+[pub_doc]: https://docs.cosmian.com/cloudproof_encryption/encrypted_search/ "Findex documentation on docs.cosmian.com"
+[sec_doc]: security.md "Security documentation"
+[ser_doc]: serialization.md "Index serialization documentation"
+[index_trait]: ../src/index/mod.rs#L33 "Index trait"
+[edx_trait]: ../src/edx/mod.rs#L31 "DX-Enc trait"
