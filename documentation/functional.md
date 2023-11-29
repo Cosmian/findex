@@ -3,8 +3,6 @@ Findex functional documentation
 
 ## How to securely manage an index
 
-This documents describes in details the functionalities of Findex.
-
 The goal of Findex is to allow users to securely manage an index. To know more
 about the security guarantees of Findex, see the [security][sec_doc]
 documentation.
@@ -80,9 +78,9 @@ Each multi-map value can be split into values of equal sizes called links, as
 described in the [serialization][ser_doc] documentation. The sequence
 of links that is generated from a given multi-map value is called a chain. This
 allows representing the multi-map using two dictionary encryption schemes:
-- the first DX-Enc is called *Chain Table*: it contains all the chains
+- the first DX-Enc is called **Chain Table**: it contains all the chains
   generated from all the multi-map values.
-- the second DX-Enc is called *Entry Table*: it contains for each keyword all
+- the second DX-Enc is called **Entry Table**: it contains for each keyword all
   the metadata needed to retrieve the entire chain from the Chain Table.
 
 The role of Findex is therefore to transform [index][index_trait] requests into
@@ -109,3 +107,4 @@ for details about how to implement this interface in other languages.
 [ser_doc]: serialization.md "Index serialization documentation"
 [index_trait]: ../src/index/mod.rs#L33 "Index trait"
 [edx_trait]: ../src/edx/mod.rs#L31 "DX-Enc trait"
+[backend_trait]: ../src/edx/mod.rs#L102 "Findex backend interface"

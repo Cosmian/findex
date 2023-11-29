@@ -21,9 +21,8 @@ The index stored is composed of:
 - encrypted values produced using AES256-GCM.
 
 As such, it provides 256 bits of classic security and 128 bits of post-quantum
-security against decryption and brute-force attack on the tokens.
-
-The indexed values stored in the Chain Table values are therefore secured.
+security against decryption and brute-force attack on the tokens. The indexed
+values (stored in the Chain Table values) are therefore secured.
 
 Another security concept is the *volume*. It describes the number of data
 associated to a given keyword.
@@ -79,13 +78,13 @@ Therefore, leaking search pattern may leak the identity of the keywords stored
 in the index and the identity of the keywords requested by the clients.
 
 Like all SSE, Findex leaks the *search pattern*. It has been proven that in
-order to hide the search pattern, a logarithmic cost in communication between
-the client and the server is needed. The state-of-the-art construction that
-preserve search access privacy is the ORAM.
+order to hide the search pattern, a logarithmic bandwidth overhead on the
+communication between the client and the server is unavoidable. The
+state-of-the-art construction that preserve search pattern privacy is the ORAM.
 
-Since a logarithmic communication costs is prohibitively high for several
-applications, we chose not to base Findex on an ORAM construction and to leak
-the search pattern.
+Since a logarithmic communication bandwidth overhead cost is prohibitively high
+for several applications, we chose not to base Findex on an ORAM construction
+and to leak the search pattern.
 
 However, we provide a way to "shuffle" the index, that can be used to reset the
 knowledge gained by the server over the time: the compact operation.

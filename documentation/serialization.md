@@ -14,7 +14,7 @@ Therefore, the actual structures stored are:
 {
     (token) [u8; 32]: (nonce) [u8; 12]
                         || (ciphertext) [u8; PLAINTEXT_LENGTH]
-                        || (tag) [u8; 16],
+                        || (mac) [u8; 16],
     ...
 }
 ```
@@ -33,7 +33,7 @@ each keyword. Its values are therefore:
 (entry) {
     last_link_token: [u8; 32],
     seed: [u8; 16],
-    entry_tag: [u8; 32],
+    keyword_hash: [u8; 32],
 }
 ```
 
