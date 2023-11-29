@@ -18,16 +18,6 @@ GLOSSARY
 - Chain: sequence of all the links containing data associated to the same
   keyword.
 
-<!--
-   -  It is important to underline that the use of this name implies the existence
-   -  of a specific *order* between the links. Thus a set of links is not a chain
-   -  as a set does not enforce any specific order between the links.
-   -
-   -  In practice, the order among chain links matters since the `delete` operation
-   -  adds negated data to the chains, which invalidates all previous occurrences,
-   -  but not subsequent occurrences of this data.
-   -->
-
 - Entry Table: table storing the metadata of the list of values indexed for a
   given keyword.
 

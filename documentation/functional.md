@@ -11,7 +11,7 @@ documentation.
 
 ### An index as a graph
 
-An index can be thought of as a graph: each indexed keyword is associated a
+An index can be thought of as a graph: each indexed keyword is associated to a
 node, which contains all data indexed under this keyword; some of this data can
 be other keywords which can be represented as directed edges linking the
 vertices of each one of the associated keywords.
