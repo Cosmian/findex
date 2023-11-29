@@ -1,7 +1,7 @@
 use std::collections::{HashMap, HashSet};
 
 use cosmian_findex::{
-    ChainTable, DxEnc, EntryTable, Findex, InMemoryEdx, Index, IndexedValue,
+    ChainTable, DxEnc, EntryTable, Findex, InMemoryBackend, Index, IndexedValue,
     IndexedValueToKeywordsMap, Keyword, Keywords, Label, Location,
 };
 use futures::executor::block_on;
@@ -36,24 +36,20 @@ fn main() {
     // Prepare indexes to be search
     //
     let findex = Findex::new(
-        EntryTable::setup(InMemoryEdx::default()),
-        ChainTable::setup(InMemoryEdx::default()),
+        EntryTable::setup(InMemoryBackend::default()),
+        ChainTable::setup(InMemoryBackend::default()),
     );
 
-    let master_key = findex.keygen();
+    let key = findex.keygen();
     let label = Label::from("label");
-    block_on(findex.add(&master_key, &label, locations_and_words)).expect("msg");
+    block_on(findex.add(&key, &label, locations_and_words)).expect("msg");
 
     //
     // Search 1000 words
     //
     let keywords = prepare_keywords(1000);
     for _ in 0..1000 {
-        block_on(
-            findex.search(&master_key, &label, keywords.clone(), &|_| async {
-                Ok(false)
-            }),
-        )
-        .expect("search failed");
+        block_on(findex.search(&key, &label, keywords.clone(), &|_| async { Ok(false) }))
+            .expect("search failed");
     }
 }

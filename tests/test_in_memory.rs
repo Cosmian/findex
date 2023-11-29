@@ -8,8 +8,8 @@ use std::{
 
 use cosmian_crypto_core::{reexport::rand_core::SeedableRng, CsRng};
 use cosmian_findex::{
-    ChainTable, DxEnc, EntryTable, Error, Findex, InMemoryEdx, Index, IndexedValue,
-    IndexedValueToKeywordsMap, Keyword, Keywords, KvStoreError, Label, Location,
+    ChainTable, DxEnc, EntryTable, Error, Findex, InMemoryBackend, InMemoryBackendError, Index,
+    IndexedValue, IndexedValueToKeywordsMap, Keyword, Keywords, Label, Location,
 };
 use futures::executor::block_on;
 use rand::Rng;
@@ -62,20 +62,18 @@ fn check_search_result(
     search_results: &HashMap<Keyword, HashSet<Location>>,
     keyword: &Keyword,
     location: &Location,
-) {
-    let results = search_results
-        .get(keyword)
-        .ok_or_else(|| {
-            Error::<KvStoreError>::Crypto(format!(
-                "keyword '{}' is not present in the given set",
-                String::from_utf8(keyword.to_vec()).unwrap()
-            ))
-        })
-        .unwrap();
-    assert!(
-        results.contains(location),
-        "{location:?} not found for keyword {keyword:?}"
-    );
+) -> Result<(), String> {
+    let results = search_results.get(keyword).ok_or_else(|| {
+        format!(
+            "keyword '{}' is not present in the given set",
+            String::from_utf8(keyword.to_vec()).unwrap()
+        )
+    })?;
+    if results.contains(location) {
+        Ok(())
+    } else {
+        Err(format!("{location:?} not found for keyword {keyword:?}"))
+    }
 }
 
 /// Checks the `progress` callback works.
@@ -89,7 +87,7 @@ fn check_search_result(
 /// Hence the location associated to the keyword "roberta" should not be
 /// returned by `search`.
 #[actix_rt::test]
-async fn test_progress_callback() -> Result<(), Error<KvStoreError>> {
+async fn test_progress_callback() -> Result<(), Error<InMemoryBackendError>> {
     let mut indexed_value_to_keywords = HashMap::new();
 
     let robert_doe_location = Location::from("Robert Doe's location");
@@ -124,16 +122,16 @@ async fn test_progress_callback() -> Result<(), Error<KvStoreError>> {
     );
 
     let findex = Findex::new(
-        EntryTable::setup(InMemoryEdx::default()),
-        ChainTable::setup(InMemoryEdx::default()),
+        EntryTable::setup(InMemoryBackend::default()),
+        ChainTable::setup(InMemoryBackend::default()),
     );
 
-    let master_key = findex.keygen();
+    let key = findex.keygen();
     let label = Label::from("First label.");
 
     findex
         .add(
-            &master_key,
+            &key,
             &label,
             IndexedValueToKeywordsMap::from(indexed_value_to_keywords),
         )
@@ -164,15 +162,15 @@ async fn test_progress_callback() -> Result<(), Error<KvStoreError>> {
 
     let rob_search = findex
         .search(
-            &master_key,
+            &key,
             &label,
             Keywords::from_iter([rob_keyword.clone()]),
             &user_interrupt,
         )
         .await?;
 
-    check_search_result(&rob_search, &rob_keyword, &robert_doe_location);
-    check_search_result(&rob_search, &rob_keyword, &rob_location);
+    check_search_result(&rob_search, &rob_keyword, &robert_doe_location).unwrap();
+    check_search_result(&rob_search, &rob_keyword, &rob_location).unwrap();
     assert!(rob_search
         .get(&rob_keyword)
         .unwrap()
@@ -182,18 +180,18 @@ async fn test_progress_callback() -> Result<(), Error<KvStoreError>> {
 }
 
 #[actix_rt::test]
-async fn test_deletions() -> Result<(), Error<KvStoreError>> {
+async fn test_deletions() -> Result<(), Error<InMemoryBackendError>> {
     let findex = Findex::new(
-        EntryTable::setup(InMemoryEdx::default()),
-        ChainTable::setup(InMemoryEdx::default()),
+        EntryTable::setup(InMemoryBackend::default()),
+        ChainTable::setup(InMemoryBackend::default()),
     );
 
-    let master_key = findex.keygen();
+    let key = findex.keygen();
     let label = Label::from("First label.");
 
     // Delete no keyword.
     let res = findex
-        .delete(&master_key, &label, IndexedValueToKeywordsMap::default())
+        .delete(&key, &label, IndexedValueToKeywordsMap::default())
         .await
         .unwrap();
     assert_eq!(res, Keywords::default());
@@ -201,7 +199,7 @@ async fn test_deletions() -> Result<(), Error<KvStoreError>> {
     // Indexed a location for a keyword.
     let res = findex
         .add(
-            &master_key,
+            &key,
             &label,
             IndexedValueToKeywordsMap::from([(
                 IndexedValue::Data(Location::from("location")),
@@ -215,7 +213,7 @@ async fn test_deletions() -> Result<(), Error<KvStoreError>> {
     // Indexed another location for this keyword.
     let res = findex
         .delete(
-            &master_key,
+            &key,
             &label,
             IndexedValueToKeywordsMap::from([(
                 IndexedValue::Data(Location::from("another location")),
@@ -229,7 +227,7 @@ async fn test_deletions() -> Result<(), Error<KvStoreError>> {
     // Indexed this location for another keyword.
     let res = findex
         .delete(
-            &master_key,
+            &key,
             &label,
             IndexedValueToKeywordsMap::from([(
                 IndexedValue::Data(Location::from("location")),
@@ -243,7 +241,7 @@ async fn test_deletions() -> Result<(), Error<KvStoreError>> {
     // Indexed this location for this keyword.
     let res = findex
         .delete(
-            &master_key,
+            &key,
             &label,
             IndexedValueToKeywordsMap::from([(
                 IndexedValue::Data(Location::from("location")),
@@ -257,7 +255,7 @@ async fn test_deletions() -> Result<(), Error<KvStoreError>> {
     // Nothing is indexed.
     let res = findex
         .search(
-            &master_key,
+            &key,
             &label,
             Keywords::from_iter([
                 Keyword::from("keyword"),
@@ -291,19 +289,19 @@ async fn test_deletions() -> Result<(), Error<KvStoreError>> {
 }
 
 #[actix_rt::test]
-async fn test_double_add() -> Result<(), Error<KvStoreError>> {
+async fn test_double_add() -> Result<(), Error<InMemoryBackendError>> {
     let findex = Findex::new(
-        EntryTable::setup(InMemoryEdx::default()),
-        ChainTable::setup(InMemoryEdx::default()),
+        EntryTable::setup(InMemoryBackend::default()),
+        ChainTable::setup(InMemoryBackend::default()),
     );
 
-    let master_key = findex.keygen();
+    let key = findex.keygen();
     let label = Label::from("First label.");
 
     // Indexed a first location for the single keyword.
     let res = findex
         .add(
-            &master_key,
+            &key,
             &label,
             IndexedValueToKeywordsMap::from([(
                 IndexedValue::Data(Location::from("first location")),
@@ -317,7 +315,7 @@ async fn test_double_add() -> Result<(), Error<KvStoreError>> {
     // Indexed a second location for the single keyword.
     let res = findex
         .add(
-            &master_key,
+            &key,
             &label,
             IndexedValueToKeywordsMap::from([(
                 IndexedValue::Data(Location::from("second location")),
@@ -331,7 +329,7 @@ async fn test_double_add() -> Result<(), Error<KvStoreError>> {
 }
 
 #[actix_rt::test]
-async fn test_findex() -> Result<(), Error<KvStoreError>> {
+async fn test_findex() -> Result<(), Error<InMemoryBackendError>> {
     let mut rng = CsRng::from_entropy();
 
     let mut removed_items: HashSet<Location> = HashSet::new();
@@ -369,16 +367,16 @@ async fn test_findex() -> Result<(), Error<KvStoreError>> {
     );
 
     let findex = Findex::new(
-        EntryTable::setup(InMemoryEdx::default()),
-        ChainTable::setup(InMemoryEdx::default()),
+        EntryTable::setup(InMemoryBackend::default()),
+        ChainTable::setup(InMemoryBackend::default()),
     );
 
-    let master_key = findex.keygen();
+    let key = findex.keygen();
     let label = Label::from("First label.");
 
     findex
         .add(
-            &master_key,
+            &key,
             &label,
             IndexedValueToKeywordsMap::from(indexed_value_to_keywords),
         )
@@ -388,19 +386,19 @@ async fn test_findex() -> Result<(), Error<KvStoreError>> {
     // search robert
     let robert_search = findex
         .search(
-            &master_key,
+            &key,
             &label,
             Keywords::from_iter([robert_keyword.clone()]),
             &|_| async { Ok(false) },
         )
         .await
         .unwrap();
-    check_search_result(&robert_search, &robert_keyword, &robert_doe_location);
+    check_search_result(&robert_search, &robert_keyword, &robert_doe_location).unwrap();
 
     // cannot find robert with wrong label
     let robert_search = findex
         .search(
-            &master_key,
+            &key,
             &Label::random(&mut rng),
             Keywords::from_iter([robert_keyword.clone()]),
             &|_| async { Ok(false) },
@@ -412,40 +410,40 @@ async fn test_findex() -> Result<(), Error<KvStoreError>> {
     // search doe
     let doe_search = findex
         .search(
-            &master_key,
+            &key,
             &label,
             Keywords::from_iter([doe_keyword.clone()]),
             &|_| async { Ok(false) },
         )
         .await
         .unwrap();
-    check_search_result(&doe_search, &doe_keyword, &robert_doe_location);
-    check_search_result(&doe_search, &doe_keyword, &john_doe_location);
+    check_search_result(&doe_search, &doe_keyword, &robert_doe_location).unwrap();
+    check_search_result(&doe_search, &doe_keyword, &john_doe_location).unwrap();
 
     // search rob without graph search
     let rob_search = findex
         .search(
-            &master_key,
+            &key,
             &label,
             Keywords::from_iter([rob_keyword.clone()]),
             &|_| async { Ok(false) },
         )
         .await
         .unwrap();
-    check_search_result(&rob_search, &rob_keyword, &rob_location);
+    check_search_result(&rob_search, &rob_keyword, &rob_location).unwrap();
 
     // search rob with graph search
     let rob_search = findex
         .search(
-            &master_key,
+            &key,
             &label,
             Keywords::from_iter([rob_keyword.clone()]),
             &|_| async { Ok(false) },
         )
         .await
         .unwrap();
-    check_search_result(&rob_search, &rob_keyword, &robert_doe_location);
-    check_search_result(&rob_search, &rob_keyword, &rob_location);
+    check_search_result(&rob_search, &rob_keyword, &robert_doe_location).unwrap();
+    check_search_result(&rob_search, &rob_keyword, &rob_location).unwrap();
 
     //
     // Add Jane Doe to indexes
@@ -460,7 +458,7 @@ async fn test_findex() -> Result<(), Error<KvStoreError>> {
     );
     findex
         .add(
-            &master_key,
+            &key,
             &label,
             IndexedValueToKeywordsMap::from(indexed_value_to_keywords),
         )
@@ -470,31 +468,31 @@ async fn test_findex() -> Result<(), Error<KvStoreError>> {
     // search jane
     let jane_search = findex
         .search(
-            &master_key,
+            &key,
             &label,
             Keywords::from_iter([jane_keyword.clone()]),
             &|_| async { Ok(false) },
         )
         .await
         .unwrap();
-    check_search_result(&jane_search, &jane_keyword, &jane_doe_location);
+    check_search_result(&jane_search, &jane_keyword, &jane_doe_location).unwrap();
 
     // search robert (no change)
     let robert_search = findex
         .search(
-            &master_key,
+            &key,
             &label,
             Keywords::from_iter([robert_keyword.clone()]),
             &|_| async { Ok(false) },
         )
         .await
         .unwrap();
-    check_search_result(&robert_search, &robert_keyword, &robert_doe_location);
+    check_search_result(&robert_search, &robert_keyword, &robert_doe_location).unwrap();
 
     // search doe (jane added)
     let doe_search = findex
         .search(
-            &master_key,
+            &key,
             &label,
             Keywords::from_iter([doe_keyword.clone()]),
             &|_| async { Ok(false) },
@@ -508,39 +506,39 @@ async fn test_findex() -> Result<(), Error<KvStoreError>> {
             .unwrap_or_default(),
         3
     );
-    check_search_result(&doe_search, &doe_keyword, &jane_doe_location);
-    check_search_result(&doe_search, &doe_keyword, &robert_doe_location);
-    check_search_result(&doe_search, &doe_keyword, &john_doe_location);
+    check_search_result(&doe_search, &doe_keyword, &jane_doe_location).unwrap();
+    check_search_result(&doe_search, &doe_keyword, &robert_doe_location).unwrap();
+    check_search_result(&doe_search, &doe_keyword, &john_doe_location).unwrap();
 
     // search rob (no change)
     let rob_search = findex
         .search(
-            &master_key,
+            &key,
             &label,
             Keywords::from_iter([rob_keyword.clone()]),
             &|_| async { Ok(false) },
         )
         .await
         .unwrap();
-    check_search_result(&rob_search, &rob_keyword, &rob_location);
+    check_search_result(&rob_search, &rob_keyword, &rob_location).unwrap();
 
-    let mut old_master_key;
+    let mut old_key;
     let mut old_label;
     let mut new_label = label;
-    let mut new_master_key = master_key;
+    let mut new_key = key;
 
     // If nothing is removed, a lot of small compact should not affect the
     // search results
     for i in 1..=100 {
         println!("Compacting {i}/100");
-        old_master_key = new_master_key;
+        old_key = new_key;
         old_label = new_label;
         new_label = Label::random(&mut rng);
-        new_master_key = findex.keygen();
+        new_key = findex.keygen();
         findex
             .compact(
-                &old_master_key,
-                &new_master_key,
+                &old_key,
+                &new_key,
                 &old_label,
                 &new_label,
                 i,
@@ -556,30 +554,30 @@ async fn test_findex() -> Result<(), Error<KvStoreError>> {
 
         let doe_search = findex
             .search(
-                &new_master_key,
+                &new_key,
                 &new_label,
                 Keywords::from_iter([doe_keyword.clone()]),
                 &|_| async { Ok(false) },
             )
             .await
             .unwrap();
-        check_search_result(&doe_search, &doe_keyword, &robert_doe_location);
-        check_search_result(&doe_search, &doe_keyword, &john_doe_location);
-        check_search_result(&doe_search, &doe_keyword, &jane_doe_location);
+        check_search_result(&doe_search, &doe_keyword, &robert_doe_location).unwrap();
+        check_search_result(&doe_search, &doe_keyword, &john_doe_location).unwrap();
+        check_search_result(&doe_search, &doe_keyword, &jane_doe_location).unwrap();
     }
 
     // Remove the location "Jane Doe" from the DB. The next compact operation should
     // remove it from the index.
     removed_items.insert(jane_doe_location);
 
-    old_master_key = new_master_key;
-    new_master_key = findex.keygen();
+    old_key = new_key;
+    new_key = findex.keygen();
     old_label = new_label;
     new_label = Label::random(&mut rng);
     findex
         .compact(
-            &old_master_key,
-            &new_master_key,
+            &old_key,
+            &new_key,
             &old_label,
             &new_label,
             1,
@@ -596,7 +594,7 @@ async fn test_findex() -> Result<(), Error<KvStoreError>> {
     // search jane
     let jane_search = findex
         .search(
-            &new_master_key,
+            &new_key,
             &new_label,
             Keywords::from_iter([jane_keyword.clone()]),
             &|_| async { Ok(false) },
@@ -610,20 +608,20 @@ async fn test_findex() -> Result<(), Error<KvStoreError>> {
     // search doe (jane removed)
     let doe_search = findex
         .search(
-            &new_master_key,
+            &new_key,
             &new_label,
             Keywords::from_iter([doe_keyword.clone()]),
             &|_| async { Ok(false) },
         )
         .await
         .unwrap();
-    check_search_result(&doe_search, &doe_keyword, &robert_doe_location);
-    check_search_result(&doe_search, &doe_keyword, &john_doe_location);
+    check_search_result(&doe_search, &doe_keyword, &robert_doe_location).unwrap();
+    check_search_result(&doe_search, &doe_keyword, &john_doe_location).unwrap();
 
     // Cannot search doe with the old label
     let doe_search = findex
         .search(
-            &new_master_key,
+            &new_key,
             &old_label,
             Keywords::from_iter([doe_keyword.clone()]),
             &|_| async { Ok(false) },
@@ -634,14 +632,14 @@ async fn test_findex() -> Result<(), Error<KvStoreError>> {
 
     for i in 1..=100 {
         println!("Compacting {i}/100");
-        old_master_key = new_master_key;
-        new_master_key = findex.keygen();
+        old_key = new_key;
+        new_key = findex.keygen();
         old_label = new_label;
         new_label = Label::random(&mut rng);
         findex
             .compact(
-                &old_master_key,
-                &new_master_key,
+                &old_key,
+                &new_key,
                 &old_label,
                 &new_label,
                 i,
@@ -659,20 +657,20 @@ async fn test_findex() -> Result<(), Error<KvStoreError>> {
     // search doe (jane removed)
     let doe_search = findex
         .search(
-            &new_master_key,
+            &new_key,
             &new_label,
             Keywords::from_iter([doe_keyword.clone()]),
             &|_| async { Ok(false) },
         )
         .await
         .unwrap();
-    check_search_result(&doe_search, &doe_keyword, &robert_doe_location);
-    check_search_result(&doe_search, &doe_keyword, &john_doe_location);
+    check_search_result(&doe_search, &doe_keyword, &robert_doe_location).unwrap();
+    check_search_result(&doe_search, &doe_keyword, &john_doe_location).unwrap();
 
     // Cannot search doe with the old label
     let doe_search = findex
         .search(
-            &new_master_key,
+            &new_key,
             &old_label,
             Keywords::from_iter([doe_keyword.clone()]),
             &|_| async { Ok(false) },
@@ -684,12 +682,12 @@ async fn test_findex() -> Result<(), Error<KvStoreError>> {
     for i in 1..100 {
         old_label = new_label;
         new_label = Label::random(&mut rng);
-        old_master_key = new_master_key;
-        new_master_key = findex.keygen();
+        old_key = new_key;
+        new_key = findex.keygen();
         findex
             .compact(
-                &old_master_key,
-                &new_master_key,
+                &old_key,
+                &new_key,
                 &old_label,
                 &new_label,
                 i,
@@ -706,15 +704,15 @@ async fn test_findex() -> Result<(), Error<KvStoreError>> {
         // search doe (jane removed)
         let doe_search = findex
             .search(
-                &new_master_key,
+                &new_key,
                 &new_label,
                 Keywords::from_iter([doe_keyword.clone()]),
                 &|_| async { Ok(false) },
             )
             .await
             .unwrap();
-        check_search_result(&doe_search, &doe_keyword, &robert_doe_location);
-        check_search_result(&doe_search, &doe_keyword, &john_doe_location);
+        check_search_result(&doe_search, &doe_keyword, &robert_doe_location).unwrap();
+        check_search_result(&doe_search, &doe_keyword, &john_doe_location).unwrap();
     }
 
     // Try deleting John Doe from the `doe_keyword`.
@@ -725,7 +723,7 @@ async fn test_findex() -> Result<(), Error<KvStoreError>> {
     );
     findex
         .delete(
-            &new_master_key,
+            &new_key,
             &new_label,
             IndexedValueToKeywordsMap::from(deletions),
         )
@@ -735,21 +733,21 @@ async fn test_findex() -> Result<(), Error<KvStoreError>> {
     // Assert John Doe cannot be found by searching for Doe.
     let doe_search = findex
         .search(
-            &new_master_key,
+            &new_key,
             &new_label,
             Keywords::from_iter([doe_keyword.clone()]),
             &|_| async { Ok(false) },
         )
         .await
         .unwrap();
-    check_search_result(&doe_search, &doe_keyword, &robert_doe_location);
+    check_search_result(&doe_search, &doe_keyword, &robert_doe_location).unwrap();
     let doe_search = doe_search.get(&doe_keyword).unwrap();
     assert!(!doe_search.contains(&john_doe_location));
     Ok(())
 }
 
 #[actix_rt::test]
-async fn test_first_names() -> Result<(), Error<KvStoreError>> {
+async fn test_first_names() -> Result<(), Error<InMemoryBackendError>> {
     const NUM_LOCATIONS: usize = 5;
     // change this to usize::MAX to run a full test
     const MAX_FIRST_NAMES: usize = 1000;
@@ -757,16 +755,16 @@ async fn test_first_names() -> Result<(), Error<KvStoreError>> {
     let mut rng = rand::thread_rng();
 
     let graph_findex = Findex::new(
-        EntryTable::setup(InMemoryEdx::default()),
-        ChainTable::setup(InMemoryEdx::default()),
+        EntryTable::setup(InMemoryBackend::default()),
+        ChainTable::setup(InMemoryBackend::default()),
     );
 
     let naive_findex = Findex::new(
-        EntryTable::setup(InMemoryEdx::default()),
-        ChainTable::setup(InMemoryEdx::default()),
+        EntryTable::setup(InMemoryBackend::default()),
+        ChainTable::setup(InMemoryBackend::default()),
     );
 
-    let master_key = graph_findex.keygen();
+    let key = graph_findex.keygen();
 
     // Keywords that will be searched later to run tests
     let mut searches: HashSet<String> = HashSet::new();
@@ -809,7 +807,7 @@ async fn test_first_names() -> Result<(), Error<KvStoreError>> {
         }
 
         graph_findex
-            .add(&master_key, &label, IndexedValueToKeywordsMap::from(map))
+            .add(&key, &label, IndexedValueToKeywordsMap::from(map))
             .await
             .unwrap();
 
@@ -835,11 +833,7 @@ async fn test_first_names() -> Result<(), Error<KvStoreError>> {
             map_naive.insert(iv, Keywords::from(keywords.clone()));
         }
         naive_findex
-            .add(
-                &master_key,
-                &label,
-                IndexedValueToKeywordsMap::from(map_naive),
-            )
+            .add(&key, &label, IndexedValueToKeywordsMap::from(map_naive))
             .await
             .unwrap();
 
@@ -879,9 +873,7 @@ async fn test_first_names() -> Result<(), Error<KvStoreError>> {
     for s in searches {
         let keywords = Keywords::from_iter([Keyword::from(s.as_str())]);
         let graph_results = graph_findex
-            .search(&master_key, &label, keywords.clone(), &|_| async {
-                Ok(false)
-            })
+            .search(&key, &label, keywords.clone(), &|_| async { Ok(false) })
             .await
             .unwrap();
         assert!(
@@ -891,7 +883,7 @@ async fn test_first_names() -> Result<(), Error<KvStoreError>> {
         total_results += graph_results.len();
         // naive search
         let naive_results = naive_findex
-            .search(&master_key, &label, keywords, &|_| async { Ok(false) })
+            .search(&key, &label, keywords, &|_| async { Ok(false) })
             .await
             .unwrap();
         assert_eq!(
@@ -913,11 +905,11 @@ async fn test_graph_compacting() {
     let mut rng = CsRng::from_entropy();
     let mut indexed_value_to_keywords = HashMap::new();
     let findex = Findex::new(
-        EntryTable::setup(InMemoryEdx::default()),
-        ChainTable::setup(InMemoryEdx::default()),
+        EntryTable::setup(InMemoryBackend::default()),
+        ChainTable::setup(InMemoryBackend::default()),
     );
 
-    let mut master_key = findex.keygen();
+    let mut key = findex.keygen();
 
     let rob_keyword = Keyword::from(b"rob".to_vec());
     let doe_keyword = Keyword::from(b"doe".to_vec());
@@ -949,7 +941,7 @@ async fn test_graph_compacting() {
     let mut label = Label::random(&mut rng);
     findex
         .add(
-            &master_key,
+            &key,
             &label,
             IndexedValueToKeywordsMap::from(indexed_value_to_keywords),
         )
@@ -959,7 +951,7 @@ async fn test_graph_compacting() {
     // Search for "rob"
     let res = findex
         .search(
-            &master_key,
+            &key,
             &label,
             Keywords::from_iter([rob_keyword.clone()]),
             &|_| async { Ok(false) },
@@ -967,7 +959,7 @@ async fn test_graph_compacting() {
         .await
         .unwrap();
     assert_eq!(res.len(), 1);
-    check_search_result(&res, &rob_keyword, &robert_doe_location);
+    check_search_result(&res, &rob_keyword, &robert_doe_location).unwrap();
 
     println!(
         "Length of the Entry Table: {}",
@@ -982,11 +974,11 @@ async fn test_graph_compacting() {
     for i in 1..100 {
         let old_label = label;
         label = Label::random(&mut rng);
-        let new_master_key = findex.keygen();
+        let new_key = findex.keygen();
         findex
             .compact(
-                &master_key,
-                &new_master_key,
+                &key,
+                &new_key,
                 &old_label,
                 &label,
                 i,
@@ -994,7 +986,7 @@ async fn test_graph_compacting() {
             )
             .await
             .unwrap();
-        master_key = new_master_key;
+        key = new_key;
 
         println!(
             "Length of the Entry Table: {}",
@@ -1008,7 +1000,7 @@ async fn test_graph_compacting() {
         // Search for "rob"
         let res = findex
             .search(
-                &master_key,
+                &key,
                 &label,
                 Keywords::from_iter([rob_keyword.clone()]),
                 &|_| async { Ok(false) },
@@ -1016,12 +1008,12 @@ async fn test_graph_compacting() {
             .await
             .unwrap();
         assert_eq!(res.len(), 1);
-        check_search_result(&res, &rob_keyword, &robert_doe_location);
+        check_search_result(&res, &rob_keyword, &robert_doe_location).unwrap();
     }
 }
 
 #[actix_rt::test]
-async fn test_keyword_presence() -> Result<(), Error<KvStoreError>> {
+async fn test_keyword_presence() -> Result<(), Error<InMemoryBackendError>> {
     let mut indexed_value_to_keywords = HashMap::new();
 
     // direct location robert doe
@@ -1039,16 +1031,16 @@ async fn test_keyword_presence() -> Result<(), Error<KvStoreError>> {
     );
 
     let findex = Findex::new(
-        EntryTable::setup(InMemoryEdx::default()),
-        ChainTable::setup(InMemoryEdx::default()),
+        EntryTable::setup(InMemoryBackend::default()),
+        ChainTable::setup(InMemoryBackend::default()),
     );
 
-    let master_key = findex.keygen();
+    let key = findex.keygen();
     let label = Label::from("First label.");
 
     let new_keywords = findex
         .add(
-            &master_key,
+            &key,
             &label,
             IndexedValueToKeywordsMap::from(indexed_value_to_keywords),
         )
@@ -1069,7 +1061,7 @@ async fn test_keyword_presence() -> Result<(), Error<KvStoreError>> {
     );
     let new_keywords = findex
         .add(
-            &master_key,
+            &key,
             &label,
             IndexedValueToKeywordsMap::from(indexed_value_to_keywords),
         )
@@ -1088,7 +1080,7 @@ async fn test_keyword_presence() -> Result<(), Error<KvStoreError>> {
     );
     let new_keywords = findex
         .delete(
-            &master_key,
+            &key,
             &label,
             IndexedValueToKeywordsMap::from(indexed_value_to_keywords.clone()),
         )
@@ -1103,7 +1095,7 @@ async fn test_keyword_presence() -> Result<(), Error<KvStoreError>> {
     // therefore deleting again will find it
     let new_keywords = findex
         .delete(
-            &master_key,
+            &key,
             &label,
             IndexedValueToKeywordsMap::from(indexed_value_to_keywords.clone()),
         )
@@ -1115,10 +1107,10 @@ async fn test_keyword_presence() -> Result<(), Error<KvStoreError>> {
 }
 
 #[actix_rt::test]
-async fn test_concurrency() -> Result<(), Error<KvStoreError>> {
+async fn test_concurrency() -> Result<(), Error<InMemoryBackendError>> {
     let findex = Arc::new(Findex::new(
-        EntryTable::setup(InMemoryEdx::default()),
-        ChainTable::setup(InMemoryEdx::default()),
+        EntryTable::setup(InMemoryBackend::default()),
+        ChainTable::setup(InMemoryBackend::default()),
     ));
     let key = Arc::new(findex.keygen());
     let label = Arc::new(Label::from("First label."));

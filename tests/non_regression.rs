@@ -9,8 +9,8 @@ use cosmian_crypto_core::{
     FixedSizeCBytes, RandomFixedSizeCBytes,
 };
 use cosmian_findex::{
-    ChainTable, DxEnc, EntryTable, Error, Findex, InMemoryEdx, Index, IndexedValue,
-    IndexedValueToKeywordsMap, Keyword, Keywords, KvStoreError, Label, Location, UserKey,
+    ChainTable, DxEnc, EntryTable, Error, Findex, InMemoryBackend, InMemoryBackendError, Index,
+    IndexedValue, IndexedValueToKeywordsMap, Keyword, Keywords, Label, Location, UserKey,
     ENTRY_LENGTH, LINK_LENGTH,
 };
 use rand::RngCore;
@@ -35,7 +35,7 @@ fn add_keyword_graph(
 }
 
 #[allow(dead_code)]
-async fn write_index() -> Result<(), Error<KvStoreError>> {
+async fn write_index() -> Result<(), Error<InMemoryBackendError>> {
     const MIN_KEYWORD_LENGTH: usize = 3;
     const MAX_NUM_LOCATIONS: usize = 20;
     const MAX_FIRST_NAMES: usize = 1000;
@@ -43,11 +43,11 @@ async fn write_index() -> Result<(), Error<KvStoreError>> {
     let mut rng = rand::thread_rng();
 
     let findex = Findex::new(
-        EntryTable::setup(InMemoryEdx::default()),
-        ChainTable::setup(InMemoryEdx::default()),
+        EntryTable::setup(InMemoryBackend::default()),
+        ChainTable::setup(InMemoryBackend::default()),
     );
 
-    let master_key = findex.keygen();
+    let key = findex.keygen();
     let label = Label::random(&mut rng);
 
     let reader = BufReader::new(File::open("datasets/first_names.txt").unwrap());
@@ -68,7 +68,7 @@ async fn write_index() -> Result<(), Error<KvStoreError>> {
         add_keyword_graph(&Keyword::from(first_name), MIN_KEYWORD_LENGTH, &mut map);
 
         findex
-            .add(&master_key, &label, IndexedValueToKeywordsMap::from(map))
+            .add(&key, &label, IndexedValueToKeywordsMap::from(map))
             .await?;
     }
 
@@ -77,13 +77,13 @@ async fn write_index() -> Result<(), Error<KvStoreError>> {
     ser.write(&findex.findex_graph.findex_mm.chain_table.0)?;
 
     std::fs::write("datasets/serialized_index", ser.finalize()).unwrap();
-    std::fs::write("datasets/key", master_key.as_bytes()).unwrap();
+    std::fs::write("datasets/key", key.as_bytes()).unwrap();
     std::fs::write("datasets/label", label.as_ref()).unwrap();
 
     let keyword = Keyword::from("Abd");
     let res = findex
         .search(
-            &master_key,
+            &key,
             &label,
             Keywords::from_iter([keyword.clone()]),
             &|_| async { Ok(false) },
@@ -101,19 +101,19 @@ async fn write_index() -> Result<(), Error<KvStoreError>> {
 }
 
 #[actix_rt::test]
-async fn test_non_regression() -> Result<(), Error<KvStoreError>> {
+async fn test_non_regression() -> Result<(), Error<InMemoryBackendError>> {
     // Uncomment to generate new test data.
     // write_index().await?;
 
     let mut findex = Findex::new(
-        EntryTable::setup(InMemoryEdx::default()),
-        ChainTable::setup(InMemoryEdx::default()),
+        EntryTable::setup(InMemoryBackend::default()),
+        ChainTable::setup(InMemoryBackend::default()),
     );
 
     let serialized_index = std::fs::read("datasets/serialized_index").unwrap();
     let mut de = Deserializer::new(&serialized_index);
-    findex.findex_graph.findex_mm.entry_table.0 = de.read::<InMemoryEdx<ENTRY_LENGTH>>()?;
-    findex.findex_graph.findex_mm.chain_table.0 = de.read::<InMemoryEdx<LINK_LENGTH>>()?;
+    findex.findex_graph.findex_mm.entry_table.0 = de.read::<InMemoryBackend<ENTRY_LENGTH>>()?;
+    findex.findex_graph.findex_mm.chain_table.0 = de.read::<InMemoryBackend<LINK_LENGTH>>()?;
 
     println!(
         "Entry Table length: {}",
@@ -132,13 +132,13 @@ async fn test_non_regression() -> Result<(), Error<KvStoreError>> {
         findex.findex_graph.findex_mm.chain_table.size()
     );
 
-    let master_key = UserKey::try_from_slice(&std::fs::read("datasets/key").unwrap())?;
+    let key = UserKey::try_from_slice(&std::fs::read("datasets/key").unwrap())?;
     let label = Label::from(std::fs::read("datasets/label").unwrap().as_slice());
 
     let keyword = Keyword::from("Abd");
     let res = findex
         .search(
-            &master_key,
+            &key,
             &label,
             Keywords::from_iter([keyword.clone()]),
             &|_| async { Ok(false) },

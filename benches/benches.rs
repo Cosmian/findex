@@ -2,7 +2,7 @@ use std::collections::{HashMap, HashSet};
 
 use cosmian_crypto_core::CsRng;
 use cosmian_findex::{
-    ChainTable, DxEnc, EntryTable, Findex, InMemoryEdx, Index, IndexedValue,
+    ChainTable, DxEnc, EntryTable, Findex, InMemoryBackend, Index, IndexedValue,
     IndexedValueToKeywordsMap, Keyword, Keywords, Label, Location,
 };
 use criterion::{criterion_group, criterion_main, Criterion};
@@ -45,12 +45,12 @@ fn bench_search(c: &mut Criterion) {
     // Prepare indexes to be search
     //
     let findex = Findex::new(
-        EntryTable::setup(InMemoryEdx::default()),
-        ChainTable::setup(InMemoryEdx::default()),
+        EntryTable::setup(InMemoryBackend::default()),
+        ChainTable::setup(InMemoryBackend::default()),
     );
 
-    let master_key = findex.keygen();
-    block_on(findex.add(&master_key, &label, locations_and_words)).expect("msg");
+    let key = findex.keygen();
+    block_on(findex.add(&key, &label, locations_and_words)).expect("msg");
 
     println!(
         "Entry Table length: {}",
@@ -75,7 +75,7 @@ fn bench_search(c: &mut Criterion) {
         group.bench_function(format!("Searching {n_keywords} keyword(s)"), |b| {
             b.iter(|| {
                 block_on(findex.search(
-                    &master_key,
+                    &key,
                     &label,
                     Keywords::from(keywords.clone()),
                     &|_| async { Ok(false) },
@@ -96,17 +96,17 @@ fn bench_upsert(c: &mut Criterion) {
     let mut rng = CsRng::from_entropy();
     let label = Label::random(&mut rng);
     let mut findex = Findex::new(
-        EntryTable::setup(InMemoryEdx::default()),
-        ChainTable::setup(InMemoryEdx::default()),
+        EntryTable::setup(InMemoryBackend::default()),
+        ChainTable::setup(InMemoryBackend::default()),
     );
-    let master_key = findex.keygen();
+    let key = findex.keygen();
 
     for power in 1..=3 {
         let n_keywords = 10usize.pow(power);
         let locations_and_words = prepare_locations_and_words(n_keywords);
         group.bench_function(format!("Upserting {n_keywords} keyword(s)"), |b| {
             b.iter(|| {
-                block_on(findex.add(&master_key, &label, locations_and_words.clone()))
+                block_on(findex.add(&key, &label, locations_and_words.clone()))
                     .expect("upsert failed");
                 findex.findex_graph.findex_mm.entry_table.0.flush();
                 findex.findex_graph.findex_mm.chain_table.0.flush();

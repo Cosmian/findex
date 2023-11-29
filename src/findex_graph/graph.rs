@@ -15,12 +15,12 @@ use crate::{
     findex_graph::{FindexGraph, GxEnc, IndexedValue},
     findex_mm::{FindexMultiMap, MmEnc, Operation, ENTRY_LENGTH, LINK_LENGTH},
     parameters::SEED_LENGTH,
-    CallbackErrorTrait, DxEnc, Error, Label,
+    BackendErrorTrait, DxEnc, Error, Label,
 };
 
 #[async_trait(?Send)]
 impl<
-        UserError: CallbackErrorTrait,
+        UserError: BackendErrorTrait,
         EntryTable: DxEnc<ENTRY_LENGTH, Error = Error<UserError>>,
         ChainTable: DxEnc<LINK_LENGTH, Error = Error<UserError>>,
     > GxEnc<UserError> for FindexGraph<UserError, EntryTable, ChainTable>
@@ -122,7 +122,7 @@ impl<
 }
 
 impl<
-        UserError: CallbackErrorTrait,
+        UserError: BackendErrorTrait,
         EntryTable: DxEnc<ENTRY_LENGTH, Error = Error<UserError>>,
         ChainTable: DxEnc<LINK_LENGTH, Error = Error<UserError>>,
     > FindexGraph<UserError, EntryTable, ChainTable>

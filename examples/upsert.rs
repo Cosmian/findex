@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use cosmian_findex::{
-    ChainTable, DxEnc, EntryTable, Findex, InMemoryEdx, Index, IndexedValue,
+    ChainTable, DxEnc, EntryTable, Findex, InMemoryBackend, Index, IndexedValue,
     IndexedValueToKeywordsMap, Keyword, Keywords, Label, Location,
 };
 use futures::executor::block_on;
@@ -36,16 +36,16 @@ fn main() {
     );
 
     let findex = Findex::new(
-        EntryTable::setup(InMemoryEdx::default()),
-        ChainTable::setup(InMemoryEdx::default()),
+        EntryTable::setup(InMemoryBackend::default()),
+        ChainTable::setup(InMemoryBackend::default()),
     );
 
-    let master_key = findex.keygen();
+    let key = findex.keygen();
     let label = Label::from("label");
 
     for _ in 0..1_000_000 {
         block_on(findex.add(
-            &master_key,
+            &key,
             &label,
             IndexedValueToKeywordsMap::from(indexed_value_to_keywords.clone()),
         ))

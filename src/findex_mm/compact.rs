@@ -11,11 +11,11 @@ use crate::{
     edx::{Token, TokenDump},
     findex_mm::{structs::Link, CompactingData, FindexMultiMap, MmEnc},
     parameters::{BLOCK_LENGTH, LINE_WIDTH, SEED_LENGTH},
-    CallbackErrorTrait, DxEnc, Error, Label, ENTRY_LENGTH, LINK_LENGTH,
+    BackendErrorTrait, DxEnc, Error, Label, ENTRY_LENGTH, LINK_LENGTH,
 };
 
 impl<
-        UserError: CallbackErrorTrait,
+        UserError: BackendErrorTrait,
         EntryTable: DxEnc<ENTRY_LENGTH, Error = Error<UserError>> + TokenDump<Error = Error<UserError>>,
         ChainTable: DxEnc<LINK_LENGTH, Error = Error<UserError>>,
     > FindexMultiMap<UserError, EntryTable, ChainTable>
@@ -127,18 +127,30 @@ impl<
         &self,
         rng: Arc<Mutex<impl CryptoRngCore>>,
         new_key: &<Self as MmEnc<SEED_LENGTH, UserError>>::Key,
-        indexed_map: HashMap<Token, HashSet<Vec<u8>>>,
+        remaining_associations: HashMap<Token, HashSet<Vec<u8>>>,
         mut continuation: CompactingData<ChainTable>,
         new_label: &Label,
     ) -> Result<(), Error<UserError>> {
+        let remaining_entry_tokens = continuation
+            .entries
+            .keys()
+            .filter(|token| {
+                remaining_associations
+                    .get(token)
+                    .map(|associated_values| !associated_values.is_empty())
+                    .unwrap_or(true)
+            })
+            .copied()
+            .collect::<HashSet<_>>();
+
         debug!(
             "Step 1: computes new chains from the given `indexed_map` and updates associated \
              entries."
         );
 
         // Allocates a lower bound on the number of links.
-        let mut new_links = HashMap::with_capacity(indexed_map.len());
-        for (entry_token, chain_values) in indexed_map {
+        let mut new_links = HashMap::with_capacity(remaining_associations.len());
+        for (entry_token, chain_values) in remaining_associations {
             let chain_links = self.decompose::<BLOCK_LENGTH, LINE_WIDTH>(
                 &chain_values
                     .into_iter()
@@ -184,11 +196,13 @@ impl<
             let rng = &mut *rng.lock().expect("could not lock mutex");
             for (token, entry) in continuation.entries {
                 old_entries.insert(token);
-                new_entries.insert(
-                    self.entry_table
-                        .tokenize(new_key, &entry.tag_hash, Some(new_label)),
-                    self.entry_table.prepare(rng, new_key, entry.into())?,
-                );
+                if remaining_entry_tokens.get(&token).is_some() {
+                    new_entries.insert(
+                        self.entry_table
+                            .tokenize(new_key, &entry.tag_hash, Some(new_label)),
+                        self.entry_table.prepare(rng, new_key, entry.into())?,
+                    );
+                }
             }
         }
         let new_links_tokens = new_links.keys().copied().collect();
@@ -208,23 +222,11 @@ impl<
             )));
         };
 
-        let upsert_results = self.entry_table.upsert(HashMap::new(), new_entries).await;
-
-        let res = if let Ok(upsert_results) = upsert_results {
-            if upsert_results.is_empty() {
-                Ok(())
-            } else {
-                Err(Error::Crypto(format!(
-                    "A conflict occurred during the upsert operation. All modifications were \
-                     reverted. ({upsert_results:?})"
-                )))
-            }
-        } else {
-            Err(Error::Crypto(
-                "An error occurred during the upsert operation. All modifications were reverted."
-                    .to_string(),
+        let res = self.entry_table.insert(new_entries).await.map_err(|e| {
+            Error::Crypto(format!(
+                "An error occurred during the `insert` operation, all modifications were reverted: {e}"
             ))
-        };
+        });
 
         if res.is_ok() {
             self.chain_table.delete(old_links).await?;

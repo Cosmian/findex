@@ -15,7 +15,7 @@ use crate::{
     edx::{Token, TokenDump, Tokens},
     findex_graph::{FindexGraph, GxEnc},
     findex_mm::{Operation, ENTRY_LENGTH, LINK_LENGTH},
-    CallbackErrorTrait, DxEnc, Error, IndexedValue,
+    BackendErrorTrait, DxEnc, Error, IndexedValue,
 };
 
 mod structs;
@@ -28,6 +28,7 @@ pub use structs::{
     IndexedValueToKeywordsMap, Keyword, KeywordToDataMap, Keywords, Label, Location, UserKey,
 };
 
+/// User-friendly interface to the Findex algorithm.
 #[async_trait(?Send)]
 pub trait Index<EntryTable: DxEnc<ENTRY_LENGTH>, ChainTable: DxEnc<LINK_LENGTH>> {
     /// Index error type.
@@ -42,7 +43,7 @@ pub trait Index<EntryTable: DxEnc<ENTRY_LENGTH>, ChainTable: DxEnc<LINK_LENGTH>>
     /// Searches the index for the given keywords.
     ///
     /// The `interrupt` callback is fed with the results of each graph search
-    /// iteration. Iterations are stopped if the `interrupt` return `true`.
+    /// iteration. Iterations are stopped if the `interrupt` returns `true`.
     async fn search<
         F: Future<Output = Result<bool, String>>,
         Interrupt: Fn(HashMap<Keyword, HashSet<IndexedValue<Keyword, Location>>>) -> F,
@@ -54,24 +55,49 @@ pub trait Index<EntryTable: DxEnc<ENTRY_LENGTH>, ChainTable: DxEnc<LINK_LENGTH>>
         interrupt: &Interrupt,
     ) -> Result<KeywordToDataMap, Self::Error>;
 
-    /// Indexes the given `IndexedValue`s for the given `Keyword`s. Returns the
-    /// set of keywords added as keys to the index.
+    /// Adds the given associations to the index.
+    ///
+    /// Returns the set of keywords added as new keys to the index.
     async fn add(
         &self,
         key: &UserKey,
         label: &Label,
-        keywords: IndexedValueToKeywordsMap,
+        associations: IndexedValueToKeywordsMap,
     ) -> Result<Keywords, Self::Error>;
 
-    /// Removes the indexing of the given `IndexedValue`s for the given
-    /// `Keyword`s. Returns the set of keywords added to the index.
+    /// Removes the given associations from the index.
+    ///
+    /// This operation actually adds the negation of the given associations to the index,
+    /// effectively increasing the index size. The compact operation is in charge of removing
+    /// associations that have been negated.
+    ///
+    /// Returns the set of keywords added as new keys to the index.
     async fn delete(
         &self,
         key: &UserKey,
         label: &Label,
-        keywords: IndexedValueToKeywordsMap,
+        associations: IndexedValueToKeywordsMap,
     ) -> Result<Keywords, Self::Error>;
 
+    /// Compacts a portion of the index.
+    ///
+    /// It re-encrypts the entire Entry Table which allows to reset the knowledge of the index
+    /// acquired by an attacker. To this effect at least either the key or the label needs to be
+    /// changed.
+    ///
+    /// It partially compacts and re-encrypts the Chain Table. The compacting operation:
+    /// - removes duplicated associations;
+    /// - removes deleted associations;
+    /// - removes obsolete indexed data;
+    /// - ensures the padding is minimal.
+    ///
+    /// The `filter` is called with batches of the data read from the index. Only the data returned
+    /// by it is indexed back.
+    ///
+    /// The entire index is statistically guaranteed to be compacted after calling this operation
+    /// `n_compact_to_full` times. For example, if one is passed, the entire index will be
+    /// compacted at once. If ten is passed, the entire index should have been compacted after the
+    /// tenth call.
     async fn compact<
         F: Future<Output = Result<HashSet<Location>, String>>,
         Filter: Fn(HashSet<Location>) -> F,
@@ -86,9 +112,10 @@ pub trait Index<EntryTable: DxEnc<ENTRY_LENGTH>, ChainTable: DxEnc<LINK_LENGTH>>
     ) -> Result<(), Self::Error>;
 }
 
+/// Findex type implements the Findex algorithm.
 #[derive(Debug)]
 pub struct Findex<
-    UserError: CallbackErrorTrait,
+    UserError: BackendErrorTrait,
     EntryTable: DxEnc<ENTRY_LENGTH, Error = Error<UserError>>,
     ChainTable: DxEnc<LINK_LENGTH, Error = Error<UserError>>,
 > {
@@ -98,7 +125,7 @@ pub struct Findex<
 
 #[async_trait(?Send)]
 impl<
-        UserError: CallbackErrorTrait,
+        UserError: BackendErrorTrait,
         EntryTable: DxEnc<ENTRY_LENGTH, Error = Error<UserError>> + TokenDump<Error = Error<UserError>>,
         ChainTable: DxEnc<LINK_LENGTH, Error = Error<UserError>>,
     > Index<EntryTable, ChainTable> for Findex<UserError, EntryTable, ChainTable>
@@ -306,7 +333,7 @@ impl<
 }
 
 impl<
-        UserError: CallbackErrorTrait,
+        UserError: BackendErrorTrait,
         EntryTable: DxEnc<ENTRY_LENGTH, Error = Error<UserError>> + TokenDump<Error = Error<UserError>>,
         ChainTable: DxEnc<LINK_LENGTH, Error = Error<UserError>>,
     > Findex<UserError, EntryTable, ChainTable>
@@ -401,16 +428,15 @@ impl<
                 let remaining_values = associated_values
                     .into_iter()
                     .filter(|value| {
-                        if let Some(location) = value.get_data() {
-                            remaining_locations.contains(location)
-                        } else {
-                            true
-                        }
+                        // Filter out obsolete locations.
+                        value
+                            .get_data()
+                            .map(|location| remaining_locations.contains(location))
+                            .unwrap_or(true)
                     })
                     .collect::<HashSet<_>>();
                 (entry_token, remaining_values)
             })
-            .filter(|(_, remaining_values)| !remaining_values.is_empty())
             .collect::<HashMap<_, _>>();
 
         self.findex_graph

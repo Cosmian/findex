@@ -17,7 +17,7 @@ use super::structs::Token;
 use crate::{
     edx::{
         structs::{EdxKey, Seed},
-        DxEnc, EdxStore,
+        DxEnc, EdxBackend,
     },
     error::Error,
     parameters::{SEED_LENGTH, TOKEN_LENGTH},
@@ -26,9 +26,9 @@ use crate::{
 
 /// Chain Table representation.
 #[derive(Debug)]
-pub struct ChainTable<const VALUE_LENGTH: usize, Edx: EdxStore<VALUE_LENGTH>>(pub Edx);
+pub struct ChainTable<const VALUE_LENGTH: usize, Edx: EdxBackend<VALUE_LENGTH>>(pub Edx);
 
-impl<const VALUE_LENGTH: usize, Edx: EdxStore<VALUE_LENGTH>> Deref
+impl<const VALUE_LENGTH: usize, Edx: EdxBackend<VALUE_LENGTH>> Deref
     for ChainTable<VALUE_LENGTH, Edx>
 {
     type Target = Edx;
@@ -41,16 +41,16 @@ impl<const VALUE_LENGTH: usize, Edx: EdxStore<VALUE_LENGTH>> Deref
 const CHAIN_TABLE_KEY_DERIVATION_INFO: &[u8] = b"Chain Table key derivation info.";
 
 #[async_trait(?Send)]
-impl<const VALUE_LENGTH: usize, EdxScheme: EdxStore<VALUE_LENGTH>> DxEnc<VALUE_LENGTH>
+impl<const VALUE_LENGTH: usize, EdxScheme: EdxBackend<VALUE_LENGTH>> DxEnc<VALUE_LENGTH>
     for ChainTable<VALUE_LENGTH, EdxScheme>
 {
     type EncryptedValue = EncryptedValue<VALUE_LENGTH>;
     type Error = Error<EdxScheme::Error>;
     type Key = EdxKey;
     type Seed = Seed<SEED_LENGTH>;
-    type Store = EdxScheme;
+    type Backend = EdxScheme;
 
-    fn setup(edx: Self::Store) -> Self {
+    fn setup(edx: Self::Backend) -> Self {
         Self(edx)
     }
 
@@ -96,7 +96,7 @@ impl<const VALUE_LENGTH: usize, EdxScheme: EdxStore<VALUE_LENGTH>> DxEnc<VALUE_L
         self.0
             .fetch(tokens.into())
             .await
-            .map_err(Error::Callback)
+            .map_err(Error::Backend)
             .map(Into::into)
     }
 
@@ -126,11 +126,11 @@ impl<const VALUE_LENGTH: usize, EdxScheme: EdxStore<VALUE_LENGTH>> DxEnc<VALUE_L
     }
 
     async fn insert(&self, items: HashMap<Token, Self::EncryptedValue>) -> Result<(), Self::Error> {
-        self.0.insert(items.into()).await.map_err(Error::Callback)
+        self.0.insert(items.into()).await.map_err(Error::Backend)
     }
 
     async fn delete(&self, items: HashSet<Token>) -> Result<(), Self::Error> {
-        self.0.delete(items.into()).await.map_err(Error::Callback)
+        self.0.delete(items.into()).await.map_err(Error::Backend)
     }
 }
 
@@ -143,7 +143,7 @@ mod tests {
     };
 
     use super::*;
-    use crate::edx::in_memory::InMemoryEdx;
+    use crate::edx::in_memory::InMemoryBackend;
 
     const VALUE_LENGTH: usize = 32;
 
@@ -151,7 +151,7 @@ mod tests {
     async fn test_edx() {
         let mut rng = CsRng::from_entropy();
 
-        let table = ChainTable::setup(InMemoryEdx::default());
+        let table = ChainTable::setup(InMemoryBackend::default());
         let seed = table.gen_seed(&mut rng);
         let key = table.derive_keys(&seed);
         let label = Label::random(&mut rng);

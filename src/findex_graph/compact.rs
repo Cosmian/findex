@@ -12,11 +12,11 @@ use super::{FindexGraph, GxEnc};
 use crate::{
     edx::{Token, TokenDump},
     findex_mm::{CompactingData, ENTRY_LENGTH, LINK_LENGTH},
-    CallbackErrorTrait, DxEnc, Error, IndexedValue, Label,
+    BackendErrorTrait, DxEnc, Error, IndexedValue, Label,
 };
 
 impl<
-        UserError: CallbackErrorTrait,
+        UserError: BackendErrorTrait,
         EntryTable: DxEnc<ENTRY_LENGTH, Error = Error<UserError>> + TokenDump<Error = Error<UserError>>,
         ChainTable: DxEnc<LINK_LENGTH, Error = Error<UserError>>,
     > FindexGraph<UserError, EntryTable, ChainTable>
