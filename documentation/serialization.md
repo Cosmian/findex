@@ -6,7 +6,7 @@ Entry and Chain tables.
 Both the Entry Table and the Chain Table represent a key/value store. Each key
 (subsequently called `token`) is the result of a cryptographic hash function
 and is therefore sufficiently secure. The values however need to be encrypted
-before being sent for storage to the backend.
+before being sent for storage to the database.
 
 Therefore, the actual structures stored are:
 

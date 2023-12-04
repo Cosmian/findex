@@ -15,7 +15,7 @@ use crate::{
     edx::{Token, TokenDump, Tokens},
     findex_graph::{FindexGraph, GxEnc},
     findex_mm::{Operation, ENTRY_LENGTH, LINK_LENGTH},
-    BackendErrorTrait, DxEnc, Error, IndexedValue,
+    DbInterfaceErrorTrait, DxEnc, Error, IndexedValue,
 };
 
 mod structs;
@@ -25,7 +25,7 @@ use cosmian_crypto_core::{
     CsRng, RandomFixedSizeCBytes,
 };
 pub use structs::{
-    IndexedValueToKeywordsMap, Keyword, KeywordToDataMap, Keywords, Label, Location, UserKey,
+    Data, IndexedValueToKeywordsMap, Keyword, KeywordToDataMap, Keywords, Label, UserKey,
 };
 
 /// User-friendly interface to the Findex algorithm.
@@ -46,7 +46,7 @@ pub trait Index<EntryTable: DxEnc<ENTRY_LENGTH>, ChainTable: DxEnc<LINK_LENGTH>>
     /// iteration. Iterations are stopped if the `interrupt` returns `true`.
     async fn search<
         F: Future<Output = Result<bool, String>>,
-        Interrupt: Fn(HashMap<Keyword, HashSet<IndexedValue<Keyword, Location>>>) -> F,
+        Interrupt: Fn(HashMap<Keyword, HashSet<IndexedValue<Keyword, Data>>>) -> F,
     >(
         &self,
         key: &UserKey,
@@ -91,31 +91,31 @@ pub trait Index<EntryTable: DxEnc<ENTRY_LENGTH>, ChainTable: DxEnc<LINK_LENGTH>>
     /// - removes obsolete indexed data;
     /// - ensures the padding is minimal.
     ///
-    /// The `filter` is called with batches of the data read from the index. Only the data returned
-    /// by it is indexed back.
+    /// The `data_filter` is called with batches of the data read from the index. Only the data
+    /// returned by it is indexed back.
     ///
     /// The entire index is statistically guaranteed to be compacted after calling this operation
     /// `n_compact_to_full` times. For example, if one is passed, the entire index will be
     /// compacted at once. If ten is passed, the entire index should have been compacted after the
     /// tenth call.
     async fn compact<
-        F: Future<Output = Result<HashSet<Location>, String>>,
-        Filter: Fn(HashSet<Location>) -> F,
+        F: Future<Output = Result<HashSet<Data>, String>>,
+        Filter: Fn(HashSet<Data>) -> F,
     >(
         &self,
         old_key: &UserKey,
         new_key: &UserKey,
         old_label: &Label,
         new_label: &Label,
-        n_compact_to_full: usize,
-        filter: &Filter,
+        compacting_rate: f64,
+        data_filter: &Filter,
     ) -> Result<(), Self::Error>;
 }
 
 /// Findex type implements the Findex algorithm.
 #[derive(Debug)]
 pub struct Findex<
-    UserError: BackendErrorTrait,
+    UserError: DbInterfaceErrorTrait,
     EntryTable: DxEnc<ENTRY_LENGTH, Error = Error<UserError>>,
     ChainTable: DxEnc<LINK_LENGTH, Error = Error<UserError>>,
 > {
@@ -125,7 +125,7 @@ pub struct Findex<
 
 #[async_trait(?Send)]
 impl<
-        UserError: BackendErrorTrait,
+        UserError: DbInterfaceErrorTrait,
         EntryTable: DxEnc<ENTRY_LENGTH, Error = Error<UserError>> + TokenDump<Error = Error<UserError>>,
         ChainTable: DxEnc<LINK_LENGTH, Error = Error<UserError>>,
     > Index<EntryTable, ChainTable> for Findex<UserError, EntryTable, ChainTable>
@@ -146,7 +146,7 @@ impl<
     #[instrument(ret(Display), err, skip_all)]
     async fn search<
         F: Future<Output = Result<bool, String>>,
-        Interrupt: Fn(HashMap<Keyword, HashSet<IndexedValue<Keyword, Location>>>) -> F,
+        Interrupt: Fn(HashMap<Keyword, HashSet<IndexedValue<Keyword, Data>>>) -> F,
     >(
         &self,
         key: &UserKey,
@@ -170,8 +170,8 @@ impl<
         let res = keywords
             .into_iter()
             .map(|tag| {
-                let locations = self.findex_graph.walk(&graph, &tag, &mut HashSet::new());
-                (tag, locations)
+                let data = self.findex_graph.walk(&graph, &tag, &mut HashSet::new());
+                (tag, data)
             })
             .collect();
 
@@ -259,16 +259,16 @@ impl<
     /// [`COMPACT_BATCH_SIZE`](Self::COMPACT_BATCH_SIZE).
     #[instrument(ret, err, skip_all)]
     async fn compact<
-        F: Future<Output = Result<HashSet<Location>, String>>,
-        Filter: Fn(HashSet<Location>) -> F,
+        F: Future<Output = Result<HashSet<Data>, String>>,
+        Filter: Fn(HashSet<Data>) -> F,
     >(
         &self,
         old_key: &UserKey,
         new_key: &UserKey,
         old_label: &Label,
         new_label: &Label,
-        n_compact_to_full: usize,
-        filter: &Filter,
+        compacting_rate: f64,
+        data_filter: &Filter,
     ) -> Result<(), Error<UserError>> {
         trace!("compact: entering: old_label: {old_label}");
         trace!("compact: entering: new_label: {new_label}");
@@ -294,7 +294,7 @@ impl<
 
         let entries_to_compact = self
             .select_random_tokens(
-                self.get_compact_line_number(entry_tokens.len(), n_compact_to_full),
+                self.get_compact_line_number(entry_tokens.len(), compacting_rate),
                 entry_tokens.as_slice(),
             )
             .into();
@@ -309,7 +309,7 @@ impl<
                     .iter()
                     .copied()
                     .collect(),
-                filter,
+                data_filter,
             )
             .await?;
         }
@@ -324,7 +324,7 @@ impl<
                 .iter()
                 .copied()
                 .collect(),
-            filter,
+            data_filter,
         )
         .await?;
 
@@ -333,7 +333,7 @@ impl<
 }
 
 impl<
-        UserError: BackendErrorTrait,
+        UserError: DbInterfaceErrorTrait,
         EntryTable: DxEnc<ENTRY_LENGTH, Error = Error<UserError>> + TokenDump<Error = Error<UserError>>,
         ChainTable: DxEnc<LINK_LENGTH, Error = Error<UserError>>,
     > Findex<UserError, EntryTable, ChainTable>
@@ -370,11 +370,7 @@ impl<
 
     /// Returns the expected number of draws per compact operation such that all
     /// Entry Table tokens are drawn after `n_compact_to_full` such operation.
-    fn get_compact_line_number(
-        &self,
-        entry_table_length: usize,
-        n_compact_to_full: usize,
-    ) -> usize {
+    fn get_compact_line_number(&self, entry_table_length: usize, compacting_rate: f64) -> usize {
         // [Euler's gamma constant](https://en.wikipedia.org/wiki/Euler%E2%80%93Mascheroni_constant).
         const GAMMA: f64 = 0.5772;
 
@@ -383,13 +379,13 @@ impl<
         // [coupon collector's problem](https://en.wikipedia.org/wiki/Coupon_collector%27s_problem).
         let n_draws = length.mul_add(length.log2() + GAMMA, 0.5);
         // Split this number among the given number of compact operations.
-        (n_draws / n_compact_to_full as f64) as usize
+        (n_draws * compacting_rate) as usize
     }
 
     #[instrument(ret, err, skip_all)]
     async fn compact_batch<
-        F: Future<Output = Result<HashSet<Location>, String>>,
-        Filter: Fn(HashSet<Location>) -> F,
+        F: Future<Output = Result<HashSet<Data>, String>>,
+        Filter: Fn(HashSet<Data>) -> F,
     >(
         &self,
         old_key: &<FindexGraph<UserError, EntryTable, ChainTable> as GxEnc<UserError>>::Key,
@@ -397,28 +393,24 @@ impl<
         new_label: &Label,
         tokens_to_compact: &Tokens,
         tokens_to_fetch: Tokens,
-        filter_obsolete_data: &Filter,
+        data_filter: &Filter,
     ) -> Result<(), Error<UserError>> {
         trace!("compact_batch: entering: new_label: {new_label}");
         trace!("compact_batch: entering: tokens_to_compact: {tokens_to_compact}");
         trace!("compact_batch: entering: tokens_to_fetch: {tokens_to_fetch}");
         let (indexed_values, data) = self
             .findex_graph
-            .prepare_compact::<Keyword, Location>(
-                old_key,
-                tokens_to_fetch.into(),
-                tokens_to_compact,
-            )
+            .prepare_compact::<Keyword, Data>(old_key, tokens_to_fetch.into(), tokens_to_compact)
             .await?;
 
-        let indexed_locations = indexed_values
+        let indexed_data = indexed_values
             .values()
             .flatten()
             .filter_map(IndexedValue::get_data)
             .cloned()
             .collect();
 
-        let remaining_locations = filter_obsolete_data(indexed_locations)
+        let remaining_data = data_filter(indexed_data)
             .await
             .map_err(<Self as Index<EntryTable, ChainTable>>::Error::Filter)?;
 
@@ -428,10 +420,10 @@ impl<
                 let remaining_values = associated_values
                     .into_iter()
                     .filter(|value| {
-                        // Filter out obsolete locations.
+                        // Filter out obsolete data.
                         value
                             .get_data()
-                            .map(|location| remaining_locations.contains(location))
+                            .map(|data| remaining_data.contains(data))
                             .unwrap_or(true)
                     })
                     .collect::<HashSet<_>>();

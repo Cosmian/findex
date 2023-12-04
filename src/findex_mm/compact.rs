@@ -11,11 +11,11 @@ use crate::{
     edx::{Token, TokenDump},
     findex_mm::{structs::Link, CompactingData, FindexMultiMap, MmEnc},
     parameters::{BLOCK_LENGTH, LINE_WIDTH, SEED_LENGTH},
-    BackendErrorTrait, DxEnc, Error, Label, ENTRY_LENGTH, LINK_LENGTH,
+    DbInterfaceErrorTrait, DxEnc, Error, Label, ENTRY_LENGTH, LINK_LENGTH,
 };
 
 impl<
-        UserError: BackendErrorTrait,
+        UserError: DbInterfaceErrorTrait,
         EntryTable: DxEnc<ENTRY_LENGTH, Error = Error<UserError>> + TokenDump<Error = Error<UserError>>,
         ChainTable: DxEnc<LINK_LENGTH, Error = Error<UserError>>,
     > FindexMultiMap<UserError, EntryTable, ChainTable>

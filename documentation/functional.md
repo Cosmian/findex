@@ -90,12 +90,12 @@ The role of Findex is therefore to transform [index][index_trait] requests into
 
 Findex implementation is generic over the practical implementation of the
 DX-Enc used to represent the Entry and the Chain tables. In practice, an
-implementation is provided but it uses a generic backend interface used to
+implementation is provided but it uses a generic database interface used to
 abstract the storage technology. This allows users to use Findex on top of any
 database.
 
-See the [Rust trait][backend_trait] for details about how to implement the
-Findex backend interface in Rust, and see the [Cosmian documentation][pub_doc]
+See the [Rust trait][db_interface] for details about how to implement the
+Findex database interface in Rust, and see the [Cosmian documentation][pub_doc]
 for details about how to implement this interface in other languages.
 
 <!--
@@ -107,4 +107,4 @@ for details about how to implement this interface in other languages.
 [ser_doc]: serialization.md "Index serialization documentation"
 [index_trait]: ../src/index/mod.rs#L33 "Index trait"
 [edx_trait]: ../src/edx/mod.rs#L31 "DX-Enc trait"
-[backend_trait]: ../src/edx/mod.rs#L102 "Findex backend interface"
+[db_interface]: ../src/edx/mod.rs#L102 "Findex database interface"

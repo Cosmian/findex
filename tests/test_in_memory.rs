@@ -8,8 +8,8 @@ use std::{
 
 use cosmian_crypto_core::{reexport::rand_core::SeedableRng, CsRng};
 use cosmian_findex::{
-    ChainTable, DxEnc, EntryTable, Error, Findex, InMemoryBackend, InMemoryBackendError, Index,
-    IndexedValue, IndexedValueToKeywordsMap, Keyword, Keywords, Label, Location,
+    ChainTable, Data, DxEnc, EntryTable, Error, Findex, InMemoryDb, InMemoryDbError, Index,
+    IndexedValue, IndexedValueToKeywordsMap, Keyword, Keywords, Label,
 };
 use futures::executor::block_on;
 use rand::Rng;
@@ -23,7 +23,7 @@ const MIN_KEYWORD_LENGTH: usize = 3;
 fn compute_index_graph(
     keyword: &Keyword,
     min_keyword_length: usize,
-) -> HashMap<IndexedValue<Keyword, Location>, HashSet<Keyword>> {
+) -> HashMap<IndexedValue<Keyword, Data>, HashSet<Keyword>> {
     if keyword.len() <= min_keyword_length {
         return HashMap::new();
     }
@@ -45,7 +45,7 @@ fn compute_index_graph(
 fn add_keyword_graph(
     keyword: &Keyword,
     min_keyword_length: usize,
-    map: &mut HashMap<IndexedValue<Keyword, Location>, Keywords>,
+    map: &mut HashMap<IndexedValue<Keyword, Data>, Keywords>,
 ) {
     let graph = compute_index_graph(keyword, min_keyword_length);
     for (key, values) in graph {
@@ -59,9 +59,9 @@ fn add_keyword_graph(
 /// Check the given keyword has a match in the given search results, and
 /// that this match is equal to the given `indexed_value`.
 fn check_search_result(
-    search_results: &HashMap<Keyword, HashSet<Location>>,
+    search_results: &HashMap<Keyword, HashSet<Data>>,
     keyword: &Keyword,
-    location: &Location,
+    location: &Data,
 ) -> Result<(), String> {
     let results = search_results.get(keyword).ok_or_else(|| {
         format!(
@@ -87,12 +87,12 @@ fn check_search_result(
 /// Hence the location associated to the keyword "roberta" should not be
 /// returned by `search`.
 #[actix_rt::test]
-async fn test_progress_callback() -> Result<(), Error<InMemoryBackendError>> {
+async fn test_progress_callback() -> Result<(), Error<InMemoryDbError>> {
     let mut indexed_value_to_keywords = HashMap::new();
 
-    let robert_doe_location = Location::from("Robert Doe's location");
-    let roberta_location = Location::from("Roberta's location");
-    let rob_location = Location::from("Rob's location");
+    let robert_doe_location = Data::from("Robert Doe's location");
+    let roberta_location = Data::from("Roberta's location");
+    let rob_location = Data::from("Rob's location");
     let robert_keyword = Keyword::from("robert");
     let rob_keyword = Keyword::from("rob");
     let roberta_keyword = Keyword::from("roberta");
@@ -122,8 +122,8 @@ async fn test_progress_callback() -> Result<(), Error<InMemoryBackendError>> {
     );
 
     let findex = Findex::new(
-        EntryTable::setup(InMemoryBackend::default()),
-        ChainTable::setup(InMemoryBackend::default()),
+        EntryTable::setup(InMemoryDb::default()),
+        ChainTable::setup(InMemoryDb::default()),
     );
 
     let key = findex.keygen();
@@ -138,14 +138,14 @@ async fn test_progress_callback() -> Result<(), Error<InMemoryBackendError>> {
         .await?;
 
     async fn user_interrupt(
-        local_results: HashMap<Keyword, HashSet<IndexedValue<Keyword, Location>>>,
+        local_results: HashMap<Keyword, HashSet<IndexedValue<Keyword, Data>>>,
     ) -> Result<bool, String> {
         let mut is_correct = false;
         let mut is_last = false;
 
         for (key, values) in local_results {
             if key == Keyword::from("robert")
-                && values.contains(&IndexedValue::Data(Location::from("Robert Doe's location")))
+                && values.contains(&IndexedValue::Data(Data::from("Robert Doe's location")))
             {
                 println!("here");
                 is_last = true;
@@ -180,10 +180,10 @@ async fn test_progress_callback() -> Result<(), Error<InMemoryBackendError>> {
 }
 
 #[actix_rt::test]
-async fn test_deletions() -> Result<(), Error<InMemoryBackendError>> {
+async fn test_deletions() -> Result<(), Error<InMemoryDbError>> {
     let findex = Findex::new(
-        EntryTable::setup(InMemoryBackend::default()),
-        ChainTable::setup(InMemoryBackend::default()),
+        EntryTable::setup(InMemoryDb::default()),
+        ChainTable::setup(InMemoryDb::default()),
     );
 
     let key = findex.keygen();
@@ -202,7 +202,7 @@ async fn test_deletions() -> Result<(), Error<InMemoryBackendError>> {
             &key,
             &label,
             IndexedValueToKeywordsMap::from([(
-                IndexedValue::Data(Location::from("location")),
+                IndexedValue::Data(Data::from("location")),
                 Keywords::from_iter([Keyword::from("keyword")]),
             )]),
         )
@@ -216,7 +216,7 @@ async fn test_deletions() -> Result<(), Error<InMemoryBackendError>> {
             &key,
             &label,
             IndexedValueToKeywordsMap::from([(
-                IndexedValue::Data(Location::from("another location")),
+                IndexedValue::Data(Data::from("another location")),
                 Keywords::from_iter([Keyword::from("keyword")]),
             )]),
         )
@@ -230,7 +230,7 @@ async fn test_deletions() -> Result<(), Error<InMemoryBackendError>> {
             &key,
             &label,
             IndexedValueToKeywordsMap::from([(
-                IndexedValue::Data(Location::from("location")),
+                IndexedValue::Data(Data::from("location")),
                 Keywords::from_iter([Keyword::from("another keyword")]),
             )]),
         )
@@ -244,7 +244,7 @@ async fn test_deletions() -> Result<(), Error<InMemoryBackendError>> {
             &key,
             &label,
             IndexedValueToKeywordsMap::from([(
-                IndexedValue::Data(Location::from("location")),
+                IndexedValue::Data(Data::from("location")),
                 Keywords::from_iter([Keyword::from("keyword")]),
             )]),
         )
@@ -289,10 +289,10 @@ async fn test_deletions() -> Result<(), Error<InMemoryBackendError>> {
 }
 
 #[actix_rt::test]
-async fn test_double_add() -> Result<(), Error<InMemoryBackendError>> {
+async fn test_double_add() -> Result<(), Error<InMemoryDbError>> {
     let findex = Findex::new(
-        EntryTable::setup(InMemoryBackend::default()),
-        ChainTable::setup(InMemoryBackend::default()),
+        EntryTable::setup(InMemoryDb::default()),
+        ChainTable::setup(InMemoryDb::default()),
     );
 
     let key = findex.keygen();
@@ -304,7 +304,7 @@ async fn test_double_add() -> Result<(), Error<InMemoryBackendError>> {
             &key,
             &label,
             IndexedValueToKeywordsMap::from([(
-                IndexedValue::Data(Location::from("first location")),
+                IndexedValue::Data(Data::from("first location")),
                 Keywords::from_iter([Keyword::from("single keyword")]),
             )]),
         )
@@ -318,7 +318,7 @@ async fn test_double_add() -> Result<(), Error<InMemoryBackendError>> {
             &key,
             &label,
             IndexedValueToKeywordsMap::from([(
-                IndexedValue::Data(Location::from("second location")),
+                IndexedValue::Data(Data::from("second location")),
                 Keywords::from_iter([Keyword::from("single keyword")]),
             )]),
         )
@@ -329,10 +329,10 @@ async fn test_double_add() -> Result<(), Error<InMemoryBackendError>> {
 }
 
 #[actix_rt::test]
-async fn test_findex() -> Result<(), Error<InMemoryBackendError>> {
+async fn test_findex() -> Result<(), Error<InMemoryDbError>> {
     let mut rng = CsRng::from_entropy();
 
-    let mut removed_items: HashSet<Location> = HashSet::new();
+    let mut removed_items: HashSet<Data> = HashSet::new();
 
     let robert_keyword = Keyword::from("robert");
     let rob_keyword = Keyword::from("rob");
@@ -341,21 +341,21 @@ async fn test_findex() -> Result<(), Error<InMemoryBackendError>> {
     let mut indexed_value_to_keywords = HashMap::new();
 
     // direct location robert doe
-    let robert_doe_location = Location::from("robert doe DB location");
+    let robert_doe_location = Data::from("robert doe DB location");
     indexed_value_to_keywords.insert(
         IndexedValue::Data(robert_doe_location.clone()),
         Keywords::from_iter(["robert", "doe"]),
     );
 
     // direct location john doe
-    let john_doe_location = Location::from("john doe DB location");
+    let john_doe_location = Data::from("john doe DB location");
     indexed_value_to_keywords.insert(
         IndexedValue::Data(john_doe_location.clone()),
         Keywords::from_iter(["john", "doe"]),
     );
 
     // direct location for rob...
-    let rob_location = Location::from("rob DB location");
+    let rob_location = Data::from("rob DB location");
     indexed_value_to_keywords.insert(
         IndexedValue::Data(rob_location.clone()),
         Keywords::from_iter(["rob"]),
@@ -367,8 +367,8 @@ async fn test_findex() -> Result<(), Error<InMemoryBackendError>> {
     );
 
     let findex = Findex::new(
-        EntryTable::setup(InMemoryBackend::default()),
-        ChainTable::setup(InMemoryBackend::default()),
+        EntryTable::setup(InMemoryDb::default()),
+        ChainTable::setup(InMemoryDb::default()),
     );
 
     let key = findex.keygen();
@@ -451,7 +451,7 @@ async fn test_findex() -> Result<(), Error<InMemoryBackendError>> {
 
     let jane_keyword = Keyword::from("jane");
     let mut indexed_value_to_keywords = HashMap::new();
-    let jane_doe_location = Location::from("jane doe DB location");
+    let jane_doe_location = Data::from("jane doe DB location");
     indexed_value_to_keywords.insert(
         IndexedValue::Data(jane_doe_location.clone()),
         Keywords::from_iter(["jane", "doe"]),
@@ -541,7 +541,7 @@ async fn test_findex() -> Result<(), Error<InMemoryBackendError>> {
                 &new_key,
                 &old_label,
                 &new_label,
-                i,
+                1f64 / i as f64,
                 &|indexed_data| async {
                     Ok(indexed_data
                         .into_iter()
@@ -580,7 +580,7 @@ async fn test_findex() -> Result<(), Error<InMemoryBackendError>> {
             &new_key,
             &old_label,
             &new_label,
-            1,
+            1f64,
             &|indexed_data| async {
                 Ok(indexed_data
                     .into_iter()
@@ -642,7 +642,7 @@ async fn test_findex() -> Result<(), Error<InMemoryBackendError>> {
                 &new_key,
                 &old_label,
                 &new_label,
-                i,
+                1f64 / i as f64,
                 &|indexed_data| async {
                     Ok(indexed_data
                         .into_iter()
@@ -690,7 +690,7 @@ async fn test_findex() -> Result<(), Error<InMemoryBackendError>> {
                 &new_key,
                 &old_label,
                 &new_label,
-                i,
+                1f64 / i as f64,
                 &|indexed_data| async {
                     Ok(indexed_data
                         .into_iter()
@@ -747,7 +747,7 @@ async fn test_findex() -> Result<(), Error<InMemoryBackendError>> {
 }
 
 #[actix_rt::test]
-async fn test_first_names() -> Result<(), Error<InMemoryBackendError>> {
+async fn test_first_names() -> Result<(), Error<InMemoryDbError>> {
     const NUM_LOCATIONS: usize = 5;
     // change this to usize::MAX to run a full test
     const MAX_FIRST_NAMES: usize = 1000;
@@ -755,13 +755,13 @@ async fn test_first_names() -> Result<(), Error<InMemoryBackendError>> {
     let mut rng = rand::thread_rng();
 
     let graph_findex = Findex::new(
-        EntryTable::setup(InMemoryBackend::default()),
-        ChainTable::setup(InMemoryBackend::default()),
+        EntryTable::setup(InMemoryDb::default()),
+        ChainTable::setup(InMemoryDb::default()),
     );
 
     let naive_findex = Findex::new(
-        EntryTable::setup(InMemoryBackend::default()),
-        ChainTable::setup(InMemoryBackend::default()),
+        EntryTable::setup(InMemoryDb::default()),
+        ChainTable::setup(InMemoryDb::default()),
     );
 
     let key = graph_findex.keygen();
@@ -800,7 +800,7 @@ async fn test_first_names() -> Result<(), Error<InMemoryBackendError>> {
         let mut map = HashMap::with_capacity(5);
         for i in 0..NUM_LOCATIONS {
             map.insert(
-                IndexedValue::Data(Location::from(format!("{first_name}_{i}").as_bytes())),
+                IndexedValue::Data(Data::from(format!("{first_name}_{i}").as_bytes())),
                 Keywords::from_iter([Keyword::from("france"), Keyword::from(first_name)]),
             );
             add_keyword_graph(&Keyword::from(first_name), MIN_KEYWORD_LENGTH, &mut map);
@@ -829,7 +829,7 @@ async fn test_first_names() -> Result<(), Error<InMemoryBackendError>> {
         }
         let mut map_naive = HashMap::new();
         for i in 0..NUM_LOCATIONS {
-            let iv = IndexedValue::Data(Location::from(format!("{first_name}_{i}").as_str()));
+            let iv = IndexedValue::Data(Data::from(format!("{first_name}_{i}").as_str()));
             map_naive.insert(iv, Keywords::from(keywords.clone()));
         }
         naive_findex
@@ -905,8 +905,8 @@ async fn test_graph_compacting() {
     let mut rng = CsRng::from_entropy();
     let mut indexed_value_to_keywords = HashMap::new();
     let findex = Findex::new(
-        EntryTable::setup(InMemoryBackend::default()),
-        ChainTable::setup(InMemoryBackend::default()),
+        EntryTable::setup(InMemoryDb::default()),
+        ChainTable::setup(InMemoryDb::default()),
     );
 
     let mut key = findex.keygen();
@@ -915,8 +915,8 @@ async fn test_graph_compacting() {
     let doe_keyword = Keyword::from(b"doe".to_vec());
     let john_keyword = Keyword::from(b"john".to_vec());
     let robert_keyword = Keyword::from(b"robert".to_vec());
-    let john_doe_location = Location::from("john doe DB location");
-    let robert_doe_location = Location::from("robert doe DB location");
+    let john_doe_location = Data::from("john doe DB location");
+    let robert_doe_location = Data::from("robert doe DB location");
 
     indexed_value_to_keywords.insert(
         IndexedValue::Data(robert_doe_location.clone()),
@@ -981,7 +981,7 @@ async fn test_graph_compacting() {
                 &new_key,
                 &old_label,
                 &label,
-                i,
+                1f64 / i as f64,
                 &|indexed_data| async { Ok(indexed_data) },
             )
             .await
@@ -1013,26 +1013,26 @@ async fn test_graph_compacting() {
 }
 
 #[actix_rt::test]
-async fn test_keyword_presence() -> Result<(), Error<InMemoryBackendError>> {
+async fn test_keyword_presence() -> Result<(), Error<InMemoryDbError>> {
     let mut indexed_value_to_keywords = HashMap::new();
 
     // direct location robert doe
-    let robert_doe_location = Location::from("robert doe DB location");
+    let robert_doe_location = Data::from("robert doe DB location");
     indexed_value_to_keywords.insert(
         IndexedValue::Data(robert_doe_location.clone()),
         Keywords::from_iter(["robert", "doe"]),
     );
 
     // direct location john doe
-    let john_doe_location = Location::from("john doe DB location");
+    let john_doe_location = Data::from("john doe DB location");
     indexed_value_to_keywords.insert(
         IndexedValue::Data(john_doe_location.clone()),
         Keywords::from_iter(["john", "doe"]),
     );
 
     let findex = Findex::new(
-        EntryTable::setup(InMemoryBackend::default()),
-        ChainTable::setup(InMemoryBackend::default()),
+        EntryTable::setup(InMemoryDb::default()),
+        ChainTable::setup(InMemoryDb::default()),
     );
 
     let key = findex.keygen();
@@ -1054,7 +1054,7 @@ async fn test_keyword_presence() -> Result<(), Error<InMemoryBackendError>> {
 
     // Now insert a Robert Smith
     let mut indexed_value_to_keywords = HashMap::new();
-    let robert_smith_location = Location::from("robert smith DB location");
+    let robert_smith_location = Data::from("robert smith DB location");
     indexed_value_to_keywords.insert(
         IndexedValue::Data(robert_smith_location),
         Keywords::from_iter(["robert", "smith"]),
@@ -1072,7 +1072,7 @@ async fn test_keyword_presence() -> Result<(), Error<InMemoryBackendError>> {
     assert!(new_keywords.contains(&Keyword::from("smith")));
 
     // Delete Robert Smith and the junior keyword
-    let robert_smith_location = Location::from("robert smith DB location");
+    let robert_smith_location = Data::from("robert smith DB location");
     let mut indexed_value_to_keywords = HashMap::new();
     indexed_value_to_keywords.insert(
         IndexedValue::Data(robert_smith_location.clone()),
@@ -1107,10 +1107,10 @@ async fn test_keyword_presence() -> Result<(), Error<InMemoryBackendError>> {
 }
 
 #[actix_rt::test]
-async fn test_concurrency() -> Result<(), Error<InMemoryBackendError>> {
+async fn test_concurrency() -> Result<(), Error<InMemoryDbError>> {
     let findex = Arc::new(Findex::new(
-        EntryTable::setup(InMemoryBackend::default()),
-        ChainTable::setup(InMemoryBackend::default()),
+        EntryTable::setup(InMemoryDb::default()),
+        ChainTable::setup(InMemoryDb::default()),
     ));
     let key = Arc::new(findex.keygen());
     let label = Arc::new(Label::from("First label."));
@@ -1128,7 +1128,7 @@ async fn test_concurrency() -> Result<(), Error<InMemoryBackendError>> {
                     &key,
                     &label,
                     IndexedValueToKeywordsMap::from([(
-                        IndexedValue::Data(Location::from(id.to_be_bytes().as_slice())),
+                        IndexedValue::Data(Data::from(id.to_be_bytes().as_slice())),
                         Keywords::from_iter([keyword]),
                     )]),
                 ));
@@ -1164,7 +1164,7 @@ async fn test_concurrency() -> Result<(), Error<InMemoryBackendError>> {
         res.get(&keyword),
         Some(
             (0..100)
-                .map(|id: usize| Location::from(id.to_be_bytes().as_slice()))
+                .map(|id: usize| Data::from(id.to_be_bytes().as_slice()))
                 .collect()
         )
         .as_ref()

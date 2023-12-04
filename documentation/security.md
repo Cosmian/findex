@@ -53,13 +53,13 @@ introducing these leaks and ways to mitigate them whenever possible.
 ### Findex operations distinguishness
 
 Findex cannot hide the nature of ongoing operations: the server learns what
-incoming requests are (one of the backend interface methods) and by associating
-several such requests, differentiate search operations from modification (adds
-or deletes) from compact operations.
+incoming requests are (one of the database interface methods) and by
+associating several such requests, differentiate search operations from
+modification (adds or deletes) from compact operations.
 
 This leak can be mitigated by making user connections *concurrent* and
 *indistinguishable*. That way, it makes is much more difficult for the server
-to group backend requests by Findex operation.
+to group database requests by Findex operation.
 
 *Note*: due to their implementation, add and delete operations are
 indistinguishable (a delete adds negated values and is therefore an add).

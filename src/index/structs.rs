@@ -38,14 +38,15 @@ pub struct Keyword(Vec<u8>);
 
 impl_byte_vector!(Keyword);
 
-/// A [`Location`] is a vector of bytes describing how to find some data indexed
-/// by a [`Keyword`]. It may be a database UID, physical location coordinates of
-/// a resources, an URL etc.
+/// A [`Data`] is an arbitrary byte-string that is indexed under some keyword.
+///
+/// In a typical use case, it would represent a database UID and would be indexed under the
+/// keywords associated to the corresponding database value.
 #[must_use]
 #[derive(Clone, Debug, Hash, Default, PartialEq, Eq)]
-pub struct Location(Vec<u8>);
+pub struct Data(Vec<u8>);
 
-impl_byte_vector!(Location);
+impl_byte_vector!(Data);
 
 #[derive(Debug, Clone, Default, Eq, PartialEq)]
 pub struct Keywords(HashSet<Keyword>);
@@ -109,10 +110,10 @@ impl From<Keywords> for HashSet<Keyword> {
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
-pub struct KeywordToDataMap(HashMap<Keyword, HashSet<Location>>);
+pub struct KeywordToDataMap(HashMap<Keyword, HashSet<Data>>);
 
 impl Deref for KeywordToDataMap {
-    type Target = HashMap<Keyword, HashSet<Location>>;
+    type Target = HashMap<Keyword, HashSet<Data>>;
 
     fn deref(&self) -> &Self::Target {
         &self.0
@@ -128,10 +129,10 @@ impl DerefMut for KeywordToDataMap {
 impl Display for KeywordToDataMap {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         writeln!(f, "Keyword to Data map: {{")?;
-        for (keyword, locations) in &self.0 {
+        for (keyword, data) in &self.0 {
             writeln!(f, "  '{keyword}': [")?;
-            for location in locations {
-                writeln!(f, "      '{location}',")?;
+            for data in data {
+                writeln!(f, "      '{data}',")?;
             }
             writeln!(f, "    ]")?;
         }
@@ -139,15 +140,15 @@ impl Display for KeywordToDataMap {
     }
 }
 
-impl FromIterator<(Keyword, HashSet<Location>)> for KeywordToDataMap {
-    fn from_iter<T: IntoIterator<Item = (Keyword, HashSet<Location>)>>(iter: T) -> Self {
+impl FromIterator<(Keyword, HashSet<Data>)> for KeywordToDataMap {
+    fn from_iter<T: IntoIterator<Item = (Keyword, HashSet<Data>)>>(iter: T) -> Self {
         Self(HashMap::from_iter(iter))
     }
 }
 
 impl IntoIterator for KeywordToDataMap {
     type IntoIter = <<Self as Deref>::Target as IntoIterator>::IntoIter;
-    type Item = (Keyword, HashSet<Location>);
+    type Item = (Keyword, HashSet<Data>);
 
     #[inline]
     fn into_iter(self) -> Self::IntoIter {
@@ -155,23 +156,23 @@ impl IntoIterator for KeywordToDataMap {
     }
 }
 
-impl From<HashMap<Keyword, HashSet<Location>>> for KeywordToDataMap {
-    fn from(map: HashMap<Keyword, HashSet<Location>>) -> Self {
+impl From<HashMap<Keyword, HashSet<Data>>> for KeywordToDataMap {
+    fn from(map: HashMap<Keyword, HashSet<Data>>) -> Self {
         Self(map)
     }
 }
 
-impl From<KeywordToDataMap> for HashMap<Keyword, HashSet<Location>> {
+impl From<KeywordToDataMap> for HashMap<Keyword, HashSet<Data>> {
     fn from(value: KeywordToDataMap) -> Self {
         value.0
     }
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct IndexedValueToKeywordsMap(HashMap<IndexedValue<Keyword, Location>, Keywords>);
+pub struct IndexedValueToKeywordsMap(HashMap<IndexedValue<Keyword, Data>, Keywords>);
 
 impl Deref for IndexedValueToKeywordsMap {
-    type Target = HashMap<IndexedValue<Keyword, Location>, Keywords>;
+    type Target = HashMap<IndexedValue<Keyword, Data>, Keywords>;
 
     fn deref(&self) -> &Self::Target {
         &self.0
@@ -190,7 +191,7 @@ impl Display for IndexedValueToKeywordsMap {
 
 impl IntoIterator for IndexedValueToKeywordsMap {
     type IntoIter = <<Self as Deref>::Target as IntoIterator>::IntoIter;
-    type Item = (IndexedValue<Keyword, Location>, Keywords);
+    type Item = (IndexedValue<Keyword, Data>, Keywords);
 
     #[inline]
     fn into_iter(self) -> Self::IntoIter {
@@ -198,18 +199,14 @@ impl IntoIterator for IndexedValueToKeywordsMap {
     }
 }
 
-impl FromIterator<(IndexedValue<Keyword, Location>, Keywords)> for IndexedValueToKeywordsMap {
-    fn from_iter<T: IntoIterator<Item = (IndexedValue<Keyword, Location>, Keywords)>>(
-        iter: T,
-    ) -> Self {
+impl FromIterator<(IndexedValue<Keyword, Data>, Keywords)> for IndexedValueToKeywordsMap {
+    fn from_iter<T: IntoIterator<Item = (IndexedValue<Keyword, Data>, Keywords)>>(iter: T) -> Self {
         Self(HashMap::from_iter(iter))
     }
 }
 
-impl FromIterator<(IndexedValue<Keyword, Location>, HashSet<Keyword>)>
-    for IndexedValueToKeywordsMap
-{
-    fn from_iter<T: IntoIterator<Item = (IndexedValue<Keyword, Location>, HashSet<Keyword>)>>(
+impl FromIterator<(IndexedValue<Keyword, Data>, HashSet<Keyword>)> for IndexedValueToKeywordsMap {
+    fn from_iter<T: IntoIterator<Item = (IndexedValue<Keyword, Data>, HashSet<Keyword>)>>(
         iter: T,
     ) -> Self {
         Self(HashMap::from_iter(
@@ -218,16 +215,14 @@ impl FromIterator<(IndexedValue<Keyword, Location>, HashSet<Keyword>)>
     }
 }
 
-impl From<HashMap<IndexedValue<Keyword, Location>, Keywords>> for IndexedValueToKeywordsMap {
-    fn from(map: HashMap<IndexedValue<Keyword, Location>, Keywords>) -> Self {
+impl From<HashMap<IndexedValue<Keyword, Data>, Keywords>> for IndexedValueToKeywordsMap {
+    fn from(map: HashMap<IndexedValue<Keyword, Data>, Keywords>) -> Self {
         Self(map)
     }
 }
 
-impl From<HashMap<IndexedValue<Keyword, Location>, HashSet<Keyword>>>
-    for IndexedValueToKeywordsMap
-{
-    fn from(map: HashMap<IndexedValue<Keyword, Location>, HashSet<Keyword>>) -> Self {
+impl From<HashMap<IndexedValue<Keyword, Data>, HashSet<Keyword>>> for IndexedValueToKeywordsMap {
+    fn from(map: HashMap<IndexedValue<Keyword, Data>, HashSet<Keyword>>) -> Self {
         Self(
             map.into_iter()
                 .map(|(iv, k)| (iv, Keywords::from(k)))
@@ -236,10 +231,10 @@ impl From<HashMap<IndexedValue<Keyword, Location>, HashSet<Keyword>>>
     }
 }
 
-impl<const N: usize> From<[(IndexedValue<Keyword, Location>, Keywords); N]>
+impl<const N: usize> From<[(IndexedValue<Keyword, Data>, Keywords); N]>
     for IndexedValueToKeywordsMap
 {
-    fn from(value: [(IndexedValue<Keyword, Location>, Keywords); N]) -> Self {
+    fn from(value: [(IndexedValue<Keyword, Data>, Keywords); N]) -> Self {
         Self(HashMap::from(value))
     }
 }

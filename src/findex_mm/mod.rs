@@ -32,7 +32,7 @@ use async_trait::async_trait;
 use cosmian_crypto_core::reexport::rand_core::CryptoRngCore;
 use zeroize::ZeroizeOnDrop;
 
-use crate::{edx::DxEnc, BackendErrorTrait, Error, Label};
+use crate::{edx::DxEnc, DbInterfaceErrorTrait, Error, Label};
 
 mod compact;
 mod mm;
@@ -41,7 +41,7 @@ mod structs;
 pub use structs::{CompactingData, Operation, ENTRY_LENGTH, LINK_LENGTH};
 
 #[async_trait(?Send)]
-pub trait MmEnc<const SEED_LENGTH: usize, EdxError: BackendErrorTrait> {
+pub trait MmEnc<const SEED_LENGTH: usize, EdxError: DbInterfaceErrorTrait> {
     /// Seed used to derive the key.
     type Seed: Sized + ZeroizeOnDrop + AsRef<[u8]> + Default + AsMut<[u8]>;
 
@@ -82,7 +82,7 @@ pub trait MmEnc<const SEED_LENGTH: usize, EdxError: BackendErrorTrait> {
 
 #[derive(Debug)]
 pub struct FindexMultiMap<
-    UserError: BackendErrorTrait,
+    UserError: DbInterfaceErrorTrait,
     EntryTable: DxEnc<ENTRY_LENGTH, Error = Error<UserError>>,
     ChainTable: DxEnc<LINK_LENGTH, Error = Error<UserError>>,
 > {
@@ -100,7 +100,7 @@ mod tests {
     use cosmian_crypto_core::{reexport::rand_core::SeedableRng, CsRng};
 
     use crate::{
-        edx::{chain_table::ChainTable, entry_table::EntryTable, in_memory::InMemoryBackend},
+        edx::{chain_table::ChainTable, entry_table::EntryTable, in_memory::InMemoryDb},
         findex_mm::{FindexMultiMap, MmEnc, Operation},
         DxEnc, Label,
     };
@@ -110,8 +110,8 @@ mod tests {
         let rng = Arc::new(Mutex::new(CsRng::from_entropy()));
         let label = Label::random(&mut *rng.lock().expect(""));
 
-        let entry_table = EntryTable::setup(InMemoryBackend::default());
-        let chain_table = ChainTable::setup(InMemoryBackend::default());
+        let entry_table = EntryTable::setup(InMemoryDb::default());
+        let chain_table = ChainTable::setup(InMemoryDb::default());
         let findex = FindexMultiMap::new(entry_table, chain_table);
 
         // Generates 10 chains of 32 bytes values.
