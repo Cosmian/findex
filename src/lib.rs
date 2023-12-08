@@ -3,7 +3,7 @@
 //! It uses a generic Dictionary Encryption Scheme (Dx-Enc) as building block to implement a
 //! Multi-Map Encryption Scheme (MM-Enc). A Graph Encryption Scheme (Gx-Enc) is then built on top
 //! of the MM-Enc scheme and finally an `Index` trait built on top of this Gx-Enc scheme allows
-//! indexing both `Location`s and `Keyword`s.
+//! indexing both `Data` and `Keyword`s.
 //!
 //! The `Index` traits is not a cryptographic one. It is used to simplify the interface and to hide
 //! the details of the cryptographic implementation when it is possible.
@@ -20,16 +20,16 @@ mod index;
 mod parameters;
 
 #[cfg(any(test, feature = "in_memory"))]
-pub use edx::in_memory::{InMemoryBackend, InMemoryBackendError};
+pub use edx::in_memory::{InMemoryDb, InMemoryDbError};
 pub use edx::{
-    chain_table::ChainTable, entry_table::EntryTable, DxEnc, EdxBackend, EncryptedValue, Token,
+    chain_table::ChainTable, entry_table::EntryTable, DbInterface, DxEnc, EncryptedValue, Token,
     TokenToEncryptedValueMap, TokenWithEncryptedValueList, Tokens,
 };
-pub use error::{BackendErrorTrait, CoreError, Error};
+pub use error::{CoreError, DbInterfaceErrorTrait, Error};
 pub use findex_graph::IndexedValue;
 pub use findex_mm::{ENTRY_LENGTH, LINK_LENGTH};
 pub use index::{
-    Findex, Index, IndexedValueToKeywordsMap, Keyword, KeywordToDataMap, Keywords, Label, Location,
+    Data, Findex, Index, IndexedValueToKeywordsMap, Keyword, KeywordToDataMap, Keywords, Label,
     UserKey,
 };
 pub use parameters::*;
@@ -41,8 +41,8 @@ mod example {
     use cosmian_crypto_core::{reexport::rand_core::SeedableRng, CsRng, RandomFixedSizeCBytes};
 
     use crate::{
-        ChainTable, DxEnc, EntryTable, Findex, InMemoryBackend, Index, IndexedValue,
-        IndexedValueToKeywordsMap, Keyword, KeywordToDataMap, Keywords, Label, Location, UserKey,
+        ChainTable, Data, DxEnc, EntryTable, Findex, InMemoryDb, Index, IndexedValue,
+        IndexedValueToKeywordsMap, Keyword, KeywordToDataMap, Keywords, Label, UserKey,
     };
 
     #[actix_rt::test]
@@ -60,8 +60,8 @@ mod example {
         // Let's create a new index using the provided Entry and Chain table implementation and the
         // in-memory EDX implementation provided for test purpose.
         let index = Findex::new(
-            EntryTable::setup(InMemoryBackend::default()),
-            ChainTable::setup(InMemoryBackend::default()),
+            EntryTable::setup(InMemoryDb::default()),
+            ChainTable::setup(InMemoryDb::default()),
         );
 
         ////////////////////////////////////////////////////////////////////////////////
@@ -80,8 +80,8 @@ mod example {
 
         let kwd1 = Keyword::from("Keyword 1");
         let kwd2 = Keyword::from("Keyword 2");
-        let loc1 = Location::from("Location 1");
-        let loc2 = Location::from("Location 2");
+        let loc1 = Data::from("Location 1");
+        let loc2 = Data::from("Location 2");
 
         let res = index
             .add(
@@ -197,7 +197,7 @@ mod example {
         assert_eq!(3, ct_length);
 
         let res = index
-            .compact(&key, &key, &label, &label, 1, &|res| async { Ok(res) })
+            .compact(&key, &key, &label, &label, 1., &|res| async { Ok(res) })
             .await;
 
         // Ooops we forgot to renew either the key or the label!
@@ -207,7 +207,9 @@ mod example {
         let new_label = Label::from("second label");
 
         index
-            .compact(&key, &key, &label, &new_label, 1, &|res| async { Ok(res) })
+            .compact(&key, &key, &label, &new_label, 1f64, &|res| async {
+                Ok(res)
+            })
             .await
             .unwrap();
 
@@ -260,7 +262,9 @@ mod example {
 
         let new_label = Label::from("third label");
         index
-            .compact(&key, &key, &label, &new_label, 1, &|res| async { Ok(res) })
+            .compact(&key, &key, &label, &new_label, 1f64, &|res| async {
+                Ok(res)
+            })
             .await
             .unwrap();
         let label = new_label;
@@ -278,9 +282,9 @@ mod example {
         //                                                                            //
         //  It is possible to filter out indexed values from the index during the     //
         //  compact operation. This is useful when indexed values become obsolete     //
-        //  but the index was not updated. A `filter` callback can be given to the    //
-        //  compact operation. It is fed with the indexed values read during the      //
-        //  compact operation. Only those returned are indexed back.                  //
+        //  but the index was not updated. A `data_filter` callback can be given to   //
+        //  the compact operation. It is fed with the indexed values read during      //
+        //  the compact operation. Only those returned are indexed back.              //
         //                                                                            //
         //  In this example, the `loc1` value will be filtered out. The index should  //
         //  then be empty since the `kwd1` will not be associated to any value.       //
@@ -293,9 +297,9 @@ mod example {
 
         let new_label = Label::from("fourth label");
         index
-            .compact(&key, &key, &label, &new_label, 1, &|res| async {
-                let remaining_locations = res.into_iter().filter(|v| v != &loc1).collect();
-                Ok(remaining_locations)
+            .compact(&key, &key, &label, &new_label, 1f64, &|data| async {
+                let remaining_data = data.into_iter().filter(|v| v != &loc1).collect();
+                Ok(remaining_data)
             })
             .await
             .unwrap();

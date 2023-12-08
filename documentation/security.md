@@ -1,5 +1,4 @@
-Findex security
-===============
+# Findex security
 
 *Note*: This page is a work in progress.
 
@@ -16,14 +15,14 @@ Findex aims to provide the snapshot security level (the proof is a work in
 progress).
 
 The index stored is composed of:
+
 - tokens (UIDs) that are the result of a cryptographic hash function with at
   least 256 bits of security;
 - encrypted values produced using AES256-GCM.
 
 As such, it provides 256 bits of classic security and 128 bits of post-quantum
-security against decryption and brute-force attack on the tokens.
-
-The indexed values stored in the Chain Table values are therefore secured.
+security against decryption and brute-force attack on the tokens. The indexed
+values (stored in the Chain Table values) are therefore secured.
 
 Another security concept is the *volume*. It describes the number of data
 associated to a given keyword.
@@ -54,13 +53,13 @@ introducing these leaks and ways to mitigate them whenever possible.
 ### Findex operations distinguishness
 
 Findex cannot hide the nature of ongoing operations: the server learns what
-incoming requests are (one of the backend interface methods) and by associating
-several such requests, differentiate search operations from modification (adds
-or deletes) from compact operations.
+incoming requests are (one of the database interface methods) and by
+associating several such requests, differentiate search operations from
+modification (adds or deletes) from compact operations.
 
 This leak can be mitigated by making user connections *concurrent* and
 *indistinguishable*. That way, it makes is much more difficult for the server
-to group backend requests by Findex operation.
+to group database requests by Findex operation.
 
 *Note*: due to their implementation, add and delete operations are
 indistinguishable (a delete adds negated values and is therefore an add).
@@ -79,13 +78,13 @@ Therefore, leaking search pattern may leak the identity of the keywords stored
 in the index and the identity of the keywords requested by the clients.
 
 Like all SSE, Findex leaks the *search pattern*. It has been proven that in
-order to hide the search pattern, a logarithmic cost in communication between
-the client and the server is needed. The state-of-the-art construction that
-preserve search access privacy is the ORAM.
+order to hide the search pattern, a logarithmic bandwidth overhead on the
+communication between the client and the server is unavoidable. The
+state-of-the-art construction that preserve search pattern privacy is the ORAM.
 
-Since a logarithmic communication costs is prohibitively high for several
-applications, we chose not to base Findex on an ORAM construction and to leak
-the search pattern.
+Since a logarithmic communication bandwidth overhead cost is prohibitively high
+for several applications, we chose not to base Findex on an ORAM construction
+and to leak the search pattern.
 
 However, we provide a way to "shuffle" the index, that can be used to reset the
 knowledge gained by the server over the time: the compact operation.

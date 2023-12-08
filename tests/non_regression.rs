@@ -9,9 +9,9 @@ use cosmian_crypto_core::{
     FixedSizeCBytes, RandomFixedSizeCBytes,
 };
 use cosmian_findex::{
-    ChainTable, DxEnc, EntryTable, Error, Findex, InMemoryBackend, InMemoryBackendError, Index,
-    IndexedValue, IndexedValueToKeywordsMap, Keyword, Keywords, Label, Location, UserKey,
-    ENTRY_LENGTH, LINK_LENGTH,
+    ChainTable, Data, DxEnc, EntryTable, Error, Findex, InMemoryDb, InMemoryDbError, Index,
+    IndexedValue, IndexedValueToKeywordsMap, Keyword, Keywords, Label, UserKey, ENTRY_LENGTH,
+    LINK_LENGTH,
 };
 use rand::RngCore;
 
@@ -25,7 +25,7 @@ use rand::RngCore;
 fn add_keyword_graph(
     keyword: &Keyword,
     min_keyword_length: usize,
-    map: &mut HashMap<IndexedValue<Keyword, Location>, Keywords>,
+    map: &mut HashMap<IndexedValue<Keyword, Data>, Keywords>,
 ) {
     for i in min_keyword_length..keyword.len() {
         map.entry(IndexedValue::Pointer(Keyword::from(&keyword[..i])))
@@ -35,7 +35,7 @@ fn add_keyword_graph(
 }
 
 #[allow(dead_code)]
-async fn write_index() -> Result<(), Error<InMemoryBackendError>> {
+async fn write_index() -> Result<(), Error<InMemoryDbError>> {
     const MIN_KEYWORD_LENGTH: usize = 3;
     const MAX_NUM_LOCATIONS: usize = 20;
     const MAX_FIRST_NAMES: usize = 1000;
@@ -43,8 +43,8 @@ async fn write_index() -> Result<(), Error<InMemoryBackendError>> {
     let mut rng = rand::thread_rng();
 
     let findex = Findex::new(
-        EntryTable::setup(InMemoryBackend::default()),
-        ChainTable::setup(InMemoryBackend::default()),
+        EntryTable::setup(InMemoryDb::default()),
+        ChainTable::setup(InMemoryDb::default()),
     );
 
     let key = findex.keygen();
@@ -60,7 +60,7 @@ async fn write_index() -> Result<(), Error<InMemoryBackendError>> {
         let mut map = HashMap::with_capacity(n_locations);
         for i in 0..n_locations {
             map.insert(
-                IndexedValue::Data(Location::from(format!("{first_name}_{i}").as_bytes())),
+                IndexedValue::Data(Data::from(format!("{first_name}_{i}").as_bytes())),
                 Keywords::from_iter([Keyword::from(first_name)]),
             );
         }
@@ -101,19 +101,19 @@ async fn write_index() -> Result<(), Error<InMemoryBackendError>> {
 }
 
 #[actix_rt::test]
-async fn test_non_regression() -> Result<(), Error<InMemoryBackendError>> {
+async fn test_non_regression() -> Result<(), Error<InMemoryDbError>> {
     // Uncomment to generate new test data.
     // write_index().await?;
 
     let mut findex = Findex::new(
-        EntryTable::setup(InMemoryBackend::default()),
-        ChainTable::setup(InMemoryBackend::default()),
+        EntryTable::setup(InMemoryDb::default()),
+        ChainTable::setup(InMemoryDb::default()),
     );
 
     let serialized_index = std::fs::read("datasets/serialized_index").unwrap();
     let mut de = Deserializer::new(&serialized_index);
-    findex.findex_graph.findex_mm.entry_table.0 = de.read::<InMemoryBackend<ENTRY_LENGTH>>()?;
-    findex.findex_graph.findex_mm.chain_table.0 = de.read::<InMemoryBackend<LINK_LENGTH>>()?;
+    findex.findex_graph.findex_mm.entry_table.0 = de.read::<InMemoryDb<ENTRY_LENGTH>>()?;
+    findex.findex_graph.findex_mm.chain_table.0 = de.read::<InMemoryDb<LINK_LENGTH>>()?;
 
     println!(
         "Entry Table length: {}",
@@ -151,7 +151,7 @@ async fn test_non_regression() -> Result<(), Error<InMemoryBackendError>> {
     let reader = BufReader::new(File::open("datasets/test_vector.txt").unwrap());
     for maybe_line in reader.lines() {
         let line = maybe_line.unwrap();
-        test_vector.insert(Location::from(line.as_bytes().to_vec()));
+        test_vector.insert(Data::from(line.as_bytes().to_vec()));
     }
 
     assert_eq!(res, test_vector);
