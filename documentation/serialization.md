@@ -6,7 +6,7 @@ Entry and Chain tables.
 Both the Entry Table and the Chain Table represent a key/value store. Each key
 (subsequently called `token`) is the result of a cryptographic hash function
 and is therefore sufficiently secure. The values however need to be encrypted
-before being sent for storage to the backend.
+before being sent for storage to the database.
 
 Therefore, the actual structures stored are:
 
@@ -14,7 +14,7 @@ Therefore, the actual structures stored are:
 {
     (token) [u8; 32]: (nonce) [u8; 12]
                         || (ciphertext) [u8; PLAINTEXT_LENGTH]
-                        || (tag) [u8; 16],
+                        || (mac) [u8; 16],
     ...
 }
 ```
@@ -22,7 +22,6 @@ Therefore, the actual structures stored are:
 Where the ciphertext is the results of the AES256-GCM encryption of the
 plaintext value. This structure is therefore serialized to a couple composed by
 a `32`-bytes value and a `28+PLAINTEXT_LENGTH` value.
-
 
 ## Serialization of the Entry Table values
 
@@ -33,7 +32,7 @@ each keyword. Its values are therefore:
 (entry) {
     last_link_token: [u8; 32],
     seed: [u8; 16],
-    entry_tag: [u8; 32],
+    keyword_hash: [u8; 32],
 }
 ```
 

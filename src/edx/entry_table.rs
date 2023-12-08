@@ -17,16 +17,16 @@ use super::{
     TokenDump,
 };
 use crate::{
-    edx::{DxEnc, EdxBackend},
+    edx::{DbInterface, DxEnc},
     parameters::{SEED_LENGTH, TOKEN_LENGTH},
     EncryptedValue, Error, Label,
 };
 
 /// Implementation of the Entry Table EDX.
 #[derive(Debug)]
-pub struct EntryTable<const VALUE_LENGTH: usize, Edx: EdxBackend<VALUE_LENGTH>>(pub Edx);
+pub struct EntryTable<const VALUE_LENGTH: usize, Edx: DbInterface<VALUE_LENGTH>>(pub Edx);
 
-impl<const VALUE_LENGTH: usize, Edx: EdxBackend<VALUE_LENGTH>> Deref
+impl<const VALUE_LENGTH: usize, Edx: DbInterface<VALUE_LENGTH>> Deref
     for EntryTable<VALUE_LENGTH, Edx>
 {
     type Target = Edx;
@@ -39,16 +39,16 @@ impl<const VALUE_LENGTH: usize, Edx: EdxBackend<VALUE_LENGTH>> Deref
 const ENTRY_TABLE_KEY_DERIVATION_INFO: &[u8] = b"Entry Table key derivation info.";
 
 #[async_trait(?Send)]
-impl<const VALUE_LENGTH: usize, Edx: EdxBackend<VALUE_LENGTH>> DxEnc<VALUE_LENGTH>
+impl<const VALUE_LENGTH: usize, Edx: DbInterface<VALUE_LENGTH>> DxEnc<VALUE_LENGTH>
     for EntryTable<VALUE_LENGTH, Edx>
 {
     type EncryptedValue = EncryptedValue<VALUE_LENGTH>;
     type Error = Error<Edx::Error>;
     type Key = EdxKey;
     type Seed = Seed<SEED_LENGTH>;
-    type Backend = Edx;
+    type Database = Edx;
 
-    fn setup(edx: Self::Backend) -> Self {
+    fn setup(edx: Self::Database) -> Self {
         Self(edx)
     }
 
@@ -117,7 +117,10 @@ impl<const VALUE_LENGTH: usize, Edx: EdxBackend<VALUE_LENGTH>> DxEnc<VALUE_LENGT
     }
 
     async fn insert(&self, items: HashMap<Token, Self::EncryptedValue>) -> Result<(), Self::Error> {
-        self.0.insert(items.into()).await.map_err(Error::Backend)
+        self.0
+            .insert(items.into())
+            .await
+            .map_err(Error::DbInterface)
     }
 
     fn prepare(
@@ -133,12 +136,12 @@ impl<const VALUE_LENGTH: usize, Edx: EdxBackend<VALUE_LENGTH>> DxEnc<VALUE_LENGT
         self.0
             .delete(items.into())
             .await
-            .map_err(Self::Error::Backend)
+            .map_err(Self::Error::DbInterface)
     }
 }
 
 #[async_trait(?Send)]
-impl<const VALUE_LENGTH: usize, Edx: EdxBackend<VALUE_LENGTH>> TokenDump
+impl<const VALUE_LENGTH: usize, Edx: DbInterface<VALUE_LENGTH>> TokenDump
     for EntryTable<VALUE_LENGTH, Edx>
 {
     type Error = <Self as DxEnc<VALUE_LENGTH>>::Error;
@@ -147,7 +150,7 @@ impl<const VALUE_LENGTH: usize, Edx: EdxBackend<VALUE_LENGTH>> TokenDump
         self.0
             .dump_tokens()
             .await
-            .map_err(Error::Backend)
+            .map_err(Error::DbInterface)
             .map(Into::into)
     }
 }
@@ -160,7 +163,7 @@ mod tests {
     };
 
     use super::*;
-    use crate::edx::in_memory::InMemoryBackend;
+    use crate::edx::in_memory::InMemoryDb;
 
     const VALUE_LENGTH: usize = 32;
 
@@ -168,7 +171,7 @@ mod tests {
     async fn test_edx() {
         let mut rng = CsRng::from_entropy();
 
-        let table = EntryTable::setup(InMemoryBackend::default());
+        let table = EntryTable::setup(InMemoryDb::default());
         let seed = table.gen_seed(&mut rng);
         let key = table.derive_keys(&seed);
         let label = Label::random(&mut rng);

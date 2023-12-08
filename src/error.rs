@@ -5,15 +5,14 @@ use core::fmt::{Debug, Display};
 use cosmian_crypto_core::CryptoCoreError;
 use never::Never;
 
-/// Marker trait for `Backend` errors.
-pub trait BackendErrorTrait: std::error::Error {}
+pub trait DbInterfaceErrorTrait: std::error::Error {}
 
 #[derive(Debug)]
 pub enum Error<T: std::error::Error> {
     Crypto(String),
     CryptoCore(CryptoCoreError),
     Conversion(String),
-    Backend(T),
+    DbInterface(T),
     Interrupt(String),
     Filter(String),
 }
@@ -25,9 +24,9 @@ impl<T: std::error::Error> Display for Error<T> {
                 write!(f, "crypto error: {msg}")
             }
             Self::CryptoCore(err) => write!(f, "CryptoCore error: {err}"),
-            Self::Backend(msg) => write!(f, "backend error: {msg}"),
+            Self::DbInterface(msg) => write!(f, "database interface error: {msg}"),
             Self::Interrupt(error) => write!(f, "user interrupt error: {error}"),
-            Self::Filter(error) => write!(f, "user filter error: {error}"),
+            Self::Filter(error) => write!(f, "user data filter error: {error}"),
         }
     }
 }
@@ -44,9 +43,9 @@ impl<T: std::error::Error> From<CryptoCoreError> for Error<T> {
     }
 }
 
-impl<T: BackendErrorTrait> From<T> for Error<T> {
+impl<T: DbInterfaceErrorTrait> From<T> for Error<T> {
     fn from(value: T) -> Self {
-        Self::Backend(value)
+        Self::DbInterface(value)
     }
 }
 
@@ -56,13 +55,13 @@ impl<T: std::error::Error> std::error::Error for Error<T> {}
 /// callback.
 pub type CoreError = Error<Never>;
 
-impl<T: BackendErrorTrait> From<CoreError> for Error<T> {
+impl<T: DbInterfaceErrorTrait> From<CoreError> for Error<T> {
     fn from(value: CoreError) -> Self {
         match value {
             CoreError::Crypto(err) => Self::Crypto(err),
             CoreError::CryptoCore(err) => Self::CryptoCore(err),
             CoreError::Conversion(err) => Self::Conversion(err),
-            CoreError::Backend(_) => {
+            CoreError::DbInterface(_) => {
                 panic!("this cannot happen because CoreError uses the `Never` type");
             }
             CoreError::Interrupt(err) => Self::Interrupt(err),

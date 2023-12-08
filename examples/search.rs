@@ -1,8 +1,8 @@
 use std::collections::{HashMap, HashSet};
 
 use cosmian_findex::{
-    ChainTable, DxEnc, EntryTable, Findex, InMemoryBackend, Index, IndexedValue,
-    IndexedValueToKeywordsMap, Keyword, Keywords, Label, Location,
+    ChainTable, Data, DxEnc, EntryTable, Findex, InMemoryDb, Index, IndexedValue,
+    IndexedValueToKeywordsMap, Keyword, Keywords, Label,
 };
 use futures::executor::block_on;
 
@@ -22,7 +22,7 @@ fn prepare_locations_and_words(number: i64) -> IndexedValueToKeywordsMap {
         words.insert(Keyword::from(format!("name_{idx}").as_bytes()));
 
         locations_and_words.insert(
-            IndexedValue::Data(Location::from(idx.to_be_bytes().as_slice())),
+            IndexedValue::Data(Data::from(idx.to_be_bytes().as_slice())),
             Keywords::from(words.clone()),
         );
     }
@@ -36,8 +36,8 @@ fn main() {
     // Prepare indexes to be search
     //
     let findex = Findex::new(
-        EntryTable::setup(InMemoryBackend::default()),
-        ChainTable::setup(InMemoryBackend::default()),
+        EntryTable::setup(InMemoryDb::default()),
+        ChainTable::setup(InMemoryDb::default()),
     );
 
     let key = findex.keygen();

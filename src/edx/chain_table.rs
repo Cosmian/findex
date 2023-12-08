@@ -17,7 +17,7 @@ use super::structs::Token;
 use crate::{
     edx::{
         structs::{EdxKey, Seed},
-        DxEnc, EdxBackend,
+        DbInterface, DxEnc,
     },
     error::Error,
     parameters::{SEED_LENGTH, TOKEN_LENGTH},
@@ -26,9 +26,9 @@ use crate::{
 
 /// Chain Table representation.
 #[derive(Debug)]
-pub struct ChainTable<const VALUE_LENGTH: usize, Edx: EdxBackend<VALUE_LENGTH>>(pub Edx);
+pub struct ChainTable<const VALUE_LENGTH: usize, Edx: DbInterface<VALUE_LENGTH>>(pub Edx);
 
-impl<const VALUE_LENGTH: usize, Edx: EdxBackend<VALUE_LENGTH>> Deref
+impl<const VALUE_LENGTH: usize, Edx: DbInterface<VALUE_LENGTH>> Deref
     for ChainTable<VALUE_LENGTH, Edx>
 {
     type Target = Edx;
@@ -41,16 +41,16 @@ impl<const VALUE_LENGTH: usize, Edx: EdxBackend<VALUE_LENGTH>> Deref
 const CHAIN_TABLE_KEY_DERIVATION_INFO: &[u8] = b"Chain Table key derivation info.";
 
 #[async_trait(?Send)]
-impl<const VALUE_LENGTH: usize, EdxScheme: EdxBackend<VALUE_LENGTH>> DxEnc<VALUE_LENGTH>
-    for ChainTable<VALUE_LENGTH, EdxScheme>
+impl<const VALUE_LENGTH: usize, Db: DbInterface<VALUE_LENGTH>> DxEnc<VALUE_LENGTH>
+    for ChainTable<VALUE_LENGTH, Db>
 {
     type EncryptedValue = EncryptedValue<VALUE_LENGTH>;
-    type Error = Error<EdxScheme::Error>;
+    type Error = Error<Db::Error>;
     type Key = EdxKey;
     type Seed = Seed<SEED_LENGTH>;
-    type Backend = EdxScheme;
+    type Database = Db;
 
-    fn setup(edx: Self::Backend) -> Self {
+    fn setup(edx: Self::Database) -> Self {
         Self(edx)
     }
 
@@ -96,7 +96,7 @@ impl<const VALUE_LENGTH: usize, EdxScheme: EdxBackend<VALUE_LENGTH>> DxEnc<VALUE
         self.0
             .fetch(tokens.into())
             .await
-            .map_err(Error::Backend)
+            .map_err(Error::DbInterface)
             .map(Into::into)
     }
 
@@ -126,11 +126,17 @@ impl<const VALUE_LENGTH: usize, EdxScheme: EdxBackend<VALUE_LENGTH>> DxEnc<VALUE
     }
 
     async fn insert(&self, items: HashMap<Token, Self::EncryptedValue>) -> Result<(), Self::Error> {
-        self.0.insert(items.into()).await.map_err(Error::Backend)
+        self.0
+            .insert(items.into())
+            .await
+            .map_err(Error::DbInterface)
     }
 
     async fn delete(&self, items: HashSet<Token>) -> Result<(), Self::Error> {
-        self.0.delete(items.into()).await.map_err(Error::Backend)
+        self.0
+            .delete(items.into())
+            .await
+            .map_err(Error::DbInterface)
     }
 }
 
@@ -143,7 +149,7 @@ mod tests {
     };
 
     use super::*;
-    use crate::edx::in_memory::InMemoryBackend;
+    use crate::edx::in_memory::InMemoryDb;
 
     const VALUE_LENGTH: usize = 32;
 
@@ -151,7 +157,7 @@ mod tests {
     async fn test_edx() {
         let mut rng = CsRng::from_entropy();
 
-        let table = ChainTable::setup(InMemoryBackend::default());
+        let table = ChainTable::setup(InMemoryDb::default());
         let seed = table.gen_seed(&mut rng);
         let key = table.derive_keys(&seed);
         let label = Label::random(&mut rng);

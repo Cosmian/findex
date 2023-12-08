@@ -18,7 +18,7 @@ pub use structs::{
     EncryptedValue, Token, TokenToEncryptedValueMap, TokenWithEncryptedValueList, Tokens,
 };
 
-use crate::{BackendErrorTrait, Label};
+use crate::{DbInterfaceErrorTrait, Label};
 
 #[async_trait(?Send)]
 pub trait TokenDump {
@@ -42,10 +42,10 @@ pub trait DxEnc<const VALUE_LENGTH: usize> {
     type EncryptedValue: Debug + Sized + Clone;
 
     /// Backend storage.
-    type Backend: EdxBackend<VALUE_LENGTH>;
+    type Database: DbInterface<VALUE_LENGTH>;
 
     /// Instantiates a new Dx-Enc scheme.
-    fn setup(edx: Self::Backend) -> Self;
+    fn setup(edx: Self::Database) -> Self;
 
     /// Generates a new random seed.
     fn gen_seed(&self, rng: &mut impl CryptoRngCore) -> Self::Seed;
@@ -99,9 +99,9 @@ pub trait DxEnc<const VALUE_LENGTH: usize> {
 }
 
 #[async_trait(?Send)]
-pub trait EdxBackend<const VALUE_LENGTH: usize> {
+pub trait DbInterface<const VALUE_LENGTH: usize> {
     /// Type of error returned by the EDX.
-    type Error: BackendErrorTrait;
+    type Error: DbInterfaceErrorTrait;
 
     /// Queries the EDX for all tokens stored.
     async fn dump_tokens(&self) -> Result<Tokens, Self::Error>;
@@ -113,7 +113,7 @@ pub trait EdxBackend<const VALUE_LENGTH: usize> {
         tokens: Tokens,
     ) -> Result<TokenWithEncryptedValueList<VALUE_LENGTH>, Self::Error>;
 
-    /// Upserts the given values into the backend for the given tokens.
+    /// Upserts the given values into the database for the given tokens.
     ///
     /// For each new token:
     /// 1. if there is no old value and no value stored, inserts the new value;
@@ -168,35 +168,37 @@ pub mod in_memory {
     #[cfg(feature = "in_memory")]
     use cosmian_crypto_core::{bytes_ser_de::Serializable, Nonce};
 
-    use super::{EdxBackend, Token, TokenToEncryptedValueMap, TokenWithEncryptedValueList, Tokens};
+    use super::{
+        DbInterface, Token, TokenToEncryptedValueMap, TokenWithEncryptedValueList, Tokens,
+    };
     #[cfg(feature = "in_memory")]
     use crate::parameters::{MAC_LENGTH, NONCE_LENGTH};
-    use crate::{error::BackendErrorTrait, EncryptedValue};
+    use crate::{error::DbInterfaceErrorTrait, EncryptedValue};
 
     #[derive(Debug)]
-    pub struct InMemoryBackendError(String);
+    pub struct InMemoryDbError(String);
 
-    impl From<CryptoCoreError> for InMemoryBackendError {
+    impl From<CryptoCoreError> for InMemoryDbError {
         fn from(value: CryptoCoreError) -> Self {
             Self(value.to_string())
         }
     }
 
-    impl Display for InMemoryBackendError {
+    impl Display for InMemoryDbError {
         fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
             write!(f, "callback error")
         }
     }
 
-    impl std::error::Error for InMemoryBackendError {}
-    impl BackendErrorTrait for InMemoryBackendError {}
+    impl std::error::Error for InMemoryDbError {}
+    impl DbInterfaceErrorTrait for InMemoryDbError {}
 
     #[derive(Debug)]
-    pub struct InMemoryBackend<const VALUE_LENGTH: usize>(
+    pub struct InMemoryDb<const VALUE_LENGTH: usize>(
         Arc<Mutex<TokenToEncryptedValueMap<VALUE_LENGTH>>>,
     );
 
-    impl<const VALUE_LENGTH: usize> Deref for InMemoryBackend<VALUE_LENGTH> {
+    impl<const VALUE_LENGTH: usize> Deref for InMemoryDb<VALUE_LENGTH> {
         type Target = Arc<Mutex<TokenToEncryptedValueMap<VALUE_LENGTH>>>;
 
         fn deref(&self) -> &Self::Target {
@@ -204,13 +206,13 @@ pub mod in_memory {
         }
     }
 
-    impl<const VALUE_LENGTH: usize> Default for InMemoryBackend<VALUE_LENGTH> {
+    impl<const VALUE_LENGTH: usize> Default for InMemoryDb<VALUE_LENGTH> {
         fn default() -> Self {
             Self(Default::default())
         }
     }
 
-    impl<const VALUE_LENGTH: usize> InMemoryBackend<VALUE_LENGTH> {
+    impl<const VALUE_LENGTH: usize> InMemoryDb<VALUE_LENGTH> {
         #[must_use]
         pub fn is_empty(&self) -> bool {
             self.lock().expect("could not lock mutex").is_empty()
@@ -236,8 +238,8 @@ pub mod in_memory {
     }
 
     #[cfg(feature = "in_memory")]
-    impl<const VALUE_LENGTH: usize> Serializable for InMemoryBackend<VALUE_LENGTH> {
-        type Error = InMemoryBackendError;
+    impl<const VALUE_LENGTH: usize> Serializable for InMemoryDb<VALUE_LENGTH> {
+        type Error = InMemoryDbError;
 
         fn length(&self) -> usize {
             (self.lock().expect("could not lock mutex").deref()).len()
@@ -288,8 +290,8 @@ pub mod in_memory {
     }
 
     #[async_trait(?Send)]
-    impl<const VALUE_LENGTH: usize> EdxBackend<VALUE_LENGTH> for InMemoryBackend<VALUE_LENGTH> {
-        type Error = InMemoryBackendError;
+    impl<const VALUE_LENGTH: usize> DbInterface<VALUE_LENGTH> for InMemoryDb<VALUE_LENGTH> {
+        type Error = InMemoryDbError;
 
         async fn dump_tokens(&self) -> Result<Tokens, Self::Error> {
             Ok(self
@@ -303,7 +305,7 @@ pub mod in_memory {
         async fn fetch(
             &self,
             tokens: Tokens,
-        ) -> Result<TokenWithEncryptedValueList<VALUE_LENGTH>, InMemoryBackendError> {
+        ) -> Result<TokenWithEncryptedValueList<VALUE_LENGTH>, InMemoryDbError> {
             Ok(TokenWithEncryptedValueList::from(
                 tokens
                     .into_iter()
@@ -322,11 +324,11 @@ pub mod in_memory {
             &self,
             old_values: TokenToEncryptedValueMap<VALUE_LENGTH>,
             new_values: TokenToEncryptedValueMap<VALUE_LENGTH>,
-        ) -> Result<TokenToEncryptedValueMap<VALUE_LENGTH>, InMemoryBackendError> {
+        ) -> Result<TokenToEncryptedValueMap<VALUE_LENGTH>, InMemoryDbError> {
             let edx = &mut self.lock().expect("couldn't lock the table");
             // Ensures an value is present inside the EDX for each given old value.
             if old_values.keys().any(|token| !edx.contains_key(token)) {
-                return Err(InMemoryBackendError(format!(
+                return Err(InMemoryDbError(format!(
                     "missing EDX tokens {:?}",
                     old_values
                         .keys()
@@ -362,7 +364,7 @@ pub mod in_memory {
             let edx = &mut self.lock().expect("couldn't lock the table");
 
             if items.keys().any(|token| edx.contains_key(token)) {
-                return Err(InMemoryBackendError(format!(
+                return Err(InMemoryDbError(format!(
                     "cannot insert value for used tokens ({:?})",
                     items
                         .keys()

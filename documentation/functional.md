@@ -1,9 +1,6 @@
-Findex functional documentation
-===============================
+# Findex functional documentation
 
 ## How to securely manage an index
-
-This documents describes in details the functionalities of Findex.
 
 The goal of Findex is to allow users to securely manage an index. To know more
 about the security guarantees of Findex, see the [security][sec_doc]
@@ -77,12 +74,13 @@ some keywords).
 ### An index as a couple of dictionaries
 
 Each multi-map value can be split into values of equal sizes called links, as
-described in the [serialization][ser_doc] documentation. The sequence
+described in the [serialization][serialization_doc] documentation. The sequence
 of links that is generated from a given multi-map value is called a chain. This
 allows representing the multi-map using two dictionary encryption schemes:
-- the first DX-Enc is called *Chain Table*: it contains all the chains
+
+- the first DX-Enc is called **Chain Table**: it contains all the chains
   generated from all the multi-map values.
-- the second DX-Enc is called *Entry Table*: it contains for each keyword all
+- the second DX-Enc is called **Entry Table**: it contains for each keyword all
   the metadata needed to retrieve the entire chain from the Chain Table.
 
 The role of Findex is therefore to transform [index][index_trait] requests into
@@ -92,12 +90,12 @@ The role of Findex is therefore to transform [index][index_trait] requests into
 
 Findex implementation is generic over the practical implementation of the
 DX-Enc used to represent the Entry and the Chain tables. In practice, an
-implementation is provided but it uses a generic backend interface used to
+implementation is provided but it uses a generic database interface used to
 abstract the storage technology. This allows users to use Findex on top of any
 database.
 
-See the [Rust trait][backend_trait] for details about how to implement the
-Findex backend interface in Rust, and see the [Cosmian documentation][pub_doc]
+See the [Rust trait][db_interface] for details about how to implement the
+Findex database interface in Rust, and see the [Cosmian documentation][pub_doc]
 for details about how to implement this interface in other languages.
 
 <!--
@@ -106,6 +104,7 @@ for details about how to implement this interface in other languages.
 
 [pub_doc]: https://docs.cosmian.com/cloudproof_encryption/encrypted_search/ "Findex documentation on docs.cosmian.com"
 [sec_doc]: security.md "Security documentation"
-[ser_doc]: serialization.md "Index serialization documentation"
+[serialization_doc]: serialization.md "Index serialization documentation"
 [index_trait]: ../src/index/mod.rs#L33 "Index trait"
 [edx_trait]: ../src/edx/mod.rs#L31 "DX-Enc trait"
+[db_interface]: ../src/edx/mod.rs#L102 "Findex database interface"

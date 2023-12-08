@@ -5,22 +5,22 @@ use std::fmt::Display;
 use crate::error::CoreError;
 
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
-pub enum IndexedValue<Tag, Value> {
+pub enum IndexedValue<Tag, Data> {
     Pointer(Tag),
-    Data(Value),
+    Data(Data),
 }
 
-impl<Tag: Display, Value: Display> Display for IndexedValue<Tag, Value> {
+impl<Tag: Display, Data: Display> Display for IndexedValue<Tag, Data> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Pointer(keyword) => write!(f, "IndexedValue::Pointer({keyword})"),
-            Self::Data(location) => write!(f, "IndexedValue::Data({location})"),
+            Self::Data(data) => write!(f, "IndexedValue::Data({data})"),
         }
     }
 }
 
-impl<Tag, Value> IndexedValue<Tag, Value> {
-    pub fn get_data(&self) -> Option<&Value> {
+impl<Tag, Data> IndexedValue<Tag, Data> {
+    pub fn get_data(&self) -> Option<&Data> {
         match self {
             Self::Pointer(_) => None,
             Self::Data(data) => Some(data),
@@ -39,8 +39,8 @@ impl<Tag, Value> IndexedValue<Tag, Value> {
     }
 }
 
-impl<Tag: AsRef<[u8]>, Value: AsRef<[u8]>> From<&IndexedValue<Tag, Value>> for Vec<u8> {
-    fn from(value: &IndexedValue<Tag, Value>) -> Self {
+impl<Tag: AsRef<[u8]>, Data: AsRef<[u8]>> From<&IndexedValue<Tag, Data>> for Vec<u8> {
+    fn from(value: &IndexedValue<Tag, Data>) -> Self {
         match value {
             IndexedValue::Pointer(pointer) => {
                 let pointer = pointer.as_ref();
@@ -60,7 +60,7 @@ impl<Tag: AsRef<[u8]>, Value: AsRef<[u8]>> From<&IndexedValue<Tag, Value>> for V
     }
 }
 
-impl<Tag: From<Vec<u8>>, Value: From<Vec<u8>>> TryFrom<&[u8]> for IndexedValue<Tag, Value> {
+impl<Tag: From<Vec<u8>>, Data: From<Vec<u8>>> TryFrom<&[u8]> for IndexedValue<Tag, Data> {
     type Error = CoreError;
 
     fn try_from(value: &[u8]) -> Result<Self, Self::Error> {
@@ -70,6 +70,7 @@ impl<Tag: From<Vec<u8>>, Value: From<Vec<u8>>> TryFrom<&[u8]> for IndexedValue<T
                 value.len()
             )));
         }
+        // TODO: change the leading value in v.7
         match value[0] {
             b'w' => Ok(Self::Pointer(value[1..].to_vec().into())),
             b'l' => Ok(Self::Data(value[1..].to_vec().into())),
