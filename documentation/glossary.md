@@ -1,5 +1,4 @@
-GLOSSARY
-========
+# GLOSSARY
 
 ## Naming conventions
 

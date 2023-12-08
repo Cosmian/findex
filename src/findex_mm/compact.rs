@@ -137,8 +137,7 @@ impl<
             .filter(|token| {
                 remaining_associations
                     .get(token)
-                    .map(|associated_values| !associated_values.is_empty())
-                    .unwrap_or(true)
+                    .map_or(true, |associated_values| !associated_values.is_empty())
             })
             .copied()
             .collect::<HashSet<_>>();

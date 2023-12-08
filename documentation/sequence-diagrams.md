@@ -1,5 +1,4 @@
-Findex sequence diagrams
-========================
+# Findex sequence diagrams
 
 This documents describes the Findex operations using sequence diagrams. Refer
 to the [functional documentation](functional.md) in order to understand the

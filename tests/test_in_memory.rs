@@ -541,7 +541,7 @@ async fn test_findex() -> Result<(), Error<InMemoryDbError>> {
                 &new_key,
                 &old_label,
                 &new_label,
-                1f64 / i as f64,
+                1f64 / f64::from(i),
                 &|indexed_data| async {
                     Ok(indexed_data
                         .into_iter()
@@ -642,7 +642,7 @@ async fn test_findex() -> Result<(), Error<InMemoryDbError>> {
                 &new_key,
                 &old_label,
                 &new_label,
-                1f64 / i as f64,
+                1f64 / f64::from(i),
                 &|indexed_data| async {
                     Ok(indexed_data
                         .into_iter()
@@ -690,7 +690,7 @@ async fn test_findex() -> Result<(), Error<InMemoryDbError>> {
                 &new_key,
                 &old_label,
                 &new_label,
-                1f64 / i as f64,
+                1f64 / f64::from(i),
                 &|indexed_data| async {
                     Ok(indexed_data
                         .into_iter()
@@ -981,7 +981,7 @@ async fn test_graph_compacting() {
                 &new_key,
                 &old_label,
                 &label,
-                1f64 / i as f64,
+                1f64 / f64::from(i),
                 &|indexed_data| async { Ok(indexed_data) },
             )
             .await

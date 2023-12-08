@@ -1,5 +1,4 @@
-Findex functional documentation
-===============================
+# Findex functional documentation
 
 ## How to securely manage an index
 
@@ -75,9 +74,10 @@ some keywords).
 ### An index as a couple of dictionaries
 
 Each multi-map value can be split into values of equal sizes called links, as
-described in the [serialization][ser_doc] documentation. The sequence
+described in the [serialization][serialization_doc] documentation. The sequence
 of links that is generated from a given multi-map value is called a chain. This
 allows representing the multi-map using two dictionary encryption schemes:
+
 - the first DX-Enc is called **Chain Table**: it contains all the chains
   generated from all the multi-map values.
 - the second DX-Enc is called **Entry Table**: it contains for each keyword all
@@ -104,7 +104,7 @@ for details about how to implement this interface in other languages.
 
 [pub_doc]: https://docs.cosmian.com/cloudproof_encryption/encrypted_search/ "Findex documentation on docs.cosmian.com"
 [sec_doc]: security.md "Security documentation"
-[ser_doc]: serialization.md "Index serialization documentation"
+[serialization_doc]: serialization.md "Index serialization documentation"
 [index_trait]: ../src/index/mod.rs#L33 "Index trait"
 [edx_trait]: ../src/edx/mod.rs#L31 "DX-Enc trait"
 [db_interface]: ../src/edx/mod.rs#L102 "Findex database interface"

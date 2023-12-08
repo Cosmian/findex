@@ -423,8 +423,7 @@ impl<
                         // Filter out obsolete data.
                         value
                             .get_data()
-                            .map(|data| remaining_data.contains(data))
-                            .unwrap_or(true)
+                            .map_or(true, |data| remaining_data.contains(data))
                     })
                     .collect::<HashSet<_>>();
                 (entry_token, remaining_values)

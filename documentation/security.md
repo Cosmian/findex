@@ -1,5 +1,4 @@
-Findex security
-===============
+# Findex security
 
 *Note*: This page is a work in progress.
 
@@ -16,6 +15,7 @@ Findex aims to provide the snapshot security level (the proof is a work in
 progress).
 
 The index stored is composed of:
+
 - tokens (UIDs) that are the result of a cryptographic hash function with at
   least 256 bits of security;
 - encrypted values produced using AES256-GCM.

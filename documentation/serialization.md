@@ -23,7 +23,6 @@ Where the ciphertext is the results of the AES256-GCM encryption of the
 plaintext value. This structure is therefore serialized to a couple composed by
 a `32`-bytes value and a `28+PLAINTEXT_LENGTH` value.
 
-
 ## Serialization of the Entry Table values
 
 The Entry Table is the simplest table. It stores the metadata of the chains of
