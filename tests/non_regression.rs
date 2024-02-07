@@ -9,7 +9,7 @@ use cosmian_crypto_core::{
     FixedSizeCBytes, RandomFixedSizeCBytes,
 };
 use cosmian_findex::{
-    ChainTable, Data, DxEnc, EntryTable, Error, Findex, InMemoryDb, InMemoryDbError, Index,
+    ChainTable, CsRhDxEnc, Data, EntryTable, Error, Findex, InMemoryDb, InMemoryDbError, Index,
     IndexedValue, IndexedValueToKeywordsMap, Keyword, Keywords, Label, UserKey, ENTRY_LENGTH,
     LINK_LENGTH,
 };

@@ -10,15 +10,15 @@ use tracing::debug;
 
 use super::{FindexGraph, GxEnc};
 use crate::{
-    edx::{Token, TokenDump},
+    edx::Token,
     findex_mm::{CompactingData, ENTRY_LENGTH, LINK_LENGTH},
-    DbInterfaceErrorTrait, DxEnc, Error, IndexedValue, Label,
+    CsRhDxEnc, DbInterfaceErrorTrait, Error, IndexedValue, Label,
 };
 
 impl<
         UserError: DbInterfaceErrorTrait,
-        EntryTable: DxEnc<ENTRY_LENGTH, Error = Error<UserError>> + TokenDump<Error = Error<UserError>>,
-        ChainTable: DxEnc<LINK_LENGTH, Error = Error<UserError>>,
+        EntryTable: CsRhDxEnc<ENTRY_LENGTH, Error = Error<UserError>>,
+        ChainTable: CsRhDxEnc<LINK_LENGTH, Error = Error<UserError>>,
     > FindexGraph<UserError, EntryTable, ChainTable>
 {
     pub async fn list_indexed_encrypted_tags(&self) -> Result<Vec<Token>, Error<UserError>> {

@@ -18,7 +18,7 @@ use zeroize::ZeroizeOnDrop;
 
 use crate::{
     findex_mm::{FindexMultiMap, Operation, ENTRY_LENGTH, LINK_LENGTH},
-    DbInterfaceErrorTrait, DxEnc, Error, Label,
+    CsRhDxEnc, DbInterfaceErrorTrait, Error, Label,
 };
 
 mod compact;
@@ -74,16 +74,16 @@ pub trait GxEnc<EdxError: DbInterfaceErrorTrait> {
 #[derive(Debug)]
 pub struct FindexGraph<
     UserError: DbInterfaceErrorTrait,
-    EntryTable: DxEnc<ENTRY_LENGTH, Error = Error<UserError>>,
-    ChainTable: DxEnc<LINK_LENGTH, Error = Error<UserError>>,
+    EntryTable: CsRhDxEnc<ENTRY_LENGTH, Error = Error<UserError>>,
+    ChainTable: CsRhDxEnc<LINK_LENGTH, Error = Error<UserError>>,
 > {
     pub findex_mm: FindexMultiMap<UserError, EntryTable, ChainTable>,
 }
 
 impl<
         UserError: DbInterfaceErrorTrait,
-        EntryTable: DxEnc<ENTRY_LENGTH, Error = Error<UserError>>,
-        ChainTable: DxEnc<LINK_LENGTH, Error = Error<UserError>>,
+        EntryTable: CsRhDxEnc<ENTRY_LENGTH, Error = Error<UserError>>,
+        ChainTable: CsRhDxEnc<LINK_LENGTH, Error = Error<UserError>>,
     > FindexGraph<UserError, EntryTable, ChainTable>
 {
     pub fn new(entry_table: EntryTable, chain_table: ChainTable) -> Self {
@@ -111,7 +111,7 @@ mod tests {
         edx::in_memory::InMemoryDb,
         findex_graph::{FindexGraph, GxEnc, IndexedValue},
         findex_mm::Operation,
-        ChainTable, DxEnc, EntryTable, Label,
+        ChainTable, CsRhDxEnc, EntryTable, Label,
     };
 
     async fn user_interrupt<

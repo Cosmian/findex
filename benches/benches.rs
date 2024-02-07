@@ -2,7 +2,7 @@ use std::collections::{HashMap, HashSet};
 
 use cosmian_crypto_core::CsRng;
 use cosmian_findex::{
-    ChainTable, Data, DxEnc, EntryTable, Findex, InMemoryDb, Index, IndexedValue,
+    ChainTable, CsRhDxEnc, Data, EntryTable, Findex, InMemoryDb, Index, IndexedValue,
     IndexedValueToKeywordsMap, Keyword, Keywords, Label,
 };
 use criterion::{criterion_group, criterion_main, Criterion};

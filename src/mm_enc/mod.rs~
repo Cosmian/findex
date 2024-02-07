@@ -1,52 +1,21 @@
-//! Findex Multi-Map Encryption scheme (MM-Enc).
-//!
-//! The Findex MM encryption scheme is in charge of storing variable-length
-//! chains of variable-length values into a dictionary storing constant length
-//! values.
-//!
-//! Tho this aim, it uses an auxiliary EDX called Entry Table in order to store
-//! chain metadata:
-//! - a seed used to derive the chain keys
-//! - a hash used to derive the EDX token for this value
-//! - the last token of the chain
-//!
-//! The EDX used to store the chains is called Chain Table. Each chain component
-//! is called a link. A chain is therefore a sequence of links. The key used to
-//! encrypt a given chain is derived from the seed stored in its associated
-//! entry. The Chain Table tokens are derived from each other using dedicated
-//! key derived from the same entry seed. The first token is derived from the
-//! hash stored in the metadata.
-//!
-//! The last chain token stored in the Entry Table along with conditional (cf
-//! [`DxEnc::upsert()`](crate::DxEnc::upsert)), atomic modifications of this
-//! table allow avoiding races between concurrent additions to the same chain.
-
-use std::{
-    collections::{HashMap, HashSet},
-    fmt::Debug,
-    hash::Hash,
-    sync::{Arc, Mutex},
-};
+use std::{fmt::Debug, hash::Hash};
 
 use async_trait::async_trait;
-use cosmian_crypto_core::reexport::rand_core::CryptoRngCore;
-use zeroize::ZeroizeOnDrop;
 
-use crate::{edx::DxEnc, DbInterfaceErrorTrait, Error, Label};
+use crate::{
+    edx::{CsRhDxEnc, TagSet},
+    DbInterface, DbInterfaceErrorTrait, Error,
+};
 
 mod compact;
-mod mm;
+mod findex;
 mod structs;
 
 pub use structs::{CompactingData, Operation, ENTRY_LENGTH, LINK_LENGTH};
 
 #[async_trait(?Send)]
-pub trait MmEnc<const SEED_LENGTH: usize, EdxError: DbInterfaceErrorTrait> {
-    /// Seed used to derive the key.
-    type Seed: Sized + ZeroizeOnDrop + AsRef<[u8]> + Default + AsMut<[u8]>;
-
-    /// Cryptographic key.
-    type Key: Sized + ZeroizeOnDrop;
+pub trait MmEnc {
+    type Tag;
 
     /// Type of the values stored inside the multi-map.
     type Item;
@@ -54,37 +23,32 @@ pub trait MmEnc<const SEED_LENGTH: usize, EdxError: DbInterfaceErrorTrait> {
     /// Error returned by the multi-map encryption scheme.
     type Error: std::error::Error;
 
-    /// Generates a new random seed.
-    fn gen_seed(&self, rng: &mut impl CryptoRngCore) -> Self::Seed;
-
-    /// Deterministically derives a key from the given seed.
-    fn derive_keys(&self, seed: &Self::Seed) -> Self::Key;
+    /// Creates a new instance of the scheme.
+    ///
+    /// Deterministically generates keys using the given seed and use the given
+    /// database connection to store the EMM.
+    fn setup(seed: &[u8], connection: impl DbInterface) -> Result<Self, Self::Error>;
 
     /// Queries the encrypted multi-map for the given tags and returns the
     /// decrypted values.
     async fn get<Tag: Debug + Clone + Hash + Eq + AsRef<[u8]>>(
         &self,
-        key: &Self::Key,
-        tags: HashSet<Tag>,
-        label: &Label,
-    ) -> Result<HashMap<Tag, HashSet<Self::Item>>, Self::Error>;
+        tags: TagSet,
+    ) -> Result<Mm<Self::Tag, Self::Item>, Self::Error>;
 
     /// Applies the given modifications to the encrypted multi-map. Returns the
     /// set of Tags added to the Multi-Map.
     async fn insert<Tag: Clone + Hash + Eq + AsRef<[u8]>>(
         &self,
-        rng: Arc<Mutex<impl CryptoRngCore>>,
-        key: &Self::Key,
-        modifications: HashMap<Tag, Vec<(Operation, Self::Item)>>,
-        label: &Label,
-    ) -> Result<HashSet<Tag>, Self::Error>;
+        mm: Mm<Self::Tag, Self::Item>,
+    ) -> Result<(), Self::Error>;
 }
 
 #[derive(Debug)]
 pub struct FindexMultiMap<
     UserError: DbInterfaceErrorTrait,
-    EntryTable: DxEnc<ENTRY_LENGTH, Error = Error<UserError>>,
-    ChainTable: DxEnc<LINK_LENGTH, Error = Error<UserError>>,
+    EntryTable: CsRhDxEnc<ENTRY_LENGTH, Error = Error<UserError>>,
+    ChainTable: CsRhDxEnc<LINK_LENGTH, Error = Error<UserError>>,
 > {
     pub entry_table: EntryTable,
     pub chain_table: ChainTable,
@@ -102,7 +66,7 @@ mod tests {
     use crate::{
         edx::{chain_table::ChainTable, entry_table::EntryTable, in_memory::InMemoryDb},
         findex_mm::{FindexMultiMap, MmEnc, Operation},
-        DxEnc, Label,
+        CsRhDxEnc, Label,
     };
 
     #[actix_rt::test]

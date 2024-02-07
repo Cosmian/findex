@@ -12,7 +12,7 @@ use cosmian_crypto_core::reexport::rand_core::CryptoRngCore;
 use tiny_keccak::{Hasher, Sha3};
 
 use crate::{
-    edx::{DxEnc, Token},
+    edx::{CsRhDxEnc, Token},
     error::Error,
     findex_mm::{
         structs::{Entry, Link, Operation},
@@ -24,8 +24,8 @@ use crate::{
 
 impl<
         UserError: DbInterfaceErrorTrait,
-        EntryTable: DxEnc<ENTRY_LENGTH, Error = Error<UserError>>,
-        ChainTable: DxEnc<LINK_LENGTH, Error = Error<UserError>>,
+        EntryTable: CsRhDxEnc<ENTRY_LENGTH, Error = Error<UserError>>,
+        ChainTable: CsRhDxEnc<LINK_LENGTH, Error = Error<UserError>>,
     > FindexMultiMap<UserError, EntryTable, ChainTable>
 {
     /// Instantiates a new `FindexMultiMap`.
@@ -356,8 +356,8 @@ impl<
 #[async_trait(?Send)]
 impl<
         UserError: DbInterfaceErrorTrait,
-        EntryTable: DxEnc<ENTRY_LENGTH, Error = Error<UserError>>,
-        ChainTable: DxEnc<LINK_LENGTH, Error = Error<UserError>>,
+        EntryTable: CsRhDxEnc<ENTRY_LENGTH, Error = Error<UserError>>,
+        ChainTable: CsRhDxEnc<LINK_LENGTH, Error = Error<UserError>>,
     > MmEnc<SEED_LENGTH, UserError> for FindexMultiMap<UserError, EntryTable, ChainTable>
 {
     type Error = Error<UserError>;

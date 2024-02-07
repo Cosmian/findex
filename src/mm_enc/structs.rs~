@@ -3,24 +3,18 @@
 use std::{
     collections::HashMap,
     fmt::{Debug, Display},
-    hash::Hash,
     ops::{Deref, DerefMut},
 };
 
 use base64::engine::{general_purpose::STANDARD, Engine};
 
 use crate::{
-    edx::{DxEnc, Token},
+    edx::{CsRhDxEnc, Token},
     error::CoreError,
-    parameters::{BLOCK_LENGTH, HASH_LENGTH, LINE_WIDTH, SEED_LENGTH, TOKEN_LENGTH},
+    parameters::{BLOCK_LENGTH, HASH_LENGTH, LINE_WIDTH, TOKEN_LENGTH},
 };
 
-/// Operation allowed to be performed on a multi-map.
-#[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]
-pub enum Operation {
-    Addition,
-    Deletion,
-}
+pub struct Mm<Tag, Item>(HashMap<Tag, Item>);
 
 /// Value stored in the Entry Table by Findex.
 ///
@@ -31,13 +25,13 @@ pub enum Operation {
 pub const ENTRY_LENGTH: usize = SEED_LENGTH + HASH_LENGTH + TOKEN_LENGTH;
 
 #[derive(Debug, Clone)]
-pub struct Entry<ChainTable: DxEnc<LINK_LENGTH>> {
+pub struct Entry<ChainTable: CsRhDxEnc<LINK_LENGTH>> {
     pub seed: ChainTable::Seed,
     pub tag_hash: [u8; HASH_LENGTH],
     pub chain_token: Option<Token>,
 }
 
-impl<ChainTable: DxEnc<LINK_LENGTH>> Entry<ChainTable> {
+impl<ChainTable: CsRhDxEnc<LINK_LENGTH>> Entry<ChainTable> {
     pub fn new(
         seed: ChainTable::Seed,
         tag_hash: [u8; HASH_LENGTH],
@@ -51,7 +45,7 @@ impl<ChainTable: DxEnc<LINK_LENGTH>> Entry<ChainTable> {
     }
 }
 
-impl<ChainTable: DxEnc<LINK_LENGTH>> From<Entry<ChainTable>> for [u8; ENTRY_LENGTH] {
+impl<ChainTable: CsRhDxEnc<LINK_LENGTH>> From<Entry<ChainTable>> for [u8; ENTRY_LENGTH] {
     fn from(value: Entry<ChainTable>) -> Self {
         let mut res = [0; ENTRY_LENGTH];
         res[..TOKEN_LENGTH].copy_from_slice(
@@ -66,7 +60,7 @@ impl<ChainTable: DxEnc<LINK_LENGTH>> From<Entry<ChainTable>> for [u8; ENTRY_LENG
     }
 }
 
-impl<ChainTable: DxEnc<LINK_LENGTH>> From<[u8; ENTRY_LENGTH]> for Entry<ChainTable>
+impl<ChainTable: CsRhDxEnc<LINK_LENGTH>> From<[u8; ENTRY_LENGTH]> for Entry<ChainTable>
 where
     [(); 1 + (BLOCK_LENGTH + 1) * LINE_WIDTH]:,
 {
@@ -90,7 +84,7 @@ where
     }
 }
 
-impl<ChainTable: DxEnc<LINK_LENGTH>> Display for Entry<ChainTable>
+impl<ChainTable: CsRhDxEnc<LINK_LENGTH>> Display for Entry<ChainTable>
 where
     [(); 1 + (BLOCK_LENGTH + 1) * LINE_WIDTH]:,
 {
@@ -215,7 +209,7 @@ impl DerefMut for Link {
     }
 }
 
-pub struct CompactingData<ChainTable: DxEnc<LINK_LENGTH>> {
+pub struct CompactingData<ChainTable: CsRhDxEnc<LINK_LENGTH>> {
     #[allow(clippy::type_complexity)]
     pub(crate) metadata: HashMap<Token, (ChainTable::Key, Vec<Token>)>,
     pub(crate) entries: HashMap<Token, Entry<ChainTable>>,

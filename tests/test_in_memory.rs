@@ -8,7 +8,7 @@ use std::{
 
 use cosmian_crypto_core::{reexport::rand_core::SeedableRng, CsRng};
 use cosmian_findex::{
-    ChainTable, Data, DxEnc, EntryTable, Error, Findex, InMemoryDb, InMemoryDbError, Index,
+    ChainTable, CsRhDxEnc, Data, EntryTable, Error, Findex, InMemoryDb, InMemoryDbError, Index,
     IndexedValue, IndexedValueToKeywordsMap, Keyword, Keywords, Label,
 };
 use futures::executor::block_on;

@@ -15,14 +15,14 @@ use crate::{
     findex_graph::{FindexGraph, GxEnc, IndexedValue},
     findex_mm::{FindexMultiMap, MmEnc, Operation, ENTRY_LENGTH, LINK_LENGTH},
     parameters::SEED_LENGTH,
-    DbInterfaceErrorTrait, DxEnc, Error, Label,
+    CsRhDxEnc, DbInterfaceErrorTrait, Error, Label,
 };
 
 #[async_trait(?Send)]
 impl<
         UserError: DbInterfaceErrorTrait,
-        EntryTable: DxEnc<ENTRY_LENGTH, Error = Error<UserError>>,
-        ChainTable: DxEnc<LINK_LENGTH, Error = Error<UserError>>,
+        EntryTable: CsRhDxEnc<ENTRY_LENGTH, Error = Error<UserError>>,
+        ChainTable: CsRhDxEnc<LINK_LENGTH, Error = Error<UserError>>,
     > GxEnc<UserError> for FindexGraph<UserError, EntryTable, ChainTable>
 {
     type Error =
@@ -123,8 +123,8 @@ impl<
 
 impl<
         UserError: DbInterfaceErrorTrait,
-        EntryTable: DxEnc<ENTRY_LENGTH, Error = Error<UserError>>,
-        ChainTable: DxEnc<LINK_LENGTH, Error = Error<UserError>>,
+        EntryTable: CsRhDxEnc<ENTRY_LENGTH, Error = Error<UserError>>,
+        ChainTable: CsRhDxEnc<LINK_LENGTH, Error = Error<UserError>>,
     > FindexGraph<UserError, EntryTable, ChainTable>
 {
     /// Walks through the given graph from the given entry. Returns the set of

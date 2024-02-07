@@ -8,16 +8,16 @@ use tracing::debug;
 
 use super::{structs::Entry, Operation};
 use crate::{
-    edx::{Token, TokenDump},
+    edx::Token,
     findex_mm::{structs::Link, CompactingData, FindexMultiMap, MmEnc},
     parameters::{BLOCK_LENGTH, LINE_WIDTH, SEED_LENGTH},
-    DbInterfaceErrorTrait, DxEnc, Error, Label, ENTRY_LENGTH, LINK_LENGTH,
+    CsRhDxEnc, DbInterfaceErrorTrait, Error, Label, ENTRY_LENGTH, LINK_LENGTH,
 };
 
 impl<
         UserError: DbInterfaceErrorTrait,
-        EntryTable: DxEnc<ENTRY_LENGTH, Error = Error<UserError>> + TokenDump<Error = Error<UserError>>,
-        ChainTable: DxEnc<LINK_LENGTH, Error = Error<UserError>>,
+        EntryTable: CsRhDxEnc<ENTRY_LENGTH, Error = Error<UserError>>,
+        ChainTable: CsRhDxEnc<LINK_LENGTH, Error = Error<UserError>>,
     > FindexMultiMap<UserError, EntryTable, ChainTable>
 {
     /// Returns the set of Entry Table tokens.

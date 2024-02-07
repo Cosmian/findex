@@ -12,10 +12,10 @@ use async_trait::async_trait;
 use tracing::{instrument, trace};
 
 use crate::{
-    edx::{Token, TokenDump, Tokens},
+    edx::{Token, TokenSet},
     findex_graph::{FindexGraph, GxEnc},
     findex_mm::{Operation, ENTRY_LENGTH, LINK_LENGTH},
-    DbInterfaceErrorTrait, DxEnc, Error, IndexedValue,
+    CsRhDxEnc, DbInterfaceErrorTrait, Error, IndexedValue,
 };
 
 mod structs;
@@ -30,7 +30,7 @@ pub use structs::{
 
 /// User-friendly interface to the Findex algorithm.
 #[async_trait(?Send)]
-pub trait Index<EntryTable: DxEnc<ENTRY_LENGTH>, ChainTable: DxEnc<LINK_LENGTH>> {
+pub trait Index<EntryTable: CsRhDxEnc<ENTRY_LENGTH>, ChainTable: CsRhDxEnc<LINK_LENGTH>> {
     /// Index error type.
     type Error: std::error::Error;
 
@@ -116,8 +116,8 @@ pub trait Index<EntryTable: DxEnc<ENTRY_LENGTH>, ChainTable: DxEnc<LINK_LENGTH>>
 #[derive(Debug)]
 pub struct Findex<
     UserError: DbInterfaceErrorTrait,
-    EntryTable: DxEnc<ENTRY_LENGTH, Error = Error<UserError>>,
-    ChainTable: DxEnc<LINK_LENGTH, Error = Error<UserError>>,
+    EntryTable: CsRhDxEnc<ENTRY_LENGTH, Error = Error<UserError>>,
+    ChainTable: CsRhDxEnc<LINK_LENGTH, Error = Error<UserError>>,
 > {
     pub findex_graph: FindexGraph<UserError, EntryTable, ChainTable>,
     rng: Arc<Mutex<CsRng>>,
@@ -126,8 +126,8 @@ pub struct Findex<
 #[async_trait(?Send)]
 impl<
         UserError: DbInterfaceErrorTrait,
-        EntryTable: DxEnc<ENTRY_LENGTH, Error = Error<UserError>> + TokenDump<Error = Error<UserError>>,
-        ChainTable: DxEnc<LINK_LENGTH, Error = Error<UserError>>,
+        EntryTable: CsRhDxEnc<ENTRY_LENGTH, Error = Error<UserError>>,
+        ChainTable: CsRhDxEnc<LINK_LENGTH, Error = Error<UserError>>,
     > Index<EntryTable, ChainTable> for Findex<UserError, EntryTable, ChainTable>
 {
     type Error = Error<UserError>;
@@ -334,8 +334,8 @@ impl<
 
 impl<
         UserError: DbInterfaceErrorTrait,
-        EntryTable: DxEnc<ENTRY_LENGTH, Error = Error<UserError>> + TokenDump<Error = Error<UserError>>,
-        ChainTable: DxEnc<LINK_LENGTH, Error = Error<UserError>>,
+        EntryTable: CsRhDxEnc<ENTRY_LENGTH, Error = Error<UserError>>,
+        ChainTable: CsRhDxEnc<LINK_LENGTH, Error = Error<UserError>>,
     > Findex<UserError, EntryTable, ChainTable>
 {
     /// Number of items to compact at once.
@@ -391,8 +391,8 @@ impl<
         old_key: &<FindexGraph<UserError, EntryTable, ChainTable> as GxEnc<UserError>>::Key,
         new_key: &<FindexGraph<UserError, EntryTable, ChainTable> as GxEnc<UserError>>::Key,
         new_label: &Label,
-        tokens_to_compact: &Tokens,
-        tokens_to_fetch: Tokens,
+        tokens_to_compact: &TokenSet,
+        tokens_to_fetch: TokenSet,
         data_filter: &Filter,
     ) -> Result<(), Error<UserError>> {
         trace!("compact_batch: entering: new_label: {new_label}");

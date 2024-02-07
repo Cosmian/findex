@@ -1,0 +1,59 @@
+use std::sync::Mutex;
+
+use cosmian_crypto_core::{kdf256, Aes256Gcm, CsRng, SymmetricKey};
+
+use crate::CoreError;
+
+/// Minimal seed length preserving 128 bits of post-quantum security.
+pub const MIN_SEED_LENGTH: usize = 32;
+
+pub struct Kmac(SymmetricKey<{ Self::KEY_LENGTH }>);
+
+impl Kmac {
+    const KEY_LENGTH: usize = 32;
+
+    pub fn setup(seed: &[u8]) -> Result<Self, CoreError> {
+        if seed.len() < MIN_SEED_LENGTH {
+            return Err(CoreError::Crypto(format!(
+                "insufficient KMAC seed length: {} given, should be at least {MIN_SEED_LENGTH}-byte long",
+                seed.len()
+            )));
+        }
+        let key = kdf256!(Self::KEY_LENGTH, seed, b"KMAC key derivation");
+        Ok(Self(key))
+    }
+
+    pub fn hash<const OUTPUT_LENGTH: usize>(
+        &self,
+        bytes: &[u8],
+        info: &[u8],
+    ) -> [u8; OUTPUT_LENGTH] {
+        kmac!(OUTPUT_LENGTH, &*self.0, bytes, info)
+    }
+}
+
+pub struct Dem(Aes256Gcm, Mutex<CsRng>);
+
+impl Dem {
+    const KEY_LENGTH: usize = 32;
+
+    pub fn setup(seed: &[u8]) -> Result<Self, CoreError> {
+        if seed.len() < MIN_SEED_LENGTH {
+            return Err(CoreError::Crypto(format!(
+                "insufficient DEM seed length: {} given, should be at least {MIN_SEED_LENGTH}-byte long",
+                seed.len()
+            )));
+        }
+        let key = kdf256!(Self::KEY_LENGTH, seed, b"DEM key derivation");
+        let mut rng = CsRng::from_entropy();
+        Ok(Self(Aes256Gcm::new(key), Mutex::new(rng)))
+    }
+
+    pub fn encrypt(&self, ptx: &[u8], aad: &[u8]) -> Result<Vec<u8>, CoreError> {
+        todo!()
+    }
+
+    pub fn decrypt(&self, ctx: &[u8], aad: &[u8]) -> Result<Vec<u8>, CoreError> {
+        todo!()
+    }
+}

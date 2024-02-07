@@ -1,7 +1,7 @@
 use std::collections::{HashMap, HashSet};
 
 use cosmian_findex::{
-    ChainTable, Data, DxEnc, EntryTable, Findex, InMemoryDb, Index, IndexedValue,
+    ChainTable, CsRhDxEnc, Data, EntryTable, Findex, InMemoryDb, Index, IndexedValue,
     IndexedValueToKeywordsMap, Keyword, Keywords, Label,
 };
 use futures::executor::block_on;
