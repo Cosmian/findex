@@ -109,7 +109,7 @@ impl<const VALUE_LENGTH: usize, DbConnection: DbInterface>
 
 #[async_trait(?Send)]
 impl<const VALUE_LENGTH: usize, DbConnection: DbInterface>
-    CsRhDxEnc<VALUE_LENGTH, Tag, DbConnection> for Vera<DbConnection>
+    CsRhDxEnc<TAG_LENGTH, VALUE_LENGTH, DbConnection> for Vera<DbConnection>
 {
     async fn insert(
         &self,

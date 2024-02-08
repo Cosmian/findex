@@ -37,11 +37,8 @@ pub trait DynRhDxEnc<
 }
 
 #[async_trait(?Send)]
-pub trait CsRhDxEnc<
-    const VALUE_LENGTH: usize,
-    Tag: Hash + Eq + PartialEq,
-    DbConnection: DbInterface,
->: DynRhDxEnc<VALUE_LENGTH, Tag, DbConnection>
+pub trait CsRhDxEnc<const TAG_LENGTH: usize, const VALUE_LENGTH: usize, DbConnection: DbInterface>:
+    DynRhDxEnc<VALUE_LENGTH, [u8; TAG_LENGTH], DbConnection>
 {
     /// Merges the given DX to the stored one. Use the existing bindings in case
     /// of conflict.
@@ -50,8 +47,8 @@ pub trait CsRhDxEnc<
     /// alongside its EDX form.
     async fn insert(
         &self,
-        dx: Dx<Tag, VALUE_LENGTH>,
-    ) -> Result<(Dx<Tag, VALUE_LENGTH>, Edx), Self::Error>;
+        dx: Dx<[u8; TAG_LENGTH], VALUE_LENGTH>,
+    ) -> Result<(Dx<[u8; TAG_LENGTH], VALUE_LENGTH>, Edx), Self::Error>;
 
     /// Merges the given new DX to the stored one conditionally to the fact that
     /// for each tag, the ciphertext bound to this tag in the stored EDX is
@@ -65,12 +62,12 @@ pub trait CsRhDxEnc<
     async fn upsert(
         &self,
         old_dx: Edx,
-        new_dx: Dx<Tag, VALUE_LENGTH>,
-    ) -> Result<(Dx<Tag, VALUE_LENGTH>, Edx), Self::Error>;
+        new_dx: Dx<[u8; TAG_LENGTH], VALUE_LENGTH>,
+    ) -> Result<(Dx<[u8; TAG_LENGTH], VALUE_LENGTH>, Edx), Self::Error>;
 
     /// Rebuilds the entire EDX using the given key.
     async fn rebuild(self, seed: &[u8]) -> Result<Self, Self::Error>;
 
     /// Returns the stored DX.
-    async fn dump(&self) -> Result<Dx<Tag, VALUE_LENGTH>, Self::Error>;
+    async fn dump(&self) -> Result<Dx<[u8; TAG_LENGTH], VALUE_LENGTH>, Self::Error>;
 }

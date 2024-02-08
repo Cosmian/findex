@@ -12,20 +12,23 @@ use cosmian_crypto_core::reexport::rand_core::CryptoRngCore;
 use tiny_keccak::{Hasher, Sha3};
 
 use crate::{
-    edx::{CsRhDxEnc, Token},
+    dx_enc::{CsRhDxEnc, Token},
     error::Error,
-    findex_mm::{
-        structs::{Entry, Link, Operation},
-        FindexMultiMap, MmEnc, ENTRY_LENGTH, LINK_LENGTH,
+    mm_enc::{
+        // structs::{Entry, Link, Operation},
+        FindexMultiMap,
+        MmEnc,
+        ENTRY_LENGTH,
+        LINK_LENGTH,
     },
-    parameters::{BLOCK_LENGTH, HASH_LENGTH, LINE_WIDTH, SEED_LENGTH},
-    CoreError, DbInterfaceErrorTrait, Label,
+    parameters::{BLOCK_LENGTH, HASH_LENGTH, LINE_WIDTH},
+    CoreError, DbInterfaceErrorTrait,
 };
 
 impl<
         UserError: DbInterfaceErrorTrait,
         EntryTable: CsRhDxEnc<ENTRY_LENGTH, Error = Error<UserError>>,
-        ChainTable: CsRhDxEnc<LINK_LENGTH, Error = Error<UserError>>,
+        ChainTable: DynRhDxEnc<LINK_LENGTH, Error = Error<UserError>>,
     > FindexMultiMap<UserError, EntryTable, ChainTable>
 {
     /// Instantiates a new `FindexMultiMap`.
