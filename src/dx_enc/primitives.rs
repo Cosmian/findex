@@ -5,10 +5,7 @@ use cosmian_crypto_core::{
     Nonce, RandomFixedSizeCBytes, SymmetricKey,
 };
 
-use crate::CoreError;
-
-/// Minimal seed length preserving 128 bits of post-quantum security.
-pub const MIN_SEED_LENGTH: usize = 32;
+use crate::{CoreError, MIN_SEED_LENGTH};
 
 pub struct Kmac(SymmetricKey<{ Self::KEY_LENGTH }>);
 

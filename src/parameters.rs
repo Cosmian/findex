@@ -6,6 +6,9 @@
 /// bits should be enough.
 pub const HASH_LENGTH: usize = 32;
 
+/// Minimal seed length preserving 128 bits of post-quantum security.
+pub const MIN_SEED_LENGTH: usize = 32;
+
 /// Length of the user key.
 pub const USER_KEY_LENGTH: usize = 16;
 

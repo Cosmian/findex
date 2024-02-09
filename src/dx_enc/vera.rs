@@ -1,15 +1,13 @@
 use async_trait::async_trait;
-use cosmian_crypto_core::kdf256;
+use cosmian_crypto_core::{kdf256, Secret};
 
-use crate::{CoreError, DbInterface, Error};
+use crate::{CoreError, DbInterface, Error, MIN_SEED_LENGTH};
 
 use super::{
-    primitives::{Dem, Kmac, MIN_SEED_LENGTH},
+    primitives::{Dem, Kmac},
+    structs::{Tag, TAG_LENGTH},
     CsRhDxEnc, Dx, DynRhDxEnc, Edx, TagSet, Token,
 };
-
-const TAG_LENGTH: usize = 16;
-type Tag = [u8; TAG_LENGTH];
 
 pub struct Vera<DbConnection: DbInterface> {
     connection: DbConnection,
@@ -26,10 +24,7 @@ impl<DbConnection: DbInterface> Vera<DbConnection> {
     }
 
     /// Returns the EDX corresponding to the given DX.
-    fn prepare<const VALUE_LENGTH: usize>(
-        &self,
-        dx: &Dx<Tag, VALUE_LENGTH>,
-    ) -> Result<Edx, CoreError> {
+    fn prepare<const VALUE_LENGTH: usize>(&self, dx: &Dx<VALUE_LENGTH>) -> Result<Edx, CoreError> {
         dx.iter()
             .map(|(tag, val)| {
                 let tok = self.tokenize(tag);
@@ -40,10 +35,7 @@ impl<DbConnection: DbInterface> Vera<DbConnection> {
     }
 
     /// Returns the DX corresponding to the given EDX.
-    fn resolve<const VALUE_LENGTH: usize>(
-        &self,
-        edx: &Edx,
-    ) -> Result<Dx<Tag, VALUE_LENGTH>, CoreError> {
+    fn resolve<const VALUE_LENGTH: usize>(&self, edx: &Edx) -> Result<Dx<VALUE_LENGTH>, CoreError> {
         edx.iter()
             .map(|(tok, ctx)| {
                 let ptx = self.dem.decrypt(ctx, tok)?;
@@ -66,13 +58,14 @@ impl<DbConnection: DbInterface> Vera<DbConnection> {
 }
 
 #[async_trait(?Send)]
-impl<const VALUE_LENGTH: usize, DbConnection: DbInterface>
-    DynRhDxEnc<VALUE_LENGTH, Tag, DbConnection> for Vera<DbConnection>
+impl<const VALUE_LENGTH: usize, DbConnection: DbInterface + Clone> DynRhDxEnc<VALUE_LENGTH>
+    for Vera<DbConnection>
 {
     type Error = Error<DbConnection::Error>;
+    type DbConnection = DbConnection;
 
     fn setup(seed: &[u8], connection: DbConnection) -> Result<Self, Self::Error> {
-        let mut vera_seed = [0; MIN_SEED_LENGTH];
+        let mut vera_seed = Secret::<MIN_SEED_LENGTH>::default();
         kdf256!(&mut vera_seed, seed, b"VERA seed derivation");
         let dem = Dem::setup(&vera_seed)?;
         let kmac = Kmac::setup(&vera_seed)?;
@@ -83,22 +76,23 @@ impl<const VALUE_LENGTH: usize, DbConnection: DbInterface>
         })
     }
 
-    async fn get(&self, tags: TagSet<Tag>) -> Result<Dx<Tag, VALUE_LENGTH>, Self::Error> {
+    fn rekey(&self, seed: &[u8]) -> Result<Self, Self::Error> {
+        <Self as DynRhDxEnc<VALUE_LENGTH>>::setup(seed, self.connection.clone())
+    }
+
+    async fn get(&self, tags: TagSet) -> Result<Dx<VALUE_LENGTH>, Self::Error> {
         let tokens = tags.iter().map(|tag| self.tokenize(tag)).collect();
         let edx = self.connection.fetch(tokens).await?;
         self.resolve(&edx).map_err(Self::Error::from)
     }
 
-    async fn insert(
-        &self,
-        dx: Dx<Tag, VALUE_LENGTH>,
-    ) -> Result<Dx<Tag, VALUE_LENGTH>, Self::Error> {
+    async fn insert(&self, dx: Dx<VALUE_LENGTH>) -> Result<Dx<VALUE_LENGTH>, Self::Error> {
         let edx = self.prepare(&dx)?;
         let edx = self.connection.insert(edx).await?;
         self.resolve(&edx).map_err(Self::Error::from)
     }
 
-    async fn delete(&self, tags: TagSet<Tag>) -> Result<(), Self::Error> {
+    async fn delete(&self, tags: TagSet) -> Result<(), Self::Error> {
         let tokens = tags.iter().map(|tag| self.tokenize(tag)).collect();
         self.connection
             .delete(tokens)
@@ -108,13 +102,10 @@ impl<const VALUE_LENGTH: usize, DbConnection: DbInterface>
 }
 
 #[async_trait(?Send)]
-impl<const VALUE_LENGTH: usize, DbConnection: DbInterface>
-    CsRhDxEnc<TAG_LENGTH, VALUE_LENGTH, DbConnection> for Vera<DbConnection>
+impl<const VALUE_LENGTH: usize, DbConnection: DbInterface + Clone> CsRhDxEnc<VALUE_LENGTH>
+    for Vera<DbConnection>
 {
-    async fn insert(
-        &self,
-        dx: Dx<Tag, VALUE_LENGTH>,
-    ) -> Result<(Dx<Tag, VALUE_LENGTH>, Edx), Self::Error> {
+    async fn insert(&self, dx: Dx<VALUE_LENGTH>) -> Result<(Dx<VALUE_LENGTH>, Edx), Self::Error> {
         let edx = self.prepare(&dx)?;
         let edx = self.connection.insert(edx).await?;
         let dx = self.resolve(&edx)?;
@@ -124,8 +115,8 @@ impl<const VALUE_LENGTH: usize, DbConnection: DbInterface>
     async fn upsert(
         &self,
         old_edx: Edx,
-        new_dx: Dx<Tag, VALUE_LENGTH>,
-    ) -> Result<(Dx<Tag, VALUE_LENGTH>, Edx), Self::Error> {
+        new_dx: Dx<VALUE_LENGTH>,
+    ) -> Result<(Dx<VALUE_LENGTH>, Edx), Self::Error> {
         let new_edx = self.prepare(&new_dx)?;
         let cur_edx = self.connection.upsert(old_edx, new_edx).await?;
         let cur_dx = self.resolve(&cur_edx)?;
@@ -134,12 +125,9 @@ impl<const VALUE_LENGTH: usize, DbConnection: DbInterface>
 
     async fn rebuild(mut self, seed: &[u8]) -> Result<Self, Self::Error> {
         let old_edx = self.connection.dump().await?;
-        let dx: Dx<[u8; 16], VALUE_LENGTH> = self.resolve(&old_edx)?;
+        let dx: Dx<VALUE_LENGTH> = self.resolve(&old_edx)?;
 
-        self = <Vera<DbConnection> as DynRhDxEnc<VALUE_LENGTH, Tag, DbConnection>>::setup(
-            seed,
-            self.connection,
-        )?;
+        self = <Vera<DbConnection> as DynRhDxEnc<VALUE_LENGTH>>::setup(seed, self.connection)?;
 
         let new_edx = self.prepare(&dx)?;
         let res = self.connection.insert(new_edx).await?;
@@ -154,7 +142,7 @@ impl<const VALUE_LENGTH: usize, DbConnection: DbInterface>
         Ok(self)
     }
 
-    async fn dump(&self) -> Result<Dx<Tag, VALUE_LENGTH>, Self::Error> {
+    async fn dump(&self) -> Result<Dx<VALUE_LENGTH>, Self::Error> {
         let edx = self.connection.dump().await?;
         self.resolve(&edx).map_err(Self::Error::from)
     }

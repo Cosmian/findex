@@ -17,13 +17,15 @@ mod dx_enc;
 mod error;
 // mod gx_enc;
 // mod index;
-// mod mm_enc;
+mod mm_enc;
 mod parameters;
 
 #[cfg(any(test, feature = "in_memory"))]
 pub use db::in_memory::{InMemoryDb, InMemoryDbError};
 pub use db::DbInterface;
+pub use dx_enc::{CsRhDxEnc, DynRhDxEnc};
 pub use error::{CoreError, DbInterfaceErrorTrait, Error};
+pub use mm_enc::{CsRhMmEnc, Findex};
 // pub use index::{
 //     Data, Findex, Index, IndexedValueToKeywordsMap, Keyword, KeywordToDataMap, Keywords, Label,
 //     UserKey,

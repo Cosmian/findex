@@ -28,7 +28,7 @@ in_memory = ["cosmian_crypto_core/ser"]
 # <https://rust-lang.github.io/rfcs/3185-static-async-fn-in-trait.html>
 async-trait = "0.1.74"
 base64 = "0.21.5"
-cosmian_crypto_core = { version = "9.3.0", default-features = false, features = [
+cosmian_crypto_core = { path = "../crypto_core", default-features = false, features = [
   "aes",
   "sha3",
 ] }
