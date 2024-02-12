@@ -7,6 +7,7 @@ mod vera;
 
 use crate::DbInterface;
 pub use structs::{Dx, Edx, TagSet, Token, TokenSet};
+pub use vera::Vera;
 
 #[async_trait(?Send)]
 pub trait DynRhDxEnc<const VALUE_LENGTH: usize>: Sized {

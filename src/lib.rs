@@ -17,7 +17,7 @@ mod dx_enc;
 mod error;
 // mod gx_enc;
 // mod index;
-// mod mm_enc;
+mod mm_enc;
 mod parameters;
 
 #[cfg(any(test, feature = "in_memory"))]

@@ -1,49 +1,173 @@
-use std::fmt::Debug;
+use std::{
+    collections::{HashSet, LinkedList},
+    fmt::Debug,
+    hash::Hash,
+    marker::PhantomData,
+};
 
 use async_trait::async_trait;
 use base64::{engine::general_purpose::STANDARD, Engine};
 use cosmian_crypto_core::{kdf256, Secret};
 
 use crate::{
-    dx_enc::{CsRhDxEnc, Dx, DynRhDxEnc, Tag, TagSet},
+    dx_enc::{CsRhDxEnc, Dx, DynRhDxEnc, TagSet},
     mm_enc::{structs::Metadata, CsRhMmEnc, ENTRY_LENGTH, LINK_LENGTH},
     CoreError, DbInterface, BLOCK_LENGTH, LINE_WIDTH, MIN_SEED_LENGTH,
 };
 
 use super::{
-    structs::{Link, Mm, Operation},
+    structs::{Block, Flag, Link, Mm, Operation},
     Error,
 };
 
 const INFO: &[u8] = b"Findex key derivation info.";
 
+/// Decomposes the given item into blocks of `BLOCK_LENGTH` bytes. Prepends
+/// those blocks with `NON_TERMINATION` for non-terminating blocks, and the
+/// non-padding byte length for the terminating blocks.
+fn item_to_blocks(mut bytes: &[u8]) -> Result<Vec<(Flag, Block)>, CoreError> {
+    let mut blocks = Vec::new();
+    loop {
+        if bytes.len() > BLOCK_LENGTH {
+            let mut block = Block::default();
+            block.copy_from_slice(&bytes[..BLOCK_LENGTH]);
+            blocks.push((Flag::NonTerminating, block));
+            bytes = &bytes[BLOCK_LENGTH..];
+        } else {
+            let mut block = Block::default();
+            block[..bytes.len()].copy_from_slice(bytes);
+            blocks.push((Flag::Terminating(bytes.len()), block));
+            return Ok(blocks);
+        }
+    }
+}
+
+/// Decomposes the given Findex index modifications into a sequence of links.
+///
+/// # Description
+///
+/// Pads each value into blocks and pushes these blocks into a chain of links,
+/// setting the flag bytes of each block according to the associated
+/// operation.
+fn decompose(op: Operation, modifications: &[Vec<u8>]) -> Result<Vec<Link>, CoreError> {
+    let mut blocks = modifications
+        .iter()
+        .flat_map(|item| item_to_blocks(item))
+        .flatten();
+
+    // This algorithm is not the most efficient as is needs a second pass on
+    // the blocks to store them into the links. This could have been
+    // performed while creating the blocks, but decoupling the two
+    // operations seemed clearer to me.
+    let mut chain = Vec::<Link>::new();
+
+    loop {
+        let mut link = Link::new();
+        link.set_op(op);
+        for pos in 0..LINE_WIDTH {
+            if let Some((flag, block)) = blocks.next() {
+                link.set_block(pos, flag, &block)?;
+            } else {
+                if pos != 0 {
+                    // Add incomplete links if some blocks were added.
+                    chain.push(link);
+                }
+                return Ok(chain);
+            }
+        }
+        chain.push(link);
+    }
+}
+
+/// Recomposes the given sequence of Chain Table values into Findex values.
+/// No duplicated and no deleted value is returned.
+///
+/// # Description
+///
+/// Iterates over the blocks:
+/// - stacks the blocks until reading a terminating block;
+/// - merges the data from the stacked block and fill the stack;
+/// - if this value was an addition, adds it to the set, otherwise removes
+///   any matching value from the set.
+fn recompose(chain: &[Link]) -> Result<Vec<Vec<u8>>, CoreError> {
+    let mut value = Vec::<(Operation, Vec<u8>)>::new();
+    let mut item = Vec::default();
+    for link in chain {
+        let op = link.get_op()?;
+        for pos in 0..LINE_WIDTH {
+            let (flag, block) = link.get_block(pos)?;
+            match flag {
+                Flag::Padding => (),
+                Flag::NonTerminating => item.extend_from_slice(&block),
+                Flag::Terminating(length) => {
+                    item.extend_from_slice(&block[..length]);
+                    value.push((op, item));
+                    item = Default::default();
+                }
+            }
+        }
+    }
+
+    // Now purging the sequence value from removed items.
+    //
+    // In order to conserve order, a set cannot be used. Since removing elements
+    // from a vector is expensive, I used a linked list. However, the return
+    // type needs to be a vector, thus the linked list needs to be converted.
+    // All in all, this method adds two iterations/allocations: there may be a
+    // better way. Maybe sticking with vectors is the way to go.
+    let mut purged_value = LinkedList::new();
+    let mut deleted_items = HashSet::<Vec<u8>>::new();
+    for (op, item) in value.into_iter().rev() {
+        if op == Operation::Insert && !deleted_items.contains(&item) {
+            purged_value.push_front(item);
+        } else {
+            deleted_items.insert(item);
+        }
+    }
+    Ok(purged_value.into_iter().collect())
+}
+
 #[derive(Debug)]
-pub struct Findex<EntryDxEnc: CsRhDxEnc<ENTRY_LENGTH>, ChainDxEnc: DynRhDxEnc<LINK_LENGTH>> {
+pub struct Findex<
+    const TAG_LENGTH: usize,
+    Tag: Hash + PartialEq + Eq + From<[u8; TAG_LENGTH]> + Into<[u8; TAG_LENGTH]>,
+    EntryDxEnc: CsRhDxEnc<TAG_LENGTH, ENTRY_LENGTH, Tag>,
+    ChainDxEnc: DynRhDxEnc<LINK_LENGTH>,
+> {
     pub entry: EntryDxEnc,
     pub chain: ChainDxEnc,
+    tag: PhantomData<Tag>,
 }
 
 impl<
         DbConnection: DbInterface + Clone,
-        EntryDxEnc: CsRhDxEnc<ENTRY_LENGTH, DbConnection = DbConnection>,
-        ChainDxEnc: DynRhDxEnc<LINK_LENGTH, DbConnection = EntryDxEnc::DbConnection>,
-    > Findex<EntryDxEnc, ChainDxEnc>
+        const TAG_LENGTH: usize,
+        Tag: Hash
+            + PartialEq
+            + Eq
+            + From<[u8; TAG_LENGTH]>
+            + Into<[u8; TAG_LENGTH]>
+            + AsRef<[u8]>
+            + Clone,
+        EntryDxEnc: CsRhDxEnc<TAG_LENGTH, ENTRY_LENGTH, Tag, DbConnection = DbConnection, Item = Metadata>,
+        ChainDxEnc: DynRhDxEnc<LINK_LENGTH, DbConnection = EntryDxEnc::DbConnection, Tag = Tag, Item = Link>,
+    > Findex<TAG_LENGTH, Tag, EntryDxEnc, ChainDxEnc>
 {
     // This function is needed to create an error-unwrapping scope. I could not
-    // find a cleaner way to do it.
+    // find a better way to do it.
     async fn rebuild_next(
         &self,
         entry_dx_enc: &EntryDxEnc,
         chain_dx_enc: &ChainDxEnc,
-        entry_dx: Dx<ENTRY_LENGTH>,
+        entry_dx: Dx<ENTRY_LENGTH, Tag, Metadata>,
     ) -> Result<(), Error<EntryDxEnc::Error, ChainDxEnc::Error>> {
         let chain_tags = entry_dx
             .iter()
-            .flat_map(|(tag, bytes)| Metadata::from(bytes).unroll(tag))
-            .collect::<TagSet>();
+            .flat_map(|(tag, value)| value.unroll(tag.as_ref()))
+            .collect::<TagSet<ChainDxEnc::Tag>>();
 
         let conflicting_entries =
-            <EntryDxEnc as DynRhDxEnc<ENTRY_LENGTH>>::insert(entry_dx_enc, entry_dx)
+            <EntryDxEnc as DynRhDxEnc<ENTRY_LENGTH>>::insert(&entry_dx_enc, entry_dx)
                 .await
                 .map_err(Error::Entry)?;
 
@@ -76,11 +200,11 @@ impl<
     }
 
     // This function is needed to create an error-unwrapping scope. I could not
-    // find a cleaner way to do it.
+    // find a better way to do it.
     async fn rebuild_next_next(
         &self,
         chain_dx_enc: &ChainDxEnc,
-        chain_dx: Dx<LINK_LENGTH>,
+        chain_dx: Dx<LINK_LENGTH, Tag, Link>,
     ) -> Result<(), Error<EntryDxEnc::Error, ChainDxEnc::Error>> {
         let conflicting_entries = chain_dx_enc.insert(chain_dx).await.map_err(Error::Chain)?;
         if !conflicting_entries.is_empty() {
@@ -92,62 +216,44 @@ impl<
         }
     }
 
-    /// Decomposes the given Findex index modifications into a sequence of Chain
-    /// Table values.
-    ///
-    /// # Description
-    ///
-    /// Pads each value into blocks and push these blocks into a chain link,
-    /// setting the flag bytes of each block according to the associated
-    /// operation.
-    pub(crate) fn decompose<const BLOCK_LENGTH: usize, const LINE_LENGTH: usize>(
-        _op: Operation,
-        _modifications: &[<Self as CsRhMmEnc>::Item],
-    ) -> Result<Vec<Link>, CoreError> {
-        todo!();
-    }
-
-    /// Recomposes the given sequence of Chain Table values into Findex values.
-    /// No duplicated and no deleted value is returned.
-    ///
-    /// # Description
-    ///
-    /// Iterates over the blocks:
-    /// - stacks the blocks until reading a terminating block;
-    /// - merges the data from the stacked block and fill the stack;
-    /// - if this value was an addition, adds it to the set, otherwise removes
-    ///   any matching value from the set.
-    pub(crate) fn recompose<const BLOCK_LENGTH: usize, const LINE_LENGTH: usize>(
-        _chain: Vec<Link>,
-    ) -> Result<Vec<<Self as CsRhMmEnc>::Item>, CoreError> {
-        todo!();
-    }
-
     /// Commits the given chain modifications into the Entry Table.
     ///
     /// Returns the chains to insert in the Chain Table.
     async fn _commit(
         &self,
-        dx: Dx<ENTRY_LENGTH>,
-    ) -> Result<Dx<ENTRY_LENGTH>, <Self as CsRhMmEnc>::Error> {
-        let (mut dx_cur, mut edx_cur) =
-            <EntryDxEnc as CsRhDxEnc<ENTRY_LENGTH>>::insert(&self.entry, dx.clone())
-                .await
-                .map_err(Error::Entry)?;
-        while !dx_cur.is_empty() {}
-        Ok(dx)
+        _dx: Dx<ENTRY_LENGTH, Tag, Metadata>,
+    ) -> Result<Dx<ENTRY_LENGTH, Tag, Metadata>, <Self as CsRhMmEnc>::Error> {
+        todo!()
+        // let (mut _dx_cur, mut _edx_cur) = <EntryDxEnc as CsRhDxEnc<
+        //     TAG_LENGTH,
+        //     ENTRY_LENGTH,
+        //     Tag,
+        // >>::insert(&self.entry, dx.clone())
+        // .await
+        // .map_err(Error::Entry)?;
+        // while !dx_cur.is_empty() {}
+        // Ok(dx)
     }
 }
 
 #[async_trait(?Send)]
 impl<
+        const TAG_LENGTH: usize,
+        Tag: Hash
+            + PartialEq
+            + Eq
+            + From<[u8; TAG_LENGTH]>
+            + Into<[u8; TAG_LENGTH]>
+            + AsRef<[u8]>
+            + Clone,
         DbConnection: DbInterface + Clone,
-        EntryDxEnc: CsRhDxEnc<ENTRY_LENGTH, DbConnection = DbConnection>,
-        ChainDxEnc: DynRhDxEnc<LINK_LENGTH, DbConnection = EntryDxEnc::DbConnection>,
-    > CsRhMmEnc for Findex<EntryDxEnc, ChainDxEnc>
+        EntryDxEnc: CsRhDxEnc<TAG_LENGTH, ENTRY_LENGTH, Tag, DbConnection = DbConnection, Item = Metadata>,
+        ChainDxEnc: DynRhDxEnc<LINK_LENGTH, DbConnection = EntryDxEnc::DbConnection, Tag = Tag, Item = Link>,
+    > CsRhMmEnc for Findex<TAG_LENGTH, Tag, EntryDxEnc, ChainDxEnc>
 {
     type DbConnection = EntryDxEnc::DbConnection;
     type Error = Error<EntryDxEnc::Error, ChainDxEnc::Error>;
+    type Tag = Tag;
     type Item = Vec<u8>;
 
     fn setup(seed: &[u8], connection: Self::DbConnection) -> Result<Self, Self::Error> {
@@ -155,15 +261,19 @@ impl<
         kdf256!(&mut findex_seed, seed, INFO);
         let entry = EntryDxEnc::setup(seed, connection.clone()).map_err(Self::Error::Entry)?;
         let chain = ChainDxEnc::setup(seed, connection).map_err(Self::Error::Chain)?;
-        Ok(Self { entry, chain })
+        let tag = PhantomData::default();
+        Ok(Self { entry, chain, tag })
     }
 
-    async fn search(&self, tags: TagSet) -> Result<Mm<Self::Item>, Self::Error> {
+    async fn search(&self, tags: TagSet<Tag>) -> Result<Mm<Self::Tag, Self::Item>, Self::Error> {
         let metadata = self.entry.get(tags).await.map_err(Self::Error::Entry)?;
         let chain_tags = metadata
             .into_iter()
-            .map(|(tag, bytes)| (tag, Metadata::from(&bytes).unroll(&tag)))
-            .collect::<Mm<Tag>>();
+            .map(|(tag, bytes)| {
+                let chain_tags = bytes.unroll(&tag.as_ref());
+                (tag, chain_tags)
+            })
+            .collect::<Mm<EntryDxEnc::Tag, ChainDxEnc::Tag>>();
         let links = self
             .chain
             .get(chain_tags.values().flatten().cloned().collect())
@@ -186,32 +296,26 @@ impl<
                             .copied()
                     })
                     .collect::<Result<Vec<Link>, _>>()?;
-                let items = Self::recompose::<BLOCK_LENGTH, LINE_WIDTH>(links)?;
+                let items = recompose(&links)?;
                 Ok((entry_tag, items))
             })
             .collect()
     }
 
-    async fn insert(&self, mm: Mm<Self::Item>) -> Result<(), Self::Error> {
-        let mm = mm
+    async fn insert(&self, mm: Mm<Self::Tag, Self::Item>) -> Result<(), Self::Error> {
+        let _mm = mm
             .into_iter()
-            .map(|(tag, items)| {
-                Self::decompose::<BLOCK_LENGTH, LINE_WIDTH>(Operation::Insert, &items)
-                    .map(|chain| (tag, chain))
-            })
-            .collect::<Result<Mm<Link>, _>>()?;
+            .map(|(tag, items)| decompose(Operation::Insert, &items).map(|chain| (tag, chain)))
+            .collect::<Result<Mm<EntryDxEnc::Tag, Link>, _>>()?;
         // self.push(mm)
         todo!()
     }
 
-    async fn delete(&self, mm: Mm<Self::Item>) -> Result<(), Self::Error> {
-        let mm = mm
+    async fn delete(&self, mm: Mm<Self::Tag, Self::Item>) -> Result<(), Self::Error> {
+        let _mm = mm
             .into_iter()
-            .map(|(tag, items)| {
-                Self::decompose::<BLOCK_LENGTH, LINE_WIDTH>(Operation::Delete, &items)
-                    .map(|chain| (tag, chain))
-            })
-            .collect::<Result<Mm<Link>, _>>()?;
+            .map(|(tag, items)| decompose(Operation::Delete, &items).map(|chain| (tag, chain)))
+            .collect::<Result<Mm<EntryDxEnc::Tag, Link>, _>>()?;
         // self.push(mm)
         todo!()
     }
@@ -227,7 +331,10 @@ impl<
         let new_chain_dx_enc = self.chain.rekey(&findex_seed).map_err(Self::Error::Chain)?;
 
         let entry_dx = self.entry.dump().await.map_err(Self::Error::Entry)?;
-        let entry_tags = entry_dx.keys().copied().collect::<TagSet>();
+        let entry_tags = entry_dx
+            .keys()
+            .cloned()
+            .collect::<TagSet<EntryDxEnc::Tag>>();
 
         // From this point, an error means the new EMM cannot be created but the
         // new Entry EDX has been inserted. It must be deleted before returning
@@ -246,7 +353,37 @@ impl<
             Ok(Self {
                 entry: new_entry_dx_enc,
                 chain: new_chain_dx_enc,
+                tag: PhantomData::default(),
             })
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+
+    use super::*;
+
+    #[test]
+    fn test_decomposition() {
+        let added_value = vec![
+            vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+            "I am a very long test string".as_bytes().to_vec(),
+            "I am a second very long test string".as_bytes().to_vec(),
+        ];
+        let deleted_value = vec![
+            "I am a deleted-only string".as_bytes().to_vec(),
+            "I am a very long test string".as_bytes().to_vec(),
+        ];
+
+        let mut chain = decompose(Operation::Insert, &added_value).unwrap();
+        chain.extend_from_slice(&decompose(Operation::Delete, &deleted_value).unwrap());
+        let recomposed_value = recompose(&chain).unwrap();
+
+        assert_eq!(recomposed_value.len(), 2);
+        assert!(added_value.contains(&recomposed_value[0]));
+        assert!(added_value.contains(&recomposed_value[1]));
+        assert_eq!(recomposed_value[0], added_value[0]);
+        assert_eq!(recomposed_value[1], added_value[2]);
     }
 }

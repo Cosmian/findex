@@ -1,4 +1,4 @@
-use std::fmt::Display;
+use std::{fmt::Display, hash::Hash};
 
 use async_trait::async_trait;
 
@@ -7,7 +7,6 @@ use crate::{dx_enc::TagSet, CoreError, DbInterface};
 mod findex;
 mod structs;
 
-pub use findex::Findex;
 pub use structs::{Mm, ENTRY_LENGTH, LINK_LENGTH};
 
 #[derive(Debug)]
@@ -46,6 +45,7 @@ impl<EntryError: std::error::Error, ChainError: std::error::Error> std::error::E
 pub trait CsRhMmEnc: Sized {
     type DbConnection: DbInterface + Clone;
     type Error: std::error::Error;
+    type Tag: Hash + PartialEq + Eq;
     type Item;
 
     /// Creates a new instance of the scheme.
@@ -55,13 +55,16 @@ pub trait CsRhMmEnc: Sized {
     fn setup(seed: &[u8], connection: Self::DbConnection) -> Result<Self, Self::Error>;
 
     /// Returns a restriction of the stored MM to the given tags.
-    async fn search(&self, tags: TagSet) -> Result<Mm<Self::Item>, Self::Error>;
+    async fn search(
+        &self,
+        tags: TagSet<Self::Tag>,
+    ) -> Result<Mm<Self::Tag, Self::Item>, Self::Error>;
 
     /// Extends the stored MM with the given one.
-    async fn insert(&self, mm: Mm<Self::Item>) -> Result<(), Self::Error>;
+    async fn insert(&self, mm: Mm<Self::Tag, Self::Item>) -> Result<(), Self::Error>;
 
     /// Extracts the given MM out of the stored one.
-    async fn delete(&self, mm: Mm<Self::Item>) -> Result<(), Self::Error>;
+    async fn delete(&self, mm: Mm<Self::Tag, Self::Item>) -> Result<(), Self::Error>;
 
     /// Compacts the stored EMM.
     async fn compact(&self) -> Result<(), Self::Error>;
