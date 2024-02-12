@@ -126,7 +126,7 @@ impl<
     /// Commits the given chain modifications into the Entry Table.
     ///
     /// Returns the chains to insert in the Chain Table.
-    async fn commit(
+    async fn _commit(
         &self,
         dx: Dx<ENTRY_LENGTH>,
     ) -> Result<Dx<ENTRY_LENGTH>, <Self as CsRhMmEnc>::Error> {
