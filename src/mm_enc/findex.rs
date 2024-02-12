@@ -22,10 +22,11 @@ use super::{
 
 const INFO: &[u8] = b"Findex key derivation info.";
 
-/// Decomposes the given item into blocks of `BLOCK_LENGTH` bytes. Prepends
-/// those blocks with `NON_TERMINATION` for non-terminating blocks, and the
-/// non-padding byte length for the terminating blocks.
-fn item_to_blocks(mut bytes: &[u8]) -> Result<Vec<(Flag, Block)>, CoreError> {
+/// Groups the given bytes into `BLOCK_LENGTH`-byte blocks.
+///
+/// Uses a flag to distinguish full terminating block from a non-terminating
+/// block.
+fn bytes_to_blocks(mut bytes: &[u8]) -> Result<Vec<(Flag, Block)>, CoreError> {
     let mut blocks = Vec::new();
     loop {
         if bytes.len() > BLOCK_LENGTH {
@@ -42,23 +43,25 @@ fn item_to_blocks(mut bytes: &[u8]) -> Result<Vec<(Flag, Block)>, CoreError> {
     }
 }
 
-/// Decomposes the given Findex index modifications into a sequence of links.
+/// Decomposes the given sequence of byte-values into a sequence of links.
 ///
 /// # Description
 ///
-/// Pads each value into blocks and pushes these blocks into a chain of links,
-/// setting the flag bytes of each block according to the associated
-/// operation.
+/// Groups value bytes into `BLOCK_LENGTH`-byte blocks. Use padding on the last
+/// one if needed. Then groups the blocks into `LINE_WIDTH`-length
+/// links. Prepends each block with a flag used to distinguish terminating,
+/// padding, and non-terminating blocks. Use padding blocks on the last link if
+/// needed. Prepends each link with the given operation.
 fn decompose(op: Operation, modifications: &[Vec<u8>]) -> Result<Vec<Link>, CoreError> {
     let mut blocks = modifications
         .iter()
-        .flat_map(|item| item_to_blocks(item))
+        .flat_map(|item| bytes_to_blocks(item))
         .flatten();
 
     // This algorithm is not the most efficient as is needs a second pass on
-    // the blocks to store them into the links. This could have been
-    // performed while creating the blocks, but decoupling the two
-    // operations seemed clearer to me.
+    // the blocks to group them into links. This could have been done while
+    // creating the blocks, but decoupling these operations seemed clearer to
+    // me.
     let mut chain = Vec::<Link>::new();
 
     loop {
@@ -79,7 +82,7 @@ fn decompose(op: Operation, modifications: &[Vec<u8>]) -> Result<Vec<Link>, Core
     }
 }
 
-/// Recomposes the given sequence of Chain Table values into Findex values.
+/// Recomposes the given sequence links into a sequence of byte values.
 /// No duplicated and no deleted value is returned.
 ///
 /// # Description
@@ -87,39 +90,43 @@ fn decompose(op: Operation, modifications: &[Vec<u8>]) -> Result<Vec<Link>, Core
 /// Iterates over the blocks:
 /// - stacks the blocks until reading a terminating block;
 /// - merges the data from the stacked block and fill the stack;
-/// - if this value was an addition, adds it to the set, otherwise removes
-///   any matching value from the set.
+///
+/// Then iterates over the value from the end, and keeps only valid items,
+/// without duplicates.
 fn recompose(chain: &[Link]) -> Result<Vec<Vec<u8>>, CoreError> {
     let mut value = Vec::<(Operation, Vec<u8>)>::new();
-    let mut item = Vec::default();
+    let mut stack = Vec::default();
     for link in chain {
         let op = link.get_op()?;
         for pos in 0..LINE_WIDTH {
             let (flag, block) = link.get_block(pos)?;
             match flag {
                 Flag::Padding => (),
-                Flag::NonTerminating => item.extend_from_slice(&block),
+                Flag::NonTerminating => stack.push(block),
                 Flag::Terminating(length) => {
-                    item.extend_from_slice(&block[..length]);
+                    stack.push(&block[..length]);
+                    let item = stack.concat();
                     value.push((op, item));
-                    item = Default::default();
+                    stack.clear();
                 }
             }
         }
     }
 
-    // Now purging the sequence value from removed items.
-    //
     // In order to conserve order, a set cannot be used. Since removing elements
     // from a vector is expensive, I used a linked list. However, the return
-    // type needs to be a vector, thus the linked list needs to be converted.
-    // All in all, this method adds two iterations/allocations: there may be a
-    // better way. Maybe sticking with vectors is the way to go.
+    // type is a vector, thus the linked list needs to be converted. All in all,
+    // this method adds two iterations/allocations: there may be a better
+    // way. Maybe sticking with vectors is the way to go.
     let mut purged_value = LinkedList::new();
-    let mut deleted_items = HashSet::<Vec<u8>>::new();
+    let mut remaining_items = HashSet::new();
+    let mut deleted_items = HashSet::new();
     for (op, item) in value.into_iter().rev() {
         if op == Operation::Insert && !deleted_items.contains(&item) {
-            purged_value.push_front(item);
+            if !remaining_items.contains(&item) {
+                purged_value.push_front(item.clone());
+                remaining_items.insert(item);
+            }
         } else {
             deleted_items.insert(item);
         }
@@ -153,8 +160,8 @@ impl<
         ChainDxEnc: DynRhDxEnc<LINK_LENGTH, DbConnection = EntryDxEnc::DbConnection, Tag = Tag, Item = Link>,
     > Findex<TAG_LENGTH, Tag, EntryDxEnc, ChainDxEnc>
 {
-    // This function is needed to create an error-unwrapping scope. I could not
-    // find a better way to do it.
+    // This function is needed to create an error-unwrapping sub-scope for the
+    // rebuild operation. I could not find a better way to do it.
     async fn rebuild_next(
         &self,
         entry_dx_enc: &EntryDxEnc,
@@ -199,8 +206,8 @@ impl<
         }
     }
 
-    // This function is needed to create an error-unwrapping scope. I could not
-    // find a better way to do it.
+    // This function is needed to create an error-unwrapping sub-scope for the
+    // rebuild-next operation. I could not find a better way to do it.
     async fn rebuild_next_next(
         &self,
         chain_dx_enc: &ChainDxEnc,
@@ -377,12 +384,16 @@ mod tests {
         ];
 
         let mut chain = decompose(Operation::Insert, &added_value).unwrap();
+        chain.extend_from_slice(&decompose(Operation::Insert, &added_value).unwrap());
         chain.extend_from_slice(&decompose(Operation::Delete, &deleted_value).unwrap());
         let recomposed_value = recompose(&chain).unwrap();
 
+        // Assert all elements are recovered, that without the duplicated and
+        // deleted ones.
         assert_eq!(recomposed_value.len(), 2);
         assert!(added_value.contains(&recomposed_value[0]));
         assert!(added_value.contains(&recomposed_value[1]));
+        // Assert the order is preserved.
         assert_eq!(recomposed_value[0], added_value[0]);
         assert_eq!(recomposed_value[1], added_value[2]);
     }

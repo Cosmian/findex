@@ -127,14 +127,11 @@ impl Link {
         self.0[0] = op.into();
     }
 
-    pub fn get_block(&self, pos: usize) -> Result<(Flag, Block), CoreError> {
+    pub fn get_block(&self, pos: usize) -> Result<(Flag, &[u8]), CoreError> {
         if pos < LINE_WIDTH {
             Ok((
                 Flag::try_from(self.0[1 + pos * (1 + BLOCK_LENGTH)])?,
-                <Block>::try_from(
-                    &self.0[2 + pos * (1 + BLOCK_LENGTH)..1 + (pos + 1) * (1 + BLOCK_LENGTH)],
-                )
-                .expect("correct byte-length"),
+                &self.0[2 + pos * (1 + BLOCK_LENGTH)..1 + (pos + 1) * (1 + BLOCK_LENGTH)],
             ))
         } else {
             Err(CoreError::Conversion(format!(
