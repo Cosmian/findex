@@ -1,8 +1,9 @@
 use std::{
     collections::{HashSet, LinkedList},
-    fmt::Debug,
+    fmt::{Debug, Display},
     hash::Hash,
     marker::PhantomData,
+    ops::DerefMut,
 };
 
 use async_trait::async_trait;
@@ -11,7 +12,7 @@ use cosmian_crypto_core::{kdf256, Secret};
 
 use crate::{
     dx_enc::{CsRhDxEnc, Dx, DynRhDxEnc, TagSet},
-    mm_enc::{structs::Metadata, CsRhMmEnc, ENTRY_LENGTH, LINK_LENGTH},
+    mm_enc::{structs::Metadata, CsRhMmEnc, LINK_LENGTH, METADATA_LENGTH},
     CoreError, DbInterface, BLOCK_LENGTH, LINE_WIDTH, MIN_SEED_LENGTH,
 };
 
@@ -138,7 +139,7 @@ fn recompose(chain: &[Link]) -> Result<Vec<Vec<u8>>, CoreError> {
 pub struct Findex<
     const TAG_LENGTH: usize,
     Tag: Hash + PartialEq + Eq + From<[u8; TAG_LENGTH]> + Into<[u8; TAG_LENGTH]>,
-    EntryDxEnc: CsRhDxEnc<TAG_LENGTH, ENTRY_LENGTH, Tag>,
+    EntryDxEnc: CsRhDxEnc<TAG_LENGTH, METADATA_LENGTH, Tag>,
     ChainDxEnc: DynRhDxEnc<LINK_LENGTH>,
 > {
     pub entry: EntryDxEnc,
@@ -155,8 +156,9 @@ impl<
             + From<[u8; TAG_LENGTH]>
             + Into<[u8; TAG_LENGTH]>
             + AsRef<[u8]>
-            + Clone,
-        EntryDxEnc: CsRhDxEnc<TAG_LENGTH, ENTRY_LENGTH, Tag, DbConnection = DbConnection, Item = Metadata>,
+            + Clone
+            + Display,
+        EntryDxEnc: CsRhDxEnc<TAG_LENGTH, METADATA_LENGTH, Tag, DbConnection = DbConnection, Item = Metadata>,
         ChainDxEnc: DynRhDxEnc<LINK_LENGTH, DbConnection = EntryDxEnc::DbConnection, Tag = Tag, Item = Link>,
     > Findex<TAG_LENGTH, Tag, EntryDxEnc, ChainDxEnc>
 {
@@ -166,7 +168,7 @@ impl<
         &self,
         entry_dx_enc: &EntryDxEnc,
         chain_dx_enc: &ChainDxEnc,
-        entry_dx: Dx<ENTRY_LENGTH, Tag, Metadata>,
+        entry_dx: Dx<METADATA_LENGTH, Tag, Metadata>,
     ) -> Result<(), Error<EntryDxEnc::Error, ChainDxEnc::Error>> {
         let chain_tags = entry_dx
             .iter()
@@ -174,7 +176,7 @@ impl<
             .collect::<TagSet<ChainDxEnc::Tag>>();
 
         let conflicting_entries =
-            <EntryDxEnc as DynRhDxEnc<ENTRY_LENGTH>>::insert(&entry_dx_enc, entry_dx)
+            <EntryDxEnc as DynRhDxEnc<METADATA_LENGTH>>::insert(&entry_dx_enc, entry_dx)
                 .await
                 .map_err(Error::Entry)?;
 
@@ -191,8 +193,8 @@ impl<
             .map_err(Error::Chain)?;
 
         // From this point, an error means the new EMM cannot be created but the
-        // new Chain EDX has been inserted. It must be deleted before returning
-        // the error.
+        // new Chain EDX may have been partially inserted. It must be deleted
+        // before returning the error.
         let res = self.rebuild_next_next(chain_dx_enc, chain_dx).await;
         if let Err(err) = res {
             chain_dx_enc.delete(chain_tags).await.map_err(|e| {
@@ -226,20 +228,103 @@ impl<
     /// Commits the given chain modifications into the Entry Table.
     ///
     /// Returns the chains to insert in the Chain Table.
-    async fn _commit(
+    async fn reserve(
         &self,
-        _dx: Dx<ENTRY_LENGTH, Tag, Metadata>,
-    ) -> Result<Dx<ENTRY_LENGTH, Tag, Metadata>, <Self as CsRhMmEnc>::Error> {
-        todo!()
-        // let (mut _dx_cur, mut _edx_cur) = <EntryDxEnc as CsRhDxEnc<
-        //     TAG_LENGTH,
-        //     ENTRY_LENGTH,
-        //     Tag,
-        // >>::insert(&self.entry, dx.clone())
-        // .await
-        // .map_err(Error::Entry)?;
-        // while !dx_cur.is_empty() {}
-        // Ok(dx)
+        mut dx: Dx<METADATA_LENGTH, Tag, Metadata>,
+    ) -> Result<Dx<METADATA_LENGTH, Tag, Metadata>, Error<EntryDxEnc::Error, ChainDxEnc::Error>>
+    {
+        let (mut dx_curr, mut edx_curr) = <EntryDxEnc as CsRhDxEnc<
+            TAG_LENGTH,
+            METADATA_LENGTH,
+            Tag,
+        >>::insert(&self.entry, dx.clone())
+        .await
+        .map_err(Error::Entry)?;
+
+        while !dx_curr.is_empty() {
+            let mut dx_new = Dx::<METADATA_LENGTH, Tag, Metadata>::default();
+            for (tag, metadata_cur) in dx_curr {
+                let metadata = dx.get_mut(&tag).ok_or_else(|| {
+                    Error::Core(CoreError::Crypto(format!(
+                        "returned tag '{tag}' does not match any tag in the input DX"
+                    )))
+                })?;
+                metadata.start += metadata_cur.start;
+                metadata.stop += metadata_cur.stop;
+                dx_new.insert(tag, metadata.clone());
+            }
+            (dx_curr, edx_curr) =
+                <EntryDxEnc as CsRhDxEnc<TAG_LENGTH, METADATA_LENGTH, Tag>>::upsert(
+                    &self.entry,
+                    edx_curr,
+                    dx_new,
+                )
+                .await
+                .map_err(Error::Entry)?;
+        }
+        Ok(dx)
+    }
+
+    async fn push(
+        &self,
+        additions: Mm<Tag, Link>,
+        deletions: Mm<Tag, Link>,
+    ) -> Result<(), Error<EntryDxEnc::Error, ChainDxEnc::Error>> {
+        let mut new_entry_dx = Dx::<METADATA_LENGTH, Tag, Metadata>::default();
+        for (tag, chain) in &*additions {
+            new_entry_dx
+                .deref_mut()
+                .insert(tag.clone(), Metadata::new(0, chain.len()));
+        }
+        for (tag, chain) in &*deletions {
+            new_entry_dx
+                .entry(tag.clone())
+                .and_modify(|metadata| metadata.start += chain.len())
+                .or_insert(Metadata::new(chain.len(), 0));
+        }
+
+        let new_entry_dx = self.reserve(new_entry_dx).await?;
+
+        let mut added_chain_dx = Dx::<LINK_LENGTH, Tag, Link>::default();
+        for (entry_tag, new_links) in additions {
+            let metadata = new_entry_dx.get(&entry_tag).ok_or_else(|| {
+                Error::Core(CoreError::Crypto(format!(
+                    "no metadata found in the reserved DX for tag {entry_tag}"
+                )))
+            })?;
+            added_chain_dx.extend(
+                Metadata::new(metadata.stop - new_links.len(), metadata.stop)
+                    .unroll(entry_tag.as_ref())
+                    .into_iter()
+                    .zip(new_links),
+            )
+        }
+
+        let insertion_res = self.chain.insert(added_chain_dx);
+
+        let mut deleted_chain_tags = TagSet::<Tag>::default();
+        for (entry_tag, new_links) in &*deletions {
+            let metadata = new_entry_dx.get(entry_tag).ok_or_else(|| {
+                Error::Core(CoreError::Crypto(format!(
+                    "no metadata found in the reserved DX for tag {entry_tag}"
+                )))
+            })?;
+            deleted_chain_tags.extend(
+                Metadata::new(metadata.stop - new_links.len(), metadata.stop)
+                    .unroll(entry_tag.as_ref())
+                    .into_iter(),
+            )
+        }
+        let rejected_insertions = insertion_res.await.map_err(Error::Chain)?;
+        if rejected_insertions.is_empty() {
+            return Err(Error::Core(CoreError::Crypto(format!(
+                "rejected new links when attempting insertion: index corrupted"
+            ))));
+        }
+        self.chain
+            .delete(deleted_chain_tags)
+            .await
+            .map_err(Error::Chain)
     }
 }
 
@@ -252,9 +337,10 @@ impl<
             + From<[u8; TAG_LENGTH]>
             + Into<[u8; TAG_LENGTH]>
             + AsRef<[u8]>
-            + Clone,
+            + Clone
+            + Display,
         DbConnection: DbInterface + Clone,
-        EntryDxEnc: CsRhDxEnc<TAG_LENGTH, ENTRY_LENGTH, Tag, DbConnection = DbConnection, Item = Metadata>,
+        EntryDxEnc: CsRhDxEnc<TAG_LENGTH, METADATA_LENGTH, Tag, DbConnection = DbConnection, Item = Metadata>,
         ChainDxEnc: DynRhDxEnc<LINK_LENGTH, DbConnection = EntryDxEnc::DbConnection, Tag = Tag, Item = Link>,
     > CsRhMmEnc for Findex<TAG_LENGTH, Tag, EntryDxEnc, ChainDxEnc>
 {
@@ -310,21 +396,19 @@ impl<
     }
 
     async fn insert(&self, mm: Mm<Self::Tag, Self::Item>) -> Result<(), Self::Error> {
-        let _mm = mm
+        let new_links = mm
             .into_iter()
             .map(|(tag, items)| decompose(Operation::Insert, &items).map(|chain| (tag, chain)))
             .collect::<Result<Mm<EntryDxEnc::Tag, Link>, _>>()?;
-        // self.push(mm)
-        todo!()
+        self.push(Mm::default(), new_links).await
     }
 
     async fn delete(&self, mm: Mm<Self::Tag, Self::Item>) -> Result<(), Self::Error> {
-        let _mm = mm
+        let new_links = mm
             .into_iter()
             .map(|(tag, items)| decompose(Operation::Delete, &items).map(|chain| (tag, chain)))
             .collect::<Result<Mm<EntryDxEnc::Tag, Link>, _>>()?;
-        // self.push(mm)
-        todo!()
+        self.push(Mm::default(), new_links).await
     }
 
     async fn compact(&self) -> Result<(), Self::Error> {
@@ -344,8 +428,8 @@ impl<
             .collect::<TagSet<EntryDxEnc::Tag>>();
 
         // From this point, an error means the new EMM cannot be created but the
-        // new Entry EDX has been inserted. It must be deleted before returning
-        // the error.
+        // new Entry EDX may have been partially inserted. It must be deleted
+        // before returning the error.
         let res = self
             .rebuild_next(&new_entry_dx_enc, &new_chain_dx_enc, entry_dx)
             .await;

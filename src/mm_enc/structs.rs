@@ -10,6 +10,12 @@ use crate::{CoreError, BLOCK_LENGTH, LINE_WIDTH};
 
 pub struct Mm<Tag: Hash + PartialEq + Eq, Item>(HashMap<Tag, Vec<Item>>);
 
+impl<Tag: Hash + PartialEq + Eq, Item> Default for Mm<Tag, Item> {
+    fn default() -> Self {
+        Self(HashMap::new())
+    }
+}
+
 impl<Tag: Hash + PartialEq + Eq, Item> Deref for Mm<Tag, Item> {
     type Target = HashMap<Tag, Vec<Item>>;
 
@@ -65,15 +71,19 @@ impl<Tag: Hash + PartialEq + Eq, Item> FromIterator<(Tag, Vec<Item>)> for Mm<Tag
     }
 }
 
-pub const ENTRY_LENGTH: usize = 8;
+pub const METADATA_LENGTH: usize = 8;
 
 #[derive(Clone)]
 pub struct Metadata {
-    pub start: u32,
-    pub stop: u32,
+    pub start: usize,
+    pub stop: usize,
 }
 
 impl Metadata {
+    pub fn new(start: usize, stop: usize) -> Self {
+        Self { start, stop }
+    }
+
     pub fn unroll<const TAG_LENGTH: usize, Tag: From<[u8; TAG_LENGTH]> + Into<[u8; TAG_LENGTH]>>(
         &self,
         seed: &[u8],
@@ -88,22 +98,32 @@ impl Metadata {
     }
 }
 
-impl From<[u8; ENTRY_LENGTH]> for Metadata {
-    fn from(bytes: [u8; ENTRY_LENGTH]) -> Self {
+impl From<[u8; METADATA_LENGTH]> for Metadata {
+    fn from(bytes: [u8; METADATA_LENGTH]) -> Self {
         let start =
             u32::from_be_bytes(<[u8; 4]>::try_from(&bytes[..4]).expect("correct byte length"));
         let stop =
             u32::from_be_bytes(<[u8; 4]>::try_from(&bytes[4..]).expect("correct byte length"));
-        Self { start, stop }
+        Self {
+            start: start as usize,
+            stop: stop as usize,
+        }
     }
 }
 
-impl From<Metadata> for [u8; ENTRY_LENGTH] {
-    fn from(entry: Metadata) -> Self {
-        let mut res = [0; ENTRY_LENGTH];
-        res[..4].copy_from_slice(&entry.start.to_be_bytes());
-        res[4..].copy_from_slice(&entry.stop.to_be_bytes());
-        res
+impl TryFrom<Metadata> for [u8; METADATA_LENGTH] {
+    type Error = CoreError;
+    fn try_from(entry: Metadata) -> Result<Self, Self::Error> {
+        let mut res = [0; METADATA_LENGTH];
+        let start = <u32>::try_from(entry.start).map_err(|_| {
+            CoreError::Conversion(format!("chain length overflow, consider compacting"))
+        })?;
+        let stop = <u32>::try_from(entry.stop).map_err(|_| {
+            CoreError::Conversion(format!("chain length overflow, consider compacting"))
+        })?;
+        res[..4].copy_from_slice(&start.to_be_bytes());
+        res[4..].copy_from_slice(&stop.to_be_bytes());
+        Ok(res)
     }
 }
 

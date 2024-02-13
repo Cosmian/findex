@@ -7,7 +7,7 @@ use crate::{dx_enc::TagSet, CoreError, DbInterface};
 mod findex;
 mod structs;
 
-pub use structs::{Mm, ENTRY_LENGTH, LINK_LENGTH};
+pub use structs::{Mm, LINK_LENGTH, METADATA_LENGTH};
 
 #[derive(Debug)]
 pub enum Error<EntryError: std::error::Error, ChainError: std::error::Error> {

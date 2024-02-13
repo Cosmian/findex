@@ -12,6 +12,12 @@ use base64::engine::{general_purpose::STANDARD, Engine};
 #[derive(Eq, PartialEq)]
 pub struct TagSet<Tag: Hash + PartialEq + Eq>(HashSet<Tag>);
 
+impl<Tag: Hash + PartialEq + Eq> Default for TagSet<Tag> {
+    fn default() -> Self {
+        Self(HashSet::new())
+    }
+}
+
 impl<Tag: Hash + PartialEq + Eq> Deref for TagSet<Tag> {
     type Target = HashSet<Tag>;
 
@@ -19,6 +25,13 @@ impl<Tag: Hash + PartialEq + Eq> Deref for TagSet<Tag> {
         &self.0
     }
 }
+
+impl<Tag: Hash + PartialEq + Eq> DerefMut for TagSet<Tag> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
+
 impl<Tag: Hash + PartialEq + Eq + Display> Display for TagSet<Tag> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         writeln!(f, "[")?;
@@ -124,8 +137,16 @@ impl From<TokenSet> for HashSet<Token> {
     }
 }
 
-#[derive(Default, PartialEq)]
+#[derive(PartialEq)]
 pub struct Dx<const VALUE_LENGTH: usize, Tag: Hash + PartialEq + Eq, Item>(HashMap<Tag, Item>);
+
+impl<const VALUE_LENGTH: usize, Tag: Hash + PartialEq + Eq, Item> Default
+    for Dx<VALUE_LENGTH, Tag, Item>
+{
+    fn default() -> Self {
+        Self(HashMap::default())
+    }
+}
 
 impl<const VALUE_LENGTH: usize, Tag: Hash + PartialEq + Eq, Item> Deref
     for Dx<VALUE_LENGTH, Tag, Item>
