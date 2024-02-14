@@ -59,12 +59,21 @@ impl Dem {
 
     pub fn encrypt(&self, ptx: &[u8], aad: &[u8]) -> Result<Vec<u8>, CoreError> {
         let nonce = Nonce::new(&mut *self.rng.lock().expect("poisoned lock"));
-        self.aead
+        let ctx = self
+            .aead
             .encrypt(&nonce, ptx, Some(aad))
-            .map_err(CoreError::from)
+            .map_err(CoreError::from)?;
+        Ok([nonce.as_bytes(), &ctx].concat())
     }
 
     pub fn decrypt(&self, ctx: &[u8], aad: &[u8]) -> Result<Vec<u8>, CoreError> {
+        if ctx.len() < Aes256Gcm::NONCE_LENGTH {
+            return Err(CoreError::Crypto(format!(
+                "wrong ciphertext length: should be at least {}-byte long, but {} were given",
+                Aes256Gcm::NONCE_LENGTH,
+                ctx.len()
+            )));
+        }
         let nonce = Nonce::try_from(&ctx[..Aes256Gcm::NONCE_LENGTH])?;
         self.aead
             .decrypt(&nonce, &ctx[Aes256Gcm::NONCE_LENGTH..], Some(aad))

@@ -44,7 +44,7 @@ impl<Tag: Hash + PartialEq + Eq + Display> Display for TagSet<Tag> {
 
 impl<Tag: Hash + PartialEq + Eq + Debug> Debug for TagSet<Tag> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        writeln!(f, "{self:?}")
+        writeln!(f, "{:?}", self.0)
     }
 }
 
@@ -171,8 +171,8 @@ impl<const VALUE_LENGTH: usize, Tag: Hash + PartialEq + Eq + Display, Item: Disp
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "Dictionary: {{")?;
-        for (tag, value) in self.iter() {
-            writeln!(f, "  '{}': {}", tag, value)?;
+        for (tag, value) in self.0.iter() {
+            writeln!(f, "  '{tag}': {value}")?;
         }
         writeln!(f, "}}")
     }
@@ -182,7 +182,7 @@ impl<const VALUE_LENGTH: usize, Tag: Hash + PartialEq + Eq + Debug, Item: Debug>
     for Dx<VALUE_LENGTH, Tag, Item>
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        writeln!(f, "{self:?}")
+        writeln!(f, "{:?}", self.0)
     }
 }
 

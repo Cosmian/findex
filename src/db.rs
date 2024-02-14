@@ -267,41 +267,37 @@ pub mod tests {
 
     const N_WORKERS: usize = 100;
 
+    /// Tries inserting `N_WORKERS` data using random tokens. Then verifies the
+    /// inserted, dumped and fetched DX are identical.
     #[test]
     fn test_insert_then_dump_and_fetch() {
+        let mut rng = CsRng::from_entropy();
         let db = InMemoryDb::default();
-        let handles = (0..N_WORKERS)
+        let inserted_dx = (0..N_WORKERS)
             .map(|i| {
-                let db = db.clone();
-                spawn(move || -> Result<_, <InMemoryDb as DbInterface>::Error> {
-                    let mut rng = CsRng::from_entropy();
-                    let mut tok = Token::default();
-                    rng.fill_bytes(&mut tok);
-                    let data = vec![i as u8];
-                    let rejected_items =
-                        block_on(db.insert(Edx::from(HashMap::from_iter([(tok, data.clone())]))))?;
-                    if rejected_items.is_empty() {
-                        Ok((tok, data))
-                    } else {
-                        Err(InMemoryDbError("some items were rejected".to_string()))
-                    }
-                })
+                let mut tok = Token::default();
+                rng.fill_bytes(&mut tok);
+                let data = vec![i as u8];
+                let rejected_items =
+                    block_on(db.insert(Edx::from(HashMap::from_iter([(tok, data.clone())]))))?;
+                if rejected_items.is_empty() {
+                    Ok((tok, data))
+                } else {
+                    Err(InMemoryDbError("some items were rejected".to_string()))
+                }
             })
-            .collect::<Vec<_>>();
-
-        let inserted_dx = handles
-            .into_iter()
-            .flat_map(|h| h.join())
             .collect::<Result<HashMap<_, _>, _>>()
             .unwrap();
 
-        let stored_dx = block_on(db.dump()).unwrap();
-        assert_eq!(inserted_dx, *stored_dx);
+        let dumped_dx = block_on(db.dump()).unwrap();
+        assert_eq!(inserted_dx, *dumped_dx);
 
-        let res = block_on(db.fetch(inserted_dx.keys().copied().collect())).unwrap();
-        assert_eq!(inserted_dx, *res);
+        let fetched_dx = block_on(db.fetch(inserted_dx.keys().copied().collect())).unwrap();
+        assert_eq!(inserted_dx, *fetched_dx);
     }
 
+    /// Tries concurrently upserting `N_WORKERS` IDs on the same token. Then
+    /// verifies each one have been successfully upserted.
     #[test]
     fn test_concurrent_upsert() {
         let db = InMemoryDb::default();
@@ -344,9 +340,7 @@ pub mod tests {
         assert_eq!(dx.len(), 1);
 
         let stored_data = dx.get(&tok).unwrap();
-        let ids = stored_data.iter().copied().collect::<HashSet<_>>();
-
-        // Check all threads have successfully inserted their ID.
-        assert_eq!(ids, (0..N_WORKERS as u8).collect::<HashSet<u8>>());
+        let stored_ids = stored_data.iter().copied().collect::<HashSet<_>>();
+        assert_eq!(stored_ids, (0..N_WORKERS as u8).collect::<HashSet<u8>>());
     }
 }

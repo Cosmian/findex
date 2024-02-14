@@ -210,3 +210,150 @@ impl<
         self.resolve(&edx).map_err(Self::Error::from)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::{
+        collections::{HashMap, HashSet},
+        thread::spawn,
+    };
+
+    use cosmian_crypto_core::CsRng;
+    use futures::executor::block_on;
+    use rand::{RngCore, SeedableRng};
+
+    use crate::{InMemoryDb, InMemoryDbError};
+
+    use super::*;
+
+    const N_WORKERS: usize = 100;
+    const VALUE_LENGTH: usize = 1;
+    type Item = [u8; VALUE_LENGTH];
+
+    /// Tries inserting `N_WORKERS` data using random tokens. Then verifies the
+    /// inserted, dumped and fetched DX are identical.
+    #[test]
+    fn test_insert_then_dump_and_fetch() {
+        let mut rng = CsRng::from_entropy();
+        let db = InMemoryDb::default();
+        let seed = Secret::<32>::random(&mut rng);
+        let vera = Vera::<VALUE_LENGTH, InMemoryDb, Item>::setup(&*seed, db).unwrap();
+        let inserted_dx = (0..N_WORKERS)
+            .map(|i| {
+                let mut tag = [0; TAG_LENGTH];
+                rng.fill_bytes(&mut tag);
+                let data = [i as u8];
+                let rejected_items =
+                    block_on(<Vera<VALUE_LENGTH, InMemoryDb, Item> as DynRhDxEnc<
+                        VALUE_LENGTH,
+                    >>::insert(
+                        &vera,
+                        Dx::from(HashMap::from_iter([(tag, data.clone())])),
+                    ))?;
+                if rejected_items.is_empty() {
+                    Ok((tag, data))
+                } else {
+                    Err(Error::<InMemoryDbError>::Crypto(
+                        "some items were rejected".to_string(),
+                    ))
+                }
+            })
+            .collect::<Result<HashMap<_, _>, _>>()
+            .unwrap();
+
+        let dumped_dx = block_on(vera.dump()).unwrap();
+        assert_eq!(inserted_dx, *dumped_dx);
+
+        let fetched_dx = block_on(vera.get(inserted_dx.keys().copied().collect())).unwrap();
+        assert_eq!(inserted_dx, *fetched_dx);
+    }
+
+    fn concurrent_worker_upserter(
+        vera: &Vera<VALUE_LENGTH, InMemoryDb, Item>,
+        tags: &[[u8; TAG_LENGTH]],
+        id: u8,
+    ) -> Result<(), Error<InMemoryDbError>> {
+        if tags.is_empty() {
+            return Err(Error::Crypto(format!("could not insert ID {id}")));
+        }
+        let mut moved_id = None;
+        let dx_new = Dx::from(HashMap::from_iter([(tags[0], [id])]));
+
+        // First tries to insert the worker ID for the first tag.
+        let (mut dx_cur, mut edx_cur) =
+            block_on(<Vera<VALUE_LENGTH, InMemoryDb, Item> as CsRhDxEnc<
+                TAG_LENGTH,
+                VALUE_LENGTH,
+                [u8; TAG_LENGTH],
+            >>::insert(vera, dx_new.clone()))?;
+
+        // Retries upserting with the current EDX state until it succeeds.
+        while !edx_cur.is_empty() {
+            moved_id = Some(
+                dx_cur.get(&tags[0]).ok_or_else(|| {
+                    Error::<InMemoryDbError>::Crypto(
+                        "current DX received does not contain any value for the upserted tag"
+                            .to_string(),
+                    )
+                })?[0],
+            );
+            (dx_cur, edx_cur) = block_on(vera.upsert(edx_cur, dx_new.clone()))?;
+        }
+
+        if let Some(moved_id) = moved_id {
+            // Moves the replaced ID to the next tag.
+            concurrent_worker_upserter(vera, &tags[1..], moved_id)
+        } else {
+            Ok(())
+        }
+    }
+
+    /// Tries concurrently upserting `N_WORKERS` IDs on the same sequence of
+    /// tokens. Each worker first tries inserting its ID in the first tag of the
+    /// pool. Upon failure, it tries replacing the current I with its ID, and
+    /// moving the current ID to the next tag of the pool.
+    ///
+    /// Then verifies each worker ID were successfully inserted.
+    #[test]
+    fn test_concurrent_upsert() {
+        let mut rng = CsRng::from_entropy();
+        let db = InMemoryDb::default();
+        let seed = Secret::<32>::random(&mut rng);
+
+        // Generate a pool of tags, one tag per worker.
+        let tags = (0..N_WORKERS)
+            .map(|_| {
+                let mut tag = [0; TAG_LENGTH];
+                rng.fill_bytes(&mut tag);
+                tag
+            })
+            .collect::<Vec<_>>();
+
+        let handles = (0..N_WORKERS)
+            .map(|i| {
+                let db = db.clone();
+                let seed = seed.clone();
+                let tags = tags.clone();
+                spawn(move || -> Result<(), Error<InMemoryDbError>> {
+                    let vera = Vera::<VALUE_LENGTH, InMemoryDb, Item>::setup(&*seed, db).unwrap();
+                    concurrent_worker_upserter(&vera, tags.as_slice(), i as u8)
+                })
+            })
+            .collect::<Vec<_>>();
+
+        for h in handles {
+            h.join().unwrap().unwrap();
+        }
+
+        let vera = Vera::<VALUE_LENGTH, InMemoryDb, Item>::setup(&*seed, db).unwrap();
+
+        let dx = block_on(vera.dump()).unwrap();
+        let stored_ids = dx.values().copied().collect::<HashSet<Item>>();
+        assert_eq!(
+            stored_ids,
+            (0..N_WORKERS as u8)
+                .map(|id| [id])
+                .collect::<HashSet<Item>>()
+        );
+    }
+}
