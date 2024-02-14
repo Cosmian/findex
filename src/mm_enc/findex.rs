@@ -119,6 +119,8 @@ fn recompose(chain: &[Link]) -> Result<Vec<Vec<u8>>, CoreError> {
     // type is a vector, thus the linked list needs to be converted. All in all,
     // this method adds two iterations/allocations: there may be a better
     // way. Maybe sticking with vectors is the way to go.
+    //
+    // TODO: use a BTreeMap
     let mut purged_value = LinkedList::new();
     let mut remaining_items = HashSet::new();
     let mut deleted_items = HashSet::new();
@@ -135,12 +137,15 @@ fn recompose(chain: &[Link]) -> Result<Vec<Vec<u8>>, CoreError> {
     Ok(purged_value.into_iter().collect())
 }
 
+/// Findex is a CS-RH-MM-Enc scheme.
+///
+/// It relies on a generic CS-RH-DX-Enc and a generic Dyn-RH-DX-Enc schemes.
 #[derive(Debug)]
 pub struct Findex<
     const TAG_LENGTH: usize,
     Tag: Hash + PartialEq + Eq + From<[u8; TAG_LENGTH]> + Into<[u8; TAG_LENGTH]>,
-    EntryDxEnc: CsRhDxEnc<TAG_LENGTH, METADATA_LENGTH, Tag>,
-    ChainDxEnc: DynRhDxEnc<LINK_LENGTH>,
+    EntryDxEnc: CsRhDxEnc<TAG_LENGTH, METADATA_LENGTH, Tag, Item = Metadata>,
+    ChainDxEnc: DynRhDxEnc<LINK_LENGTH, Item = Link>,
 > {
     pub entry: EntryDxEnc,
     pub chain: ChainDxEnc,
