@@ -1,7 +1,8 @@
 use cosmian_crypto_core::kdf256;
+use std::ops::Add;
 use std::{
     collections::HashMap,
-    fmt::Display,
+    fmt::{Debug, Display},
     hash::Hash,
     ops::{Deref, DerefMut},
 };
@@ -30,6 +31,12 @@ impl<Tag: Hash + PartialEq + Eq, Item> DerefMut for Mm<Tag, Item> {
     }
 }
 
+impl<Tag: Hash + PartialEq + Eq + Clone, Item: Clone> Clone for Mm<Tag, Item> {
+    fn clone(&self) -> Self {
+        Self(self.0.clone())
+    }
+}
+
 impl<Tag: Hash + PartialEq + Eq + Display, Item: Display> Display for Mm<Tag, Item> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "Multi-Map: {{")?;
@@ -41,6 +48,12 @@ impl<Tag: Hash + PartialEq + Eq + Display, Item: Display> Display for Mm<Tag, It
             writeln!(f, "  ],")?;
         }
         writeln!(f, "}}")
+    }
+}
+
+impl<Tag: Hash + PartialEq + Eq + Debug, Item: Debug> Debug for Mm<Tag, Item> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Mm: {:?}", self.0)
     }
 }
 
@@ -71,16 +84,22 @@ impl<Tag: Hash + PartialEq + Eq, Item> FromIterator<(Tag, Vec<Item>)> for Mm<Tag
     }
 }
 
+impl<Tag: Hash + PartialEq + Eq, Item: PartialEq> PartialEq for Mm<Tag, Item> {
+    fn eq(&self, other: &Self) -> bool {
+        self.0 == other.0
+    }
+}
+
 pub const METADATA_LENGTH: usize = 8;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Metadata {
-    pub start: usize,
-    pub stop: usize,
+    pub start: u32,
+    pub stop: u32,
 }
 
 impl Metadata {
-    pub fn new(start: usize, stop: usize) -> Self {
+    pub fn new(start: u32, stop: u32) -> Self {
         Self { start, stop }
     }
 
@@ -104,26 +123,37 @@ impl From<[u8; METADATA_LENGTH]> for Metadata {
             u32::from_be_bytes(<[u8; 4]>::try_from(&bytes[..4]).expect("correct byte length"));
         let stop =
             u32::from_be_bytes(<[u8; 4]>::try_from(&bytes[4..]).expect("correct byte length"));
-        Self {
-            start: start as usize,
-            stop: stop as usize,
+        Self { start, stop }
+    }
+}
+
+impl From<Metadata> for [u8; METADATA_LENGTH] {
+    fn from(value: Metadata) -> Self {
+        let mut res = [0; METADATA_LENGTH];
+        res[..4].copy_from_slice(&value.start.to_be_bytes());
+        res[4..].copy_from_slice(&value.stop.to_be_bytes());
+        res
+    }
+}
+
+impl Add<&Metadata> for &Metadata {
+    type Output = Metadata;
+
+    fn add(self, rhs: &Metadata) -> Self::Output {
+        Self::Output {
+            start: self.start + rhs.start,
+            stop: self.stop + rhs.stop,
         }
     }
 }
 
-impl TryFrom<Metadata> for [u8; METADATA_LENGTH] {
-    type Error = CoreError;
-    fn try_from(entry: Metadata) -> Result<Self, Self::Error> {
-        let mut res = [0; METADATA_LENGTH];
-        let start = <u32>::try_from(entry.start).map_err(|_| {
-            CoreError::Conversion(format!("chain length overflow, consider compacting"))
-        })?;
-        let stop = <u32>::try_from(entry.stop).map_err(|_| {
-            CoreError::Conversion(format!("chain length overflow, consider compacting"))
-        })?;
-        res[..4].copy_from_slice(&start.to_be_bytes());
-        res[4..].copy_from_slice(&stop.to_be_bytes());
-        Ok(res)
+impl Display for Metadata {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "Metadata: {{ start: {}, stop: {} }}",
+            self.start, self.stop
+        )
     }
 }
 
@@ -171,6 +201,18 @@ impl Link {
                 "block position {pos} out of link range"
             )))
         }
+    }
+}
+
+impl From<[u8; LINK_LENGTH]> for Link {
+    fn from(bytes: [u8; LINK_LENGTH]) -> Self {
+        Self(bytes)
+    }
+}
+
+impl From<Link> for [u8; LINK_LENGTH] {
+    fn from(link: Link) -> Self {
+        link.0
     }
 }
 

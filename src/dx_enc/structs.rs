@@ -6,6 +6,78 @@ use std::{
 };
 
 use base64::engine::{general_purpose::STANDARD, Engine};
+use cosmian_crypto_core::reexport::rand_core::CryptoRngCore;
+
+use crate::CoreError;
+
+/// Byte length of Vera's tags.
+const TAG_LENGTH: usize = 16;
+
+#[derive(Clone, Copy, Default, Debug, Hash, PartialEq, Eq)]
+pub struct Tag([u8; TAG_LENGTH]);
+
+impl Tag {
+    pub const LENGTH: usize = TAG_LENGTH;
+
+    pub fn random(rng: &mut impl CryptoRngCore) -> Self {
+        let mut tag = Self::default();
+        rng.fill_bytes(&mut tag);
+        tag
+    }
+}
+
+impl AsRef<[u8]> for Tag {
+    fn as_ref(&self) -> &[u8] {
+        &self
+    }
+}
+impl Deref for Tag {
+    type Target = [u8];
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl DerefMut for Tag {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
+
+impl Display for Tag {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", STANDARD.encode(self))
+    }
+}
+
+impl From<[u8; Tag::LENGTH]> for Tag {
+    fn from(bytes: [u8; Tag::LENGTH]) -> Self {
+        Self(bytes)
+    }
+}
+
+impl From<Tag> for [u8; Tag::LENGTH] {
+    fn from(tag: Tag) -> Self {
+        tag.0
+    }
+}
+
+impl TryFrom<&[u8]> for Tag {
+    type Error = CoreError;
+
+    fn try_from(bytes: &[u8]) -> Result<Self, Self::Error> {
+        <[u8; Self::LENGTH]>::try_from(bytes)
+            .map_err(|_| {
+                Self::Error::Conversion(format!(
+                    "incorrect byte length: expected {}, found {}",
+                    Self::LENGTH,
+                    bytes.len()
+                ))
+            })
+            .map(Self)
+    }
+}
 
 // This type is needed to add automatic logging (we need all argument types to
 // implement `Display`).
@@ -170,9 +242,9 @@ impl<const VALUE_LENGTH: usize, Tag: Hash + PartialEq + Eq + Display, Item: Disp
     for Dx<VALUE_LENGTH, Tag, Item>
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Dictionary: {{")?;
+        writeln!(f, "Dictionary: {{")?;
         for (tag, value) in self.0.iter() {
-            writeln!(f, "  '{tag}': {value}")?;
+            writeln!(f, "'{tag}': {value}")?;
         }
         writeln!(f, "}}")
     }

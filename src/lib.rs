@@ -23,7 +23,7 @@ mod parameters;
 #[cfg(any(test, feature = "in_memory"))]
 pub use db::tests::{InMemoryDb, InMemoryDbError};
 pub use db::DbInterface;
-pub use dx_enc::{CsRhDxEnc, DynRhDxEnc};
+pub use dx_enc::{CsRhDxEnc, DynRhDxEnc, Vera};
 pub use error::{CoreError, DbInterfaceErrorTrait, Error};
 
 // pub use mm_enc::{CsRhMmEnc, Findex};

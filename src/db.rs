@@ -222,8 +222,8 @@ pub mod tests {
             let db = &mut *self.lock().expect("couldn't lock the table");
             let mut res = Edx::default();
             for (k, v) in items {
-                if db.contains_key(&k) {
-                    res.insert(k, v);
+                if let Some(current_value) = db.get(&k) {
+                    res.insert(k, current_value.clone());
                 } else {
                     db.insert(k, v);
                 }
@@ -270,7 +270,7 @@ pub mod tests {
     /// Tries inserting `N_WORKERS` data using random tokens. Then verifies the
     /// inserted, dumped and fetched DX are identical.
     #[test]
-    fn test_insert_then_dump_and_fetch() {
+    fn insert_then_dump_and_fetch() {
         let mut rng = CsRng::from_entropy();
         let db = InMemoryDb::default();
         let inserted_dx = (0..N_WORKERS)
@@ -299,7 +299,7 @@ pub mod tests {
     /// Tries concurrently upserting `N_WORKERS` IDs on the same token. Then
     /// verifies each one have been successfully upserted.
     #[test]
-    fn test_concurrent_upsert() {
+    fn concurrent_upsert() {
         let db = InMemoryDb::default();
         let mut rng = CsRng::from_entropy();
         let mut tok = Token::default();

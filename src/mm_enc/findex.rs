@@ -114,13 +114,10 @@ fn recompose(chain: &[Link]) -> Result<Vec<Vec<u8>>, CoreError> {
         }
     }
 
-    // In order to conserve order, a set cannot be used. Since removing elements
-    // from a vector is expensive, I used a linked list. However, the return
-    // type is a vector, thus the linked list needs to be converted. All in all,
-    // this method adds two iterations/allocations: there may be a better
-    // way. Maybe sticking with vectors is the way to go.
-    //
-    // TODO: use a BTreeMap
+    // A linked list stored in a set could advantageously replace this
+    // code. However there is no such structure in the standard library and I
+    // don't want to include a dependency for that. Since I also don't want to
+    // implement a dedicated structure for now, this will do.
     let mut purged_value = LinkedList::new();
     let mut remaining_items = HashSet::new();
     let mut deleted_items = HashSet::new();
@@ -235,9 +232,10 @@ impl<
     /// Returns the chains to insert in the Chain Table.
     async fn reserve(
         &self,
-        mut dx: Dx<METADATA_LENGTH, Tag, Metadata>,
+        dx: Dx<METADATA_LENGTH, Tag, Metadata>,
     ) -> Result<Dx<METADATA_LENGTH, Tag, Metadata>, Error<EntryDxEnc::Error, ChainDxEnc::Error>>
     {
+        let mut modified_dx = dx.clone();
         let (mut dx_curr, mut edx_curr) = <EntryDxEnc as CsRhDxEnc<
             TAG_LENGTH,
             METADATA_LENGTH,
@@ -249,14 +247,17 @@ impl<
         while !dx_curr.is_empty() {
             let mut dx_new = Dx::<METADATA_LENGTH, Tag, Metadata>::default();
             for (tag, metadata_cur) in dx_curr {
-                let metadata = dx.get_mut(&tag).ok_or_else(|| {
+                let metadata = dx.get(&tag).ok_or_else(|| {
                     Error::Core(CoreError::Crypto(format!(
                         "returned tag '{tag}' does not match any tag in the input DX"
                     )))
                 })?;
-                metadata.start += metadata_cur.start;
-                metadata.stop += metadata_cur.stop;
-                dx_new.insert(tag, metadata.clone());
+                let metadata_new = metadata + &metadata_cur;
+                modified_dx.get_mut(&tag).and_then(|metadata| {
+                    *metadata = metadata_new.clone();
+                    Some(())
+                });
+                dx_new.deref_mut().insert(tag, metadata_new);
             }
             (dx_curr, edx_curr) =
                 <EntryDxEnc as CsRhDxEnc<TAG_LENGTH, METADATA_LENGTH, Tag>>::upsert(
@@ -267,69 +268,129 @@ impl<
                 .await
                 .map_err(Error::Entry)?;
         }
-        Ok(dx)
+        Ok(modified_dx)
     }
 
-    async fn push(
+    /// Extracts modifications to the Entry DX associated to the addition and
+    /// deletion of the given MM.
+    ///
+    /// Adding a sequence of links for a given tag increases the `stop` counter
+    /// in the associated metadata. Removing a sequence of links for a given tag
+    /// increases the `start` counter in the associated metadata.
+    fn extract_entry_modifications(
         &self,
-        additions: Mm<Tag, Link>,
-        deletions: Mm<Tag, Link>,
-    ) -> Result<(), Error<EntryDxEnc::Error, ChainDxEnc::Error>> {
+        additions: &Mm<Tag, Link>,
+        deletions: &Mm<Tag, Link>,
+    ) -> Result<Dx<METADATA_LENGTH, Tag, Metadata>, Error<EntryDxEnc::Error, ChainDxEnc::Error>>
+    {
         let mut new_entry_dx = Dx::<METADATA_LENGTH, Tag, Metadata>::default();
-        for (tag, chain) in &*additions {
+        for (tag, chain) in &**additions {
+            let n_links = <u32>::try_from(chain.len())
+                .map_err(|_| Error::Core(CoreError::Conversion("chain overflow".to_string())))?;
             new_entry_dx
                 .deref_mut()
-                .insert(tag.clone(), Metadata::new(0, chain.len()));
+                .insert(tag.clone(), Metadata::new(0, n_links));
         }
-        for (tag, chain) in &*deletions {
+        for (tag, chain) in &**deletions {
+            let n_links = <u32>::try_from(chain.len())
+                .map_err(|_| Error::Core(CoreError::Conversion("chain overflow".to_string())))?;
             new_entry_dx
                 .entry(tag.clone())
-                .and_modify(|metadata| metadata.start += chain.len())
-                .or_insert(Metadata::new(chain.len(), 0));
+                .and_modify(|metadata| metadata.start += n_links)
+                .or_insert(Metadata::new(n_links, 0));
         }
+        Ok(new_entry_dx)
+    }
 
-        let new_entry_dx = self.reserve(new_entry_dx).await?;
-
+    fn extract_chain_additions(
+        &self,
+        metadata: &Dx<METADATA_LENGTH, Tag, Metadata>,
+        additions: Mm<Tag, Link>,
+    ) -> Result<Dx<LINK_LENGTH, Tag, Link>, Error<EntryDxEnc::Error, ChainDxEnc::Error>> {
         let mut added_chain_dx = Dx::<LINK_LENGTH, Tag, Link>::default();
         for (entry_tag, new_links) in additions {
-            let metadata = new_entry_dx.get(&entry_tag).ok_or_else(|| {
+            let n_links = <u32>::try_from(new_links.len())
+                .map_err(|_| Error::Core(CoreError::Conversion("chain overflow".to_string())))?;
+            let metadata = metadata.get(&entry_tag).ok_or_else(|| {
                 Error::Core(CoreError::Crypto(format!(
                     "no metadata found in the reserved DX for tag {entry_tag}"
                 )))
             })?;
             added_chain_dx.extend(
-                Metadata::new(metadata.stop - new_links.len(), metadata.stop)
+                Metadata::new(metadata.stop - n_links, metadata.stop)
                     .unroll(entry_tag.as_ref())
                     .into_iter()
                     .zip(new_links),
             )
         }
+        Ok(added_chain_dx)
+    }
 
-        let insertion_res = self.chain.insert(added_chain_dx);
-
+    fn extract_chain_deletions(
+        &self,
+        metadata: &Dx<METADATA_LENGTH, Tag, Metadata>,
+        deletions: Mm<Tag, Link>,
+    ) -> Result<TagSet<Tag>, Error<EntryDxEnc::Error, ChainDxEnc::Error>> {
         let mut deleted_chain_tags = TagSet::<Tag>::default();
-        for (entry_tag, new_links) in &*deletions {
-            let metadata = new_entry_dx.get(entry_tag).ok_or_else(|| {
+        for (entry_tag, new_links) in deletions {
+            let n_links = <u32>::try_from(new_links.len())
+                .map_err(|_| Error::Core(CoreError::Conversion("chain overflow".to_string())))?;
+            let metadata = metadata.get(&entry_tag).ok_or_else(|| {
                 Error::Core(CoreError::Crypto(format!(
                     "no metadata found in the reserved DX for tag {entry_tag}"
                 )))
             })?;
             deleted_chain_tags.extend(
-                Metadata::new(metadata.stop - new_links.len(), metadata.stop)
+                Metadata::new(metadata.stop + n_links, metadata.stop)
                     .unroll(entry_tag.as_ref())
                     .into_iter(),
             )
         }
-        let rejected_insertions = insertion_res.await.map_err(Error::Chain)?;
-        if rejected_insertions.is_empty() {
-            return Err(Error::Core(CoreError::Crypto(format!(
-                "rejected new links when attempting insertion: index corrupted"
-            ))));
-        }
-        self.chain
-            .delete(deleted_chain_tags)
+        Ok(deleted_chain_tags)
+    }
+
+    /// Applies the given additions and deletions to the stored MM.
+    ///
+    /// Removes any inserted links in case an error occurs during the insertion.
+    async fn apply(
+        &self,
+        additions: Mm<Tag, Link>,
+        deletions: Mm<Tag, Link>,
+    ) -> Result<(), Error<EntryDxEnc::Error, ChainDxEnc::Error>> {
+        let entry_modifications = self.extract_entry_modifications(&additions, &deletions)?;
+        let modified_dx = self.reserve(entry_modifications).await?;
+        let inserted_links = self.extract_chain_additions(&modified_dx, additions)?;
+        let inserted_link_tags = inserted_links.keys().cloned().collect();
+
+        let insertion_result = self
+            .chain
+            .insert(inserted_links)
             .await
             .map_err(Error::Chain)
+            .and_then(|conclicting_links| {
+                if !conclicting_links.is_empty() {
+                    Err(Error::Core(CoreError::Crypto(
+                        "conflicts when inserting new links".to_string(),
+                    )))
+                } else {
+                    Ok(())
+                }
+            });
+
+        if insertion_result.is_ok() {
+            // Go on with deleting links.
+            let deleted_links = self.extract_chain_deletions(&modified_dx, deletions)?;
+            self.chain.delete(deleted_links).await.map_err(Error::Chain)
+        } else {
+            // Reverts any successful insertion. Do not revert entry
+            // modifications as concurrent modifications could have
+            // happened.
+            self.chain
+                .delete(inserted_link_tags)
+                .await
+                .map_err(Error::Chain)?;
+            insertion_result
+        }
     }
 }
 
@@ -405,7 +466,7 @@ impl<
             .into_iter()
             .map(|(tag, items)| decompose(Operation::Insert, &items).map(|chain| (tag, chain)))
             .collect::<Result<Mm<EntryDxEnc::Tag, Link>, _>>()?;
-        self.push(Mm::default(), new_links).await
+        self.apply(new_links, Mm::default()).await
     }
 
     async fn delete(&self, mm: Mm<Self::Tag, Self::Item>) -> Result<(), Self::Error> {
@@ -413,7 +474,7 @@ impl<
             .into_iter()
             .map(|(tag, items)| decompose(Operation::Delete, &items).map(|chain| (tag, chain)))
             .collect::<Result<Mm<EntryDxEnc::Tag, Link>, _>>()?;
-        self.push(Mm::default(), new_links).await
+        self.apply(new_links, Mm::default()).await
     }
 
     async fn compact(&self) -> Result<(), Self::Error> {
@@ -458,10 +519,23 @@ impl<
 #[cfg(test)]
 mod tests {
 
+    use std::{collections::HashMap, thread::spawn};
+
+    use cosmian_crypto_core::CsRng;
+    use futures::executor::block_on;
+    use rand::{RngCore, SeedableRng};
+
+    use crate::{
+        dx_enc::{Tag, Vera},
+        InMemoryDb,
+    };
+
     use super::*;
 
+    const N_WORKERS: usize = 100;
+
     #[test]
-    fn test_decomposition() {
+    fn decomposition() {
         let added_value = vec![
             vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
             "I am a very long test string".as_bytes().to_vec(),
@@ -477,13 +551,149 @@ mod tests {
         chain.extend_from_slice(&decompose(Operation::Delete, &deleted_value).unwrap());
         let recomposed_value = recompose(&chain).unwrap();
 
-        // Assert all elements are recovered, that without the duplicated and
-        // deleted ones.
+        // Assert all elements are recovered, without the duplicated and deleted
+        // ones.
         assert_eq!(recomposed_value.len(), 2);
         assert!(added_value.contains(&recomposed_value[0]));
         assert!(added_value.contains(&recomposed_value[1]));
         // Assert the order is preserved.
         assert_eq!(recomposed_value[0], added_value[0]);
         assert_eq!(recomposed_value[1], added_value[2]);
+    }
+
+    /// Checks the insert, delete and fetch work correctly in a sequential
+    /// manner:
+    /// - successive add work;
+    /// - delete works;
+    /// - reinserting existing item in a chain works;
+    /// - fetch finds all the chains, all the items, and the order of the items
+    ///   is correct.
+    #[test]
+    fn insert_then_fetch() {
+        let mut rng = CsRng::from_entropy();
+        let seed = Secret::<32>::random(&mut rng);
+        let db = InMemoryDb::default();
+        let findex = Findex::<
+            { Tag::LENGTH },
+            Tag,
+            Vera<METADATA_LENGTH, InMemoryDb, Metadata>,
+            Vera<LINK_LENGTH, InMemoryDb, Link>,
+        >::setup(&*seed, db)
+        .unwrap();
+
+        let inserted_mm = (0..N_WORKERS)
+            .map(|i| {
+                let tag = Tag::random(&mut rng);
+                let data = (0..=i as u8).map(|j| vec![j]).collect::<Vec<_>>();
+                let mm = Mm::from(HashMap::from_iter([(tag, data.clone())]));
+                block_on(findex.insert(mm.clone()))?;
+                Ok((i, mm))
+            })
+            .collect::<Result<HashMap<_, _>, Error<_, _>>>()
+            .unwrap();
+
+        let mut inserted_mm = inserted_mm
+            .into_values()
+            .flat_map(|mm| mm.into_iter())
+            .collect::<Mm<Tag, Vec<u8>>>();
+
+        let fetched_mm =
+            block_on(findex.search(inserted_mm.keys().copied().collect::<TagSet<Tag>>())).unwrap();
+        assert_eq!(inserted_mm, fetched_mm);
+
+        // Now remove some entries, add some already existing
+        let removed_data = (0..N_WORKERS)
+            .zip(inserted_mm.iter())
+            .map(|(i, (tag, data))| {
+                // Select a random data.
+                let pos = rng.next_u32() as usize % data.len();
+                let mm = Mm::from(HashMap::from_iter([(tag.clone(), vec![data[pos].clone()])]));
+                block_on(findex.delete(mm))?;
+                Ok((i, (tag.clone(), data[pos].clone())))
+            })
+            .collect::<Result<HashMap<_, _>, Error<_, _>>>()
+            .unwrap();
+
+        let mut reinserted_data = (0..N_WORKERS)
+            .zip(inserted_mm.iter())
+            .map(|(i, (tag, data))| {
+                // Select a random data.
+                let pos = rng.next_u32() as usize % data.len();
+                let mm = Mm::from(HashMap::from_iter([(tag.clone(), vec![data[pos].clone()])]));
+                block_on(findex.insert(mm))?;
+                Ok((i, (tag.clone(), data[pos].clone())))
+            })
+            .collect::<Result<HashMap<_, _>, Error<_, _>>>()
+            .unwrap();
+
+        for worker in 0..N_WORKERS {
+            let (_, deletion) = removed_data.get(&worker).unwrap();
+            let (tag, addition) = reinserted_data.remove(&worker).unwrap();
+            let data = inserted_mm.get_mut(&tag).unwrap();
+            data.retain(|item| item != deletion);
+            data.retain(|item| *item != addition);
+            data.push(addition);
+        }
+
+        let fetched_mm =
+            block_on(findex.search(inserted_mm.keys().copied().collect::<TagSet<Tag>>())).unwrap();
+        assert_eq!(inserted_mm, fetched_mm);
+    }
+
+    #[test]
+    fn concurrent_additions() {
+        let mut rng = CsRng::from_entropy();
+        let db = InMemoryDb::default();
+        let seed = Secret::<32>::random(&mut rng);
+
+        let tag = Tag::random(&mut rng);
+
+        let handles = (0..N_WORKERS)
+            .map(|i| {
+                let db = db.clone();
+                let seed = seed.clone();
+                let mm = Mm::<Tag, Vec<u8>>::from(HashMap::from_iter([(
+                    tag.clone(),
+                    vec![vec![i as u8]],
+                )]));
+                spawn(move || -> Result<(), Error<_, _>> {
+                    let findex = Findex::<
+                        { Tag::LENGTH },
+                        Tag,
+                        Vera<METADATA_LENGTH, InMemoryDb, Metadata>,
+                        Vera<LINK_LENGTH, InMemoryDb, Link>,
+                    >::setup(&*seed, db)
+                    .unwrap();
+                    block_on(findex.insert(mm))
+                })
+            })
+            .collect::<Vec<_>>();
+
+        for h in handles {
+            h.join().unwrap().unwrap();
+        }
+
+        let findex = Findex::<
+            { Tag::LENGTH },
+            Tag,
+            Vera<METADATA_LENGTH, InMemoryDb, Metadata>,
+            Vera<LINK_LENGTH, InMemoryDb, Link>,
+        >::setup(&*seed, db)
+        .unwrap();
+
+        let stored_mm = block_on(findex.search(TagSet::from_iter([tag.clone()]))).unwrap();
+        let stored_ids = stored_mm
+            .get(&tag)
+            .unwrap()
+            .iter()
+            .cloned()
+            .collect::<HashSet<_>>();
+
+        assert_eq!(
+            stored_ids,
+            (0..N_WORKERS as u8)
+                .map(|id| vec![id])
+                .collect::<HashSet<Vec<u8>>>()
+        );
     }
 }

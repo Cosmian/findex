@@ -7,11 +7,8 @@ use crate::{CoreError, DbInterface, Error, MIN_SEED_LENGTH};
 
 use super::{
     primitives::{Dem, Kmac},
-    CsRhDxEnc, Dx, DynRhDxEnc, Edx, TagSet, Token,
+    CsRhDxEnc, Dx, DynRhDxEnc, Edx, Tag, TagSet, Token,
 };
-
-/// Byte length of Vera's tags.
-pub const TAG_LENGTH: usize = 16;
 
 /// Vera is a CS-RH-DX-Enc scheme: it interacts with a DB to securely store a
 /// dictionary (DX).
@@ -39,7 +36,7 @@ impl<
     const TOKEN_INFO: &'static [u8] = b"Token derivation info.";
 
     /// Returns the token associated to the given tag.
-    fn tokenize(&self, tag: &<Self as DynRhDxEnc<VALUE_LENGTH>>::Tag) -> Token {
+    fn tokenize(&self, tag: &Tag) -> Token {
         self.kmac.hash(tag, Self::TOKEN_INFO)
     }
 
@@ -58,7 +55,7 @@ impl<
                 // TODO: zeroize DX here.
                 let ctx = self
                     .dem
-                    .encrypt(&[&tag.as_slice(), val.into().as_slice()].concat(), &tok)?;
+                    .encrypt(&[&tag, val.into().as_slice()].concat(), &tok)?;
                 Ok((tok, ctx))
             })
             .collect()
@@ -79,16 +76,15 @@ impl<
         edx.iter()
             .map(|(tok, ctx)| {
                 let ptx = self.dem.decrypt(ctx, tok)?;
-                if ptx.len() != TAG_LENGTH + VALUE_LENGTH {
+                if ptx.len() != Tag::LENGTH + VALUE_LENGTH {
                     Err(CoreError::Crypto(format!(
-                        "invalid length for decrypted EDX value: found {} while {} was expected",
+                        "invalid length for decrypted EDX value: expected {}, found {}",
+                        Tag::LENGTH + VALUE_LENGTH,
                         ptx.len(),
-                        TAG_LENGTH + VALUE_LENGTH
                     )))
                 } else {
-                    let tag = <Self as DynRhDxEnc<VALUE_LENGTH>>::Tag::try_from(&ptx[..TAG_LENGTH])
-                        .expect("above check ensures length is correct");
-                    let val = <[u8; VALUE_LENGTH]>::try_from(&ptx[TAG_LENGTH..])
+                    let tag = Tag::try_from(&ptx[..Tag::LENGTH])?;
+                    let val = <[u8; VALUE_LENGTH]>::try_from(&ptx[Tag::LENGTH..])
                         .expect("above check ensures length is correct");
                     Ok((tag, val.into()))
                 }
@@ -106,7 +102,7 @@ impl<
 {
     type Error = Error<DbConnection::Error>;
     type DbConnection = DbConnection;
-    type Tag = [u8; TAG_LENGTH];
+    type Tag = Tag;
     type Item = Item;
 
     fn setup(seed: &[u8], connection: DbConnection) -> Result<Self, Self::Error> {
@@ -158,8 +154,7 @@ impl<
         const VALUE_LENGTH: usize,
         DbConnection: DbInterface + Clone,
         Item: From<[u8; VALUE_LENGTH]> + Into<[u8; VALUE_LENGTH]>,
-    > CsRhDxEnc<TAG_LENGTH, VALUE_LENGTH, [u8; TAG_LENGTH]>
-    for Vera<VALUE_LENGTH, DbConnection, Item>
+    > CsRhDxEnc<{ Tag::LENGTH }, VALUE_LENGTH, Tag> for Vera<VALUE_LENGTH, DbConnection, Item>
 {
     async fn insert(
         &self,
@@ -220,7 +215,7 @@ mod tests {
 
     use cosmian_crypto_core::CsRng;
     use futures::executor::block_on;
-    use rand::{RngCore, SeedableRng};
+    use rand::SeedableRng;
 
     use crate::{InMemoryDb, InMemoryDbError};
 
@@ -233,15 +228,14 @@ mod tests {
     /// Tries inserting `N_WORKERS` data using random tokens. Then verifies the
     /// inserted, dumped and fetched DX are identical.
     #[test]
-    fn test_insert_then_dump_and_fetch() {
+    fn insert_then_dump_and_fetch() {
         let mut rng = CsRng::from_entropy();
         let db = InMemoryDb::default();
         let seed = Secret::<32>::random(&mut rng);
         let vera = Vera::<VALUE_LENGTH, InMemoryDb, Item>::setup(&*seed, db).unwrap();
         let inserted_dx = (0..N_WORKERS)
             .map(|i| {
-                let mut tag = [0; TAG_LENGTH];
-                rng.fill_bytes(&mut tag);
+                let tag = Tag::random(&mut rng);
                 let data = [i as u8];
                 let rejected_items =
                     block_on(<Vera<VALUE_LENGTH, InMemoryDb, Item> as DynRhDxEnc<
@@ -270,7 +264,7 @@ mod tests {
 
     fn concurrent_worker_upserter(
         vera: &Vera<VALUE_LENGTH, InMemoryDb, Item>,
-        tags: &[[u8; TAG_LENGTH]],
+        tags: &[Tag],
         id: u8,
     ) -> Result<(), Error<InMemoryDbError>> {
         if tags.is_empty() {
@@ -282,9 +276,9 @@ mod tests {
         // First tries to insert the worker ID for the first tag.
         let (mut dx_cur, mut edx_cur) =
             block_on(<Vera<VALUE_LENGTH, InMemoryDb, Item> as CsRhDxEnc<
-                TAG_LENGTH,
+                { Tag::LENGTH },
                 VALUE_LENGTH,
-                [u8; TAG_LENGTH],
+                Tag,
             >>::insert(vera, dx_new.clone()))?;
 
         // Retries upserting with the current EDX state until it succeeds.
@@ -315,18 +309,14 @@ mod tests {
     ///
     /// Then verifies each worker ID were successfully inserted.
     #[test]
-    fn test_concurrent_upsert() {
+    fn concurrent_upsert() {
         let mut rng = CsRng::from_entropy();
         let db = InMemoryDb::default();
         let seed = Secret::<32>::random(&mut rng);
 
         // Generate a pool of tags, one tag per worker.
         let tags = (0..N_WORKERS)
-            .map(|_| {
-                let mut tag = [0; TAG_LENGTH];
-                rng.fill_bytes(&mut tag);
-                tag
-            })
+            .map(|_| Tag::random(&mut rng))
             .collect::<Vec<_>>();
 
         let handles = (0..N_WORKERS)
@@ -336,7 +326,7 @@ mod tests {
                 let tags = tags.clone();
                 spawn(move || -> Result<(), Error<InMemoryDbError>> {
                     let vera = Vera::<VALUE_LENGTH, InMemoryDb, Item>::setup(&*seed, db).unwrap();
-                    concurrent_worker_upserter(&vera, tags.as_slice(), i as u8)
+                    concurrent_worker_upserter(&vera, &tags, i as u8)
                 })
             })
             .collect::<Vec<_>>();
@@ -346,9 +336,8 @@ mod tests {
         }
 
         let vera = Vera::<VALUE_LENGTH, InMemoryDb, Item>::setup(&*seed, db).unwrap();
-
-        let dx = block_on(vera.dump()).unwrap();
-        let stored_ids = dx.values().copied().collect::<HashSet<Item>>();
+        let stored_dx = block_on(vera.dump()).unwrap();
+        let stored_ids = stored_dx.values().copied().collect::<HashSet<Item>>();
         assert_eq!(
             stored_ids,
             (0..N_WORKERS as u8)
