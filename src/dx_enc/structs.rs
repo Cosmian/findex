@@ -6,62 +6,10 @@ use std::{
 };
 
 use base64::engine::{general_purpose::STANDARD, Engine};
-use cosmian_crypto_core::reexport::rand_core::CryptoRngCore;
 
 use crate::CoreError;
 
-/// Byte length of Vera's tags.
-const TAG_LENGTH: usize = 16;
-
-#[derive(Clone, Copy, Default, Debug, Hash, PartialEq, Eq)]
-pub struct Tag([u8; TAG_LENGTH]);
-
-impl Tag {
-    pub const LENGTH: usize = TAG_LENGTH;
-
-    pub fn random(rng: &mut impl CryptoRngCore) -> Self {
-        let mut tag = Self::default();
-        rng.fill_bytes(&mut tag);
-        tag
-    }
-}
-
-impl AsRef<[u8]> for Tag {
-    fn as_ref(&self) -> &[u8] {
-        &self
-    }
-}
-impl Deref for Tag {
-    type Target = [u8];
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-impl DerefMut for Tag {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
-    }
-}
-
-impl Display for Tag {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", STANDARD.encode(self))
-    }
-}
-
-impl From<[u8; Tag::LENGTH]> for Tag {
-    fn from(bytes: [u8; Tag::LENGTH]) -> Self {
-        Self(bytes)
-    }
-}
-
-impl From<Tag> for [u8; Tag::LENGTH] {
-    fn from(tag: Tag) -> Self {
-        tag.0
-    }
-}
+impl_byte_array!(Tag, 16, "Tag");
 
 impl TryFrom<&[u8]> for Tag {
     type Error = CoreError;
@@ -82,29 +30,29 @@ impl TryFrom<&[u8]> for Tag {
 // This type is needed to add automatic logging (we need all argument types to
 // implement `Display`).
 #[derive(Eq, PartialEq)]
-pub struct TagSet<Tag: Hash + PartialEq + Eq>(HashSet<Tag>);
+pub struct Set<Item: Hash + PartialEq + Eq>(HashSet<Item>);
 
-impl<Tag: Hash + PartialEq + Eq> Default for TagSet<Tag> {
+impl<Item: Hash + PartialEq + Eq> Default for Set<Item> {
     fn default() -> Self {
         Self(HashSet::new())
     }
 }
 
-impl<Tag: Hash + PartialEq + Eq> Deref for TagSet<Tag> {
-    type Target = HashSet<Tag>;
+impl<Item: Hash + PartialEq + Eq> Deref for Set<Item> {
+    type Target = HashSet<Item>;
 
     fn deref(&self) -> &Self::Target {
         &self.0
     }
 }
 
-impl<Tag: Hash + PartialEq + Eq> DerefMut for TagSet<Tag> {
+impl<Item: Hash + PartialEq + Eq> DerefMut for Set<Item> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.0
     }
 }
 
-impl<Tag: Hash + PartialEq + Eq + Display> Display for TagSet<Tag> {
+impl<Item: Hash + PartialEq + Eq + Display> Display for Set<Item> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         writeln!(f, "[")?;
         for tag in &self.0 {
@@ -114,40 +62,40 @@ impl<Tag: Hash + PartialEq + Eq + Display> Display for TagSet<Tag> {
     }
 }
 
-impl<Tag: Hash + PartialEq + Eq + Debug> Debug for TagSet<Tag> {
+impl<Item: Hash + PartialEq + Eq + Debug> Debug for Set<Item> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         writeln!(f, "{:?}", self.0)
     }
 }
 
-impl<Tag: Hash + PartialEq + Eq> FromIterator<Tag> for TagSet<Tag> {
-    fn from_iter<T: IntoIterator<Item = Tag>>(iter: T) -> Self {
+impl<Item: Hash + PartialEq + Eq> FromIterator<Item> for Set<Item> {
+    fn from_iter<T: IntoIterator<Item = Item>>(iter: T) -> Self {
         Self(HashSet::from_iter(iter))
     }
 }
 
-impl<Tag: Hash + PartialEq + Eq> IntoIterator for TagSet<Tag> {
+impl<Item: Hash + PartialEq + Eq> IntoIterator for Set<Item> {
     type IntoIter = <<Self as Deref>::Target as IntoIterator>::IntoIter;
-    type Item = Tag;
+    type Item = Item;
 
     fn into_iter(self) -> Self::IntoIter {
         self.0.into_iter()
     }
 }
 
-impl<Tag: Hash + PartialEq + Eq> From<HashSet<Tag>> for TagSet<Tag> {
-    fn from(value: HashSet<Tag>) -> Self {
+impl<Item: Hash + PartialEq + Eq> From<HashSet<Item>> for Set<Item> {
+    fn from(value: HashSet<Item>) -> Self {
         Self(value)
     }
 }
 
-impl<Tag: Hash + PartialEq + Eq> From<TagSet<Tag>> for HashSet<Tag> {
-    fn from(value: TagSet<Tag>) -> Self {
+impl<Item: Hash + PartialEq + Eq> From<Set<Item>> for HashSet<Item> {
+    fn from(value: Set<Item>) -> Self {
         value.0
     }
 }
 
-impl<Tag: Hash + PartialEq + Eq + Clone> Clone for TagSet<Tag> {
+impl<Item: Hash + PartialEq + Eq + Clone> Clone for Set<Item> {
     fn clone(&self) -> Self {
         Self(self.0.clone())
     }
@@ -155,60 +103,9 @@ impl<Tag: Hash + PartialEq + Eq + Clone> Clone for TagSet<Tag> {
 
 /// Size of the token used. It is 256 bits in order to allow more than 80 bits
 /// of post-quantum resistance.
-pub const TOKEN_LENGTH: usize = 32;
+const TOKEN_LENGTH: usize = 32;
 
-pub type Token = [u8; TOKEN_LENGTH];
-
-// This type is needed to add automatic logging (we need all argument types to
-// implement `Display`).
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct TokenSet(pub HashSet<Token>);
-
-impl Deref for TokenSet {
-    type Target = HashSet<Token>;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-impl Display for TokenSet {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        writeln!(f, "[")?;
-        for token in &self.0 {
-            writeln!(f, "  {},", STANDARD.encode(token))?;
-        }
-        write!(f, "]")
-    }
-}
-
-impl FromIterator<Token> for TokenSet {
-    fn from_iter<T: IntoIterator<Item = Token>>(iter: T) -> Self {
-        Self(HashSet::from_iter(iter))
-    }
-}
-
-impl IntoIterator for TokenSet {
-    type IntoIter = <<Self as Deref>::Target as IntoIterator>::IntoIter;
-    type Item = Token;
-
-    fn into_iter(self) -> Self::IntoIter {
-        self.0.into_iter()
-    }
-}
-
-impl From<HashSet<Token>> for TokenSet {
-    fn from(value: HashSet<Token>) -> Self {
-        Self(value)
-    }
-}
-
-impl From<TokenSet> for HashSet<Token> {
-    fn from(value: TokenSet) -> Self {
-        value.0
-    }
-}
-
+impl_byte_array!(Token, TOKEN_LENGTH, "Token");
 #[derive(PartialEq)]
 pub struct Dx<const VALUE_LENGTH: usize, Tag: Hash + PartialEq + Eq, Item>(HashMap<Tag, Item>);
 

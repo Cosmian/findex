@@ -8,6 +8,8 @@
 //! The `Index` traits is not a cryptographic one. It is used to simplify the interface and to hide
 //! the details of the cryptographic implementation when it is possible.
 
+#![allow(async_fn_in_trait)]
+
 // Macro declarations should come first.
 #[macro_use]
 pub mod macros;
@@ -18,20 +20,21 @@ mod error;
 // mod gx_enc;
 // mod index;
 mod mm_enc;
-mod parameters;
 
-#[cfg(any(test, feature = "in_memory"))]
-pub use db::tests::{InMemoryDb, InMemoryDbError};
+#[cfg(feature = "in_memory")]
+pub use db::in_memory_db::{InMemoryDb, InMemoryDbError};
 pub use db::DbInterface;
-pub use dx_enc::{CsRhDxEnc, DynRhDxEnc, Vera};
+pub use dx_enc::{CsRhDxEnc, DynRhDxEnc, Token, Vera};
 pub use error::{CoreError, DbInterfaceErrorTrait, Error};
+pub use mm_enc::{CsRhMmEnc, Findex};
 
-// pub use mm_enc::{CsRhMmEnc, Findex};
 // pub use index::{
 //     Data, Findex, Index, IndexedValueToKeywordsMap, Keyword, KeywordToDataMap, Keywords, Label,
 //     UserKey,
 // };
-pub use parameters::*;
+
+/// Minimal seed length preserving 128 bits of post-quantum security.
+pub const MIN_SEED_LENGTH: usize = 32;
 
 // #[cfg(test)]
 // mod example {

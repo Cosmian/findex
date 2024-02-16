@@ -1,13 +1,12 @@
 use std::marker::PhantomData;
 
-use async_trait::async_trait;
 use cosmian_crypto_core::{kdf256, Secret};
 
 use crate::{CoreError, DbInterface, Error, MIN_SEED_LENGTH};
 
 use super::{
     primitives::{Dem, Kmac},
-    CsRhDxEnc, Dx, DynRhDxEnc, Edx, Tag, TagSet, Token,
+    CsRhDxEnc, Dx, DynRhDxEnc, Edx, Set, Tag, Token,
 };
 
 /// Vera is a CS-RH-DX-Enc scheme: it interacts with a DB to securely store a
@@ -37,7 +36,7 @@ impl<
 
     /// Returns the token associated to the given tag.
     fn tokenize(&self, tag: &Tag) -> Token {
-        self.kmac.hash(tag, Self::TOKEN_INFO)
+        self.kmac.hash(tag, Self::TOKEN_INFO).into()
     }
 
     /// Returns the EDX corresponding to the given DX.
@@ -52,7 +51,6 @@ impl<
         dx.into_iter()
             .map(|(tag, val)| {
                 let tok = self.tokenize(&tag);
-                // TODO: zeroize DX here.
                 let ctx = self
                     .dem
                     .encrypt(&[&tag, val.into().as_slice()].concat(), &tok)?;
@@ -93,7 +91,6 @@ impl<
     }
 }
 
-#[async_trait(?Send)]
 impl<
         const VALUE_LENGTH: usize,
         DbConnection: DbInterface + Clone,
@@ -118,13 +115,9 @@ impl<
         })
     }
 
-    fn rekey(&self, seed: &[u8]) -> Result<Self, Self::Error> {
-        Self::setup(seed, self.connection.clone())
-    }
-
     async fn get(
         &self,
-        tags: TagSet<Self::Tag>,
+        tags: Set<Self::Tag>,
     ) -> Result<Dx<VALUE_LENGTH, Self::Tag, Self::Item>, Self::Error> {
         let tokens = tags.iter().map(|tag| self.tokenize(tag)).collect();
         let edx = self.connection.fetch(tokens).await?;
@@ -140,16 +133,23 @@ impl<
         self.resolve(&edx).map_err(Self::Error::from)
     }
 
-    async fn delete(&self, tags: TagSet<Self::Tag>) -> Result<(), Self::Error> {
+    async fn delete(&self, tags: Set<Self::Tag>) -> Result<(), Self::Error> {
         let tokens = tags.iter().map(|tag| self.tokenize(tag)).collect();
         self.connection
             .delete(tokens)
             .await
             .map_err(Self::Error::from)
     }
+
+    async fn rebuild(&self, seed: &[u8], connection: DbConnection) -> Result<Self, Self::Error> {
+        let edx = self.connection.dump().await?;
+        let dx = self.resolve(&edx)?;
+        let new_scheme = Self::setup(seed, connection)?;
+	<Self as DynRhDxEnc<VALUE_LENGTH>>::insert(&new_scheme, dx).await?;
+	Ok(new_scheme)
+    }
 }
 
-#[async_trait(?Send)]
 impl<
         const VALUE_LENGTH: usize,
         DbConnection: DbInterface + Clone,
@@ -176,37 +176,9 @@ impl<
         let cur_dx = self.resolve(&cur_edx)?;
         Ok((cur_dx, cur_edx))
     }
-
-    async fn rebuild(mut self, _seed: &[u8]) -> Result<Self, Self::Error> {
-        todo!()
-        // let old_edx = self.connection.dump().await?;
-        // let dx = self.resolve(&old_edx)?;
-
-        // self = <Vera<VALUE_LENGTH, DbConnection, Item> as DynRhDxEnc<VALUE_LENGTH>>::setup(
-        //     seed,
-        //     self.connection,
-        // )?;
-
-        // let new_edx = self.prepare(dx)?;
-        // let res = self.connection.insert(new_edx).await?;
-        // if res.is_empty() {
-        //     self.connection
-        //         .delete(old_edx.keys().cloned().collect())
-        //         .await?;
-        // } else {
-        //     let tokens = dx.keys().map(|tag| self.tokenize(tag)).collect();
-        //     self.connection.delete(tokens).await?;
-        // }
-        // Ok(self)
-    }
-
-    async fn dump(&self) -> Result<Dx<VALUE_LENGTH, Self::Tag, Self::Item>, Self::Error> {
-        let edx = self.connection.dump().await?;
-        self.resolve(&edx).map_err(Self::Error::from)
-    }
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "in_memory"))]
 mod tests {
     use std::{
         collections::{HashMap, HashSet},
@@ -226,7 +198,7 @@ mod tests {
     type Item = [u8; VALUE_LENGTH];
 
     /// Tries inserting `N_WORKERS` data using random tokens. Then verifies the
-    /// inserted, dumped and fetched DX are identical.
+    /// inserted and fetched DX are identical.
     #[test]
     fn insert_then_dump_and_fetch() {
         let mut rng = CsRng::from_entropy();
@@ -254,9 +226,6 @@ mod tests {
             })
             .collect::<Result<HashMap<_, _>, _>>()
             .unwrap();
-
-        let dumped_dx = block_on(vera.dump()).unwrap();
-        assert_eq!(inserted_dx, *dumped_dx);
 
         let fetched_dx = block_on(vera.get(inserted_dx.keys().copied().collect())).unwrap();
         assert_eq!(inserted_dx, *fetched_dx);
@@ -336,7 +305,7 @@ mod tests {
         }
 
         let vera = Vera::<VALUE_LENGTH, InMemoryDb, Item>::setup(&*seed, db).unwrap();
-        let stored_dx = block_on(vera.dump()).unwrap();
+        let stored_dx = block_on(vera.get(tags.into_iter().collect())).unwrap();
         let stored_ids = stored_dx.values().copied().collect::<HashSet<Item>>();
         assert_eq!(
             stored_ids,

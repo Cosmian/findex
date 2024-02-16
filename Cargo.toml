@@ -22,11 +22,10 @@ path = "src/lib.rs"
 
 [features]
 in_memory = ["cosmian_crypto_core/ser"]
+# Used to avoid compiling broken tests.
+all_tests = ["in_memory"]
 
 [dependencies]
-# Once available in stable Rust (presumably 1.74), use std async fn in trait
-# <https://rust-lang.github.io/rfcs/3185-static-async-fn-in-trait.html>
-async-trait = "0.1.74"
 base64 = "0.21.5"
 cosmian_crypto_core = { path = "../crypto_core", default-features = false, features = [
   "aes",
@@ -48,20 +47,20 @@ rand = "0.8.5"
 [[bench]]
 harness = false
 name = "benches"
-required-features = ["in_memory"]
+required-features = ["all_tests"]
 
 [[test]]
 name = "test_in_memory"
-required-features = ["in_memory"]
+required-features = ["all_tests"]
 
 [[test]]
 name = "non_regression"
-required-features = ["in_memory"]
+required-features = ["all_tests"]
 
 [[example]]
 name = "search"
-required-features = ["in_memory"]
+required-features = ["all_tests"]
 
 [[example]]
 name = "upsert"
-required-features = ["in_memory"]
+required-features = ["all_tests"]

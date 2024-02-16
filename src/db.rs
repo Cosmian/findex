@@ -1,20 +1,15 @@
-use async_trait::async_trait;
-
 use crate::{
-    dx_enc::{Edx, TokenSet},
+    dx_enc::{Edx, Set, Token},
     DbInterfaceErrorTrait,
 };
 
-// TODO: add `connect`/`setup` to the DX interface. First check if all existing
-// interfaces allow it.
-#[async_trait(?Send)]
 pub trait DbInterface {
     /// Type of error returned by the EDX.
     type Error: DbInterfaceErrorTrait;
 
     /// Queries an Edx for the given tokens. Only returns a value for the tokens
     /// that are present in the store.
-    async fn fetch(&self, tokens: TokenSet) -> Result<Edx, Self::Error>;
+    async fn fetch(&self, tokens: Set<Token>) -> Result<Edx, Self::Error>;
 
     /// Upserts the given values into the database for the given tokens.
     ///
@@ -47,36 +42,29 @@ pub trait DbInterface {
     async fn insert(&self, values: Edx) -> Result<Edx, Self::Error>;
 
     /// Deletes the lines associated to the given tokens from the EDX.
-    async fn delete(&self, tokens: TokenSet) -> Result<(), Self::Error>;
+    async fn delete(&self, tokens: Set<Token>) -> Result<(), Self::Error>;
 
     /// Returns all data stored through this interface.
     async fn dump(&self) -> Result<Edx, Self::Error>;
 }
 
-#[cfg(any(test, feature = "in_memory"))]
-pub mod tests {
+#[cfg(feature = "in_memory")]
+pub mod in_memory_db {
     use std::{
-        collections::{HashMap, HashSet},
+        collections::HashMap,
         fmt::{Debug, Display},
         ops::Deref,
         sync::{Arc, Mutex},
-        thread::spawn,
     };
 
-    use async_trait::async_trait;
-    #[cfg(feature = "in_memory")]
-    use cosmian_crypto_core::{bytes_ser_de::Serializable, Nonce};
-    use cosmian_crypto_core::{CryptoCoreError, CsRng};
-    use futures::executor::block_on;
-    use rand::{RngCore, SeedableRng};
+    use cosmian_crypto_core::bytes_ser_de::Serializable;
+    use cosmian_crypto_core::CryptoCoreError;
 
-    use super::{DbInterface, Edx, TokenSet};
-    #[cfg(feature = "in_memory")]
-    use crate::parameters::{MAC_LENGTH, NONCE_LENGTH};
-    use crate::{dx_enc::Token, error::DbInterfaceErrorTrait};
+    use super::*;
+    use crate::Token;
 
     #[derive(Debug)]
-    pub struct InMemoryDbError(String);
+    pub struct InMemoryDbError(pub String);
 
     impl From<CryptoCoreError> for InMemoryDbError {
         fn from(value: CryptoCoreError) -> Self {
@@ -139,7 +127,6 @@ pub mod tests {
         }
     }
 
-    #[cfg(feature = "in_memory")]
     impl Serializable for InMemoryDb {
         type Error = InMemoryDbError;
 
@@ -171,20 +158,19 @@ pub mod tests {
             let n = de.read_leb128_u64()? as usize;
             let mut table = HashMap::with_capacity(n);
             for _ in 0..n {
-                let k = de.read_array::<TOKEN_LENGTH>()?;
+                let k = de.read_array::<{ Token::LENGTH }>()?;
                 let v = de.read_vec()?;
-                table.insert(k, v);
+                table.insert(k.into(), v);
             }
 
             Ok(Self(Arc::new(Mutex::new(Edx::from(table)))))
         }
     }
 
-    #[async_trait(?Send)]
     impl DbInterface for InMemoryDb {
         type Error = InMemoryDbError;
 
-        async fn delete(&self, items: TokenSet) -> Result<(), Self::Error> {
+        async fn delete(&self, items: Set<Token>) -> Result<(), Self::Error> {
             let edx = &mut self.lock().expect("could not lock mutex");
             for token in &*items {
                 edx.remove(token);
@@ -196,7 +182,7 @@ pub mod tests {
             Ok(self.lock().expect("could not lock table").clone())
         }
 
-        async fn fetch(&self, tokens: TokenSet) -> Result<Edx, InMemoryDbError> {
+        async fn fetch(&self, tokens: Set<Token>) -> Result<Edx, InMemoryDbError> {
             Ok(tokens
                 .into_iter()
                 .filter_map(|token| {
@@ -255,83 +241,104 @@ pub mod tests {
             Ok(Edx::from(res))
         }
     }
+    #[cfg(test)]
+    mod tests {
+        use std::{
+            collections::{HashMap, HashSet},
+            thread::spawn,
+        };
 
-    const N_WORKERS: usize = 100;
+        use cosmian_crypto_core::{
+            reexport::rand_core::{RngCore, SeedableRng},
+            CsRng,
+        };
+        use futures::executor::block_on;
 
-    /// Tries inserting `N_WORKERS` data using random tokens. Then verifies the
-    /// inserted, dumped and fetched DX are identical.
-    #[test]
-    fn insert_then_dump_and_fetch() {
-        let mut rng = CsRng::from_entropy();
-        let db = InMemoryDb::default();
-        let inserted_dx = (0..N_WORKERS)
-            .map(|i| {
-                let mut tok = Token::default();
-                rng.fill_bytes(&mut tok);
-                let data = vec![i as u8];
-                let rejected_items =
-                    block_on(db.insert(Edx::from(HashMap::from_iter([(tok, data.clone())]))))?;
-                if rejected_items.is_empty() {
-                    Ok((tok, data))
-                } else {
-                    Err(InMemoryDbError("some items were rejected".to_string()))
-                }
-            })
-            .collect::<Result<HashMap<_, _>, _>>()
-            .unwrap();
+        use crate::{
+            db::in_memory_db::{InMemoryDb, InMemoryDbError},
+            Token,
+        };
 
-        let dumped_dx = block_on(db.dump()).unwrap();
-        assert_eq!(inserted_dx, *dumped_dx);
+        use super::*;
 
-        let fetched_dx = block_on(db.fetch(inserted_dx.keys().copied().collect())).unwrap();
-        assert_eq!(inserted_dx, *fetched_dx);
-    }
+        const N_WORKERS: usize = 100;
 
-    /// Tries concurrently upserting `N_WORKERS` IDs on the same token. Then
-    /// verifies each one have been successfully upserted.
-    #[test]
-    fn concurrent_upsert() {
-        let db = InMemoryDb::default();
-        let mut rng = CsRng::from_entropy();
-        let mut tok = Token::default();
-        rng.fill_bytes(&mut tok);
-
-        let handles = (0..N_WORKERS)
-            .map(|i| {
-                let db = db.clone();
-                spawn(move || -> Result<_, <InMemoryDb as DbInterface>::Error> {
+        /// Tries inserting `N_WORKERS` data using random tokens. Then verifies the
+        /// inserted, dumped and fetched DX are identical.
+        #[test]
+        fn insert_then_dump_and_fetch() {
+            let mut rng = CsRng::from_entropy();
+            let db = InMemoryDb::default();
+            let inserted_dx = (0..N_WORKERS)
+                .map(|i| {
+                    let mut tok = Token::default();
+                    rng.fill_bytes(&mut tok);
                     let data = vec![i as u8];
-                    let mut rejected_items =
+                    let rejected_items =
                         block_on(db.insert(Edx::from(HashMap::from_iter([(tok, data.clone())]))))?;
-                    while !rejected_items.is_empty() {
-                        let mut new_data = rejected_items
-                            .get(&tok)
-                            .ok_or_else(|| {
-                                InMemoryDbError(format!(
-                                    "thread {i} did not retrieve token current value"
-                                ))
-                            })?
-                            .clone();
-                        new_data.extend(&data);
-                        rejected_items = block_on(db.upsert(
-                            rejected_items,
-                            Edx::from(HashMap::from_iter([(tok, new_data)])),
-                        ))?;
+                    if rejected_items.is_empty() {
+                        Ok((tok, data))
+                    } else {
+                        Err(InMemoryDbError("some items were rejected".to_string()))
                     }
-                    Ok(())
                 })
-            })
-            .collect::<Vec<_>>();
+                .collect::<Result<HashMap<_, _>, _>>()
+                .unwrap();
 
-        for h in handles {
-            h.join().unwrap().unwrap();
+            let dumped_dx = block_on(db.dump()).unwrap();
+            assert_eq!(inserted_dx, *dumped_dx);
+
+            let fetched_dx = block_on(db.fetch(inserted_dx.keys().copied().collect())).unwrap();
+            assert_eq!(inserted_dx, *fetched_dx);
         }
 
-        let dx = block_on(db.dump()).unwrap();
-        assert_eq!(dx.len(), 1);
+        /// Tries concurrently upserting `N_WORKERS` IDs on the same token. Then
+        /// verifies each one have been successfully upserted.
+        #[test]
+        fn concurrent_upsert() {
+            let db = InMemoryDb::default();
+            let mut rng = CsRng::from_entropy();
+            let mut tok = Token::default();
+            rng.fill_bytes(&mut tok);
 
-        let stored_data = dx.get(&tok).unwrap();
-        let stored_ids = stored_data.iter().copied().collect::<HashSet<_>>();
-        assert_eq!(stored_ids, (0..N_WORKERS as u8).collect::<HashSet<u8>>());
+            let handles = (0..N_WORKERS)
+                .map(|i| {
+                    let db = db.clone();
+                    spawn(move || -> Result<_, <InMemoryDb as DbInterface>::Error> {
+                        let data = vec![i as u8];
+                        let mut rejected_items = block_on(
+                            db.insert(Edx::from(HashMap::from_iter([(tok, data.clone())]))),
+                        )?;
+                        while !rejected_items.is_empty() {
+                            let mut new_data = rejected_items
+                                .get(&tok)
+                                .ok_or_else(|| {
+                                    InMemoryDbError(format!(
+                                        "thread {i} did not retrieve token current value"
+                                    ))
+                                })?
+                                .clone();
+                            new_data.extend(&data);
+                            rejected_items = block_on(db.upsert(
+                                rejected_items,
+                                Edx::from(HashMap::from_iter([(tok, new_data)])),
+                            ))?;
+                        }
+                        Ok(())
+                    })
+                })
+                .collect::<Vec<_>>();
+
+            for h in handles {
+                h.join().unwrap().unwrap();
+            }
+
+            let dx = block_on(db.dump()).unwrap();
+            assert_eq!(dx.len(), 1);
+
+            let stored_data = dx.get(&tok).unwrap();
+            let stored_ids = stored_data.iter().copied().collect::<HashSet<_>>();
+            assert_eq!(stored_ids, (0..N_WORKERS as u8).collect::<HashSet<u8>>());
+        }
     }
 }

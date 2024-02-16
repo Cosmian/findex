@@ -6,20 +6,23 @@ use std::{
     ops::DerefMut,
 };
 
-use async_trait::async_trait;
 use base64::{engine::general_purpose::STANDARD, Engine};
 use cosmian_crypto_core::{kdf256, Secret};
 
 use crate::{
-    dx_enc::{CsRhDxEnc, Dx, DynRhDxEnc, TagSet},
-    mm_enc::{structs::Metadata, CsRhMmEnc, LINK_LENGTH, METADATA_LENGTH},
-    CoreError, DbInterface, BLOCK_LENGTH, LINE_WIDTH, MIN_SEED_LENGTH,
+    dx_enc::{CsRhDxEnc, Dx, DynRhDxEnc, Set},
+    mm_enc::{structs::Metadata, CsRhMmEnc, METADATA_LENGTH},
+    CoreError, MIN_SEED_LENGTH,
 };
 
 use super::{
     structs::{Block, Flag, Link, Mm, Operation},
     Error,
 };
+
+pub const BLOCK_LENGTH: usize = 16;
+pub const LINE_WIDTH: usize = 5;
+pub const LINK_LENGTH: usize = 1 + LINE_WIDTH * (1 + BLOCK_LENGTH);
 
 const INFO: &[u8] = b"Findex key derivation info.";
 
@@ -150,7 +153,6 @@ pub struct Findex<
 }
 
 impl<
-        DbConnection: DbInterface + Clone,
         const TAG_LENGTH: usize,
         Tag: Hash
             + PartialEq
@@ -160,73 +162,10 @@ impl<
             + AsRef<[u8]>
             + Clone
             + Display,
-        EntryDxEnc: CsRhDxEnc<TAG_LENGTH, METADATA_LENGTH, Tag, DbConnection = DbConnection, Item = Metadata>,
-        ChainDxEnc: DynRhDxEnc<LINK_LENGTH, DbConnection = EntryDxEnc::DbConnection, Tag = Tag, Item = Link>,
+        EntryDxEnc: CsRhDxEnc<TAG_LENGTH, METADATA_LENGTH, Tag, Item = Metadata>,
+        ChainDxEnc: DynRhDxEnc<LINK_LENGTH, Tag = Tag, Item = Link>,
     > Findex<TAG_LENGTH, Tag, EntryDxEnc, ChainDxEnc>
 {
-    // This function is needed to create an error-unwrapping sub-scope for the
-    // rebuild operation. I could not find a better way to do it.
-    async fn rebuild_next(
-        &self,
-        entry_dx_enc: &EntryDxEnc,
-        chain_dx_enc: &ChainDxEnc,
-        entry_dx: Dx<METADATA_LENGTH, Tag, Metadata>,
-    ) -> Result<(), Error<EntryDxEnc::Error, ChainDxEnc::Error>> {
-        let chain_tags = entry_dx
-            .iter()
-            .flat_map(|(tag, value)| value.unroll(tag.as_ref()))
-            .collect::<TagSet<ChainDxEnc::Tag>>();
-
-        let conflicting_entries =
-            <EntryDxEnc as DynRhDxEnc<METADATA_LENGTH>>::insert(&entry_dx_enc, entry_dx)
-                .await
-                .map_err(Error::Entry)?;
-
-        if !conflicting_entries.is_empty() {
-            return Err(Error::Core(CoreError::Crypto(
-                "conflicting entries after rekeying: maybe try with a new seed".to_string(),
-            )));
-        }
-
-        let chain_dx = self
-            .chain
-            .get(chain_tags.clone())
-            .await
-            .map_err(Error::Chain)?;
-
-        // From this point, an error means the new EMM cannot be created but the
-        // new Chain EDX may have been partially inserted. It must be deleted
-        // before returning the error.
-        let res = self.rebuild_next_next(chain_dx_enc, chain_dx).await;
-        if let Err(err) = res {
-            chain_dx_enc.delete(chain_tags).await.map_err(|e| {
-                CoreError::Crypto(format!(
-                    "while backtracking after error {err}, delete Chain tokens with error {e}"
-                ))
-            })?;
-            Err(err)
-        } else {
-            Ok(())
-        }
-    }
-
-    // This function is needed to create an error-unwrapping sub-scope for the
-    // rebuild-next operation. I could not find a better way to do it.
-    async fn rebuild_next_next(
-        &self,
-        chain_dx_enc: &ChainDxEnc,
-        chain_dx: Dx<LINK_LENGTH, Tag, Link>,
-    ) -> Result<(), Error<EntryDxEnc::Error, ChainDxEnc::Error>> {
-        let conflicting_entries = chain_dx_enc.insert(chain_dx).await.map_err(Error::Chain)?;
-        if !conflicting_entries.is_empty() {
-            Err(Error::Core(CoreError::Crypto(
-                "conflicting links after rekeying: maybe try with a new seed".to_string(),
-            )))
-        } else {
-            Ok(())
-        }
-    }
-
     /// Commits the given chain modifications into the Entry Table.
     ///
     /// Returns the chains to insert in the Chain Table.
@@ -330,8 +269,8 @@ impl<
         &self,
         metadata: &Dx<METADATA_LENGTH, Tag, Metadata>,
         deletions: Mm<Tag, Link>,
-    ) -> Result<TagSet<Tag>, Error<EntryDxEnc::Error, ChainDxEnc::Error>> {
-        let mut deleted_chain_tags = TagSet::<Tag>::default();
+    ) -> Result<Set<Tag>, Error<EntryDxEnc::Error, ChainDxEnc::Error>> {
+        let mut deleted_chain_tags = Set::<Tag>::default();
         for (entry_tag, new_links) in deletions {
             let n_links = <u32>::try_from(new_links.len())
                 .map_err(|_| Error::Core(CoreError::Conversion("chain overflow".to_string())))?;
@@ -394,7 +333,6 @@ impl<
     }
 }
 
-#[async_trait(?Send)]
 impl<
         const TAG_LENGTH: usize,
         Tag: Hash
@@ -405,12 +343,11 @@ impl<
             + AsRef<[u8]>
             + Clone
             + Display,
-        DbConnection: DbInterface + Clone,
-        EntryDxEnc: CsRhDxEnc<TAG_LENGTH, METADATA_LENGTH, Tag, DbConnection = DbConnection, Item = Metadata>,
-        ChainDxEnc: DynRhDxEnc<LINK_LENGTH, DbConnection = EntryDxEnc::DbConnection, Tag = Tag, Item = Link>,
+        EntryDxEnc: CsRhDxEnc<TAG_LENGTH, METADATA_LENGTH, Tag, Item = Metadata>,
+        ChainDxEnc: DynRhDxEnc<LINK_LENGTH, Tag = Tag, Item = Link>,
     > CsRhMmEnc for Findex<TAG_LENGTH, Tag, EntryDxEnc, ChainDxEnc>
 {
-    type DbConnection = EntryDxEnc::DbConnection;
+    type DbConnection = (EntryDxEnc::DbConnection, ChainDxEnc::DbConnection);
     type Error = Error<EntryDxEnc::Error, ChainDxEnc::Error>;
     type Tag = Tag;
     type Item = Vec<u8>;
@@ -418,13 +355,13 @@ impl<
     fn setup(seed: &[u8], connection: Self::DbConnection) -> Result<Self, Self::Error> {
         let mut findex_seed = Secret::<MIN_SEED_LENGTH>::default();
         kdf256!(&mut findex_seed, seed, INFO);
-        let entry = EntryDxEnc::setup(seed, connection.clone()).map_err(Self::Error::Entry)?;
-        let chain = ChainDxEnc::setup(seed, connection).map_err(Self::Error::Chain)?;
+        let entry = EntryDxEnc::setup(seed, connection.0).map_err(Self::Error::Entry)?;
+        let chain = ChainDxEnc::setup(seed, connection.1).map_err(Self::Error::Chain)?;
         let tag = PhantomData::default();
         Ok(Self { entry, chain, tag })
     }
 
-    async fn search(&self, tags: TagSet<Tag>) -> Result<Mm<Self::Tag, Self::Item>, Self::Error> {
+    async fn search(&self, tags: Set<Tag>) -> Result<Mm<Self::Tag, Self::Item>, Self::Error> {
         let metadata = self.entry.get(tags).await.map_err(Self::Error::Entry)?;
         let chain_tags = metadata
             .into_iter()
@@ -481,42 +418,29 @@ impl<
         todo!()
     }
 
-    async fn rebuild(mut self, seed: &[u8]) -> Result<Self, Self::Error> {
+    async fn rebuild(
+        &self,
+        seed: &[u8],
+        connection: Self::DbConnection,
+    ) -> Result<Self, Self::Error> {
         let mut findex_seed = Secret::<MIN_SEED_LENGTH>::default();
         kdf256!(&mut findex_seed, seed, INFO);
-        let new_entry_dx_enc = self.entry.rekey(&findex_seed).map_err(Self::Error::Entry)?;
-        let new_chain_dx_enc = self.chain.rekey(&findex_seed).map_err(Self::Error::Chain)?;
-
-        let entry_dx = self.entry.dump().await.map_err(Self::Error::Entry)?;
-        let entry_tags = entry_dx
-            .keys()
-            .cloned()
-            .collect::<TagSet<EntryDxEnc::Tag>>();
-
-        // From this point, an error means the new EMM cannot be created but the
-        // new Entry EDX may have been partially inserted. It must be deleted
-        // before returning the error.
-        let res = self
-            .rebuild_next(&new_entry_dx_enc, &new_chain_dx_enc, entry_dx)
-            .await;
-        if let Err(err) = res {
-            new_entry_dx_enc.delete(entry_tags).await.map_err(|e| {
-                CoreError::Crypto(format!(
-                    "while backtracking after error {err}, delete Entry tokens with error {e}"
-                ))
-            })?;
-            Err(err)
-        } else {
-            Ok(Self {
-                entry: new_entry_dx_enc,
-                chain: new_chain_dx_enc,
-                tag: PhantomData::default(),
-            })
-        }
+        let entry = self
+            .entry
+            .rebuild(&*findex_seed, connection.0)
+            .await
+            .map_err(Self::Error::Entry)?;
+        let chain = self
+            .chain
+            .rebuild(&*findex_seed, connection.1)
+            .await
+            .map_err(Self::Error::Chain)?;
+        let tag = PhantomData::default();
+        Ok(Self { entry, chain, tag })
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "in_memory"))]
 mod tests {
 
     use std::{collections::HashMap, thread::spawn};
@@ -572,13 +496,14 @@ mod tests {
     fn insert_then_fetch() {
         let mut rng = CsRng::from_entropy();
         let seed = Secret::<32>::random(&mut rng);
-        let db = InMemoryDb::default();
+        let entry_db = InMemoryDb::default();
+        let chain_db = InMemoryDb::default();
         let findex = Findex::<
             { Tag::LENGTH },
             Tag,
             Vera<METADATA_LENGTH, InMemoryDb, Metadata>,
             Vera<LINK_LENGTH, InMemoryDb, Link>,
-        >::setup(&*seed, db)
+        >::setup(&*seed, (entry_db, chain_db))
         .unwrap();
 
         let inserted_mm = (0..N_WORKERS)
@@ -598,7 +523,7 @@ mod tests {
             .collect::<Mm<Tag, Vec<u8>>>();
 
         let fetched_mm =
-            block_on(findex.search(inserted_mm.keys().copied().collect::<TagSet<Tag>>())).unwrap();
+            block_on(findex.search(inserted_mm.keys().copied().collect::<Set<Tag>>())).unwrap();
         assert_eq!(inserted_mm, fetched_mm);
 
         // Now remove some entries, add some already existing
@@ -636,14 +561,14 @@ mod tests {
         }
 
         let fetched_mm =
-            block_on(findex.search(inserted_mm.keys().copied().collect::<TagSet<Tag>>())).unwrap();
+            block_on(findex.search(inserted_mm.keys().copied().collect::<Set<Tag>>())).unwrap();
         assert_eq!(inserted_mm, fetched_mm);
     }
 
     #[test]
     fn concurrent_additions() {
         let mut rng = CsRng::from_entropy();
-        let db = InMemoryDb::default();
+        let db = (InMemoryDb::default(), InMemoryDb::default());
         let seed = Secret::<32>::random(&mut rng);
 
         let tag = Tag::random(&mut rng);
@@ -681,7 +606,7 @@ mod tests {
         >::setup(&*seed, db)
         .unwrap();
 
-        let stored_mm = block_on(findex.search(TagSet::from_iter([tag.clone()]))).unwrap();
+        let stored_mm = block_on(findex.search(Set::from_iter([tag.clone()]))).unwrap();
         let stored_ids = stored_mm
             .get(&tag)
             .unwrap()
@@ -695,5 +620,42 @@ mod tests {
                 .map(|id| vec![id])
                 .collect::<HashSet<Vec<u8>>>()
         );
+    }
+
+    #[test]
+    fn test_rebuild() {
+        let mut rng = CsRng::from_entropy();
+        let seed = Secret::<32>::random(&mut rng);
+        let db = (InMemoryDb::default(), InMemoryDb::default());
+        let findex = Findex::<
+            { Tag::LENGTH },
+            Tag,
+            Vera<METADATA_LENGTH, InMemoryDb, Metadata>,
+            Vera<LINK_LENGTH, InMemoryDb, Link>,
+        >::setup(&*seed, db)
+        .unwrap();
+
+        let inserted_mm = (0..N_WORKERS)
+            .map(|i| {
+                let tag = Tag::random(&mut rng);
+                let data = (0..=i as u8).map(|j| vec![j]).collect::<Vec<_>>();
+                let mm = Mm::from(HashMap::from_iter([(tag, data.clone())]));
+                block_on(findex.insert(mm.clone()))?;
+                Ok((i, mm))
+            })
+            .collect::<Result<HashMap<_, _>, Error<_, _>>>()
+            .unwrap();
+
+        let inserted_mm = inserted_mm
+            .into_values()
+            .flat_map(|mm| mm.into_iter())
+            .collect::<Mm<Tag, Vec<u8>>>();
+
+        let seed = Secret::<32>::random(&mut rng);
+        let db = (InMemoryDb::default(), InMemoryDb::default());
+        let findex = block_on(findex.rebuild(&*seed, db)).unwrap();
+        let fetched_mm =
+            block_on(findex.search(inserted_mm.keys().copied().collect::<Set<Tag>>())).unwrap();
+        assert_eq!(inserted_mm, fetched_mm);
     }
 }

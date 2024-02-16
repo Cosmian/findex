@@ -1,5 +1,9 @@
-pub use core::ops::{Deref, DerefMut};
-
+pub use base64::engine::{general_purpose::STANDARD, Engine};
+pub use core::{
+    default::Default,
+    ops::{Deref, DerefMut},
+};
+pub use cosmian_crypto_core::reexport::rand_core::CryptoRngCore;
 pub use tiny_keccak::{self, Hasher, IntoXof, Kmac, KmacXof, Xof};
 
 /// Hashes the given bytes to the desired length using the KMAC algorithm and
@@ -24,61 +28,73 @@ macro_rules! kmac {
     };
 }
 
-// /// Implements the functionalities of a byte-vector.
-// ///
-// /// # Parameters
-// ///
-// /// - `type_name`   : name of the byte-vector type
-// macro_rules! impl_byte_vector {
-//     ($type_name:ty) => {
-//         impl AsRef<[u8]> for $type_name {
-//             fn as_ref(&self) -> &[u8] {
-//                 &self.0
-//             }
-//         }
+/// Implements the functionalities of a byte-array.
+///
+/// # Parameters
+///
+/// - `type_name`   : name of the byte-vector type
+macro_rules! impl_byte_array {
+    ($type_name:ident, $length:expr, $str_name:expr) => {
+        #[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
+        pub struct $type_name([u8; $length]);
 
-//         impl $crate::macros::Deref for $type_name {
-//             type Target = [u8];
+        impl $type_name {
+            pub const LENGTH: usize = $length;
 
-//             fn deref(&self) -> &Self::Target {
-//                 &self.0
-//             }
-//         }
+            pub fn random(rng: &mut impl $crate::macros::CryptoRngCore) -> Self {
+                let mut res = Self::default();
+                rng.fill_bytes(&mut res);
+                res
+            }
+        }
 
-//         impl $crate::macros::DerefMut for $type_name {
-//             fn deref_mut(&mut self) -> &mut <Self as $crate::macros::Deref>::Target {
-//                 &mut self.0
-//             }
-//         }
+        impl $crate::macros::Default for $type_name {
+            fn default() -> Self {
+                Self([0; $length])
+            }
+        }
 
-//         impl<'a> From<&'a [u8]> for $type_name {
-//             fn from(bytes: &'a [u8]) -> Self {
-//                 Self(bytes.to_vec())
-//             }
-//         }
+        impl AsRef<[u8]> for $type_name {
+            fn as_ref(&self) -> &[u8] {
+                &self.0
+            }
+        }
 
-//         impl From<Vec<u8>> for $type_name {
-//             fn from(bytes: Vec<u8>) -> Self {
-//                 Self(bytes)
-//             }
-//         }
+        impl $crate::macros::Deref for $type_name {
+            type Target = [u8];
 
-//         impl From<&str> for $type_name {
-//             fn from(bytes: &str) -> Self {
-//                 bytes.as_bytes().into()
-//             }
-//         }
+            fn deref(&self) -> &Self::Target {
+                &self.0
+            }
+        }
 
-//         impl From<$type_name> for Vec<u8> {
-//             fn from(var: $type_name) -> Self {
-//                 var.0
-//             }
-//         }
+        impl $crate::macros::DerefMut for $type_name {
+            fn deref_mut(&mut self) -> &mut <Self as $crate::macros::Deref>::Target {
+                &mut self.0
+            }
+        }
 
-//         impl std::fmt::Display for $type_name {
-//             fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-//                 write!(f, "{}", String::from_utf8_lossy(&self.0))
-//             }
-//         }
-//     };
-// }
+        impl From<[u8; $length]> for $type_name {
+            fn from(bytes: [u8; $length]) -> Self {
+                Self(bytes)
+            }
+        }
+
+        impl From<$type_name> for [u8; $length] {
+            fn from(var: $type_name) -> Self {
+                var.0
+            }
+        }
+
+        impl std::fmt::Display for $type_name {
+            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                write!(
+                    f,
+                    "{}({})",
+                    $str_name,
+                    $crate::macros::STANDARD.encode(self)
+                )
+            }
+        }
+    };
+}

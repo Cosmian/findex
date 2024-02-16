@@ -7,7 +7,9 @@ use std::{
     ops::{Deref, DerefMut},
 };
 
-use crate::{CoreError, BLOCK_LENGTH, LINE_WIDTH};
+use crate::CoreError;
+
+use super::findex::{BLOCK_LENGTH, LINE_WIDTH, LINK_LENGTH};
 
 pub struct Mm<Tag: Hash + PartialEq + Eq, Item>(HashMap<Tag, Vec<Item>>);
 
@@ -156,8 +158,6 @@ impl Display for Metadata {
         )
     }
 }
-
-pub const LINK_LENGTH: usize = 1 + LINE_WIDTH * (1 + BLOCK_LENGTH);
 
 pub type Block = [u8; BLOCK_LENGTH];
 
