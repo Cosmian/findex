@@ -140,12 +140,16 @@ pub mod tests {
     }
 
     #[cfg(feature = "in_memory")]
-    impl<const VALUE_LENGTH: usize> Serializable for InMemoryDb<VALUE_LENGTH> {
+    impl Serializable for InMemoryDb {
         type Error = InMemoryDbError;
 
         fn length(&self) -> usize {
-            (self.lock().expect("could not lock mutex").deref()).len()
-                * (Token::LENGTH + NONCE_LENGTH + MAC_LENGTH + VALUE_LENGTH)
+            self.lock()
+                .expect("could not lock mutex")
+                .deref()
+                .iter()
+                .map(|(k, v)| k.len() + v.len())
+                .sum()
         }
 
         fn write(
@@ -156,9 +160,7 @@ pub mod tests {
             let mut n = ser.write_leb128_u64(table.len() as u64)?;
             for (k, v) in table.iter() {
                 n += ser.write_array(k)?;
-                n += ser.write_array(&v.nonce.0)?;
-                n += ser.write_array(&v.ciphertext)?;
-                n += ser.write_array(&v.tag)?;
+                n += ser.write_vec(v)?;
             }
             Ok(n)
         }
@@ -169,20 +171,9 @@ pub mod tests {
             let n = de.read_leb128_u64()? as usize;
             let mut table = HashMap::with_capacity(n);
             for _ in 0..n {
-                let k = de.read_array::<{ Token::LENGTH }>()?;
-                // previous version used to write the size of the value.
-                let _ = de.read_leb128_u64();
-                let nonce = Nonce::from(de.read_array::<NONCE_LENGTH>()?);
-                let ciphertext = de.read_array::<VALUE_LENGTH>()?;
-                let tag = de.read_array::<MAC_LENGTH>()?;
-                table.insert(
-                    Token::from(k),
-                    EncryptedValue {
-                        ciphertext,
-                        tag,
-                        nonce,
-                    },
-                );
+                let k = de.read_array::<TOKEN_LENGTH>()?;
+                let v = de.read_vec()?;
+                table.insert(k, v);
             }
 
             Ok(Self(Arc::new(Mutex::new(Edx::from(table)))))
