@@ -231,18 +231,23 @@ mod tests {
         assert_eq!(inserted_dx, *fetched_dx);
     }
 
+    /// Implement a worker that upserts the given value for the first one of the
+    /// given tags.
+    ///
+    /// Upon success, if a value was already inserted for this tag, inserts this
+    /// value for the next tag using a recursive call.
     fn concurrent_worker_upserter(
         vera: &Vera<VALUE_LENGTH, InMemoryDb, Item>,
         tags: &[Tag],
-        id: u8,
+        value: u8,
     ) -> Result<(), Error<InMemoryDbError>> {
         if tags.is_empty() {
-            return Err(Error::Crypto(format!("could not insert ID {id}")));
+            return Err(Error::Crypto(format!("could not insert {value}")));
         }
-        let mut moved_id = None;
-        let dx_new = Dx::from(HashMap::from_iter([(tags[0], [id])]));
+        let mut moved_value = None;
+        let dx_new = Dx::from(HashMap::from_iter([(tags[0], [value])]));
 
-        // First tries to insert the worker ID for the first tag.
+        // First tries to insert the worker value for the first tag.
         let (mut dx_cur, mut edx_cur) =
             block_on(<Vera<VALUE_LENGTH, InMemoryDb, Item> as CsRhDxEnc<
                 { Tag::LENGTH },
@@ -252,7 +257,7 @@ mod tests {
 
         // Retries upserting with the current EDX state until it succeeds.
         while !edx_cur.is_empty() {
-            moved_id = Some(
+            moved_value = Some(
                 dx_cur.get(&tags[0]).ok_or_else(|| {
                     Error::<InMemoryDbError>::Crypto(
                         "current DX received does not contain any value for the upserted tag"
@@ -263,9 +268,9 @@ mod tests {
             (dx_cur, edx_cur) = block_on(vera.upsert(edx_cur, dx_new.clone()))?;
         }
 
-        if let Some(moved_id) = moved_id {
-            // Moves the replaced ID to the next tag.
-            concurrent_worker_upserter(vera, &tags[1..], moved_id)
+        if let Some(value) = moved_value {
+            // Moves the replaced value to the next tag.
+            concurrent_worker_upserter(vera, &tags[1..], value)
         } else {
             Ok(())
         }

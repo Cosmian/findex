@@ -4,13 +4,12 @@ mod primitives;
 mod structs;
 mod vera;
 
-use crate::DbInterface;
 pub use structs::{Dx, Edx, Set, Tag, Token};
 pub use vera::Vera;
 
 pub trait DynRhDxEnc<const VALUE_LENGTH: usize>: Sized {
     /// The type of the connection to the DB used to store the EDX.
-    type DbConnection: DbInterface;
+    type DbConnection;
 
     /// The type of error used by the scheme.
     type Error: std::error::Error;
@@ -18,7 +17,7 @@ pub trait DynRhDxEnc<const VALUE_LENGTH: usize>: Sized {
     /// Type of the tags used by the scheme.
     ///
     /// Such tags need to be hashable.
-    type Tag: Hash + PartialEq + Eq + AsRef<[u8]>;
+    type Tag: Hash + PartialEq + Eq;
 
     /// The type of objects stored by the scheme.
     ///

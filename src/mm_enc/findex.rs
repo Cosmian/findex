@@ -331,6 +331,11 @@ impl<
             insertion_result
         }
     }
+
+    async fn compact(&self) -> Result<(), Error<EntryDxEnc::Error, ChainDxEnc::Error>> {
+        todo!()
+    }
+
 }
 
 impl<
@@ -414,10 +419,6 @@ impl<
         self.apply(new_links, Mm::default()).await
     }
 
-    async fn compact(&self) -> Result<(), Self::Error> {
-        todo!()
-    }
-
     async fn rebuild(
         &self,
         seed: &[u8],
@@ -458,6 +459,11 @@ mod tests {
 
     const N_WORKERS: usize = 100;
 
+    /// Checks sequences of variable length values can be decomposed into a
+    /// sequence of fixed length ones, that additions and deletions can be
+    /// performed on the on the fixed-length domain by specifying the
+    /// corresponding operation upon decomposition, and that recomposition
+    /// preserves order but removes duplicates and deleted values.
     #[test]
     fn decomposition() {
         let added_value = vec![
