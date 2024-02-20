@@ -24,7 +24,7 @@ mod mm_enc;
 #[cfg(feature = "in_memory")]
 pub use db::in_memory_db::{InMemoryDb, InMemoryDbError};
 pub use db::DbInterface;
-pub use dx_enc::{CsRhDxEnc, DynRhDxEnc, Token, Vera};
+pub use dx_enc::{CsRhDxEnc, DynRhDxEnc, Token, Tag, Set,  Vera};
 pub use error::{CoreError, DbInterfaceErrorTrait, Error};
 pub use mm_enc::{CsRhMmEnc, Findex};
 

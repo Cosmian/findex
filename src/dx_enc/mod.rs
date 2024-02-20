@@ -49,6 +49,9 @@ pub trait DynRhDxEnc<const VALUE_LENGTH: usize>: Sized {
     /// Removes any binding on the given tags from the stored DX.
     async fn delete(&self, tags: Set<Self::Tag>) -> Result<(), Self::Error>;
 
+    /// Returns the entire stored DX.
+    async fn dump(&self) -> Result<Dx<VALUE_LENGTH, Self::Tag, Self::Item>, Self::Error>;
+
     /// Gets the currently stored DX and stores it using the given connection
     /// under the given seed. Returns the new instance of the scheme allowing to
     /// manipulate this copy.

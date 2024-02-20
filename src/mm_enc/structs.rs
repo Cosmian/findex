@@ -41,7 +41,7 @@ impl<Tag: Hash + PartialEq + Eq + Clone, Item: Clone> Clone for Mm<Tag, Item> {
 
 impl<Tag: Hash + PartialEq + Eq + Display, Item: Display> Display for Mm<Tag, Item> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Multi-Map: {{")?;
+        writeln!(f, "Multi-Map: {{")?;
         for (tag, items) in self.iter() {
             writeln!(f, "  '{}': [", tag)?;
             for i in items {
@@ -49,7 +49,7 @@ impl<Tag: Hash + PartialEq + Eq + Display, Item: Display> Display for Mm<Tag, It
             }
             writeln!(f, "  ],")?;
         }
-        writeln!(f, "}}")
+        write!(f, "}}")
     }
 }
 
@@ -161,8 +161,7 @@ impl Display for Metadata {
 
 pub type Block = [u8; BLOCK_LENGTH];
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct Link([u8; LINK_LENGTH]);
+impl_byte_array!(Link, LINK_LENGTH, "Link");
 
 impl Link {
     pub fn new() -> Self {
@@ -204,17 +203,6 @@ impl Link {
     }
 }
 
-impl From<[u8; LINK_LENGTH]> for Link {
-    fn from(bytes: [u8; LINK_LENGTH]) -> Self {
-        Self(bytes)
-    }
-}
-
-impl From<Link> for [u8; LINK_LENGTH] {
-    fn from(link: Link) -> Self {
-        link.0
-    }
-}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Flag {

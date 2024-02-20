@@ -280,7 +280,7 @@ impl<
                 )))
             })?;
             deleted_chain_tags.extend(
-                Metadata::new(metadata.stop + n_links, metadata.stop)
+                Metadata::new(metadata.start - n_links, metadata.start)
                     .unroll(entry_tag.as_ref())
                     .into_iter(),
             )
@@ -332,10 +332,46 @@ impl<
         }
     }
 
-    async fn compact(&self) -> Result<(), Error<EntryDxEnc::Error, ChainDxEnc::Error>> {
-        todo!()
-    }
+    pub async fn compact(&self) -> Result<(), Error<EntryDxEnc::Error, ChainDxEnc::Error>> {
+        let entry_dx = self.entry.dump().await.map_err(Error::Entry)?;
+        let chain_tags = entry_dx
+            .iter()
+            .map(|(tag, metadata)| (tag.clone(), metadata.unroll(tag.as_ref())))
+            .collect::<Mm<EntryDxEnc::Tag, ChainDxEnc::Tag>>();
+        let links = self
+            .chain
+            .get(chain_tags.values().flatten().cloned().collect())
+            .await
+            .map_err(Error::Chain)?;
+        let old_chain_items = chain_tags
+            .into_iter()
+            .map(|(entry_tag, tags)| {
+                let items = tags
+                    .iter()
+                    .map(|chain_tag| {
+                        links
+                            .get(chain_tag)
+                            .ok_or_else(|| {
+                                CoreError::Crypto(format!(
+                                    "missing link value for tag '{chain_tag}"
+                                ))
+                            })
+                            .cloned()
+                    })
+                    .collect::<Result<Vec<_>, _>>()?;
+                Ok((entry_tag, items))
+            })
+            .collect::<Result<Mm<_, _>, CoreError>>()?;
+        let new_chain_items = old_chain_items
+            .iter()
+            .map(|(tag, items)| {
+                let new_items = decompose(Operation::Insert, &recompose(&items)?)?;
+                Ok((tag.clone(), new_items))
+            })
+            .collect::<Result<Mm<_, _>, CoreError>>()?;
 
+        self.apply(new_chain_items, old_chain_items).await
+    }
 }
 
 impl<
@@ -370,8 +406,8 @@ impl<
         let metadata = self.entry.get(tags).await.map_err(Self::Error::Entry)?;
         let chain_tags = metadata
             .into_iter()
-            .map(|(tag, bytes)| {
-                let chain_tags = bytes.unroll(&tag.as_ref());
+            .map(|(tag, metadata)| {
+                let chain_tags = metadata.unroll(&tag.as_ref());
                 (tag, chain_tags)
             })
             .collect::<Mm<EntryDxEnc::Tag, ChainDxEnc::Tag>>();
@@ -450,10 +486,7 @@ mod tests {
     use futures::executor::block_on;
     use rand::{RngCore, SeedableRng};
 
-    use crate::{
-        dx_enc::{Tag, Vera},
-        InMemoryDb,
-    };
+    use crate::{InMemoryDb, Set, Tag, Vera};
 
     use super::*;
 
@@ -466,29 +499,26 @@ mod tests {
     /// preserves order but removes duplicates and deleted values.
     #[test]
     fn decomposition() {
-        let added_value = vec![
+        let added_values = vec![
             vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
             "I am a very long test string".as_bytes().to_vec(),
             "I am a second very long test string".as_bytes().to_vec(),
         ];
-        let deleted_value = vec![
+        let deleted_values = vec![
             "I am a deleted-only string".as_bytes().to_vec(),
             "I am a very long test string".as_bytes().to_vec(),
         ];
 
-        let mut chain = decompose(Operation::Insert, &added_value).unwrap();
-        chain.extend_from_slice(&decompose(Operation::Insert, &added_value).unwrap());
-        chain.extend_from_slice(&decompose(Operation::Delete, &deleted_value).unwrap());
-        let recomposed_value = recompose(&chain).unwrap();
+        let mut chain = decompose(Operation::Insert, &added_values).unwrap();
+        chain.extend_from_slice(&decompose(Operation::Insert, &added_values).unwrap());
+        chain.extend_from_slice(&decompose(Operation::Delete, &deleted_values).unwrap());
+        let recomposed_values = recompose(&chain).unwrap();
 
         // Assert all elements are recovered, without the duplicated and deleted
-        // ones.
-        assert_eq!(recomposed_value.len(), 2);
-        assert!(added_value.contains(&recomposed_value[0]));
-        assert!(added_value.contains(&recomposed_value[1]));
-        // Assert the order is preserved.
-        assert_eq!(recomposed_value[0], added_value[0]);
-        assert_eq!(recomposed_value[1], added_value[2]);
+        // ones, and that the order is preserved.
+        assert_eq!(recomposed_values.len(), 2);
+        assert_eq!(recomposed_values[0], added_values[0]);
+        assert_eq!(recomposed_values[1], added_values[2]);
     }
 
     /// Checks the insert, delete and fetch work correctly in a sequential
@@ -663,5 +693,48 @@ mod tests {
         let fetched_mm =
             block_on(findex.search(inserted_mm.keys().copied().collect::<Set<Tag>>())).unwrap();
         assert_eq!(inserted_mm, fetched_mm);
+    }
+
+    #[test]
+    fn test_compact() {
+        let mut rng = CsRng::from_entropy();
+        let seed = Secret::<32>::random(&mut rng);
+        let db = (InMemoryDb::default(), InMemoryDb::default());
+        let findex = Findex::<
+            { Tag::LENGTH },
+            Tag,
+            Vera<METADATA_LENGTH, InMemoryDb, Metadata>,
+            Vera<LINK_LENGTH, InMemoryDb, Link>,
+        >::setup(&*seed, db.clone())
+        .unwrap();
+
+        let tag = Tag::random(&mut rng);
+        let added_values = vec![
+            vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+            "I am a very long test string".as_bytes().to_vec(),
+            "I am a second very long test string".as_bytes().to_vec(),
+        ];
+        let deleted_values = vec![
+            "I am a deleted-only string".as_bytes().to_vec(),
+            "I am a second very long test string".as_bytes().to_vec(),
+        ];
+
+        block_on(findex.insert(Mm::from_iter([(tag.clone(), added_values.clone())]))).unwrap();
+        block_on(findex.delete(Mm::from_iter([(tag.clone(), deleted_values)]))).unwrap();
+
+        let chain_len_pre = db.1.len();
+        let fetched_mm_pre = block_on(findex.search(Set::from_iter([tag]))).unwrap();
+        block_on(findex.compact()).unwrap();
+        let fetched_mm_post = block_on(findex.search(Set::from_iter([tag]))).unwrap();
+        let chain_len_post = db.1.len();
+        assert_eq!(fetched_mm_pre, fetched_mm_post);
+        assert_eq!(
+            fetched_mm_post.get(&tag),
+            Some(&vec![
+                vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+                "I am a very long test string".as_bytes().to_vec(),
+            ])
+        );
+        assert!(chain_len_post < chain_len_pre);
     }
 }

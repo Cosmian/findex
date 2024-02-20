@@ -141,9 +141,13 @@ impl<
             .map_err(Self::Error::from)
     }
 
-    async fn rebuild(&self, seed: &[u8], connection: DbConnection) -> Result<Self, Self::Error> {
+    async fn dump(&self) -> Result<Dx<VALUE_LENGTH, Self::Tag, Self::Item>, Self::Error> {
         let edx = self.connection.dump().await?;
-        let dx = self.resolve(&edx)?;
+        self.resolve(&edx).map_err(Self::Error::from)
+    }
+
+    async fn rebuild(&self, seed: &[u8], connection: DbConnection) -> Result<Self, Self::Error> {
+        let dx = self.dump().await?;
         let new_scheme = Self::setup(seed, connection)?;
 	<Self as DynRhDxEnc<VALUE_LENGTH>>::insert(&new_scheme, dx).await?;
 	Ok(new_scheme)

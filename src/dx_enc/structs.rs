@@ -54,11 +54,11 @@ impl<Item: Hash + PartialEq + Eq> DerefMut for Set<Item> {
 
 impl<Item: Hash + PartialEq + Eq + Display> Display for Set<Item> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        writeln!(f, "[")?;
+        writeln!(f, "{{")?;
         for tag in &self.0 {
             writeln!(f, "  {},", tag)?;
         }
-        write!(f, "]")
+        writeln!(f, "}}")
     }
 }
 
@@ -106,6 +106,7 @@ impl<Item: Hash + PartialEq + Eq + Clone> Clone for Set<Item> {
 const TOKEN_LENGTH: usize = 32;
 
 impl_byte_array!(Token, TOKEN_LENGTH, "Token");
+
 #[derive(PartialEq)]
 pub struct Dx<const VALUE_LENGTH: usize, Tag: Hash + PartialEq + Eq, Item>(HashMap<Tag, Item>);
 
@@ -219,12 +220,12 @@ impl DerefMut for Edx {
 
 impl Display for Edx {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Token to EncryptedValue map: {{")?;
+        writeln!(f, "Token to EncryptedValue map: {{")?;
         for (token, encrypted_value) in self.iter() {
             writeln!(
                 f,
                 "  '{}': {}",
-                STANDARD.encode(token),
+		token,
                 STANDARD.encode(encrypted_value)
             )?;
         }

@@ -1,4 +1,4 @@
-pub use base64::engine::{general_purpose::STANDARD, Engine};
+pub use base64::engine::{general_purpose::{GeneralPurpose, STANDARD}, Engine};
 pub use core::{
     default::Default,
     ops::{Deref, DerefMut},
@@ -92,7 +92,10 @@ macro_rules! impl_byte_array {
                     f,
                     "{}({})",
                     $str_name,
-                    $crate::macros::STANDARD.encode(self)
+                    <$crate::macros::GeneralPurpose as $crate::macros::Engine>::encode(
+                        &$crate::macros::STANDARD,
+                        self
+                    )
                 )
             }
         }
