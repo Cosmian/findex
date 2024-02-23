@@ -15,8 +15,8 @@ use super::{
 /// dictionary (DX).
 ///
 /// It transforms [`TAG_LENGTH`](TAG_LENGTH)-byte long tags into
-/// cryptographically secure [`Token`s](Token), and stores tags alongside the
-/// values in the EDX ciphertexts.
+/// cryptographically secure [`Token`s](Token), and stores them alongside the
+/// encrypted values in the EDX.
 pub struct Vera<
     const VALUE_LENGTH: usize,
     DbConnection: EdxDbInterface,
