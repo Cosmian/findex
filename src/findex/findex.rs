@@ -477,7 +477,7 @@ mod tests {
 
     /// Checks sequences of variable length values can be decomposed into a
     /// sequence of fixed length ones, that additions and deletions can be
-    /// performed on the on the fixed-length domain by specifying the
+    /// performed on the fixed-length domain by specifying the
     /// corresponding operation upon decomposition, and that recomposition
     /// preserves order but removes duplicates and deleted values.
     #[test]
