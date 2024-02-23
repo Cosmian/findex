@@ -265,7 +265,7 @@ mod tests {
 
     /// Tries concurrently upserting `N_WORKERS` IDs on the same sequence of
     /// tokens. Each worker first tries inserting its ID in the first tag of the
-    /// pool. Upon failure, it tries replacing the current I with its ID, and
+    /// pool. Upon failure, it tries replacing the current ID with its ID, and
     /// moving the current ID to the next tag of the pool.
     ///
     /// Then verifies each worker ID were successfully inserted.
