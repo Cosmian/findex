@@ -156,7 +156,7 @@ impl EdxDbInterface for InMemoryDb {
 
     async fn upsert(&self, old_values: Edx, new_values: Edx) -> Result<Edx, InMemoryDbError> {
         let edx = &mut self.lock().expect("couldn't lock the table");
-        // Ensures an value is present inside the EDX for each given old value.
+        // Ensures a value is present inside the EDX for each given old value.
         if old_values.keys().any(|token| !edx.contains_key(token)) {
             return Err(InMemoryDbError(format!(
                 "missing EDX tokens {:?}",
