@@ -34,6 +34,7 @@ impl<
         Item: From<[u8; VALUE_LENGTH]> + Into<[u8; VALUE_LENGTH]>,
     > Vera<VALUE_LENGTH, DbConnection, Item>
 {
+    const SEED_INFO: &'static [u8] = b"VERA seed derivation";
     const TOKEN_INFO: &'static [u8] = b"Token derivation info.";
 
     /// Returns the token associated to the given tag.
@@ -106,7 +107,7 @@ impl<
 
     fn setup(seed: &[u8], connection: DbConnection) -> Result<Self, Self::Error> {
         let mut vera_seed = Secret::<MIN_SEED_LENGTH>::default();
-        kdf256!(&mut vera_seed, seed, b"VERA seed derivation");
+        kdf256!(&mut vera_seed, seed, Self::SEED_INFO);
         let dem = Dem::setup(&vera_seed)?;
         let kmac = Kmac::setup(&vera_seed)?;
         Ok(Self {

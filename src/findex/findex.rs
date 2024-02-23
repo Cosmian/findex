@@ -153,7 +153,7 @@ impl<
         ChainDxEnc: DxEnc<TAG_LENGTH, { Link::LENGTH }, Tag = Tag, Item = Link>,
     > Findex<TAG_LENGTH, EntryDxEnc, ChainDxEnc>
 {
-    const INFO: &'static [u8] = b"Findex key derivation info.";
+    const SEED_INFO: &'static [u8] = b"Findex key derivation info.";
 
     /// Commits the given chain modifications into the Entry Table.
     ///
@@ -379,7 +379,7 @@ impl<
 
     fn setup(seed: &[u8], connection: Self::DbConnection) -> Result<Self, Self::Error> {
         let mut findex_seed = Secret::<MIN_SEED_LENGTH>::default();
-        kdf256!(&mut findex_seed, seed, Self::INFO);
+        kdf256!(&mut findex_seed, seed, Self::SEED_INFO);
         let entry = EntryDxEnc::setup(seed, connection.0).map_err(Self::Error::Entry)?;
         let chain = ChainDxEnc::setup(seed, connection.1).map_err(Self::Error::Chain)?;
         Ok(Self { entry, chain })
@@ -445,7 +445,7 @@ impl<
         connection: Self::DbConnection,
     ) -> Result<Self, Self::Error> {
         let mut findex_seed = Secret::<MIN_SEED_LENGTH>::default();
-        kdf256!(&mut findex_seed, seed, Self::INFO);
+        kdf256!(&mut findex_seed, seed, Self::SEED_INFO);
         let entry = self
             .entry
             .rebuild(&*findex_seed, connection.0)
