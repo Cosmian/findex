@@ -51,7 +51,7 @@ fn decompose(op: Operation, modifications: &[Vec<u8>]) -> Result<Vec<Link>, Core
         .flat_map(|item| bytes_to_blocks(item))
         .flatten();
 
-    // This algorithm is not the most efficient as is needs a second pass on
+    // This algorithm is not the most efficient as it needs a second pass on
     // the blocks to group them into links. This could have been done while
     // creating the blocks, but decoupling these operations seemed clearer to
     // me.
