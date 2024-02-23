@@ -2,10 +2,10 @@ use std::fmt::Display;
 
 use crate::CoreError;
 
-mod findex;
+mod implem;
 mod structs;
 
-pub use findex::Findex;
+pub use implem::Findex;
 pub use structs::{Link, Metadata};
 
 #[derive(Debug)]

@@ -91,7 +91,7 @@ impl Link {
         self.0[0].try_into()
     }
 
-    pub fn set_op(&mut self, op: Operation) -> () {
+    pub fn set_op(&mut self, op: Operation) {
         self.0[0] = op.into();
     }
 
@@ -135,7 +135,7 @@ impl TryFrom<Flag> for u8 {
     fn try_from(flag: Flag) -> Result<Self, Self::Error> {
         match flag {
             Flag::Terminating(length) => <u8>::try_from(length).map_err(|_| {
-                CoreError::Conversion(format!("`BLOCK_LENGTH` should be smaller than `u8::MAX`"))
+                CoreError::Conversion("`BLOCK_LENGTH` should be smaller than `u8::MAX`".to_string())
             }),
             Flag::Padding => Ok(0),
             Flag::NonTerminating => Ok(255),

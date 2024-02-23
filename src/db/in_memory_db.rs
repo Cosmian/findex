@@ -29,7 +29,7 @@ impl Display for InMemoryDbError {
 impl std::error::Error for InMemoryDbError {}
 impl DbInterfaceErrorTrait for InMemoryDbError {}
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct InMemoryDb(Arc<Mutex<Edx>>);
 
 impl Deref for InMemoryDb {
@@ -37,12 +37,6 @@ impl Deref for InMemoryDb {
 
     fn deref(&self) -> &Self::Target {
         &self.0
-    }
-}
-
-impl Default for InMemoryDb {
-    fn default() -> Self {
-        Self(Default::default())
     }
 }
 

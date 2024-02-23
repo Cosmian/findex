@@ -4,7 +4,7 @@ use crate::{DbInterfaceErrorTrait, Set};
 pub mod in_memory_db;
 mod structs;
 
-pub use structs::{Token, Edx};
+pub use structs::{Edx, Token};
 
 pub trait EdxDbInterface {
     /// Type of error returned by the EDX.

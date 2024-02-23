@@ -18,13 +18,13 @@ mod db;
 mod error;
 mod vera;
 // mod gx_enc;
-// mod index;
 mod findex;
+// mod index;
 mod traits;
 
 #[cfg(feature = "in_memory")]
 pub use db::in_memory_db::{InMemoryDb, InMemoryDbError};
-pub use db::{EdxDbInterface, Token, Edx};
+pub use db::{Edx, EdxDbInterface, Token};
 pub use error::{CoreError, DbInterfaceErrorTrait, Error};
 pub use findex::{Findex, Link, Metadata};
 pub use traits::*;

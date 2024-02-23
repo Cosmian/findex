@@ -1,6 +1,6 @@
 use std::{
-    collections::{HashSet, HashMap},
-    fmt::{Display, Debug},
+    collections::{HashMap, HashSet},
+    fmt::{Debug, Display},
     hash::Hash,
     ops::{Deref, DerefMut},
 };
@@ -80,19 +80,15 @@ impl<Item: Hash + PartialEq + Eq + Clone> Clone for Set<Item> {
 }
 
 #[derive(PartialEq)]
-pub struct Dx<const VALUE_LENGTH: usize, Tag: Hash + PartialEq + Eq, Item>(HashMap<Tag, Item>);
+pub struct Dx<Tag: Hash + PartialEq + Eq, Item>(HashMap<Tag, Item>);
 
-impl<const VALUE_LENGTH: usize, Tag: Hash + PartialEq + Eq, Item> Default
-    for Dx<VALUE_LENGTH, Tag, Item>
-{
+impl<Tag: Hash + PartialEq + Eq, Item> Default for Dx<Tag, Item> {
     fn default() -> Self {
         Self(HashMap::default())
     }
 }
 
-impl<const VALUE_LENGTH: usize, Tag: Hash + PartialEq + Eq, Item> Deref
-    for Dx<VALUE_LENGTH, Tag, Item>
-{
+impl<Tag: Hash + PartialEq + Eq, Item> Deref for Dx<Tag, Item> {
     type Target = HashMap<Tag, Item>;
 
     fn deref(&self) -> &Self::Target {
@@ -100,17 +96,13 @@ impl<const VALUE_LENGTH: usize, Tag: Hash + PartialEq + Eq, Item> Deref
     }
 }
 
-impl<const VALUE_LENGTH: usize, Tag: Hash + PartialEq + Eq, Item> DerefMut
-    for Dx<VALUE_LENGTH, Tag, Item>
-{
+impl<Tag: Hash + PartialEq + Eq, Item> DerefMut for Dx<Tag, Item> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.0
     }
 }
 
-impl<const VALUE_LENGTH: usize, Tag: Hash + PartialEq + Eq + Display, Item: Display> Display
-    for Dx<VALUE_LENGTH, Tag, Item>
-{
+impl<Tag: Hash + PartialEq + Eq + Display, Item: Display> Display for Dx<Tag, Item> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         writeln!(f, "Dictionary: {{")?;
         for (tag, value) in self.0.iter() {
@@ -120,49 +112,37 @@ impl<const VALUE_LENGTH: usize, Tag: Hash + PartialEq + Eq + Display, Item: Disp
     }
 }
 
-impl<const VALUE_LENGTH: usize, Tag: Hash + PartialEq + Eq + Debug, Item: Debug> Debug
-    for Dx<VALUE_LENGTH, Tag, Item>
-{
+impl<Tag: Hash + PartialEq + Eq + Debug, Item: Debug> Debug for Dx<Tag, Item> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         writeln!(f, "{:?}", self.0)
     }
 }
 
-impl<const VALUE_LENGTH: usize, Tag: Hash + PartialEq + Eq + Clone, Item: Clone> Clone
-    for Dx<VALUE_LENGTH, Tag, Item>
-{
+impl<Tag: Hash + PartialEq + Eq + Clone, Item: Clone> Clone for Dx<Tag, Item> {
     fn clone(&self) -> Self {
         Self(self.0.clone())
     }
 }
 
-impl<const VALUE_LENGTH: usize, Tag: Hash + PartialEq + Eq, Item> From<HashMap<Tag, Item>>
-    for Dx<VALUE_LENGTH, Tag, Item>
-{
+impl<Tag: Hash + PartialEq + Eq, Item> From<HashMap<Tag, Item>> for Dx<Tag, Item> {
     fn from(value: HashMap<Tag, Item>) -> Self {
         Self(value)
     }
 }
 
-impl<const VALUE_LENGTH: usize, Tag: Hash + PartialEq + Eq, Item> From<Dx<VALUE_LENGTH, Tag, Item>>
-    for HashMap<Tag, Item>
-{
-    fn from(value: Dx<VALUE_LENGTH, Tag, Item>) -> Self {
+impl<Tag: Hash + PartialEq + Eq, Item> From<Dx<Tag, Item>> for HashMap<Tag, Item> {
+    fn from(value: Dx<Tag, Item>) -> Self {
         value.0
     }
 }
 
-impl<const VALUE_LENGTH: usize, Tag: Hash + PartialEq + Eq, Item> FromIterator<(Tag, Item)>
-    for Dx<VALUE_LENGTH, Tag, Item>
-{
+impl<Tag: Hash + PartialEq + Eq, Item> FromIterator<(Tag, Item)> for Dx<Tag, Item> {
     fn from_iter<T: IntoIterator<Item = (Tag, Item)>>(iter: T) -> Self {
         Self(HashMap::from_iter(iter))
     }
 }
 
-impl<const VALUE_LENGTH: usize, Tag: Hash + PartialEq + Eq, Item> IntoIterator
-    for Dx<VALUE_LENGTH, Tag, Item>
-{
+impl<Tag: Hash + PartialEq + Eq, Item> IntoIterator for Dx<Tag, Item> {
     type IntoIter = <<Self as Deref>::Target as IntoIterator>::IntoIter;
     type Item = <<Self as Deref>::Target as IntoIterator>::Item;
 

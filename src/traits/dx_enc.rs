@@ -24,10 +24,7 @@ pub trait DxEnc<const TAG_LENGTH: usize, const VALUE_LENGTH: usize>: Sized {
     fn setup(seed: &[u8], connection: Self::DbConnection) -> Result<Self, Self::Error>;
 
     /// Returns the restriction of the stored DX to the given tags.
-    async fn get(
-        &self,
-        tags: Set<Self::Tag>,
-    ) -> Result<Dx<VALUE_LENGTH, Self::Tag, Self::Item>, Self::Error>;
+    async fn get(&self, tags: Set<Self::Tag>) -> Result<Dx<Self::Tag, Self::Item>, Self::Error>;
 
     /// Merges the given DX to the stored one. Use the existing bindings in case
     /// of conflict.
@@ -35,14 +32,14 @@ pub trait DxEnc<const TAG_LENGTH: usize, const VALUE_LENGTH: usize>: Sized {
     /// Returns the restriction of the stored DX to the conflicting tags.
     async fn insert(
         &self,
-        dx: Dx<VALUE_LENGTH, Self::Tag, Self::Item>,
-    ) -> Result<Dx<VALUE_LENGTH, Self::Tag, Self::Item>, Self::Error>;
+        dx: Dx<Self::Tag, Self::Item>,
+    ) -> Result<Dx<Self::Tag, Self::Item>, Self::Error>;
 
     /// Removes any binding on the given tags from the stored DX.
     async fn delete(&self, tags: Set<Self::Tag>) -> Result<(), Self::Error>;
 
     /// Returns the entire dictionary stored.
-    async fn dump(&self) -> Result<Dx<VALUE_LENGTH, Self::Tag, Self::Item>, Self::Error>;
+    async fn dump(&self) -> Result<Dx<Self::Tag, Self::Item>, Self::Error>;
 
     /// Gets the currently stored DX and stores it using the given connection
     /// under the given seed. Returns the new instance of the scheme allowing to
@@ -69,6 +66,6 @@ pub trait CsDxEnc<const TAG_LENGTH: usize, const VALUE_LENGTH: usize, Edx>:
     async fn upsert(
         &self,
         old_edx: Edx,
-        new_dx: Dx<VALUE_LENGTH, Self::Tag, Self::Item>,
-    ) -> Result<(Dx<VALUE_LENGTH, Self::Tag, Self::Item>, Edx), Self::Error>;
+        new_dx: Dx<Self::Tag, Self::Item>,
+    ) -> Result<(Dx<Self::Tag, Self::Item>, Edx), Self::Error>;
 }

@@ -1,6 +1,6 @@
+mod implem;
 mod primitives;
 mod structs;
-mod vera;
 
+pub use implem::Vera;
 pub use structs::Tag;
-pub use vera::Vera;

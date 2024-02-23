@@ -135,8 +135,8 @@ pub struct Findex<
     EntryDxEnc: CsDxEnc<TAG_LENGTH, { Metadata::LENGTH }, Edx, Item = Metadata>,
     ChainDxEnc: DxEnc<TAG_LENGTH, { Link::LENGTH }, Item = Link>,
 > {
-    pub entry: EntryDxEnc,
-    pub chain: ChainDxEnc,
+    entry: EntryDxEnc,
+    chain: ChainDxEnc,
 }
 
 impl<
@@ -160,9 +160,8 @@ impl<
     /// Returns the chains to insert in the Chain Table.
     async fn reserve(
         &self,
-        dx: Dx<{ Metadata::LENGTH }, Tag, Metadata>,
-    ) -> Result<Dx<{ Metadata::LENGTH }, Tag, Metadata>, Error<EntryDxEnc::Error, ChainDxEnc::Error>>
-    {
+        dx: Dx<Tag, Metadata>,
+    ) -> Result<Dx<Tag, Metadata>, Error<EntryDxEnc::Error, ChainDxEnc::Error>> {
         let mut modified_dx = dx.clone();
         let (mut dx_curr, mut edx_curr) = self
             .entry
@@ -179,10 +178,9 @@ impl<
                     )))
                 })?;
                 let metadata_new = metadata + &metadata_cur;
-                modified_dx.get_mut(&tag).and_then(|metadata| {
+                if let Some(metadata) = modified_dx.get_mut(&tag) {
                     *metadata = metadata_new.clone();
-                    Some(())
-                });
+                }
                 dx_new.deref_mut().insert(tag, metadata_new);
             }
             (dx_curr, edx_curr) = self
@@ -204,8 +202,7 @@ impl<
         &self,
         additions: &Mm<Tag, Link>,
         deletions: &Mm<Tag, Link>,
-    ) -> Result<Dx<{ Metadata::LENGTH }, Tag, Metadata>, Error<EntryDxEnc::Error, ChainDxEnc::Error>>
-    {
+    ) -> Result<Dx<Tag, Metadata>, Error<EntryDxEnc::Error, ChainDxEnc::Error>> {
         let mut new_entry_dx = Dx::default();
         for (tag, chain) in &**additions {
             let n_links = <u32>::try_from(chain.len())
@@ -227,10 +224,10 @@ impl<
 
     fn extract_chain_additions(
         &self,
-        metadata: &Dx<{ Metadata::LENGTH }, Tag, Metadata>,
+        metadata: &Dx<Tag, Metadata>,
         additions: Mm<Tag, Link>,
-    ) -> Result<Dx<{ Link::LENGTH }, Tag, Link>, Error<EntryDxEnc::Error, ChainDxEnc::Error>> {
-        let mut added_chain_dx = Dx::<{ Link::LENGTH }, Tag, Link>::default();
+    ) -> Result<Dx<Tag, Link>, Error<EntryDxEnc::Error, ChainDxEnc::Error>> {
+        let mut added_chain_dx = Dx::<Tag, Link>::default();
         for (entry_tag, new_links) in additions {
             let n_links = <u32>::try_from(new_links.len())
                 .map_err(|_| Error::Core(CoreError::Conversion("chain overflow".to_string())))?;
@@ -251,7 +248,7 @@ impl<
 
     fn extract_chain_deletions(
         &self,
-        metadata: &Dx<{ Metadata::LENGTH }, Tag, Metadata>,
+        metadata: &Dx<Tag, Metadata>,
         deletions: Mm<Tag, Link>,
     ) -> Result<Set<Tag>, Error<EntryDxEnc::Error, ChainDxEnc::Error>> {
         let mut deleted_chain_tags = Set::<Tag>::default();
@@ -349,7 +346,7 @@ impl<
         let new_chain_items = old_chain_items
             .iter()
             .map(|(tag, items)| {
-                let new_items = decompose(Operation::Insert, &recompose(&items)?)?;
+                let new_items = decompose(Operation::Insert, &recompose(items)?)?;
                 Ok((tag.clone(), new_items))
             })
             .collect::<Result<Mm<_, _>, CoreError>>()?;
@@ -390,7 +387,7 @@ impl<
         let chain_tags = metadata
             .into_iter()
             .map(|(tag, metadata)| {
-                let chain_tags = metadata.unroll(&tag.as_ref());
+                let chain_tags = metadata.unroll(tag.as_ref());
                 (tag, chain_tags)
             })
             .collect::<Mm<EntryDxEnc::Tag, ChainDxEnc::Tag>>();
@@ -448,12 +445,12 @@ impl<
         kdf256!(&mut findex_seed, seed, Self::SEED_INFO);
         let entry = self
             .entry
-            .rebuild(&*findex_seed, connection.0)
+            .rebuild(&findex_seed, connection.0)
             .await
             .map_err(Self::Error::Entry)?;
         let chain = self
             .chain
-            .rebuild(&*findex_seed, connection.1)
+            .rebuild(&findex_seed, connection.1)
             .await
             .map_err(Self::Error::Chain)?;
         Ok(Self { entry, chain })
@@ -521,7 +518,7 @@ mod tests {
             { Tag::LENGTH },
             Vera<{ Metadata::LENGTH }, InMemoryDb, Metadata>,
             Vera<{ Link::LENGTH }, InMemoryDb, Link>,
-        >::setup(&*seed, (entry_db, chain_db))
+        >::setup(&seed, (entry_db, chain_db))
         .unwrap();
 
         let inserted_mm = (0..N_WORKERS)
@@ -550,9 +547,9 @@ mod tests {
             .map(|(i, (tag, data))| {
                 // Select a random data.
                 let pos = rng.next_u32() as usize % data.len();
-                let mm = Mm::from(HashMap::from_iter([(tag.clone(), vec![data[pos].clone()])]));
+                let mm = Mm::from(HashMap::from_iter([(*tag, vec![data[pos].clone()])]));
                 block_on(findex.delete(mm))?;
-                Ok((i, (tag.clone(), data[pos].clone())))
+                Ok((i, (*tag, data[pos].clone())))
             })
             .collect::<Result<HashMap<_, _>, Error<_, _>>>()
             .unwrap();
@@ -562,9 +559,9 @@ mod tests {
             .map(|(i, (tag, data))| {
                 // Select a random data.
                 let pos = rng.next_u32() as usize % data.len();
-                let mm = Mm::from(HashMap::from_iter([(tag.clone(), vec![data[pos].clone()])]));
+                let mm = Mm::from(HashMap::from_iter([(*tag, vec![data[pos].clone()])]));
                 block_on(findex.insert(mm))?;
-                Ok((i, (tag.clone(), data[pos].clone())))
+                Ok((i, (*tag, data[pos].clone())))
             })
             .collect::<Result<HashMap<_, _>, Error<_, _>>>()
             .unwrap();
@@ -594,16 +591,13 @@ mod tests {
             .map(|i| {
                 let db = db.clone();
                 let seed = seed.clone();
-                let mm = Mm::<Tag, Vec<u8>>::from(HashMap::from_iter([(
-                    tag.clone(),
-                    vec![vec![i as u8]],
-                )]));
+                let mm = Mm::<Tag, Vec<u8>>::from(HashMap::from_iter([(tag, vec![vec![i as u8]])]));
                 spawn(move || -> Result<(), Error<_, _>> {
                     let findex = Findex::<
                         { Tag::LENGTH },
                         Vera<{ Metadata::LENGTH }, InMemoryDb, Metadata>,
                         Vera<{ Link::LENGTH }, InMemoryDb, Link>,
-                    >::setup(&*seed, db)
+                    >::setup(&seed, db)
                     .unwrap();
                     block_on(findex.insert(mm))
                 })
@@ -617,10 +611,10 @@ mod tests {
             { Tag::LENGTH },
             Vera<{ Metadata::LENGTH }, InMemoryDb, Metadata>,
             Vera<{ Link::LENGTH }, InMemoryDb, Link>,
-        >::setup(&*seed, db)
+        >::setup(&seed, db)
         .unwrap();
 
-        let stored_mm = block_on(findex.search(Set::from_iter([tag.clone()]))).unwrap();
+        let stored_mm = block_on(findex.search(Set::from_iter([tag]))).unwrap();
         let stored_ids = stored_mm
             .get(&tag)
             .unwrap()
@@ -645,7 +639,7 @@ mod tests {
             { Tag::LENGTH },
             Vera<{ Metadata::LENGTH }, InMemoryDb, Metadata>,
             Vera<{ Link::LENGTH }, InMemoryDb, Link>,
-        >::setup(&*seed, db)
+        >::setup(&seed, db)
         .unwrap();
 
         let inserted_mm = (0..N_WORKERS)
@@ -666,7 +660,7 @@ mod tests {
 
         let seed = Secret::<32>::random(&mut rng);
         let db = (InMemoryDb::default(), InMemoryDb::default());
-        let findex = block_on(findex.rebuild(&*seed, db)).unwrap();
+        let findex = block_on(findex.rebuild(&seed, db)).unwrap();
         let fetched_mm =
             block_on(findex.search(inserted_mm.keys().copied().collect::<Set<Tag>>())).unwrap();
         assert_eq!(inserted_mm, fetched_mm);
@@ -681,7 +675,7 @@ mod tests {
             { Tag::LENGTH },
             Vera<{ Metadata::LENGTH }, InMemoryDb, Metadata>,
             Vera<{ Link::LENGTH }, InMemoryDb, Link>,
-        >::setup(&*seed, db.clone())
+        >::setup(&seed, db.clone())
         .unwrap();
 
         let tag = Tag::random(&mut rng);
@@ -695,8 +689,8 @@ mod tests {
             "I am a second very long test string".as_bytes().to_vec(),
         ];
 
-        block_on(findex.insert(Mm::from_iter([(tag.clone(), added_values.clone())]))).unwrap();
-        block_on(findex.delete(Mm::from_iter([(tag.clone(), deleted_values)]))).unwrap();
+        block_on(findex.insert(Mm::from_iter([(tag, added_values.clone())]))).unwrap();
+        block_on(findex.delete(Mm::from_iter([(tag, deleted_values)]))).unwrap();
 
         let chain_len_pre = db.1.len();
         let fetched_mm_pre = block_on(findex.search(Set::from_iter([tag]))).unwrap();

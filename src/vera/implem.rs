@@ -11,7 +11,7 @@ use super::{
     Tag,
 };
 
-/// Vera is a CS-RH-DX-Enc scheme: it interacts with a DB to securely store a
+/// Vera is a CS-DX-Enc scheme: it interacts with a DB to securely store a
 /// dictionary (DX).
 ///
 /// It transforms [`TAG_LENGTH`](TAG_LENGTH)-byte long tags into
@@ -34,7 +34,10 @@ impl<
         Item: From<[u8; VALUE_LENGTH]> + Into<[u8; VALUE_LENGTH]>,
     > Vera<VALUE_LENGTH, DbConnection, Item>
 {
+    /// Info used to derive a seed.
     const SEED_INFO: &'static [u8] = b"VERA seed derivation";
+
+    /// Info used to derive tokens.
     const TOKEN_INFO: &'static [u8] = b"Token derivation info.";
 
     /// Returns the token associated to the given tag.
@@ -46,7 +49,6 @@ impl<
     fn prepare(
         &self,
         dx: Dx<
-            VALUE_LENGTH,
             <Self as DxEnc<{ Tag::LENGTH }, VALUE_LENGTH>>::Tag,
             <Self as DxEnc<{ Tag::LENGTH }, VALUE_LENGTH>>::Item,
         >,
@@ -68,7 +70,6 @@ impl<
         edx: &Edx,
     ) -> Result<
         Dx<
-            VALUE_LENGTH,
             <Self as DxEnc<{ Tag::LENGTH }, VALUE_LENGTH>>::Tag,
             <Self as DxEnc<{ Tag::LENGTH }, VALUE_LENGTH>>::Item,
         >,
@@ -114,14 +115,11 @@ impl<
             connection,
             kmac,
             dem,
-            item: PhantomData::default(),
+            item: Default::default(),
         })
     }
 
-    async fn get(
-        &self,
-        tags: Set<Self::Tag>,
-    ) -> Result<Dx<VALUE_LENGTH, Self::Tag, Self::Item>, Self::Error> {
+    async fn get(&self, tags: Set<Self::Tag>) -> Result<Dx<Self::Tag, Self::Item>, Self::Error> {
         let tokens = tags.iter().map(|tag| self.tokenize(tag)).collect();
         let edx = self.connection.fetch(tokens).await?;
         self.resolve(&edx).map_err(Self::Error::from)
@@ -129,8 +127,8 @@ impl<
 
     async fn insert(
         &self,
-        dx: Dx<VALUE_LENGTH, Self::Tag, Self::Item>,
-    ) -> Result<Dx<VALUE_LENGTH, Self::Tag, Self::Item>, Self::Error> {
+        dx: Dx<Self::Tag, Self::Item>,
+    ) -> Result<Dx<Self::Tag, Self::Item>, Self::Error> {
         let edx = self.prepare(dx)?;
         let edx = self.connection.insert(edx).await?;
         self.resolve(&edx).map_err(Self::Error::from)
@@ -144,7 +142,7 @@ impl<
             .map_err(Self::Error::from)
     }
 
-    async fn dump(&self) -> Result<Dx<VALUE_LENGTH, Self::Tag, Self::Item>, Self::Error> {
+    async fn dump(&self) -> Result<Dx<Self::Tag, Self::Item>, Self::Error> {
         let edx = self.connection.dump().await?;
         self.resolve(&edx).map_err(Self::Error::from)
     }
@@ -166,8 +164,8 @@ impl<
     async fn upsert(
         &self,
         old_edx: Edx,
-        new_dx: Dx<VALUE_LENGTH, Self::Tag, Self::Item>,
-    ) -> Result<(Dx<VALUE_LENGTH, Self::Tag, Self::Item>, Edx), Self::Error> {
+        new_dx: Dx<Self::Tag, Self::Item>,
+    ) -> Result<(Dx<Self::Tag, Self::Item>, Edx), Self::Error> {
         let new_edx = self.prepare(new_dx)?;
         let cur_edx = self.connection.upsert(old_edx, new_edx).await?;
         let cur_dx = self.resolve(&cur_edx)?;
@@ -201,13 +199,13 @@ mod tests {
         let mut rng = CsRng::from_entropy();
         let db = InMemoryDb::default();
         let seed = Secret::<32>::random(&mut rng);
-        let vera = Vera::<VALUE_LENGTH, InMemoryDb, Item>::setup(&*seed, db).unwrap();
+        let vera = Vera::<VALUE_LENGTH, InMemoryDb, Item>::setup(&seed, db).unwrap();
         let inserted_dx = (0..N_WORKERS)
             .map(|i| {
                 let tag = Tag::random(&mut rng);
                 let data = [i as u8];
                 let rejected_items =
-                    block_on(vera.insert(Dx::from(HashMap::from_iter([(tag, data.clone())]))))?;
+                    block_on(vera.insert(Dx::from(HashMap::from_iter([(tag, data)]))))?;
                 if rejected_items.is_empty() {
                     Ok((tag, data))
                 } else {
@@ -286,7 +284,7 @@ mod tests {
                 let seed = seed.clone();
                 let tags = tags.clone();
                 spawn(move || -> Result<(), Error<InMemoryDbError>> {
-                    let vera = Vera::<VALUE_LENGTH, InMemoryDb, Item>::setup(&*seed, db).unwrap();
+                    let vera = Vera::<VALUE_LENGTH, InMemoryDb, Item>::setup(&seed, db).unwrap();
                     concurrent_worker_upserter(&vera, &tags, i as u8)
                 })
             })
@@ -296,7 +294,7 @@ mod tests {
             h.join().unwrap().unwrap();
         }
 
-        let vera = Vera::<VALUE_LENGTH, InMemoryDb, Item>::setup(&*seed, db).unwrap();
+        let vera = Vera::<VALUE_LENGTH, InMemoryDb, Item>::setup(&seed, db).unwrap();
         let stored_dx = block_on(vera.get(tags.into_iter().collect())).unwrap();
         let stored_ids = stored_dx.values().copied().collect::<HashSet<Item>>();
         assert_eq!(
