@@ -49,7 +49,7 @@ pub trait DynRhDxEnc<const VALUE_LENGTH: usize>: Sized {
     /// Removes any binding on the given tags from the stored DX.
     async fn delete(&self, tags: Set<Self::Tag>) -> Result<(), Self::Error>;
 
-    /// Returns the entire stored DX.
+    /// Returns the entire dictionary stored.
     async fn dump(&self) -> Result<Dx<VALUE_LENGTH, Self::Tag, Self::Item>, Self::Error>;
 
     /// Gets the currently stored DX and stores it using the given connection
@@ -68,16 +68,6 @@ pub trait CsRhDxEnc<
     Tag: Hash + PartialEq + Eq + From<[u8; TAG_LENGTH]> + Into<[u8; TAG_LENGTH]>,
 >: DynRhDxEnc<VALUE_LENGTH, Tag = Tag>
 {
-    /// Merges the given DX to the stored one. Uses the existing bindings in
-    /// case of conflict.
-    ///
-    /// Returns the restriction of the stored DX to the conflicting tags,
-    /// alongside its EDX form.
-    async fn insert(
-        &self,
-        dx: Dx<VALUE_LENGTH, Self::Tag, Self::Item>,
-    ) -> Result<(Dx<VALUE_LENGTH, Self::Tag, Self::Item>, Edx), Self::Error>;
-
     /// Merges the given new DX to the stored one conditionally to the fact that
     /// for each tag, the ciphertext bound to this tag in the stored EDX is
     /// equal to the one bound to this tag in the given old EDX.

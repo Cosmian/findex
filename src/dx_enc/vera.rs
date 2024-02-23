@@ -149,8 +149,8 @@ impl<
     async fn rebuild(&self, seed: &[u8], connection: DbConnection) -> Result<Self, Self::Error> {
         let dx = self.dump().await?;
         let new_scheme = Self::setup(seed, connection)?;
-	<Self as DynRhDxEnc<VALUE_LENGTH>>::insert(&new_scheme, dx).await?;
-	Ok(new_scheme)
+        new_scheme.insert(dx).await?;
+        Ok(new_scheme)
     }
 }
 
@@ -160,16 +160,6 @@ impl<
         Item: From<[u8; VALUE_LENGTH]> + Into<[u8; VALUE_LENGTH]>,
     > CsRhDxEnc<{ Tag::LENGTH }, VALUE_LENGTH, Tag> for Vera<VALUE_LENGTH, DbConnection, Item>
 {
-    async fn insert(
-        &self,
-        dx: Dx<VALUE_LENGTH, Self::Tag, Self::Item>,
-    ) -> Result<(Dx<VALUE_LENGTH, Self::Tag, Self::Item>, Edx), Self::Error> {
-        let edx = self.prepare(dx)?;
-        let edx = self.connection.insert(edx).await?;
-        let dx = self.resolve(&edx)?;
-        Ok((dx, edx))
-    }
-
     async fn upsert(
         &self,
         old_edx: Edx,
@@ -214,12 +204,7 @@ mod tests {
                 let tag = Tag::random(&mut rng);
                 let data = [i as u8];
                 let rejected_items =
-                    block_on(<Vera<VALUE_LENGTH, InMemoryDb, Item> as DynRhDxEnc<
-                        VALUE_LENGTH,
-                    >>::insert(
-                        &vera,
-                        Dx::from(HashMap::from_iter([(tag, data.clone())])),
-                    ))?;
+                    block_on(vera.insert(Dx::from(HashMap::from_iter([(tag, data.clone())]))))?;
                 if rejected_items.is_empty() {
                     Ok((tag, data))
                 } else {
@@ -252,12 +237,7 @@ mod tests {
         let dx_new = Dx::from(HashMap::from_iter([(tags[0], [value])]));
 
         // First tries to insert the worker value for the first tag.
-        let (mut dx_cur, mut edx_cur) =
-            block_on(<Vera<VALUE_LENGTH, InMemoryDb, Item> as CsRhDxEnc<
-                { Tag::LENGTH },
-                VALUE_LENGTH,
-                Tag,
-            >>::insert(vera, dx_new.clone()))?;
+        let (mut dx_cur, mut edx_cur) = block_on(vera.upsert(Edx::default(), dx_new.clone()))?;
 
         // Retries upserting with the current EDX state until it succeeds.
         while !edx_cur.is_empty() {

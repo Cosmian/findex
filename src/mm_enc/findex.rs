@@ -10,7 +10,7 @@ use base64::{engine::general_purpose::STANDARD, Engine};
 use cosmian_crypto_core::{kdf256, Secret};
 
 use crate::{
-    dx_enc::{CsRhDxEnc, Dx, DynRhDxEnc, Set},
+    dx_enc::{CsRhDxEnc, Dx, DynRhDxEnc, Edx, Set},
     mm_enc::{structs::Metadata, CsRhMmEnc, METADATA_LENGTH},
     CoreError, MIN_SEED_LENGTH,
 };
@@ -46,7 +46,6 @@ fn bytes_to_blocks(mut bytes: &[u8]) -> Result<Vec<(Flag, Block)>, CoreError> {
         }
     }
 }
-
 /// Decomposes the given sequence of byte-values into a sequence of links.
 ///
 /// # Description
@@ -85,7 +84,6 @@ fn decompose(op: Operation, modifications: &[Vec<u8>]) -> Result<Vec<Link>, Core
         chain.push(link);
     }
 }
-
 /// Recomposes the given sequence links into a sequence of byte values.
 /// No duplicated and no deleted value is returned.
 ///
@@ -116,7 +114,6 @@ fn recompose(chain: &[Link]) -> Result<Vec<Vec<u8>>, CoreError> {
             }
         }
     }
-
     // A linked list stored in a set could advantageously replace this
     // code. However there is no such structure in the standard library and I
     // don't want to include a dependency for that. Since I also don't want to
@@ -136,7 +133,6 @@ fn recompose(chain: &[Link]) -> Result<Vec<Vec<u8>>, CoreError> {
     }
     Ok(purged_value.into_iter().collect())
 }
-
 /// Findex is a CS-RH-MM-Enc scheme.
 ///
 /// It relies on a generic CS-RH-DX-Enc and a generic Dyn-RH-DX-Enc schemes.
@@ -151,7 +147,6 @@ pub struct Findex<
     pub chain: ChainDxEnc,
     tag: PhantomData<Tag>,
 }
-
 impl<
         const TAG_LENGTH: usize,
         Tag: Hash
@@ -175,13 +170,11 @@ impl<
     ) -> Result<Dx<METADATA_LENGTH, Tag, Metadata>, Error<EntryDxEnc::Error, ChainDxEnc::Error>>
     {
         let mut modified_dx = dx.clone();
-        let (mut dx_curr, mut edx_curr) = <EntryDxEnc as CsRhDxEnc<
-            TAG_LENGTH,
-            METADATA_LENGTH,
-            Tag,
-        >>::insert(&self.entry, dx.clone())
-        .await
-        .map_err(Error::Entry)?;
+        let (mut dx_curr, mut edx_curr) = self
+            .entry
+            .upsert(Edx::default(), dx.clone())
+            .await
+            .map_err(Error::Entry)?;
 
         while !dx_curr.is_empty() {
             let mut dx_new = Dx::<METADATA_LENGTH, Tag, Metadata>::default();
@@ -209,7 +202,6 @@ impl<
         }
         Ok(modified_dx)
     }
-
     /// Extracts modifications to the Entry DX associated to the addition and
     /// deletion of the given MM.
     ///
@@ -240,7 +232,6 @@ impl<
         }
         Ok(new_entry_dx)
     }
-
     fn extract_chain_additions(
         &self,
         metadata: &Dx<METADATA_LENGTH, Tag, Metadata>,
@@ -264,7 +255,6 @@ impl<
         }
         Ok(added_chain_dx)
     }
-
     fn extract_chain_deletions(
         &self,
         metadata: &Dx<METADATA_LENGTH, Tag, Metadata>,
@@ -287,7 +277,6 @@ impl<
         }
         Ok(deleted_chain_tags)
     }
-
     /// Applies the given additions and deletions to the stored MM.
     ///
     /// Removes any inserted links in case an error occurs during the insertion.
@@ -306,8 +295,8 @@ impl<
             .insert(inserted_links)
             .await
             .map_err(Error::Chain)
-            .and_then(|conclicting_links| {
-                if !conclicting_links.is_empty() {
+            .and_then(|conflicting_links| {
+                if !conflicting_links.is_empty() {
                     Err(Error::Core(CoreError::Crypto(
                         "conflicts when inserting new links".to_string(),
                     )))
@@ -331,7 +320,6 @@ impl<
             insertion_result
         }
     }
-
     pub async fn compact(&self) -> Result<(), Error<EntryDxEnc::Error, ChainDxEnc::Error>> {
         let entry_dx = self.entry.dump().await.map_err(Error::Entry)?;
         let chain_tags = entry_dx
@@ -373,7 +361,6 @@ impl<
         self.apply(new_chain_items, old_chain_items).await
     }
 }
-
 impl<
         const TAG_LENGTH: usize,
         Tag: Hash
@@ -401,7 +388,6 @@ impl<
         let tag = PhantomData::default();
         Ok(Self { entry, chain, tag })
     }
-
     async fn search(&self, tags: Set<Tag>) -> Result<Mm<Self::Tag, Self::Item>, Self::Error> {
         let metadata = self.entry.get(tags).await.map_err(Self::Error::Entry)?;
         let chain_tags = metadata
@@ -424,6 +410,7 @@ impl<
                     .map(|chain_tag| {
                         links
                             .get(&chain_tag)
+                            // TODO: ignore missing values
                             .ok_or_else(|| {
                                 CoreError::Crypto(format!(
                                     "missing link value for chain tag {}",
@@ -438,7 +425,6 @@ impl<
             })
             .collect()
     }
-
     async fn insert(&self, mm: Mm<Self::Tag, Self::Item>) -> Result<(), Self::Error> {
         let new_links = mm
             .into_iter()
@@ -446,7 +432,6 @@ impl<
             .collect::<Result<Mm<EntryDxEnc::Tag, Link>, _>>()?;
         self.apply(new_links, Mm::default()).await
     }
-
     async fn delete(&self, mm: Mm<Self::Tag, Self::Item>) -> Result<(), Self::Error> {
         let new_links = mm
             .into_iter()
@@ -454,7 +439,6 @@ impl<
             .collect::<Result<Mm<EntryDxEnc::Tag, Link>, _>>()?;
         self.apply(new_links, Mm::default()).await
     }
-
     async fn rebuild(
         &self,
         seed: &[u8],
@@ -476,7 +460,6 @@ impl<
         Ok(Self { entry, chain, tag })
     }
 }
-
 #[cfg(all(test, feature = "in_memory"))]
 mod tests {
 
@@ -520,7 +503,6 @@ mod tests {
         assert_eq!(recomposed_values[0], added_values[0]);
         assert_eq!(recomposed_values[1], added_values[2]);
     }
-
     /// Checks the insert, delete and fetch work correctly in a sequential
     /// manner:
     /// - successive add work;
@@ -595,12 +577,10 @@ mod tests {
             data.retain(|item| *item != addition);
             data.push(addition);
         }
-
         let fetched_mm =
             block_on(findex.search(inserted_mm.keys().copied().collect::<Set<Tag>>())).unwrap();
         assert_eq!(inserted_mm, fetched_mm);
     }
-
     #[test]
     fn concurrent_additions() {
         let mut rng = CsRng::from_entropy();
@@ -633,7 +613,6 @@ mod tests {
         for h in handles {
             h.join().unwrap().unwrap();
         }
-
         let findex = Findex::<
             { Tag::LENGTH },
             Tag,
@@ -657,7 +636,6 @@ mod tests {
                 .collect::<HashSet<Vec<u8>>>()
         );
     }
-
     #[test]
     fn test_rebuild() {
         let mut rng = CsRng::from_entropy();
@@ -694,7 +672,6 @@ mod tests {
             block_on(findex.search(inserted_mm.keys().copied().collect::<Set<Tag>>())).unwrap();
         assert_eq!(inserted_mm, fetched_mm);
     }
-
     #[test]
     fn test_compact() {
         let mut rng = CsRng::from_entropy();
