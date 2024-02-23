@@ -2,11 +2,13 @@ use std::marker::PhantomData;
 
 use cosmian_crypto_core::{kdf256, Secret};
 
-use crate::{CoreError, DbInterface, Error, MIN_SEED_LENGTH};
+use crate::{
+    CoreError, CsDxEnc, Dx, DxEnc, Edx, EdxDbInterface, Error, Set, Token, MIN_SEED_LENGTH,
+};
 
 use super::{
     primitives::{Dem, Kmac},
-    CsRhDxEnc, Dx, DynRhDxEnc, Edx, Set, Tag, Token,
+    Tag,
 };
 
 /// Vera is a CS-RH-DX-Enc scheme: it interacts with a DB to securely store a
@@ -17,7 +19,7 @@ use super::{
 /// values in the EDX ciphertexts.
 pub struct Vera<
     const VALUE_LENGTH: usize,
-    DbConnection: DbInterface,
+    DbConnection: EdxDbInterface,
     Item: From<[u8; VALUE_LENGTH]> + Into<[u8; VALUE_LENGTH]>,
 > {
     connection: DbConnection,
@@ -28,7 +30,7 @@ pub struct Vera<
 
 impl<
         const VALUE_LENGTH: usize,
-        DbConnection: Clone + DbInterface,
+        DbConnection: Clone + EdxDbInterface,
         Item: From<[u8; VALUE_LENGTH]> + Into<[u8; VALUE_LENGTH]>,
     > Vera<VALUE_LENGTH, DbConnection, Item>
 {
@@ -44,8 +46,8 @@ impl<
         &self,
         dx: Dx<
             VALUE_LENGTH,
-            <Self as DynRhDxEnc<VALUE_LENGTH>>::Tag,
-            <Self as DynRhDxEnc<VALUE_LENGTH>>::Item,
+            <Self as DxEnc<{ Tag::LENGTH }, VALUE_LENGTH>>::Tag,
+            <Self as DxEnc<{ Tag::LENGTH }, VALUE_LENGTH>>::Item,
         >,
     ) -> Result<Edx, CoreError> {
         dx.into_iter()
@@ -66,8 +68,8 @@ impl<
     ) -> Result<
         Dx<
             VALUE_LENGTH,
-            <Self as DynRhDxEnc<VALUE_LENGTH>>::Tag,
-            <Self as DynRhDxEnc<VALUE_LENGTH>>::Item,
+            <Self as DxEnc<{ Tag::LENGTH }, VALUE_LENGTH>>::Tag,
+            <Self as DxEnc<{ Tag::LENGTH }, VALUE_LENGTH>>::Item,
         >,
         CoreError,
     > {
@@ -93,9 +95,9 @@ impl<
 
 impl<
         const VALUE_LENGTH: usize,
-        DbConnection: DbInterface + Clone,
+        DbConnection: EdxDbInterface + Clone,
         Item: From<[u8; VALUE_LENGTH]> + Into<[u8; VALUE_LENGTH]>,
-    > DynRhDxEnc<VALUE_LENGTH> for Vera<VALUE_LENGTH, DbConnection, Item>
+    > DxEnc<{ Tag::LENGTH }, VALUE_LENGTH> for Vera<VALUE_LENGTH, DbConnection, Item>
 {
     type Error = Error<DbConnection::Error>;
     type DbConnection = DbConnection;
@@ -156,9 +158,9 @@ impl<
 
 impl<
         const VALUE_LENGTH: usize,
-        DbConnection: DbInterface + Clone,
+        DbConnection: EdxDbInterface + Clone,
         Item: From<[u8; VALUE_LENGTH]> + Into<[u8; VALUE_LENGTH]>,
-    > CsRhDxEnc<{ Tag::LENGTH }, VALUE_LENGTH, Tag> for Vera<VALUE_LENGTH, DbConnection, Item>
+    > CsDxEnc<{ Tag::LENGTH }, VALUE_LENGTH, Edx> for Vera<VALUE_LENGTH, DbConnection, Item>
 {
     async fn upsert(
         &self,

@@ -1,13 +1,7 @@
+use super::{Dx, Set};
 use std::hash::Hash;
 
-mod primitives;
-mod structs;
-mod vera;
-
-pub use structs::{Dx, Edx, Set, Tag, Token};
-pub use vera::Vera;
-
-pub trait DynRhDxEnc<const VALUE_LENGTH: usize>: Sized {
+pub trait DxEnc<const TAG_LENGTH: usize, const VALUE_LENGTH: usize>: Sized {
     /// The type of the connection to the DB used to store the EDX.
     type DbConnection;
 
@@ -15,9 +9,7 @@ pub trait DynRhDxEnc<const VALUE_LENGTH: usize>: Sized {
     type Error: std::error::Error;
 
     /// Type of the tags used by the scheme.
-    ///
-    /// Such tags need to be hashable.
-    type Tag: Hash + PartialEq + Eq;
+    type Tag: Hash + PartialEq + Eq + From<[u8; TAG_LENGTH]> + Into<[u8; TAG_LENGTH]>;
 
     /// The type of objects stored by the scheme.
     ///
@@ -62,11 +54,8 @@ pub trait DynRhDxEnc<const VALUE_LENGTH: usize>: Sized {
     ) -> Result<Self, Self::Error>;
 }
 
-pub trait CsRhDxEnc<
-    const TAG_LENGTH: usize,
-    const VALUE_LENGTH: usize,
-    Tag: Hash + PartialEq + Eq + From<[u8; TAG_LENGTH]> + Into<[u8; TAG_LENGTH]>,
->: DynRhDxEnc<VALUE_LENGTH, Tag = Tag>
+pub trait CsDxEnc<const TAG_LENGTH: usize, const VALUE_LENGTH: usize, Edx>:
+    DxEnc<TAG_LENGTH, VALUE_LENGTH>
 {
     /// Merges the given new DX to the stored one conditionally to the fact that
     /// for each tag, the ciphertext bound to this tag in the stored EDX is

@@ -1,31 +1,9 @@
 use std::{
-    collections::{HashMap, HashSet},
-    fmt::{Debug, Display},
+    collections::{HashSet, HashMap},
+    fmt::{Display, Debug},
     hash::Hash,
     ops::{Deref, DerefMut},
 };
-
-use base64::engine::{general_purpose::STANDARD, Engine};
-
-use crate::CoreError;
-
-impl_byte_array!(Tag, 16, "Tag");
-
-impl TryFrom<&[u8]> for Tag {
-    type Error = CoreError;
-
-    fn try_from(bytes: &[u8]) -> Result<Self, Self::Error> {
-        <[u8; Self::LENGTH]>::try_from(bytes)
-            .map_err(|_| {
-                Self::Error::Conversion(format!(
-                    "incorrect byte length: expected {}, found {}",
-                    Self::LENGTH,
-                    bytes.len()
-                ))
-            })
-            .map(Self)
-    }
-}
 
 // This type is needed to add automatic logging (we need all argument types to
 // implement `Display`).
@@ -100,12 +78,6 @@ impl<Item: Hash + PartialEq + Eq + Clone> Clone for Set<Item> {
         Self(self.0.clone())
     }
 }
-
-/// Size of the token used. It is 256 bits in order to allow more than 80 bits
-/// of post-quantum resistance.
-const TOKEN_LENGTH: usize = 32;
-
-impl_byte_array!(Token, TOKEN_LENGTH, "Token");
 
 #[derive(PartialEq)]
 pub struct Dx<const VALUE_LENGTH: usize, Tag: Hash + PartialEq + Eq, Item>(HashMap<Tag, Item>);
@@ -199,63 +171,83 @@ impl<const VALUE_LENGTH: usize, Tag: Hash + PartialEq + Eq, Item> IntoIterator
     }
 }
 
-// We would like to use an array as ciphertext value. However, constant generics
-// cannot be used in constant operations yet. This is a blocking missing feature.
-#[derive(Default, Debug, Clone, PartialEq, Eq)]
-pub struct Edx(HashMap<Token, Vec<u8>>);
+pub struct Mm<Tag: Hash + PartialEq + Eq, Item>(HashMap<Tag, Vec<Item>>);
 
-impl Deref for Edx {
-    type Target = HashMap<Token, Vec<u8>>;
+impl<Tag: Hash + PartialEq + Eq, Item> Default for Mm<Tag, Item> {
+    fn default() -> Self {
+        Self(HashMap::new())
+    }
+}
+
+impl<Tag: Hash + PartialEq + Eq, Item> Deref for Mm<Tag, Item> {
+    type Target = HashMap<Tag, Vec<Item>>;
 
     fn deref(&self) -> &Self::Target {
         &self.0
     }
 }
 
-impl DerefMut for Edx {
+impl<Tag: Hash + PartialEq + Eq, Item> DerefMut for Mm<Tag, Item> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.0
     }
 }
 
-impl Display for Edx {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        writeln!(f, "Token to EncryptedValue map: {{")?;
-        for (token, encrypted_value) in self.iter() {
-            writeln!(
-                f,
-                "  '{}': {}",
-		token,
-                STANDARD.encode(encrypted_value)
-            )?;
-        }
-        writeln!(f, "}}")
+impl<Tag: Hash + PartialEq + Eq + Clone, Item: Clone> Clone for Mm<Tag, Item> {
+    fn clone(&self) -> Self {
+        Self(self.0.clone())
     }
 }
 
-impl From<HashMap<Token, Vec<u8>>> for Edx {
-    fn from(value: HashMap<Token, Vec<u8>>) -> Self {
+impl<Tag: Hash + PartialEq + Eq + Display, Item: Display> Display for Mm<Tag, Item> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        writeln!(f, "Multi-Map: {{")?;
+        for (tag, items) in self.iter() {
+            writeln!(f, "  '{}': [", tag)?;
+            for i in items {
+                writeln!(f, "    '{}',", i)?;
+            }
+            writeln!(f, "  ],")?;
+        }
+        write!(f, "}}")
+    }
+}
+
+impl<Tag: Hash + PartialEq + Eq + Debug, Item: Debug> Debug for Mm<Tag, Item> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Mm: {:?}", self.0)
+    }
+}
+
+impl<Tag: Hash + PartialEq + Eq, Item> From<HashMap<Tag, Vec<Item>>> for Mm<Tag, Item> {
+    fn from(value: HashMap<Tag, Vec<Item>>) -> Self {
         Self(value)
     }
 }
 
-impl From<Edx> for HashMap<Token, Vec<u8>> {
-    fn from(value: Edx) -> Self {
+impl<Tag: Hash + PartialEq + Eq, Item> From<Mm<Tag, Item>> for HashMap<Tag, Vec<Item>> {
+    fn from(value: Mm<Tag, Item>) -> Self {
         value.0
     }
 }
 
-impl FromIterator<(Token, Vec<u8>)> for Edx {
-    fn from_iter<T: IntoIterator<Item = (Token, Vec<u8>)>>(iter: T) -> Self {
-        Self(HashMap::from_iter(iter))
-    }
-}
-
-impl IntoIterator for Edx {
+impl<Tag: Hash + PartialEq + Eq, Item> IntoIterator for Mm<Tag, Item> {
     type IntoIter = <<Self as Deref>::Target as IntoIterator>::IntoIter;
     type Item = <<Self as Deref>::Target as IntoIterator>::Item;
 
     fn into_iter(self) -> Self::IntoIter {
         self.0.into_iter()
+    }
+}
+
+impl<Tag: Hash + PartialEq + Eq, Item> FromIterator<(Tag, Vec<Item>)> for Mm<Tag, Item> {
+    fn from_iter<T: IntoIterator<Item = (Tag, Vec<Item>)>>(iter: T) -> Self {
+        Self(HashMap::from_iter(iter))
+    }
+}
+
+impl<Tag: Hash + PartialEq + Eq, Item: PartialEq> PartialEq for Mm<Tag, Item> {
+    fn eq(&self, other: &Self) -> bool {
+        self.0 == other.0
     }
 }

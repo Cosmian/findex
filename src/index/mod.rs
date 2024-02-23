@@ -8,29 +8,26 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use async_trait::async_trait;
 use tracing::{instrument, trace};
 
-use crate::{
-    edx::{Token, TokenSet},
-    findex_graph::{FindexGraph, GxEnc},
-    findex_mm::{Operation, ENTRY_LENGTH, LINK_LENGTH},
-    CsRhDxEnc, DbInterfaceErrorTrait, Error, IndexedValue,
-};
+use crate::{CsRhDxEnc, DbInterfaceErrorTrait, DxEnc, Error, Link, Metadata, Tag};
 
-mod structs;
+// mod structs;
 
 use cosmian_crypto_core::{
     reexport::rand_core::{RngCore, SeedableRng},
     CsRng, RandomFixedSizeCBytes,
 };
-pub use structs::{
-    Data, IndexedValueToKeywordsMap, Keyword, KeywordToDataMap, Keywords, Label, UserKey,
-};
+// pub use structs::{
+//     Data, IndexedValueToKeywordsMap, Keyword, KeywordToDataMap, Keywords, Label, UserKey,
+// };
 
 /// User-friendly interface to the Findex algorithm.
-#[async_trait(?Send)]
-pub trait Index<EntryTable: CsRhDxEnc<ENTRY_LENGTH>, ChainTable: CsRhDxEnc<LINK_LENGTH>> {
+pub trait Index<
+    EntryTable: CsRhDxEnc<{ Tag::LENGTH }, { Metadata::LENGTH }, Tag>,
+    ChainTable: DxEnc<{ Link::LENGTH }>,
+>
+{
     /// Index error type.
     type Error: std::error::Error;
 
@@ -123,7 +120,6 @@ pub struct Findex<
     rng: Arc<Mutex<CsRng>>,
 }
 
-#[async_trait(?Send)]
 impl<
         UserError: DbInterfaceErrorTrait,
         EntryTable: CsRhDxEnc<ENTRY_LENGTH, Error = Error<UserError>>,

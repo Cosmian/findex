@@ -1,98 +1,11 @@
 use cosmian_crypto_core::kdf256;
 use std::ops::Add;
 use std::{
-    collections::HashMap,
     fmt::{Debug, Display},
     hash::Hash,
-    ops::{Deref, DerefMut},
 };
 
 use crate::CoreError;
-
-use super::findex::{BLOCK_LENGTH, LINE_WIDTH, LINK_LENGTH};
-
-pub struct Mm<Tag: Hash + PartialEq + Eq, Item>(HashMap<Tag, Vec<Item>>);
-
-impl<Tag: Hash + PartialEq + Eq, Item> Default for Mm<Tag, Item> {
-    fn default() -> Self {
-        Self(HashMap::new())
-    }
-}
-
-impl<Tag: Hash + PartialEq + Eq, Item> Deref for Mm<Tag, Item> {
-    type Target = HashMap<Tag, Vec<Item>>;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-impl<Tag: Hash + PartialEq + Eq, Item> DerefMut for Mm<Tag, Item> {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
-    }
-}
-
-impl<Tag: Hash + PartialEq + Eq + Clone, Item: Clone> Clone for Mm<Tag, Item> {
-    fn clone(&self) -> Self {
-        Self(self.0.clone())
-    }
-}
-
-impl<Tag: Hash + PartialEq + Eq + Display, Item: Display> Display for Mm<Tag, Item> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        writeln!(f, "Multi-Map: {{")?;
-        for (tag, items) in self.iter() {
-            writeln!(f, "  '{}': [", tag)?;
-            for i in items {
-                writeln!(f, "    '{}',", i)?;
-            }
-            writeln!(f, "  ],")?;
-        }
-        write!(f, "}}")
-    }
-}
-
-impl<Tag: Hash + PartialEq + Eq + Debug, Item: Debug> Debug for Mm<Tag, Item> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Mm: {:?}", self.0)
-    }
-}
-
-impl<Tag: Hash + PartialEq + Eq, Item> From<HashMap<Tag, Vec<Item>>> for Mm<Tag, Item> {
-    fn from(value: HashMap<Tag, Vec<Item>>) -> Self {
-        Self(value)
-    }
-}
-
-impl<Tag: Hash + PartialEq + Eq, Item> From<Mm<Tag, Item>> for HashMap<Tag, Vec<Item>> {
-    fn from(value: Mm<Tag, Item>) -> Self {
-        value.0
-    }
-}
-
-impl<Tag: Hash + PartialEq + Eq, Item> IntoIterator for Mm<Tag, Item> {
-    type IntoIter = <<Self as Deref>::Target as IntoIterator>::IntoIter;
-    type Item = <<Self as Deref>::Target as IntoIterator>::Item;
-
-    fn into_iter(self) -> Self::IntoIter {
-        self.0.into_iter()
-    }
-}
-
-impl<Tag: Hash + PartialEq + Eq, Item> FromIterator<(Tag, Vec<Item>)> for Mm<Tag, Item> {
-    fn from_iter<T: IntoIterator<Item = (Tag, Vec<Item>)>>(iter: T) -> Self {
-        Self(HashMap::from_iter(iter))
-    }
-}
-
-impl<Tag: Hash + PartialEq + Eq, Item: PartialEq> PartialEq for Mm<Tag, Item> {
-    fn eq(&self, other: &Self) -> bool {
-        self.0 == other.0
-    }
-}
-
-pub const METADATA_LENGTH: usize = 8;
 
 #[derive(Clone, Debug)]
 pub struct Metadata {
@@ -101,6 +14,8 @@ pub struct Metadata {
 }
 
 impl Metadata {
+    pub const LENGTH: usize = 8;
+
     pub fn new(start: u32, stop: u32) -> Self {
         Self { start, stop }
     }
@@ -119,8 +34,8 @@ impl Metadata {
     }
 }
 
-impl From<[u8; METADATA_LENGTH]> for Metadata {
-    fn from(bytes: [u8; METADATA_LENGTH]) -> Self {
+impl From<[u8; Self::LENGTH]> for Metadata {
+    fn from(bytes: [u8; Self::LENGTH]) -> Self {
         let start =
             u32::from_be_bytes(<[u8; 4]>::try_from(&bytes[..4]).expect("correct byte length"));
         let stop =
@@ -129,9 +44,9 @@ impl From<[u8; METADATA_LENGTH]> for Metadata {
     }
 }
 
-impl From<Metadata> for [u8; METADATA_LENGTH] {
+impl From<Metadata> for [u8; Metadata::LENGTH] {
     fn from(value: Metadata) -> Self {
-        let mut res = [0; METADATA_LENGTH];
+        let mut res = [0; Metadata::LENGTH];
         res[..4].copy_from_slice(&value.start.to_be_bytes());
         res[4..].copy_from_slice(&value.stop.to_be_bytes());
         res
@@ -159,8 +74,12 @@ impl Display for Metadata {
     }
 }
 
-pub type Block = [u8; BLOCK_LENGTH];
+pub const BLOCK_LENGTH: usize = 16;
+impl_byte_array!(Block, BLOCK_LENGTH, "Block");
 
+pub const LINE_WIDTH: usize = 5;
+
+pub const LINK_LENGTH: usize = 1 + LINE_WIDTH * (1 + BLOCK_LENGTH);
 impl_byte_array!(Link, LINK_LENGTH, "Link");
 
 impl Link {
@@ -202,7 +121,6 @@ impl Link {
         }
     }
 }
-
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Flag {

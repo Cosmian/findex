@@ -2,29 +2,18 @@ use std::{
     collections::{HashSet, LinkedList},
     fmt::{Debug, Display},
     hash::Hash,
-    marker::PhantomData,
     ops::DerefMut,
 };
 
 use base64::{engine::general_purpose::STANDARD, Engine};
 use cosmian_crypto_core::{kdf256, Secret};
 
-use crate::{
-    dx_enc::{CsRhDxEnc, Dx, DynRhDxEnc, Edx, Set},
-    mm_enc::{structs::Metadata, CsRhMmEnc, METADATA_LENGTH},
-    CoreError, MIN_SEED_LENGTH,
-};
+use crate::{CoreError, CsDxEnc, CsMmEnc, Dx, DxEnc, Edx, Mm, Set, MIN_SEED_LENGTH};
 
 use super::{
-    structs::{Block, Flag, Link, Mm, Operation},
-    Error,
+    structs::{Block, Flag, Operation, LINE_WIDTH},
+    Error, Link, Metadata,
 };
-
-pub const BLOCK_LENGTH: usize = 16;
-pub const LINE_WIDTH: usize = 5;
-pub const LINK_LENGTH: usize = 1 + LINE_WIDTH * (1 + BLOCK_LENGTH);
-
-const INFO: &[u8] = b"Findex key derivation info.";
 
 /// Groups the given bytes into `BLOCK_LENGTH`-byte blocks.
 ///
@@ -33,11 +22,11 @@ const INFO: &[u8] = b"Findex key derivation info.";
 fn bytes_to_blocks(mut bytes: &[u8]) -> Result<Vec<(Flag, Block)>, CoreError> {
     let mut blocks = Vec::new();
     loop {
-        if bytes.len() > BLOCK_LENGTH {
+        if bytes.len() > Block::LENGTH {
             let mut block = Block::default();
-            block.copy_from_slice(&bytes[..BLOCK_LENGTH]);
+            block.copy_from_slice(&bytes[..Block::LENGTH]);
             blocks.push((Flag::NonTerminating, block));
-            bytes = &bytes[BLOCK_LENGTH..];
+            bytes = &bytes[Block::LENGTH..];
         } else {
             let mut block = Block::default();
             block[..bytes.len()].copy_from_slice(bytes);
@@ -46,6 +35,7 @@ fn bytes_to_blocks(mut bytes: &[u8]) -> Result<Vec<(Flag, Block)>, CoreError> {
         }
     }
 }
+
 /// Decomposes the given sequence of byte-values into a sequence of links.
 ///
 /// # Description
@@ -84,6 +74,7 @@ fn decompose(op: Operation, modifications: &[Vec<u8>]) -> Result<Vec<Link>, Core
         chain.push(link);
     }
 }
+
 /// Recomposes the given sequence links into a sequence of byte values.
 /// No duplicated and no deleted value is returned.
 ///
@@ -114,6 +105,7 @@ fn recompose(chain: &[Link]) -> Result<Vec<Vec<u8>>, CoreError> {
             }
         }
     }
+
     // A linked list stored in a set could advantageously replace this
     // code. However there is no such structure in the standard library and I
     // don't want to include a dependency for that. Since I also don't want to
@@ -133,20 +125,20 @@ fn recompose(chain: &[Link]) -> Result<Vec<Vec<u8>>, CoreError> {
     }
     Ok(purged_value.into_iter().collect())
 }
+
 /// Findex is a CS-RH-MM-Enc scheme.
 ///
 /// It relies on a generic CS-RH-DX-Enc and a generic Dyn-RH-DX-Enc schemes.
 #[derive(Debug)]
 pub struct Findex<
     const TAG_LENGTH: usize,
-    Tag: Hash + PartialEq + Eq + From<[u8; TAG_LENGTH]> + Into<[u8; TAG_LENGTH]>,
-    EntryDxEnc: CsRhDxEnc<TAG_LENGTH, METADATA_LENGTH, Tag, Item = Metadata>,
-    ChainDxEnc: DynRhDxEnc<LINK_LENGTH, Item = Link>,
+    EntryDxEnc: CsDxEnc<TAG_LENGTH, { Metadata::LENGTH }, Edx, Item = Metadata>,
+    ChainDxEnc: DxEnc<TAG_LENGTH, { Link::LENGTH }, Item = Link>,
 > {
     pub entry: EntryDxEnc,
     pub chain: ChainDxEnc,
-    tag: PhantomData<Tag>,
 }
+
 impl<
         const TAG_LENGTH: usize,
         Tag: Hash
@@ -157,17 +149,19 @@ impl<
             + AsRef<[u8]>
             + Clone
             + Display,
-        EntryDxEnc: CsRhDxEnc<TAG_LENGTH, METADATA_LENGTH, Tag, Item = Metadata>,
-        ChainDxEnc: DynRhDxEnc<LINK_LENGTH, Tag = Tag, Item = Link>,
-    > Findex<TAG_LENGTH, Tag, EntryDxEnc, ChainDxEnc>
+        EntryDxEnc: CsDxEnc<TAG_LENGTH, { Metadata::LENGTH }, Edx, Tag = Tag, Item = Metadata>,
+        ChainDxEnc: DxEnc<TAG_LENGTH, { Link::LENGTH }, Tag = Tag, Item = Link>,
+    > Findex<TAG_LENGTH, EntryDxEnc, ChainDxEnc>
 {
+    const INFO: &'static [u8] = b"Findex key derivation info.";
+
     /// Commits the given chain modifications into the Entry Table.
     ///
     /// Returns the chains to insert in the Chain Table.
     async fn reserve(
         &self,
-        dx: Dx<METADATA_LENGTH, Tag, Metadata>,
-    ) -> Result<Dx<METADATA_LENGTH, Tag, Metadata>, Error<EntryDxEnc::Error, ChainDxEnc::Error>>
+        dx: Dx<{ Metadata::LENGTH }, Tag, Metadata>,
+    ) -> Result<Dx<{ Metadata::LENGTH }, Tag, Metadata>, Error<EntryDxEnc::Error, ChainDxEnc::Error>>
     {
         let mut modified_dx = dx.clone();
         let (mut dx_curr, mut edx_curr) = self
@@ -177,7 +171,7 @@ impl<
             .map_err(Error::Entry)?;
 
         while !dx_curr.is_empty() {
-            let mut dx_new = Dx::<METADATA_LENGTH, Tag, Metadata>::default();
+            let mut dx_new = Dx::default();
             for (tag, metadata_cur) in dx_curr {
                 let metadata = dx.get(&tag).ok_or_else(|| {
                     Error::Core(CoreError::Crypto(format!(
@@ -191,17 +185,15 @@ impl<
                 });
                 dx_new.deref_mut().insert(tag, metadata_new);
             }
-            (dx_curr, edx_curr) =
-                <EntryDxEnc as CsRhDxEnc<TAG_LENGTH, METADATA_LENGTH, Tag>>::upsert(
-                    &self.entry,
-                    edx_curr,
-                    dx_new,
-                )
+            (dx_curr, edx_curr) = self
+                .entry
+                .upsert(edx_curr, dx_new)
                 .await
                 .map_err(Error::Entry)?;
         }
         Ok(modified_dx)
     }
+
     /// Extracts modifications to the Entry DX associated to the addition and
     /// deletion of the given MM.
     ///
@@ -212,9 +204,9 @@ impl<
         &self,
         additions: &Mm<Tag, Link>,
         deletions: &Mm<Tag, Link>,
-    ) -> Result<Dx<METADATA_LENGTH, Tag, Metadata>, Error<EntryDxEnc::Error, ChainDxEnc::Error>>
+    ) -> Result<Dx<{ Metadata::LENGTH }, Tag, Metadata>, Error<EntryDxEnc::Error, ChainDxEnc::Error>>
     {
-        let mut new_entry_dx = Dx::<METADATA_LENGTH, Tag, Metadata>::default();
+        let mut new_entry_dx = Dx::default();
         for (tag, chain) in &**additions {
             let n_links = <u32>::try_from(chain.len())
                 .map_err(|_| Error::Core(CoreError::Conversion("chain overflow".to_string())))?;
@@ -232,12 +224,13 @@ impl<
         }
         Ok(new_entry_dx)
     }
+
     fn extract_chain_additions(
         &self,
-        metadata: &Dx<METADATA_LENGTH, Tag, Metadata>,
+        metadata: &Dx<{ Metadata::LENGTH }, Tag, Metadata>,
         additions: Mm<Tag, Link>,
-    ) -> Result<Dx<LINK_LENGTH, Tag, Link>, Error<EntryDxEnc::Error, ChainDxEnc::Error>> {
-        let mut added_chain_dx = Dx::<LINK_LENGTH, Tag, Link>::default();
+    ) -> Result<Dx<{ Link::LENGTH }, Tag, Link>, Error<EntryDxEnc::Error, ChainDxEnc::Error>> {
+        let mut added_chain_dx = Dx::<{ Link::LENGTH }, Tag, Link>::default();
         for (entry_tag, new_links) in additions {
             let n_links = <u32>::try_from(new_links.len())
                 .map_err(|_| Error::Core(CoreError::Conversion("chain overflow".to_string())))?;
@@ -255,9 +248,10 @@ impl<
         }
         Ok(added_chain_dx)
     }
+
     fn extract_chain_deletions(
         &self,
-        metadata: &Dx<METADATA_LENGTH, Tag, Metadata>,
+        metadata: &Dx<{ Metadata::LENGTH }, Tag, Metadata>,
         deletions: Mm<Tag, Link>,
     ) -> Result<Set<Tag>, Error<EntryDxEnc::Error, ChainDxEnc::Error>> {
         let mut deleted_chain_tags = Set::<Tag>::default();
@@ -277,6 +271,7 @@ impl<
         }
         Ok(deleted_chain_tags)
     }
+
     /// Applies the given additions and deletions to the stored MM.
     ///
     /// Removes any inserted links in case an error occurs during the insertion.
@@ -320,6 +315,7 @@ impl<
             insertion_result
         }
     }
+
     pub async fn compact(&self) -> Result<(), Error<EntryDxEnc::Error, ChainDxEnc::Error>> {
         let entry_dx = self.entry.dump().await.map_err(Error::Entry)?;
         let chain_tags = entry_dx
@@ -361,6 +357,7 @@ impl<
         self.apply(new_chain_items, old_chain_items).await
     }
 }
+
 impl<
         const TAG_LENGTH: usize,
         Tag: Hash
@@ -371,9 +368,9 @@ impl<
             + AsRef<[u8]>
             + Clone
             + Display,
-        EntryDxEnc: CsRhDxEnc<TAG_LENGTH, METADATA_LENGTH, Tag, Item = Metadata>,
-        ChainDxEnc: DynRhDxEnc<LINK_LENGTH, Tag = Tag, Item = Link>,
-    > CsRhMmEnc for Findex<TAG_LENGTH, Tag, EntryDxEnc, ChainDxEnc>
+        EntryDxEnc: CsDxEnc<TAG_LENGTH, { Metadata::LENGTH }, Edx, Tag = Tag, Item = Metadata>,
+        ChainDxEnc: DxEnc<TAG_LENGTH, { Link::LENGTH }, Tag = Tag, Item = Link>,
+    > CsMmEnc for Findex<TAG_LENGTH, EntryDxEnc, ChainDxEnc>
 {
     type DbConnection = (EntryDxEnc::DbConnection, ChainDxEnc::DbConnection);
     type Error = Error<EntryDxEnc::Error, ChainDxEnc::Error>;
@@ -382,12 +379,12 @@ impl<
 
     fn setup(seed: &[u8], connection: Self::DbConnection) -> Result<Self, Self::Error> {
         let mut findex_seed = Secret::<MIN_SEED_LENGTH>::default();
-        kdf256!(&mut findex_seed, seed, INFO);
+        kdf256!(&mut findex_seed, seed, Self::INFO);
         let entry = EntryDxEnc::setup(seed, connection.0).map_err(Self::Error::Entry)?;
         let chain = ChainDxEnc::setup(seed, connection.1).map_err(Self::Error::Chain)?;
-        let tag = PhantomData::default();
-        Ok(Self { entry, chain, tag })
+        Ok(Self { entry, chain })
     }
+
     async fn search(&self, tags: Set<Tag>) -> Result<Mm<Self::Tag, Self::Item>, Self::Error> {
         let metadata = self.entry.get(tags).await.map_err(Self::Error::Entry)?;
         let chain_tags = metadata
@@ -425,6 +422,7 @@ impl<
             })
             .collect()
     }
+
     async fn insert(&self, mm: Mm<Self::Tag, Self::Item>) -> Result<(), Self::Error> {
         let new_links = mm
             .into_iter()
@@ -432,6 +430,7 @@ impl<
             .collect::<Result<Mm<EntryDxEnc::Tag, Link>, _>>()?;
         self.apply(new_links, Mm::default()).await
     }
+
     async fn delete(&self, mm: Mm<Self::Tag, Self::Item>) -> Result<(), Self::Error> {
         let new_links = mm
             .into_iter()
@@ -439,13 +438,14 @@ impl<
             .collect::<Result<Mm<EntryDxEnc::Tag, Link>, _>>()?;
         self.apply(new_links, Mm::default()).await
     }
+
     async fn rebuild(
         &self,
         seed: &[u8],
         connection: Self::DbConnection,
     ) -> Result<Self, Self::Error> {
         let mut findex_seed = Secret::<MIN_SEED_LENGTH>::default();
-        kdf256!(&mut findex_seed, seed, INFO);
+        kdf256!(&mut findex_seed, seed, Self::INFO);
         let entry = self
             .entry
             .rebuild(&*findex_seed, connection.0)
@@ -456,10 +456,10 @@ impl<
             .rebuild(&*findex_seed, connection.1)
             .await
             .map_err(Self::Error::Chain)?;
-        let tag = PhantomData::default();
-        Ok(Self { entry, chain, tag })
+        Ok(Self { entry, chain })
     }
 }
+
 #[cfg(all(test, feature = "in_memory"))]
 mod tests {
 
@@ -503,6 +503,7 @@ mod tests {
         assert_eq!(recomposed_values[0], added_values[0]);
         assert_eq!(recomposed_values[1], added_values[2]);
     }
+
     /// Checks the insert, delete and fetch work correctly in a sequential
     /// manner:
     /// - successive add work;
@@ -518,9 +519,8 @@ mod tests {
         let chain_db = InMemoryDb::default();
         let findex = Findex::<
             { Tag::LENGTH },
-            Tag,
-            Vera<METADATA_LENGTH, InMemoryDb, Metadata>,
-            Vera<LINK_LENGTH, InMemoryDb, Link>,
+            Vera<{ Metadata::LENGTH }, InMemoryDb, Metadata>,
+            Vera<{ Link::LENGTH }, InMemoryDb, Link>,
         >::setup(&*seed, (entry_db, chain_db))
         .unwrap();
 
@@ -581,6 +581,7 @@ mod tests {
             block_on(findex.search(inserted_mm.keys().copied().collect::<Set<Tag>>())).unwrap();
         assert_eq!(inserted_mm, fetched_mm);
     }
+
     #[test]
     fn concurrent_additions() {
         let mut rng = CsRng::from_entropy();
@@ -600,9 +601,8 @@ mod tests {
                 spawn(move || -> Result<(), Error<_, _>> {
                     let findex = Findex::<
                         { Tag::LENGTH },
-                        Tag,
-                        Vera<METADATA_LENGTH, InMemoryDb, Metadata>,
-                        Vera<LINK_LENGTH, InMemoryDb, Link>,
+                        Vera<{ Metadata::LENGTH }, InMemoryDb, Metadata>,
+                        Vera<{ Link::LENGTH }, InMemoryDb, Link>,
                     >::setup(&*seed, db)
                     .unwrap();
                     block_on(findex.insert(mm))
@@ -615,9 +615,8 @@ mod tests {
         }
         let findex = Findex::<
             { Tag::LENGTH },
-            Tag,
-            Vera<METADATA_LENGTH, InMemoryDb, Metadata>,
-            Vera<LINK_LENGTH, InMemoryDb, Link>,
+            Vera<{ Metadata::LENGTH }, InMemoryDb, Metadata>,
+            Vera<{ Link::LENGTH }, InMemoryDb, Link>,
         >::setup(&*seed, db)
         .unwrap();
 
@@ -636,6 +635,7 @@ mod tests {
                 .collect::<HashSet<Vec<u8>>>()
         );
     }
+
     #[test]
     fn test_rebuild() {
         let mut rng = CsRng::from_entropy();
@@ -643,9 +643,8 @@ mod tests {
         let db = (InMemoryDb::default(), InMemoryDb::default());
         let findex = Findex::<
             { Tag::LENGTH },
-            Tag,
-            Vera<METADATA_LENGTH, InMemoryDb, Metadata>,
-            Vera<LINK_LENGTH, InMemoryDb, Link>,
+            Vera<{ Metadata::LENGTH }, InMemoryDb, Metadata>,
+            Vera<{ Link::LENGTH }, InMemoryDb, Link>,
         >::setup(&*seed, db)
         .unwrap();
 
@@ -672,6 +671,7 @@ mod tests {
             block_on(findex.search(inserted_mm.keys().copied().collect::<Set<Tag>>())).unwrap();
         assert_eq!(inserted_mm, fetched_mm);
     }
+
     #[test]
     fn test_compact() {
         let mut rng = CsRng::from_entropy();
@@ -679,9 +679,8 @@ mod tests {
         let db = (InMemoryDb::default(), InMemoryDb::default());
         let findex = Findex::<
             { Tag::LENGTH },
-            Tag,
-            Vera<METADATA_LENGTH, InMemoryDb, Metadata>,
-            Vera<LINK_LENGTH, InMemoryDb, Link>,
+            Vera<{ Metadata::LENGTH }, InMemoryDb, Metadata>,
+            Vera<{ Link::LENGTH }, InMemoryDb, Link>,
         >::setup(&*seed, db.clone())
         .unwrap();
 

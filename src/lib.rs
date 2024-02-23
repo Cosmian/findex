@@ -15,18 +15,20 @@
 pub mod macros;
 
 mod db;
-mod dx_enc;
 mod error;
+mod vera;
 // mod gx_enc;
 // mod index;
-mod mm_enc;
+mod findex;
+mod traits;
 
 #[cfg(feature = "in_memory")]
 pub use db::in_memory_db::{InMemoryDb, InMemoryDbError};
-pub use db::DbInterface;
-pub use dx_enc::{CsRhDxEnc, DynRhDxEnc, Token, Tag, Set,  Vera};
+pub use db::{EdxDbInterface, Token, Edx};
 pub use error::{CoreError, DbInterfaceErrorTrait, Error};
-pub use mm_enc::{CsRhMmEnc, Findex};
+pub use findex::{Findex, Link, Metadata};
+pub use traits::*;
+pub use vera::{Tag, Vera};
 
 // pub use index::{
 //     Data, Findex, Index, IndexedValueToKeywordsMap, Keyword, KeywordToDataMap, Keywords, Label,

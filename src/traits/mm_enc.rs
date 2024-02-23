@@ -1,14 +1,8 @@
-use std::{fmt::Display, hash::Hash};
+use std::hash::Hash;
 
-use crate::{dx_enc::Set, CoreError};
+use super::{Mm, Set};
 
-mod findex;
-mod structs;
-
-pub use findex::Findex;
-pub use structs::{Mm, METADATA_LENGTH};
-
-pub trait CsRhMmEnc: Sized {
+pub trait CsMmEnc: Sized {
     /// Type of the tags used by the scheme.
     type Tag: Hash + PartialEq + Eq;
 
@@ -42,36 +36,4 @@ pub trait CsRhMmEnc: Sized {
         seed: &[u8],
         connection: Self::DbConnection,
     ) -> Result<Self, Self::Error>;
-}
-
-#[derive(Debug)]
-pub enum Error<EntryError: std::error::Error, ChainError: std::error::Error> {
-    Core(CoreError),
-    Entry(EntryError),
-    Chain(ChainError),
-}
-
-impl<EntryError: std::error::Error, ChainError: std::error::Error> From<CoreError>
-    for Error<EntryError, ChainError>
-{
-    fn from(e: CoreError) -> Self {
-        Self::Core(e)
-    }
-}
-
-impl<EntryError: std::error::Error, ChainError: std::error::Error> Display
-    for Error<EntryError, ChainError>
-{
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Error::Entry(e) => write!(f, "Entry DX-Enc error: {e}"),
-            Error::Chain(e) => write!(f, "Chain DX-Enc error: {e}"),
-            Error::Core(e) => write!(f, "{e}"),
-        }
-    }
-}
-
-impl<EntryError: std::error::Error, ChainError: std::error::Error> std::error::Error
-    for Error<EntryError, ChainError>
-{
 }
