@@ -7,54 +7,11 @@ use std::{
 };
 
 use cosmian_crypto_core::{reexport::rand_core::SeedableRng, CsRng};
-use cosmian_findex::{
-    ChainTable, CsRhDxEnc, Data, EntryTable, Error, Findex, InMemoryDb, InMemoryDbError, Index,
-    IndexedValue, IndexedValueToKeywordsMap, Keyword, Keywords, Label,
-};
+use cosmian_findex::{mm, Data, Error, InMemoryDbError, Keyword, Mm};
 use futures::executor::block_on;
 use rand::Rng;
 
 const MIN_KEYWORD_LENGTH: usize = 3;
-
-/// Computes the index graph of the given `Keyword`.
-///
-/// - `keyword`             : `Keyword` of which to compute the index graph
-/// - `min_keyword_length`  : number of letters to use as graph root
-fn compute_index_graph(
-    keyword: &Keyword,
-    min_keyword_length: usize,
-) -> HashMap<IndexedValue<Keyword, Data>, HashSet<Keyword>> {
-    if keyword.len() <= min_keyword_length {
-        return HashMap::new();
-    }
-    let mut res = HashMap::with_capacity(keyword.len() - min_keyword_length);
-    for i in min_keyword_length..keyword.len() {
-        let indexing_keyword = Keyword::from(&keyword[..i]);
-        let indexed_value = IndexedValue::Pointer(Keyword::from(&keyword[..=i]));
-        res.insert(indexed_value, HashSet::from_iter([indexing_keyword]));
-    }
-    res
-}
-
-/// Adds the graph of the given `Keyword` to the given `IndexedValue` to
-/// `Keyword`s map.
-///
-/// - `keyword`             : `Keyword` to upsert as graph
-/// - `min_keyword_length`  : number of letters to use as graph root
-/// - `map`                 : `IndexedValue` to `Keyword`s map
-fn add_keyword_graph(
-    keyword: &Keyword,
-    min_keyword_length: usize,
-    map: &mut HashMap<IndexedValue<Keyword, Data>, Keywords>,
-) {
-    let graph = compute_index_graph(keyword, min_keyword_length);
-    for (key, values) in graph {
-        let entry = map.entry(key).or_default();
-        for value in values {
-            entry.insert(value);
-        }
-    }
-}
 
 /// Check the given keyword has a match in the given search results, and
 /// that this match is equal to the given `indexed_value`.

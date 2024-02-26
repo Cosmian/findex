@@ -30,7 +30,7 @@ pub struct Vera<
 
 impl<
         const VALUE_LENGTH: usize,
-        DbConnection: Clone + EdxDbInterface,
+        DbConnection: EdxDbInterface,
         Item: From<[u8; VALUE_LENGTH]> + Into<[u8; VALUE_LENGTH]>,
     > Vera<VALUE_LENGTH, DbConnection, Item>
 {
@@ -97,7 +97,7 @@ impl<
 
 impl<
         const VALUE_LENGTH: usize,
-        DbConnection: EdxDbInterface + Clone,
+        DbConnection: EdxDbInterface,
         Item: From<[u8; VALUE_LENGTH]> + Into<[u8; VALUE_LENGTH]>,
     > DxEnc<{ Tag::LENGTH }, VALUE_LENGTH> for Vera<VALUE_LENGTH, DbConnection, Item>
 {
@@ -157,7 +157,7 @@ impl<
 
 impl<
         const VALUE_LENGTH: usize,
-        DbConnection: EdxDbInterface + Clone,
+        DbConnection: EdxDbInterface,
         Item: From<[u8; VALUE_LENGTH]> + Into<[u8; VALUE_LENGTH]>,
     > CsDxEnc<{ Tag::LENGTH }, VALUE_LENGTH, Edx> for Vera<VALUE_LENGTH, DbConnection, Item>
 {
@@ -204,8 +204,7 @@ mod tests {
             .map(|i| {
                 let tag = Tag::random(&mut rng);
                 let data = [i as u8];
-                let rejected_items =
-                    block_on(vera.insert(Dx::from(HashMap::from_iter([(tag, data)]))))?;
+                let rejected_items = block_on(vera.insert(dx!((tag, data))))?;
                 if rejected_items.is_empty() {
                     Ok((tag, data))
                 } else {
@@ -235,7 +234,7 @@ mod tests {
             return Err(Error::Crypto(format!("could not insert {value}")));
         }
         let mut moved_value = None;
-        let dx_new = Dx::from(HashMap::from_iter([(tags[0], [value])]));
+        let dx_new = dx!((tags[0], [value]));
 
         // First tries to insert the worker value for the first tag.
         let (mut dx_cur, mut edx_cur) = block_on(vera.upsert(Edx::default(), dx_new.clone()))?;

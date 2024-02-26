@@ -525,7 +525,7 @@ mod tests {
             .map(|i| {
                 let tag = Tag::random(&mut rng);
                 let data = (0..=i as u8).map(|j| vec![j]).collect::<Vec<_>>();
-                let mm = Mm::from(HashMap::from_iter([(tag, data.clone())]));
+                let mm = mm!((tag, data.clone()));
                 block_on(findex.insert(mm.clone()))?;
                 Ok((i, mm))
             })
@@ -547,7 +547,7 @@ mod tests {
             .map(|(i, (tag, data))| {
                 // Select a random data.
                 let pos = rng.next_u32() as usize % data.len();
-                let mm = Mm::from(HashMap::from_iter([(*tag, vec![data[pos].clone()])]));
+                let mm = mm!((*tag, vec![data[pos].clone()]));
                 block_on(findex.delete(mm))?;
                 Ok((i, (*tag, data[pos].clone())))
             })
@@ -559,7 +559,7 @@ mod tests {
             .map(|(i, (tag, data))| {
                 // Select a random data.
                 let pos = rng.next_u32() as usize % data.len();
-                let mm = Mm::from(HashMap::from_iter([(*tag, vec![data[pos].clone()])]));
+                let mm = mm!((*tag, vec![data[pos].clone()]));
                 block_on(findex.insert(mm))?;
                 Ok((i, (*tag, data[pos].clone())))
             })
@@ -646,7 +646,7 @@ mod tests {
             .map(|i| {
                 let tag = Tag::random(&mut rng);
                 let data = (0..=i as u8).map(|j| vec![j]).collect::<Vec<_>>();
-                let mm = Mm::from(HashMap::from_iter([(tag, data.clone())]));
+                let mm = mm!((tag, data.clone()));
                 block_on(findex.insert(mm.clone()))?;
                 Ok((i, mm))
             })
@@ -689,8 +689,8 @@ mod tests {
             "I am a second very long test string".as_bytes().to_vec(),
         ];
 
-        block_on(findex.insert(Mm::from_iter([(tag, added_values.clone())]))).unwrap();
-        block_on(findex.delete(Mm::from_iter([(tag, deleted_values)]))).unwrap();
+        block_on(findex.insert(mm!((tag, added_values.clone())))).unwrap();
+        block_on(findex.delete(mm!((tag, deleted_values)))).unwrap();
 
         let chain_len_pre = db.1.len();
         let fetched_mm_pre = block_on(findex.search(Set::from_iter([tag]))).unwrap();

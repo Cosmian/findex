@@ -47,7 +47,7 @@ rand = "0.8.5"
 [[bench]]
 harness = false
 name = "benches"
-required-features = ["all_tests"]
+required-features = ["in_memory"]
 
 [[test]]
 name = "test_in_memory"

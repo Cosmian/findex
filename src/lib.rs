@@ -16,302 +16,176 @@ pub mod macros;
 
 mod db;
 mod error;
-mod vera;
-// mod gx_enc;
 mod findex;
-// mod index;
+mod index;
 mod traits;
+mod vera;
 
 #[cfg(feature = "in_memory")]
 pub use db::in_memory_db::{InMemoryDb, InMemoryDbError};
 pub use db::{Edx, EdxDbInterface, Token};
 pub use error::{CoreError, DbInterfaceErrorTrait, Error};
-pub use findex::{Findex, Link, Metadata};
+pub use findex::{Error as FindexError, Findex, Link, Metadata};
+pub use index::{Index, IndexError, UserKey};
 pub use traits::*;
-pub use vera::{Tag, Vera};
-
-// pub use index::{
-//     Data, Findex, Index, IndexedValueToKeywordsMap, Keyword, KeywordToDataMap, Keywords, Label,
-//     UserKey,
-// };
+pub use vera::{Error as VeraError, Tag, Vera};
 
 /// Minimal seed length preserving 128 bits of post-quantum security.
 pub const MIN_SEED_LENGTH: usize = 32;
 
-// #[cfg(test)]
-// mod example {
-//     use std::collections::HashSet;
+impl_byte_vector!(Keyword, "Keyword");
+impl_byte_vector!(Data, "Data");
 
-//     use cosmian_crypto_core::{reexport::rand_core::SeedableRng, CsRng, RandomFixedSizeCBytes};
+#[cfg(test)]
+mod example {
+    use cosmian_crypto_core::{reexport::rand_core::SeedableRng, CsRng};
 
-//     use crate::{
-//         ChainTable, CsRhDxEnc, Data, EntryTable, Findex, InMemoryDb, Index, IndexedValue,
-//         IndexedValueToKeywordsMap, Keyword, KeywordToDataMap, Keywords, Label, UserKey,
-//     };
+    use crate::*;
 
-//     #[actix_rt::test]
-//     async fn index_and_search() {
-//         /*
-//          * Findex instantiation.
-//          */
-//         let mut rng = CsRng::from_entropy();
-//         // Let's create a new key for our index.
-//         let key = UserKey::new(&mut rng);
-//         // Findex uses a public label with the private key. Let's generate a new label.
-//         let label = Label::from("My public label");
+    #[actix_rt::test]
+    async fn index_and_search() {
+        /*
+         * Findex instantiation.
+         */
+        let mut rng = CsRng::from_entropy();
+        // Let's create a new key for our index.
+        let key = UserKey::random(&mut rng);
 
-//         // Let's create a new index using the provided Entry and Chain table implementation and the
-//         // in-memory EDX implementation provided for test purpose.
-//         let index = Findex::new(
-//             EntryTable::setup(InMemoryDb::default()),
-//             ChainTable::setup(InMemoryDb::default()),
-//         );
+        // Let's create two connection to store the Entry and Chain tables.
+        let entry_table = InMemoryDb::default();
+        let chain_table = InMemoryDb::default();
 
-//         ////////////////////////////////////////////////////////////////////////////////
-//         //                                                                            //
-//         //  Let's associate `loc1` to `kwd1`, `loc2` to `kwd2` and `kwd2` to `kwd1`.  //
-//         //  The future state of the index can be represented as a JSON:               //
-//         //                                                                            //
-//         //  ```json                                                                   //
-//         //  {                                                                         //
-//         //      'kwd1' : ['loc1', 'kwd2'],                                            //
-//         //      'kwd2' : ['loc2'],                                                    //
-//         //  }                                                                         //
-//         //  ```                                                                       //
-//         //                                                                            //
-//         ////////////////////////////////////////////////////////////////////////////////
+        // Let's create a new index using the provided Entry and Chain table implementation and the
+        // in-memory EDX implementation provided for test purpose.
+        let index = Index::new(&key, entry_table.clone(), chain_table.clone()).unwrap();
 
-//         let kwd1 = Keyword::from("Keyword 1");
-//         let kwd2 = Keyword::from("Keyword 2");
-//         let loc1 = Data::from("Location 1");
-//         let loc2 = Data::from("Location 2");
+        ////////////////////////////////////////////////////////////////////////////////
+        //                                                                            //
+        //  Let's associate `loc1` to `kwd1`, `loc2` to `kwd2` and `kwd1`.            //
+        //  The future state of the index can be represented as a JSON:               //
+        //                                                                            //
+        //  ```json                                                                   //
+        //  {                                                                         //
+        //      'kwd1' : ['loc1', 'loc2'],                                            //
+        //      'kwd2' : ['loc2'],                                                    //
+        //  }                                                                         //
+        //  ```                                                                       //
+        //                                                                            //
+        ////////////////////////////////////////////////////////////////////////////////
 
-//         let res = index
-//             .add(
-//                 &key,
-//                 &label,
-//                 IndexedValueToKeywordsMap::from_iter([
-//                     (
-//                         IndexedValue::Data(loc1.clone()),
-//                         HashSet::from_iter([kwd1.clone()]),
-//                     ),
-//                     (
-//                         IndexedValue::Data(loc2.clone()),
-//                         HashSet::from_iter([kwd2.clone()]),
-//                     ),
-//                     (
-//                         IndexedValue::Pointer(kwd2.clone()),
-//                         HashSet::from_iter([kwd1.clone()]),
-//                     ),
-//                 ]),
-//             )
-//             .await
-//             .expect("Error while indexing additions.");
+        let kwd1 = Keyword::from("Keyword 1");
+        let kwd2 = Keyword::from("Keyword 2");
+        let loc1 = Keyword::from("Location 1");
+        let loc2 = Keyword::from("Location 2");
 
-//         // Two new keywords were added to the index.
-//         assert_eq!(2, res.len());
+        let inserted_index = mm! {
+            (kwd1.clone(), vec![loc1.clone(), loc2.clone()]),
+            (kwd2.clone(), vec![loc2.clone()]),
+        };
 
-//         let res = index
-//             .search(
-//                 &key,
-//                 &label,
-//                 Keywords::from_iter([kwd1.clone()]),
-//                 &|_| async { Ok(false) },
-//             )
-//             .await
-//             .expect("Error while searching.");
+        index
+            .add(inserted_index.clone())
+            .await
+            .expect("Error while indexing additions.");
 
-//         // Searching for `kwd1` also retrieves `loc2` since `kwd2` is associated to `kwd1` and that
-//         // Findex search is recursive.
-//         assert_eq!(
-//             res,
-//             KeywordToDataMap::from_iter([(
-//                 kwd1.clone(),
-//                 HashSet::from_iter([loc1.clone(), loc2.clone()])
-//             )])
-//         );
+        let res = index
+            .search(set! {kwd1.clone()})
+            .await
+            .expect("Error while searching.");
 
-//         ////////////////////////////////////////////////////////////////////////////////
-//         //                                                                            //
-//         //  Let's delete the association `kwd1`->`kwd2`. This actually associates the //
-//         //  negation of `kwd2` to `kwd1`.                                             //
-//         //                                                                            //
-//         //  ```json                                                                   //
-//         //  {                                                                         //
-//         //      'kwd1' : ['loc1', 'kwd2', !'kwd2'],                                   //
-//         //      'kwd2' : ['loc2'],                                                    //
-//         //  }                                                                         //
-//         //  ```                                                                       //
-//         //                                                                            //
-//         ////////////////////////////////////////////////////////////////////////////////
+        assert_eq!(res, mm! {(kwd1.clone(), vec![loc1.clone(), loc2.clone()])});
 
-//         let res = index
-//             .delete(
-//                 &key,
-//                 &label,
-//                 IndexedValueToKeywordsMap::from_iter([(
-//                     IndexedValue::Pointer(kwd2.clone()),
-//                     HashSet::from_iter([kwd1.clone()]),
-//                 )]),
-//             )
-//             .await
-//             .expect("Error while indexing deletions.");
+        ////////////////////////////////////////////////////////////////////////////////
+        //                                                                            //
+        //  Let's delete the association `kwd1`->`loc2`. This actually associates the //
+        //  negation of `loc2` to `kwd1`.                                             //
+        //                                                                            //
+        //  ```json                                                                   //
+        //  {                                                                         //
+        //      'kwd1' : ['loc1', 'loc2', !'loc2'],                                   //
+        //      'kwd2' : ['loc2'],                                                    //
+        //  }                                                                         //
+        //  ```                                                                       //
+        //                                                                            //
+        ////////////////////////////////////////////////////////////////////////////////
 
-//         // No new keyword were added to the index.
-//         assert_eq!(0, res.len());
+        index
+            .delete(mm! {(kwd1.clone(), vec![loc2.clone()])})
+            .await
+            .expect("Error while indexing deletions.");
 
-//         let res = index
-//             .search(
-//                 &key,
-//                 &label,
-//                 Keywords::from_iter([kwd1.clone()]),
-//                 &|_| async { Ok(false) },
-//             )
-//             .await
-//             .expect("Error while searching.");
+        let res = index
+            .search(Set::from_iter([kwd1.clone()]))
+            .await
+            .expect("Error while searching.");
 
-//         // Searching for `kwd1` no longer retrieves `loc2`.
-//         assert_eq!(
-//             res,
-//             KeywordToDataMap::from_iter([(kwd1, HashSet::from_iter([loc1.clone()]))])
-//         );
+        // Searching for `kwd1` no longer retrieves `loc2`.
+        assert_eq!(res, mm!((kwd1.clone(), vec![loc1.clone()])));
 
-//         ////////////////////////////////////////////////////////////////////////////////
-//         //                                                                            //
-//         //  Let's compact the index in order to collapse the negation.                //
-//         //                                                                            //
-//         //  ```json                                                                   //
-//         //  {                                                                         //
-//         //      'kwd1' : ['loc1'],                                                    //
-//         //      'kwd2' : ['loc2'],                                                    //
-//         //  }                                                                         //
-//         //  ```                                                                       //
-//         //                                                                            //
-//         ////////////////////////////////////////////////////////////////////////////////
+        ////////////////////////////////////////////////////////////////////////////////
+        //                                                                            //
+        //  Let's compact the index in order to collapse the negation.                //
+        //                                                                            //
+        //  ```json                                                                   //
+        //  {                                                                         //
+        //      'kwd1' : ['loc1'],                                                    //
+        //      'kwd2' : ['loc2'],                                                    //
+        //  }                                                                         //
+        //  ```                                                                       //
+        //                                                                            //
+        ////////////////////////////////////////////////////////////////////////////////
 
-//         // Before compacting, the Entry Table holds 2 lines since two keywords were indexed.
-//         let et_length = index.findex_graph.findex_mm.entry_table.len();
-//         assert_eq!(2, et_length);
+        // Before compacting, the Entry Table holds 2 lines since two keywords were indexed.
+        assert_eq!(2, entry_table.len());
 
-//         // Before compacting, the Entry Table holds 3 lines since four associations were indexed
-//         // but two of them were indexed for the same keyword in the same `add` operations and the
-//         // indexed values are small enough to hold in the same line.
-//         let ct_length = index.findex_graph.findex_mm.chain_table.len();
-//         assert_eq!(3, ct_length);
+        // Before compacting, the Entry Table holds 3 lines since four associations were indexed
+        // but two of them were indexed for the same keyword in the same `add` operations and the
+        // indexed values are small enough to hold in the same line.
+        assert_eq!(3, chain_table.len());
 
-//         let res = index
-//             .compact(&key, &key, &label, &label, 1., &|res| async { Ok(res) })
-//             .await;
+        index.compact().await.unwrap();
 
-//         // Ooops we forgot to renew either the key or the label!
-//         assert!(res.is_err());
+        // After compacting, the Entry Table still holds 2 lines since each indexed keyword still
+        // holds at least one association.
+        assert_eq!(2, entry_table.len());
 
-//         // A new label is easier to propagate since this is public information.
-//         let new_label = Label::from("second label");
+        // After compacting, the Chain Table holds 2 lines since the two associations
+        // `kwd1`->`kwd2` and `kwd1`->!`kwd2` collapsed.
+        assert_eq!(2, chain_table.len());
 
-//         index
-//             .compact(&key, &key, &label, &new_label, 1f64, &|res| async {
-//                 Ok(res)
-//             })
-//             .await
-//             .unwrap();
+        ////////////////////////////////////////////////////////////////////////////////
+        //                                                                            //
+        //  Let's delete the association `kwd2`->`loc2` and compact the index in      //
+        //  order to collapse the negation. Since `kwd2` indexes no more keyword,     //
+        //  it should be removed from the index:                                      //
+        //                                                                            //
+        //  ```json                                                                   //
+        //  {                                                                         //
+        //      'kwd1' : ['loc1'],                                                    //
+        //  }                                                                         //
+        //  ```                                                                       //
+        //                                                                            //
+        ////////////////////////////////////////////////////////////////////////////////
 
-//         // `new_label` is the new `label`.
-//         let label = new_label;
+        index
+            .delete(mm!((kwd2, vec![loc2.clone()])))
+            .await
+            .expect("Error while indexing deletions.");
 
-//         // After compacting, the Entry Table still holds 2 lines since each indexed keyword still
-//         // holds at least one association.
-//         let et_length = index.findex_graph.findex_mm.entry_table.len();
-//         assert_eq!(2, et_length);
+        // The Entry Table still holds 2 lines since no more keywords were
+        // indexed and the deletion is an insertion.
+        assert_eq!(2, entry_table.len());
 
-//         // After compacting, the Chain Table holds 2 lines since the two associations
-//         // `kwd1`->`kwd2` and `kwd1`->!`kwd2` collapsed.
-//         let ct_length = index.findex_graph.findex_mm.chain_table.len();
-//         assert_eq!(2, ct_length);
+        // The Chain Table holds 3 lines since a new association was indexed.
+        assert_eq!(3, chain_table.len());
 
-//         ////////////////////////////////////////////////////////////////////////////////
-//         //                                                                            //
-//         //  Let's delete the association `loc2`->`kwd2` and compact the index in      //
-//         //  order to collapse the negation. Since `kwd2` indexes no more keyword,     //
-//         //  it should be removed from the index:                                      //
-//         //                                                                            //
-//         //  ```json                                                                   //
-//         //  {                                                                         //
-//         //      'kwd1' : ['loc1'],                                                    //
-//         //  }                                                                         //
-//         //  ```                                                                       //
-//         //                                                                            //
-//         ////////////////////////////////////////////////////////////////////////////////
+        index.compact().await.unwrap();
 
-//         index
-//             .delete(
-//                 &key,
-//                 &label,
-//                 IndexedValueToKeywordsMap::from_iter([(
-//                     IndexedValue::Data(loc2),
-//                     HashSet::from_iter([kwd2.clone()]),
-//                 )]),
-//             )
-//             .await
-//             .expect("Error while indexing deletions.");
+        // The Entry Table now holds only 1 line: since `kwd2` does not index
+        // any value anymore, it was removed from the index.
+        // assert_eq!(1, entry_table.len());
 
-//         // The Entry Table still holds 2 lines since no more keywords were indexed.
-//         let et_length = index.findex_graph.findex_mm.entry_table.len();
-//         assert_eq!(2, et_length);
-
-//         // The Chain Table holds 3 lines since a new association was indexed.
-//         let ct_length = index.findex_graph.findex_mm.chain_table.len();
-//         assert_eq!(3, ct_length);
-
-//         let new_label = Label::from("third label");
-//         index
-//             .compact(&key, &key, &label, &new_label, 1f64, &|res| async {
-//                 Ok(res)
-//             })
-//             .await
-//             .unwrap();
-//         let label = new_label;
-
-//         // The Entry Table now holds only 1 line since `kwd2` was not associated to any indexed
-//         // value anymore.
-//         let et_length = index.findex_graph.findex_mm.entry_table.len();
-//         assert_eq!(1, et_length);
-
-//         // The Chain Table holds 1 lines since a two associations collapsed.
-//         let ct_length = index.findex_graph.findex_mm.chain_table.len();
-//         assert_eq!(1, ct_length);
-
-//         ////////////////////////////////////////////////////////////////////////////////
-//         //                                                                            //
-//         //  It is possible to filter out indexed values from the index during the     //
-//         //  compact operation. This is useful when indexed values become obsolete     //
-//         //  but the index was not updated. A `data_filter` callback can be given to   //
-//         //  the compact operation. It is fed with the indexed values read during      //
-//         //  the compact operation. Only those returned are indexed back.              //
-//         //                                                                            //
-//         //  In this example, the `loc1` value will be filtered out. The index should  //
-//         //  then be empty since the `kwd1` will not be associated to any value.       //
-//         //                                                                            //
-//         //  ```json                                                                   //
-//         //  {}                                                                        //
-//         //  ```                                                                       //
-//         //                                                                            //
-//         ////////////////////////////////////////////////////////////////////////////////
-
-//         let new_label = Label::from("fourth label");
-//         index
-//             .compact(&key, &key, &label, &new_label, 1f64, &|data| async {
-//                 let remaining_data = data.into_iter().filter(|v| v != &loc1).collect();
-//                 Ok(remaining_data)
-//             })
-//             .await
-//             .unwrap();
-//         let _label = new_label;
-
-//         let et_length = index.findex_graph.findex_mm.entry_table.len();
-//         assert_eq!(0, et_length);
-
-//         let ct_length = index.findex_graph.findex_mm.chain_table.len();
-//         assert_eq!(0, ct_length);
-//     }
-// }
+        // The Chain Table holds 1 lines since a two associations collapsed.
+        assert_eq!(1, chain_table.len());
+    }
+}

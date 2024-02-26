@@ -1,54 +1,31 @@
-use std::collections::HashMap;
-
-use cosmian_findex::{
-    ChainTable, CsRhDxEnc, Data, EntryTable, Findex, InMemoryDb, Index, IndexedValue,
-    IndexedValueToKeywordsMap, Keyword, Keywords, Label,
-};
+use cosmian_crypto_core::CsRng;
+use cosmian_findex::{mm, Data, InMemoryDb, Index, Keyword, UserKey};
 use futures::executor::block_on;
+use rand::SeedableRng;
 
 fn main() {
-    let mut indexed_value_to_keywords = HashMap::new();
-
-    // direct location robert doe
     let robert_doe_location = Data::from("robert doe DB location");
-    indexed_value_to_keywords.insert(
-        IndexedValue::Data(robert_doe_location),
-        Keywords::from_iter(["robert", "doe"]),
-    );
-
-    // direct location john doe
     let john_doe_location = Data::from("john doe DB location");
-    indexed_value_to_keywords.insert(
-        IndexedValue::Data(john_doe_location),
-        Keywords::from_iter(["john", "doe"]),
-    );
-
-    // direct location for rob...
     let rob_location = Data::from("rob DB location");
-    indexed_value_to_keywords.insert(
-        IndexedValue::Data(rob_location),
-        Keywords::from_iter(["rob"]),
-    );
-    // ... and indirection to robert
-    indexed_value_to_keywords.insert(
-        IndexedValue::Pointer(Keyword::from("robert")),
-        Keywords::from_iter(["rob"]),
+
+    let indexed_value_to_keywords = mm!(
+        (
+            Keyword::from("doe"),
+            vec![robert_doe_location.clone(), john_doe_location.clone()],
+        ),
+        (Keyword::from("john"), vec![john_doe_location],),
+        (Keyword::from("robert"), vec![robert_doe_location],),
+        (Keyword::from("rob"), vec![rob_location]),
     );
 
-    let findex = Findex::new(
-        EntryTable::setup(InMemoryDb::default()),
-        ChainTable::setup(InMemoryDb::default()),
-    );
+    let mut rng = CsRng::from_entropy();
+    let key = UserKey::random(&mut rng);
+    let entry_table = InMemoryDb::default();
+    let chain_table = InMemoryDb::default();
 
-    let key = findex.keygen();
-    let label = Label::from("label");
+    let index = Index::new(&key, entry_table.clone(), chain_table.clone()).unwrap();
 
     for _ in 0..1_000_000 {
-        block_on(findex.add(
-            &key,
-            &label,
-            IndexedValueToKeywordsMap::from(indexed_value_to_keywords.clone()),
-        ))
-        .unwrap();
+        block_on(index.add(indexed_value_to_keywords.clone())).unwrap();
     }
 }

@@ -8,11 +8,6 @@ use cosmian_crypto_core::{
     bytes_ser_de::{Deserializer, Serializer},
     FixedSizeCBytes, RandomFixedSizeCBytes,
 };
-use cosmian_findex::{
-    ChainTable, CsRhDxEnc, Data, EntryTable, Error, Findex, InMemoryDb, InMemoryDbError, Index,
-    IndexedValue, IndexedValueToKeywordsMap, Keyword, Keywords, Label, UserKey, ENTRY_LENGTH,
-    LINK_LENGTH,
-};
 use rand::RngCore;
 
 /// Adds the graph of the given `Keyword` to the given `IndexedValue` to
