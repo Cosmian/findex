@@ -215,8 +215,7 @@ mod tests {
                 let mut tok = Token::default();
                 rng.fill_bytes(&mut tok);
                 let data = vec![i as u8];
-                let rejected_items =
-                    block_on(db.insert(edx!((tok, data.clone()))))?;
+                let rejected_items = block_on(db.insert(edx!((tok, data.clone()))))?;
                 if rejected_items.is_empty() {
                     Ok((tok, data))
                 } else {
@@ -248,9 +247,7 @@ mod tests {
                 spawn(
                     move || -> Result<_, <InMemoryDb as EdxDbInterface>::Error> {
                         let data = vec![i as u8];
-                        let mut rejected_items = block_on(
-                            db.insert(edx!((tok, data.clone()))),
-                        )?;
+                        let mut rejected_items = block_on(db.insert(edx!((tok, data.clone()))))?;
                         while !rejected_items.is_empty() {
                             let mut new_data = rejected_items
                                 .get(&tok)
@@ -261,10 +258,8 @@ mod tests {
                                 })?
                                 .clone();
                             new_data.extend(&data);
-                            rejected_items = block_on(db.upsert(
-                                rejected_items,
-                                edx!((tok, new_data)),
-                            ))?;
+                            rejected_items =
+                                block_on(db.upsert(rejected_items, edx!((tok, new_data))))?;
                         }
                         Ok(())
                     },

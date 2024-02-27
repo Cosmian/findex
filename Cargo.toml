@@ -49,13 +49,13 @@ harness = false
 name = "benches"
 required-features = ["in_memory"]
 
-[[test]]
-name = "test_in_memory"
-required-features = ["all_tests"]
+# [[test]]
+# name = "test_in_memory"
+# required-features = ["all_tests"]
 
-[[test]]
-name = "non_regression"
-required-features = ["all_tests"]
+# [[test]]
+# name = "non_regression"
+# required-features = ["all_tests"]
 
 [[example]]
 name = "search"

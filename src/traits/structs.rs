@@ -12,7 +12,7 @@ pub struct Set<Item: Hash + PartialEq + Eq>(HashSet<Item>);
 
 impl<Item: Hash + PartialEq + Eq> Set<Item> {
     pub fn with_capacity(capacity: usize) -> Self {
-	Self(HashSet::with_capacity(capacity))
+        Self(HashSet::with_capacity(capacity))
     }
 }
 
