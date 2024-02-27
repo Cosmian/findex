@@ -30,13 +30,13 @@ pub use index::{Index, IndexError, UserKey};
 pub use traits::*;
 pub use vera::{Error as VeraError, Tag, Vera};
 
-/// Minimal seed length preserving 128 bits of post-quantum security.
+/// Minimal seed length ensuring enough of post-quantum security bits.
 pub const MIN_SEED_LENGTH: usize = 32;
 
 impl_byte_vector!(Keyword, "Keyword");
 impl_byte_vector!(Data, "Data");
 
-#[cfg(test)]
+#[cfg(all(feature = "in_memory", test))]
 mod example {
     use cosmian_crypto_core::{reexport::rand_core::SeedableRng, CsRng};
 

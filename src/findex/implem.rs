@@ -631,7 +631,7 @@ mod tests {
     }
 
     #[test]
-    fn test_rebuild() {
+    fn rebuild() {
         let mut rng = CsRng::from_entropy();
         let seed = Secret::<32>::random(&mut rng);
         let db = (InMemoryDb::default(), InMemoryDb::default());
@@ -667,7 +667,7 @@ mod tests {
     }
 
     #[test]
-    fn test_compact() {
+    fn compact() {
         let mut rng = CsRng::from_entropy();
         let seed = Secret::<32>::random(&mut rng);
         let db = (InMemoryDb::default(), InMemoryDb::default());

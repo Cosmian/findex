@@ -31,6 +31,7 @@ cosmian_crypto_core = { git = "https://github.com/Cosmian/crypto_core.git", bran
   "aes",
   "sha3",
 ] }
+
 # Once available in stable Rust, use `!` std primitive
 # <https://doc.rust-lang.org/std/primitive.never.html>
 never = "0.1.0"
