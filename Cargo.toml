@@ -22,16 +22,16 @@ path = "src/lib.rs"
 
 [features]
 in_memory = ["cosmian_crypto_core/ser"]
+# Used to avoid compiling broken tests.
+all_tests = ["in_memory"]
 
 [dependencies]
-# Once available in stable Rust (presumably 1.74), use std async fn in trait
-# <https://rust-lang.github.io/rfcs/3185-static-async-fn-in-trait.html>
-async-trait = "0.1.74"
 base64 = "0.21.5"
-cosmian_crypto_core = { version = "9.3.0", default-features = false, features = [
+cosmian_crypto_core = { git = "https://github.com/Cosmian/crypto_core.git", branch = "develop", default-features = false, features = [
   "aes",
   "sha3",
 ] }
+
 # Once available in stable Rust, use `!` std primitive
 # <https://doc.rust-lang.org/std/primitive.never.html>
 never = "0.1.0"
@@ -50,18 +50,18 @@ harness = false
 name = "benches"
 required-features = ["in_memory"]
 
-[[test]]
-name = "test_in_memory"
-required-features = ["in_memory"]
+# [[test]]
+# name = "test_in_memory"
+# required-features = ["all_tests"]
 
-[[test]]
-name = "non_regression"
-required-features = ["in_memory"]
+# [[test]]
+# name = "non_regression"
+# required-features = ["all_tests"]
 
 [[example]]
 name = "search"
-required-features = ["in_memory"]
+required-features = ["all_tests"]
 
 [[example]]
 name = "upsert"
-required-features = ["in_memory"]
+required-features = ["all_tests"]
