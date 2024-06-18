@@ -33,12 +33,11 @@ impl<Address: Hash + Eq + Debug, Value: Clone + Eq + Debug> Stm for KvStore<Addr
 
     type Error = MemoryError;
 
-    fn batch_read(&self, a: Vec<Address>) -> Result<Vec<(Address, Option<Value>)>, Self::Error> {
+    fn batch_read(&self, a: Vec<Address>) -> Result<HashMap<Address, Option<Value>>, Self::Error> {
         let store = &mut *self.0.lock().expect("poisoned lock");
         Ok(a.into_iter()
             .map(|k| {
                 let v = store.get(&k).cloned();
-                //println!("get\t{:?} -> {:?}", k, v);
                 (k, v)
             })
             .collect())
@@ -51,20 +50,20 @@ impl<Address: Hash + Eq + Debug, Value: Clone + Eq + Debug> Stm for KvStore<Addr
     ) -> Result<Option<Self::Word>, Self::Error> {
         let store = &mut *self.0.lock().expect("poisoned lock");
         let (a, old) = guard;
-        let cur = store.get(&a);
-        if old.as_ref() == cur {
+        let cur = store.get(&a).cloned();
+        if old == cur {
             for (k, v) in bindings {
-                println!("set\t{:?}", k);
                 store.insert(k, v);
             }
         }
-        let new = store.get(&a).cloned();
-        Ok(new)
+        Ok(cur)
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashMap;
+
     use crate::stm::Stm;
 
     use super::KvStore;
@@ -79,7 +78,7 @@ mod tests {
         assert_eq!(
             kv.guarded_write((0, None), vec![(0, 2), (1, 1), (2, 1)])
                 .unwrap(),
-            Some(2)
+            None
         );
         assert_eq!(
             kv.guarded_write((0, None), vec![(0, 4), (3, 2), (4, 2)])
@@ -89,10 +88,10 @@ mod tests {
         assert_eq!(
             kv.guarded_write((0, Some(2)), vec![(0, 4), (3, 3), (4, 3)])
                 .unwrap(),
-            Some(4)
+            Some(2)
         );
         assert_eq!(
-            vec![(1, Some(1)), (2, Some(1)), (3, Some(3)), (4, Some(3))],
+            HashMap::from_iter([(1, Some(1)), (2, Some(1)), (3, Some(3)), (4, Some(3))]),
             kv.batch_read(vec![1, 2, 3, 4]).unwrap(),
         )
     }

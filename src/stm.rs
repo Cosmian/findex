@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 pub trait Stm {
     /// Address space.
     type Address;
@@ -12,7 +14,7 @@ pub trait Stm {
     fn batch_read(
         &self,
         a: Vec<Self::Address>,
-    ) -> Result<Vec<(Self::Address, Option<Self::Word>)>, Self::Error>;
+    ) -> Result<HashMap<Self::Address, Option<Self::Word>>, Self::Error>;
 
     /// Adds the given memory bindings if the guard binding is stored.
     /// Returns the value of the guarded word after the writes.
