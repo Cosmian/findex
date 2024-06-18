@@ -80,17 +80,20 @@ impl<
         Self { a, h: None, m }
     }
 
-    pub fn push(&mut self, values: Vec<Vec<u8>>) -> Result<(), Error<Address, Memory::Error>> {
-        let try_push =
-            |old: Option<&Header>| -> Result<(Option<Header>, Header), Error<Address, Memory::Error>> {
+    pub async fn push(
+        &mut self,
+        values: Vec<Vec<u8>>,
+    ) -> Result<(), Error<Address, Memory::Error>> {
+        loop {
+            let old = self.h.as_ref();
+            let (cur, new) = {
                 // Generates a new header which counter is incremented.
                 let mut new = old.cloned().unwrap_or_default();
                 new.stop += values.len() as u64;
 
                 // Binds the correct addresses to the values.
-                let mut bindings = (new.stop - values.len() as u64 ..new.stop).zip(values
-                    .clone()
-                    )
+                let mut bindings = (new.stop - values.len() as u64..new.stop)
+                    .zip(values.clone())
                     .map(|(i, v)| (self.a.clone() + 1 + i, v))
                     .collect::<Vec<_>>();
                 bindings.push((self.a.clone(), (&new).into()));
@@ -98,17 +101,14 @@ impl<
                 // Attempts committing the new bindings using the old header as guard.
                 let cur = self
                     .m
-                    .guarded_write((self.a.clone(), old.map(<Vec<u8>>::from)), bindings)?
+                    .guarded_write((self.a.clone(), old.map(<Vec<u8>>::from)), bindings)
+                    .await?
                     .map(|v| Header::try_from(v.as_slice()))
                     .transpose()
                     .map_err(Error::Conversion)?;
 
-                Ok((cur, new))
+                (cur, new)
             };
-
-        loop {
-            let old = self.h.as_ref();
-            let (cur, new) = try_push(old)?;
             if cur.as_ref() == old {
                 self.h = Some(new);
                 return Ok(());
@@ -118,7 +118,7 @@ impl<
         }
     }
 
-    pub fn read(&self) -> Result<Vec<Vec<u8>>, Error<Address, Memory::Error>> {
+    pub async fn read(&self) -> Result<Vec<Vec<u8>>, Error<Address, Memory::Error>> {
         // Read a first batch of addresses:
         // - the header address;
         // - the value addresses derived from the known header.
@@ -128,7 +128,7 @@ impl<
             .map(|i| self.a.clone() + i)
             .collect();
 
-        let mut res = self.m.batch_read(addresses)?;
+        let mut res = self.m.batch_read(addresses).await?;
 
         let cur_header = res
             .get(&self.a)
@@ -148,12 +148,15 @@ impl<
             .collect::<Vec<_>>();
 
         // Read missing values if any.
-        let mut missing_res = self.m.batch_read(
-            res.iter()
-                .filter_map(|(a, v)| if v.is_none() { Some(a) } else { None })
-                .cloned()
-                .collect(),
-        )?;
+        let mut missing_res = self
+            .m
+            .batch_read(
+                res.iter()
+                    .filter_map(|(a, v)| if v.is_none() { Some(a) } else { None })
+                    .cloned()
+                    .collect(),
+            )
+            .await?;
 
         res.into_iter()
             .map(|(a, maybe_v)| {
@@ -167,6 +170,7 @@ impl<
 
 #[cfg(test)]
 mod tests {
+    use futures::executor::block_on;
     use std::sync::{Arc, Mutex};
 
     use cosmian_crypto_core::{reexport::rand_core::SeedableRng, CsRng, Secret};
@@ -184,13 +188,13 @@ mod tests {
         let mut vector2 = OVec::new(address.clone(), &obf);
 
         let values = (0..10).map(|n| vec![n]).collect::<Vec<_>>();
-        vector1.push(values[..5].to_vec()).unwrap();
-        vector2.push(values[..5].to_vec()).unwrap();
-        vector1.push(values[5..].to_vec()).unwrap();
-        vector2.push(values[5..].to_vec()).unwrap();
+        block_on(vector1.push(values[..5].to_vec())).unwrap();
+        block_on(vector2.push(values[..5].to_vec())).unwrap();
+        block_on(vector1.push(values[5..].to_vec())).unwrap();
+        block_on(vector2.push(values[5..].to_vec())).unwrap();
         assert_eq!(
             [&values[..5], &values[..5], &values[5..], &values[5..]].concat(),
-            vector1.read().unwrap()
+            block_on(vector1.read()).unwrap()
         );
     }
 
@@ -207,15 +211,15 @@ mod tests {
         let mut vector2 = OVec::new(address.clone(), &obf2);
 
         let values = (0..10).map(|n| vec![n]).collect::<Vec<_>>();
-        vector1.push(values[..5].to_vec()).unwrap();
+        block_on(vector1.push(values[..5].to_vec())).unwrap();
         // vector2 should fail its first attempt.
-        vector2.push(values[..5].to_vec()).unwrap();
-        vector1.push(values[5..].to_vec()).unwrap();
+        block_on(vector2.push(values[..5].to_vec())).unwrap();
+        block_on(vector1.push(values[5..].to_vec())).unwrap();
         // vector2 should fail its first attempt.
-        vector2.push(values[5..].to_vec()).unwrap();
+        block_on(vector2.push(values[5..].to_vec())).unwrap();
         assert_eq!(
             [&values[..5], &values[..5], &values[5..], &values[5..]].concat(),
-            vector1.read().unwrap()
+            block_on(vector1.read()).unwrap()
         );
     }
 }

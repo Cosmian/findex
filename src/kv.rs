@@ -28,7 +28,10 @@ impl<Address: Hash + Eq + Debug, Value: Clone + Eq + Debug> Stm for KvStore<Addr
 
     type Error = MemoryError;
 
-    fn batch_read(&self, a: Vec<Address>) -> Result<HashMap<Address, Option<Value>>, Self::Error> {
+    async fn batch_read(
+        &self,
+        a: Vec<Address>,
+    ) -> Result<HashMap<Address, Option<Value>>, Self::Error> {
         let store = &mut *self.0.lock().expect("poisoned lock");
         Ok(a.into_iter()
             .map(|k| {
@@ -38,7 +41,7 @@ impl<Address: Hash + Eq + Debug, Value: Clone + Eq + Debug> Stm for KvStore<Addr
             .collect())
     }
 
-    fn guarded_write(
+    async fn guarded_write(
         &self,
         guard: (Self::Address, Option<Self::Word>),
         bindings: Vec<(Self::Address, Self::Word)>,
@@ -59,6 +62,8 @@ impl<Address: Hash + Eq + Debug, Value: Clone + Eq + Debug> Stm for KvStore<Addr
 mod tests {
     use std::collections::HashMap;
 
+    use futures::executor::block_on;
+
     use crate::Stm;
 
     use super::KvStore;
@@ -71,23 +76,20 @@ mod tests {
         let kv = KvStore::<u8, u8>::default();
 
         assert_eq!(
-            kv.guarded_write((0, None), vec![(0, 2), (1, 1), (2, 1)])
-                .unwrap(),
+            block_on(kv.guarded_write((0, None), vec![(0, 2), (1, 1), (2, 1)])).unwrap(),
             None
         );
         assert_eq!(
-            kv.guarded_write((0, None), vec![(0, 4), (3, 2), (4, 2)])
-                .unwrap(),
+            block_on(kv.guarded_write((0, None), vec![(0, 4), (3, 2), (4, 2)])).unwrap(),
             Some(2)
         );
         assert_eq!(
-            kv.guarded_write((0, Some(2)), vec![(0, 4), (3, 3), (4, 3)])
-                .unwrap(),
+            block_on(kv.guarded_write((0, Some(2)), vec![(0, 4), (3, 3), (4, 3)])).unwrap(),
             Some(2)
         );
         assert_eq!(
             HashMap::from_iter([(1, Some(1)), (2, Some(1)), (3, Some(3)), (4, Some(3))]),
-            kv.batch_read(vec![1, 2, 3, 4]).unwrap(),
+            block_on(kv.batch_read(vec![1, 2, 3, 4])).unwrap(),
         )
     }
 }

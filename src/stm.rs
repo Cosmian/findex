@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::future::Future;
 
 pub trait Stm {
     /// Address space.
@@ -14,7 +15,7 @@ pub trait Stm {
     fn batch_read(
         &self,
         a: Vec<Self::Address>,
-    ) -> Result<HashMap<Self::Address, Option<Self::Word>>, Self::Error>;
+    ) -> impl Future<Output = Result<HashMap<Self::Address, Option<Self::Word>>, Self::Error>>;
 
     /// Adds the given memory bindings if the guard binding is stored.
     /// Returns the value of the guarded word after the writes.
@@ -22,5 +23,5 @@ pub trait Stm {
         &self,
         guard: (Self::Address, Option<Self::Word>),
         bindings: Vec<(Self::Address, Self::Word)>,
-    ) -> Result<Option<Self::Word>, Self::Error>;
+    ) -> impl Future<Output = Result<Option<Self::Word>, Self::Error>>;
 }

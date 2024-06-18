@@ -141,7 +141,7 @@ impl<
 
     type Error = Error<Self::Address, Memory::Error>;
 
-    fn batch_read(
+    async fn batch_read(
         &self,
         addresses: Vec<Self::Address>,
     ) -> Result<HashMap<Self::Address, Option<Self::Word>>, Self::Error> {
@@ -151,7 +151,7 @@ impl<
             .map(|a| self.permute(a))
             .collect();
 
-        let bindings = self.stm.batch_read(tokens)?;
+        let bindings = self.stm.batch_read(tokens).await?;
 
         bindings
             .into_iter()
@@ -163,7 +163,7 @@ impl<
             .collect()
     }
 
-    fn guarded_write(
+    async fn guarded_write(
         &self,
         guard: (Self::Address, Option<Self::Word>),
         bindings: Vec<(Self::Address, Self::Word)>,
@@ -180,7 +180,7 @@ impl<
             })
             .collect::<Result<Vec<_>, _>>()?;
 
-        let ctx = self.stm.guarded_write((tok.clone(), old), bindings)?;
+        let ctx = self.stm.guarded_write((tok.clone(), old), bindings).await?;
 
         if let Some(ctx) = ctx {
             let ptx = self.decrypt(ctx.clone(), tok)?;
@@ -199,6 +199,7 @@ mod tests {
     };
 
     use cosmian_crypto_core::{reexport::rand_core::SeedableRng, CsRng, Secret};
+    use futures::executor::block_on;
 
     use crate::{
         address::Address,
@@ -239,40 +240,40 @@ mod tests {
         let val_addr_4 = Address::<ADDRESS_LENGTH>::random(&mut rng);
 
         assert_eq!(
-            obf.guarded_write(
+            block_on(obf.guarded_write(
                 (header_addr.clone(), None),
                 vec![
                     (header_addr.clone(), vec![2]),
                     (val_addr_1.clone(), vec![1]),
                     (val_addr_2.clone(), vec![1])
                 ]
-            )
+            ))
             .unwrap(),
             None
         );
 
         assert_eq!(
-            obf.guarded_write(
+            block_on(obf.guarded_write(
                 (header_addr.clone(), None),
                 vec![
                     (header_addr.clone(), vec![2]),
                     (val_addr_1.clone(), vec![3]),
                     (val_addr_2.clone(), vec![3])
                 ]
-            )
+            ))
             .unwrap(),
             Some(vec![2])
         );
 
         assert_eq!(
-            obf.guarded_write(
+            block_on(obf.guarded_write(
                 (header_addr.clone(), Some(vec![2])),
                 vec![
                     (header_addr.clone(), vec![4]),
                     (val_addr_3.clone(), vec![2]),
                     (val_addr_4.clone(), vec![2])
                 ]
-            )
+            ))
             .unwrap(),
             Some(vec![2])
         );
@@ -286,13 +287,13 @@ mod tests {
                 (val_addr_4.clone(), Some(vec![2]))
             ]),
             HashSet::from_iter(
-                obf.batch_read(vec![
+                block_on(obf.batch_read(vec![
                     header_addr,
                     val_addr_1,
                     val_addr_2,
                     val_addr_3,
                     val_addr_4
-                ])
+                ]))
                 .unwrap()
             ),
         )

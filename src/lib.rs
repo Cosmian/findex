@@ -11,6 +11,7 @@ mod value;
 
 use std::{
     collections::{HashMap, HashSet},
+    future::Future,
     hash::Hash,
 };
 
@@ -30,13 +31,14 @@ pub trait Index<'a, Keyword: Hash, Value: Hash> {
     fn search(
         &'a self,
         keywords: impl Iterator<Item = Keyword>,
-    ) -> Result<HashMap<Keyword, HashSet<Value>>, Self::Error>;
+    ) -> impl Future<Output = Result<HashMap<Keyword, HashSet<Value>>, Self::Error>>;
 
     fn insert(
         &'a self,
         bindings: impl Iterator<Item = (Keyword, HashSet<Value>)>,
-    ) -> Result<(), Self::Error>;
+    ) -> impl Future<Output = Result<(), Self::Error>>;
 
-    fn delete(bindings: impl Iterator<Item = (Keyword, HashSet<Value>)>)
-        -> Result<(), Self::Error>;
+    fn delete(
+        bindings: impl Iterator<Item = (Keyword, HashSet<Value>)>,
+    ) -> impl Future<Output = Result<(), Self::Error>>;
 }

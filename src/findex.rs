@@ -65,6 +65,35 @@ impl<'a, Memory: 'a + Stm<Address = Address<ADDRESS_LENGTH>, Word = Vec<u8>>> Fi
     {
         links.into_iter().map(Value::from).collect()
     }
+
+    async fn vector_push<Keyword: AsRef<[u8]>, Value>(
+        &'a self,
+        kw: Keyword,
+        values: HashSet<Value>,
+    ) -> Result<(), Error<Address<ADDRESS_LENGTH>, <EncryptionLayer<Memory> as Stm>::Error>>
+    where
+        for<'z> Vec<u8>: From<&'z Value>,
+    {
+        let a = Self::hash_address(kw.as_ref());
+        let mut vector = self.get_vector(&a);
+        vector.push(Self::decompose(values.into_iter())).await?;
+        self.set_vector(a, vector);
+        Ok(())
+    }
+
+    async fn read<Keyword: AsRef<[u8]>, Value: Hash + PartialEq + Eq + From<Vec<u8>>>(
+        &'a self,
+        kw: Keyword,
+    ) -> Result<
+        (Keyword, HashSet<Value>),
+        Error<Address<ADDRESS_LENGTH>, <EncryptionLayer<Memory> as Stm>::Error>,
+    > {
+        let a = Self::hash_address(kw.as_ref());
+        let vector = self.get_vector(&a);
+        let links = vector.read().await?;
+        self.set_vector(a, vector);
+        Ok((kw, Self::recompose(links)))
+    }
 }
 
 impl<
@@ -78,38 +107,35 @@ where
 {
     type Error = Error<Address<ADDRESS_LENGTH>, <EncryptionLayer<Memory> as Stm>::Error>;
 
-    fn search(
+    async fn search(
         &'a self,
         keywords: impl Iterator<Item = Keyword>,
     ) -> Result<HashMap<Keyword, HashSet<Value>>, Self::Error> {
-        keywords
-            .map(|kw| {
-                let a = Self::hash_address(kw.as_ref());
-                let vector = self.get_vector(&a);
-                let links = vector.read()?;
-                self.set_vector(a, vector);
-                Ok((kw, Self::recompose(links)))
-            })
-            .collect()
+        let futures = keywords
+            .map(|kw| self.read::<Keyword, Value>(kw))
+            .collect::<Vec<_>>();
+        let mut bindings = HashMap::new();
+        for fut in futures {
+            let (kw, vals) = fut.await?;
+            bindings.insert(kw, vals);
+        }
+        Ok(bindings)
     }
 
-    fn insert(
+    async fn insert(
         &'a self,
         bindings: impl Iterator<Item = (Keyword, HashSet<Value>)>,
     ) -> Result<(), Self::Error> {
-        bindings
-            .map(|(kw, vals)| {
-                let a = Self::hash_address(kw.as_ref());
-                let mut vector = self.get_vector(&a);
-                vector.push(Self::decompose(vals.into_iter()))?;
-                self.set_vector(a, vector);
-                Ok::<(), Self::Error>(())
-            })
-            .collect::<Result<Vec<_>, _>>()?;
+        let futures = bindings
+            .map(|(kw, vals)| self.vector_push(kw, vals))
+            .collect::<Vec<_>>();
+        for fut in futures {
+            fut.await?;
+        }
         Ok(())
     }
 
-    fn delete(
+    async fn delete(
         _bindings: impl Iterator<Item = (Keyword, HashSet<Value>)>,
     ) -> Result<(), Self::Error> {
         todo!()
@@ -124,6 +150,7 @@ mod tests {
     };
 
     use cosmian_crypto_core::{reexport::rand_core::SeedableRng, CsRng, Secret};
+    use futures::executor::block_on;
 
     use crate::{address::Address, kv::KvStore, Findex, Index, Value, ADDRESS_LENGTH};
 
@@ -143,8 +170,8 @@ mod tests {
                 HashSet::from_iter([Value::from(0), Value::from(2), Value::from(4)]),
             ),
         ]);
-        findex.insert(bindings.clone().into_iter()).unwrap();
-        let res = findex.search(bindings.keys().cloned()).unwrap();
+        block_on(findex.insert(bindings.clone().into_iter())).unwrap();
+        let res = block_on(findex.search(bindings.keys().cloned())).unwrap();
         assert_eq!(bindings, res);
     }
 }
