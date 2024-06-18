@@ -22,6 +22,49 @@ impl<'a, Memory: 'a + Stm<Address = Address<ADDRESS_LENGTH>, Word = Vec<u8>>> Fi
             vectors: Mutex::new(HashMap::new()),
         }
     }
+
+    fn set_vector(
+        &'a self,
+        address: Address<ADDRESS_LENGTH>,
+        vector: OVec<'a, EncryptionLayer<Memory>>,
+    ) {
+        self.vectors
+            .lock()
+            .expect("poisoned mutex")
+            .insert(address, vector);
+    }
+
+    fn get_vector(
+        &'a self,
+        address: &Address<ADDRESS_LENGTH>,
+    ) -> OVec<'a, EncryptionLayer<Memory>> {
+        self.vectors
+            .lock()
+            .expect("poisoned mutex")
+            .get(address)
+            .cloned()
+            .unwrap_or_else(|| OVec::<'a, EncryptionLayer<Memory>>::new(address.clone(), &self.el))
+    }
+
+    fn hash_address(bytes: &[u8]) -> Address<ADDRESS_LENGTH> {
+        let mut a = Address::<ADDRESS_LENGTH>::default();
+        kdf128!(&mut a, bytes);
+        a
+    }
+
+    fn decompose<Value>(values: impl Iterator<Item = Value>) -> Vec<Vec<u8>>
+    where
+        for<'z> Vec<u8>: From<&'z Value>,
+    {
+        values.map(|v| <Vec<u8>>::from(&v)).collect()
+    }
+
+    fn recompose<Value>(links: Vec<Vec<u8>>) -> HashSet<Value>
+    where
+        Value: Hash + PartialEq + Eq + From<Vec<u8>>,
+    {
+        links.into_iter().map(Value::from).collect()
+    }
 }
 
 impl<
@@ -41,17 +84,11 @@ where
     ) -> Result<HashMap<Keyword, HashSet<Value>>, Self::Error> {
         keywords
             .map(|kw| {
-                let mut a = Address::<ADDRESS_LENGTH>::default();
-                kdf128!(&mut a, kw.as_ref());
-                let mut vectors = self.vectors.lock().expect("poisoned mutex");
-                let vector = vectors
-                    .entry(a.clone())
-                    .or_insert_with(|| OVec::<'a, EncryptionLayer<Memory>>::new(a, &self.el));
+                let a = Self::hash_address(kw.as_ref());
+                let vector = self.get_vector(&a);
                 let links = vector.read()?;
-                Ok((
-                    kw,
-                    links.into_iter().map(Value::from).collect::<HashSet<_>>(),
-                ))
+                self.set_vector(a, vector);
+                Ok((kw, Self::recompose(links)))
             })
             .collect()
     }
@@ -62,13 +99,11 @@ where
     ) -> Result<(), Self::Error> {
         bindings
             .map(|(kw, vals)| {
-                let mut a = Address::<ADDRESS_LENGTH>::default();
-                kdf128!(&mut a, kw.as_ref());
-                let mut vectors = self.vectors.lock().expect("poisoned mutex");
-                let vector = vectors
-                    .entry(a.clone())
-                    .or_insert_with(|| OVec::<'a, EncryptionLayer<Memory>>::new(a, &self.el));
-                vector.push(vals.iter().map(<Vec<u8>>::from).collect::<Vec<_>>())
+                let a = Self::hash_address(kw.as_ref());
+                let mut vector = self.get_vector(&a);
+                vector.push(Self::decompose(vals.into_iter()))?;
+                self.set_vector(a, vector);
+                Ok::<(), Self::Error>(())
             })
             .collect::<Result<Vec<_>, _>>()?;
         Ok(())

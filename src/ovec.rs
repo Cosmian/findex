@@ -51,11 +51,23 @@ impl TryFrom<&[u8]> for Header {
 ///     |                                     |
 ///     +------------distant-memory-----------+
 /// ```
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct OVec<'a, Memory: Stm<Word = Vec<u8>>> {
     a: Memory::Address,
     h: Option<Header>,
     m: &'a Memory,
+}
+
+impl<'a, Address: Clone, Memory: Stm<Address = Address, Word = Vec<u8>>> Clone
+    for OVec<'a, Memory>
+{
+    fn clone(&self) -> Self {
+        Self {
+            a: self.a.clone(),
+            h: self.h.clone(),
+            m: self.m,
+        }
+    }
 }
 
 impl<

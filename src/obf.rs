@@ -15,6 +15,7 @@ use cosmian_crypto_core::{
     RandomFixedSizeCBytes, Secret, SymmetricKey,
 };
 
+#[derive(Debug)]
 pub struct EncryptionLayer<Memory: Stm<Address = Address<ADDRESS_LENGTH>, Word = Vec<u8>>> {
     permutation_key: SymmetricKey<KEY_LENGTH>,
     encryption_key: SymmetricKey<32>,
