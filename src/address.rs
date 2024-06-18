@@ -19,6 +19,12 @@ impl<const LENGTH: usize> DerefMut for Address<LENGTH> {
     }
 }
 
+impl<const LENGTH: usize> Default for Address<LENGTH> {
+    fn default() -> Self {
+        Self([0; LENGTH])
+    }
+}
+
 impl<const LENGTH: usize> Address<LENGTH> {
     pub fn random(rng: &mut impl CryptoRngCore) -> Self {
         let mut res = Self([0; LENGTH]);
@@ -38,13 +44,7 @@ impl<const LENGTH: usize> Add<u64> for Address<LENGTH> {
             // add bytes
             let lhs = &mut self[pos % LENGTH];
             let rhs = adder % 256;
-
             let res = *lhs as i32 + rhs as i32 + carry;
-
-            println!(
-                "(pos, lhs, rhs, carry, res) = {:?}",
-                (pos, *lhs, (rhs % 256), carry, res)
-            );
 
             // update states
             *lhs = (res % 256) as u8;

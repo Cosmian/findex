@@ -2,10 +2,10 @@ use std::{
     cmp::Ordering,
     collections::{HashMap, HashSet},
     ops::DerefMut,
-    sync::{Mutex, MutexGuard},
+    sync::{Arc, Mutex, MutexGuard},
 };
 
-use crate::{address::Address, error::Error, Stm};
+use crate::{address::Address, error::Error, Stm, ADDRESS_LENGTH, KEY_LENGTH};
 use aes::{
     cipher::{generic_array::GenericArray, BlockDecrypt, BlockEncrypt, KeyInit},
     Aes256,
@@ -15,26 +15,23 @@ use cosmian_crypto_core::{
     RandomFixedSizeCBytes, Secret, SymmetricKey,
 };
 
-const ADDRESS_LENGTH: usize = 16;
-const KEY_LENGTH: usize = 32;
-
-pub struct ObfuscationLayer<Memory: Stm<Address = Address<ADDRESS_LENGTH>, Word = Vec<u8>>> {
+pub struct EncryptionLayer<Memory: Stm<Address = Address<ADDRESS_LENGTH>, Word = Vec<u8>>> {
     permutation_key: SymmetricKey<KEY_LENGTH>,
     encryption_key: SymmetricKey<32>,
-    cache: Mutex<HashMap<(Address<ADDRESS_LENGTH>, Vec<u8>), Vec<u8>>>,
-    rng: Mutex<CsRng>,
+    cache: Arc<Mutex<HashMap<(Address<ADDRESS_LENGTH>, Vec<u8>), Vec<u8>>>>,
+    rng: Arc<Mutex<CsRng>>,
     stm: Memory,
 }
 
-impl<Memory: Stm<Address = Address<ADDRESS_LENGTH>, Word = Vec<u8>>> ObfuscationLayer<Memory> {
-    pub fn new(seed: Secret<KEY_LENGTH>, rng: CsRng, stm: Memory) -> Self {
+impl<Memory: Stm<Address = Address<ADDRESS_LENGTH>, Word = Vec<u8>>> EncryptionLayer<Memory> {
+    pub fn new(seed: Secret<KEY_LENGTH>, rng: Arc<Mutex<CsRng>>, stm: Memory) -> Self {
         let permutation_key = SymmetricKey::derive(&seed, &[0]).expect("secret is large enough");
         let encryption_key = SymmetricKey::derive(&seed, &[0]).expect("secret is large enough");
         Self {
             permutation_key,
             encryption_key,
-            cache: Mutex::new(HashMap::new()),
-            rng: Mutex::new(rng),
+            cache: Arc::new(Mutex::new(HashMap::new())),
+            rng,
             stm,
         }
     }
@@ -135,7 +132,7 @@ impl<Memory: Stm<Address = Address<ADDRESS_LENGTH>, Word = Vec<u8>>> Obfuscation
 impl<
         Memory: Stm<Address = Address<ADDRESS_LENGTH>, Word = Vec<u8>>, // use a `Vec<u8>` because `const` generics
                                                                         // are not allowed in `const` operations
-    > Stm for ObfuscationLayer<Memory>
+    > Stm for EncryptionLayer<Memory>
 {
     type Address = Address<ADDRESS_LENGTH>;
 
@@ -195,14 +192,17 @@ impl<
 
 #[cfg(test)]
 mod tests {
-    use std::collections::HashSet;
+    use std::{
+        collections::HashSet,
+        sync::{Arc, Mutex},
+    };
 
     use cosmian_crypto_core::{reexport::rand_core::SeedableRng, CsRng, Secret};
 
     use crate::{
         address::Address,
         kv::KvStore,
-        obf::{ObfuscationLayer, ADDRESS_LENGTH},
+        obf::{EncryptionLayer, ADDRESS_LENGTH},
         stm::Stm,
     };
 
@@ -210,8 +210,8 @@ mod tests {
     fn test_encrypt_decrypt() {
         let mut rng = CsRng::from_entropy();
         let seed = Secret::random(&mut rng);
-        let kv = KvStore::<Address<ADDRESS_LENGTH>, Vec<u8>>::new();
-        let obf = ObfuscationLayer::new(seed, rng.clone(), kv);
+        let kv = KvStore::<Address<ADDRESS_LENGTH>, Vec<u8>>::default();
+        let obf = EncryptionLayer::new(seed, Arc::new(Mutex::new(rng.clone())), kv);
         let tok = Address::<ADDRESS_LENGTH>::random(&mut rng);
         let ptx = vec![1];
         let ctx = obf.encrypt(&ptx, &tok).unwrap();
@@ -227,8 +227,8 @@ mod tests {
     fn test_vector_push() {
         let mut rng = CsRng::from_entropy();
         let seed = Secret::random(&mut rng);
-        let kv = KvStore::<Address<ADDRESS_LENGTH>, Vec<u8>>::new();
-        let obf = ObfuscationLayer::new(seed, rng.clone(), kv);
+        let kv = KvStore::<Address<ADDRESS_LENGTH>, Vec<u8>>::default();
+        let obf = EncryptionLayer::new(seed, Arc::new(Mutex::new(rng.clone())), kv);
 
         let header_addr = Address::<ADDRESS_LENGTH>::random(&mut rng);
 

@@ -18,13 +18,8 @@ impl Display for MemoryError {
 
 impl std::error::Error for MemoryError {}
 
+#[derive(Clone, Debug, Default)]
 pub struct KvStore<Address: Hash + Eq, Value>(Arc<Mutex<HashMap<Address, Value>>>);
-
-impl<Address: Hash + Eq, Value: Clone + Eq> KvStore<Address, Value> {
-    pub fn new() -> Self {
-        Self(Arc::new(Mutex::new(HashMap::new())))
-    }
-}
 
 impl<Address: Hash + Eq + Debug, Value: Clone + Eq + Debug> Stm for KvStore<Address, Value> {
     type Address = Address;
@@ -64,7 +59,7 @@ impl<Address: Hash + Eq + Debug, Value: Clone + Eq + Debug> Stm for KvStore<Addr
 mod tests {
     use std::collections::HashMap;
 
-    use crate::stm::Stm;
+    use crate::Stm;
 
     use super::KvStore;
 
@@ -73,7 +68,7 @@ mod tests {
     /// - using the wrong value in the guard fails the operation and returns the current value.
     #[test]
     fn test_vector_push() {
-        let kv = KvStore::<u8, u8>::new();
+        let kv = KvStore::<u8, u8>::default();
 
         assert_eq!(
             kv.guarded_write((0, None), vec![(0, 2), (1, 1), (2, 1)])

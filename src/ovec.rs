@@ -64,6 +64,10 @@ impl<
         Memory: Stm<Address = Address, Word = Vec<u8>>,
     > OVec<'a, Memory>
 {
+    pub fn new(a: Address, m: &'a Memory) -> Self {
+        Self { a, h: None, m }
+    }
+
     pub fn push(&mut self, values: Vec<Vec<u8>>) -> Result<(), Error<Address, Memory::Error>> {
         let try_push =
             |old: Option<&Header>| -> Result<(Option<Header>, Header), Error<Address, Memory::Error>> {
@@ -72,11 +76,10 @@ impl<
                 new.stop += values.len() as u64;
 
                 // Binds the correct addresses to the values.
-                let mut bindings = values
-                    .iter()
-                    .cloned()
-                    .enumerate()
-                    .map(|(i, v)| (self.a.clone() + new.start + 1 + i as u64, v))
+                let mut bindings = (new.stop - values.len() as u64 ..new.stop).zip(values
+                    .clone()
+                    )
+                    .map(|(i, v)| (self.a.clone() + 1 + i, v))
                     .collect::<Vec<_>>();
                 bindings.push((self.a.clone(), (&new).into()));
 
@@ -107,15 +110,15 @@ impl<
         // Read a first batch of addresses:
         // - the header address;
         // - the value addresses derived from the known header.
-        let header = self.h.clone().unwrap_or_default();
-        let addresses = (header.start + 1..header.stop + 1)
+        let old_header = self.h.clone().unwrap_or_default();
+        let addresses = (old_header.start + 1..old_header.stop + 1)
             .chain(0..=0)
             .map(|i| self.a.clone() + i)
             .collect();
 
         let mut res = self.m.batch_read(addresses)?;
 
-        let current_header = res
+        let cur_header = res
             .get(&self.a)
             .ok_or_else(|| Error::MissingValue(self.a.clone()))?
             .as_ref()
@@ -124,7 +127,7 @@ impl<
             .map_err(Error::Conversion)?
             .unwrap_or_default();
 
-        let res = (current_header.start..current_header.stop)
+        let res = (cur_header.start..cur_header.stop)
             .map(|i| self.a.clone() + 1 + i)
             .map(|a| {
                 let v = res.remove(&a).flatten();
@@ -150,82 +153,57 @@ impl<
     }
 }
 
-//#[cfg(test)]
-//mod tests {
-///// Ensures a transaction can express an vector push operation:
-///// - the counter is correctly incremented and all values are written;
-///// - using the wrong value in the guard fails the operation and returns the current value.
-//fn test_vector_push() {
-//let mut rng = CsRng::from_entropy();
-//let seed = Secret::random(&mut rng);
-//let kv = KvStore::<Address<ADDRESS_LENGTH>, Vec<u8>>::new();
-//let obf = ObfuscationLayer::new(seed, rng.clone(), kv);
-//let ovec = OVec::new(seed, rng.clone(), obf);
+#[cfg(test)]
+mod tests {
+    use std::sync::{Arc, Mutex};
 
-//let header_addr = Address::<ADDRESS_LENGTH>::random(&mut rng);
+    use cosmian_crypto_core::{reexport::rand_core::SeedableRng, CsRng, Secret};
 
-//let val_addr_1 = Address::<ADDRESS_LENGTH>::random(&mut rng);
-//let val_addr_2 = Address::<ADDRESS_LENGTH>::random(&mut rng);
-//let val_addr_3 = Address::<ADDRESS_LENGTH>::random(&mut rng);
-//let val_addr_4 = Address::<ADDRESS_LENGTH>::random(&mut rng);
+    use crate::{address::Address, kv::KvStore, obf::EncryptionLayer, ovec::OVec, ADDRESS_LENGTH};
 
-//assert_eq!(
-//obf.guarded_write(
-//(header_addr.clone(), None),
-//vec![
-//(header_addr.clone(), vec![2]),
-//(val_addr_1.clone(), vec![1]),
-//(val_addr_2.clone(), vec![1])
-//]
-//)
-//.unwrap(),
-//None
-//);
+    #[test]
+    fn test_vector_push_with_shared_cache() {
+        let mut rng = CsRng::from_entropy();
+        let seed = Secret::random(&mut rng);
+        let kv = KvStore::<Address<ADDRESS_LENGTH>, Vec<u8>>::default();
+        let obf = EncryptionLayer::new(seed, Arc::new(Mutex::new(rng.clone())), kv);
+        let address = Address::random(&mut rng);
+        let mut vector1 = OVec::new(address.clone(), &obf);
+        let mut vector2 = OVec::new(address.clone(), &obf);
 
-//assert_eq!(
-//obf.guarded_write(
-//(header_addr.clone(), None),
-//vec![
-//(header_addr.clone(), vec![2]),
-//(val_addr_1.clone(), vec![3]),
-//(val_addr_2.clone(), vec![3])
-//]
-//)
-//.unwrap(),
-//Some(vec![2])
-//);
+        let values = (0..10).map(|n| vec![n]).collect::<Vec<_>>();
+        vector1.push(values[..5].to_vec()).unwrap();
+        vector2.push(values[..5].to_vec()).unwrap();
+        vector1.push(values[5..].to_vec()).unwrap();
+        vector2.push(values[5..].to_vec()).unwrap();
+        assert_eq!(
+            [&values[..5], &values[..5], &values[5..], &values[5..]].concat(),
+            vector1.read().unwrap()
+        );
+    }
 
-//assert_eq!(
-//obf.guarded_write(
-//(header_addr.clone(), Some(vec![2])),
-//vec![
-//(header_addr.clone(), vec![4]),
-//(val_addr_3.clone(), vec![2]),
-//(val_addr_4.clone(), vec![2])
-//]
-//)
-//.unwrap(),
-//Some(vec![2])
-//);
+    #[test]
+    fn test_vector_push_without_shared_cache() {
+        let mut rng = CsRng::from_entropy();
+        let seed = Secret::random(&mut rng);
+        let kv = KvStore::<Address<ADDRESS_LENGTH>, Vec<u8>>::default();
+        let obf1 =
+            EncryptionLayer::new(seed.clone(), Arc::new(Mutex::new(rng.clone())), kv.clone());
+        let obf2 = EncryptionLayer::new(seed, Arc::new(Mutex::new(rng.clone())), kv);
+        let address = Address::random(&mut rng);
+        let mut vector1 = OVec::new(address.clone(), &obf1);
+        let mut vector2 = OVec::new(address.clone(), &obf2);
 
-//assert_eq!(
-//HashSet::<(Address<ADDRESS_LENGTH>, Option<Vec<u8>>)>::from_iter([
-//(header_addr.clone(), Some(vec![4])),
-//(val_addr_1.clone(), Some(vec![1])),
-//(val_addr_2.clone(), Some(vec![1])),
-//(val_addr_3.clone(), Some(vec![2])),
-//(val_addr_4.clone(), Some(vec![2]))
-//]),
-//HashSet::from_iter(
-//obf.batch_read(vec![
-//header_addr,
-//val_addr_1,
-//val_addr_2,
-//val_addr_3,
-//val_addr_4
-//])
-//.unwrap()
-//),
-//)
-//}
-//}
+        let values = (0..10).map(|n| vec![n]).collect::<Vec<_>>();
+        vector1.push(values[..5].to_vec()).unwrap();
+        // vector2 should fail its first attempt.
+        vector2.push(values[..5].to_vec()).unwrap();
+        vector1.push(values[5..].to_vec()).unwrap();
+        // vector2 should fail its first attempt.
+        vector2.push(values[5..].to_vec()).unwrap();
+        assert_eq!(
+            [&values[..5], &values[..5], &values[5..], &values[5..]].concat(),
+            vector1.read().unwrap()
+        );
+    }
+}
