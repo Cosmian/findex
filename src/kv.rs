@@ -28,17 +28,9 @@ impl<Address: Hash + Eq + Debug, Value: Clone + Eq + Debug> Stm for KvStore<Addr
 
     type Error = MemoryError;
 
-    async fn batch_read(
-        &self,
-        a: Vec<Address>,
-    ) -> Result<HashMap<Address, Option<Value>>, Self::Error> {
+    async fn batch_read(&self, a: Vec<Address>) -> Result<Vec<Option<Value>>, Self::Error> {
         let store = &mut *self.0.lock().expect("poisoned lock");
-        Ok(a.into_iter()
-            .map(|k| {
-                let v = store.get(&k).cloned();
-                (k, v)
-            })
-            .collect())
+        Ok(a.into_iter().map(|k| store.get(&k).cloned()).collect())
     }
 
     async fn guarded_write(
@@ -60,7 +52,6 @@ impl<Address: Hash + Eq + Debug, Value: Clone + Eq + Debug> Stm for KvStore<Addr
 
 #[cfg(test)]
 mod tests {
-    use std::collections::HashMap;
 
     use futures::executor::block_on;
 
@@ -88,7 +79,7 @@ mod tests {
             Some(2)
         );
         assert_eq!(
-            HashMap::from_iter([(1, Some(1)), (2, Some(1)), (3, Some(3)), (4, Some(3))]),
+            vec![Some(1), Some(1), Some(3), Some(3)],
             block_on(kv.batch_read(vec![1, 2, 3, 4])).unwrap(),
         )
     }

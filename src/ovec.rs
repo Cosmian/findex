@@ -76,10 +76,13 @@ impl<
         Memory: Stm<Address = Address, Word = Vec<u8>>,
     > OVec<'a, Memory>
 {
+    /// (Lazily) instantiates a new vector at this address in this memory: no value is written
+    /// before the first push.
     pub fn new(a: Address, m: &'a Memory) -> Self {
         Self { a, h: None, m }
     }
 
+    /// Atomically pushes the given values at the end of this vector. Retries upon conflict.
     pub async fn push(
         &mut self,
         values: Vec<Vec<u8>>,
@@ -114,56 +117,52 @@ impl<
                 return Ok(());
             } else {
                 self.h = cur;
+                // Findex modifications are only lock-free, hence it does not guarantee a given
+                // client will ever terminate. It arguably will if the index is not highly
+                // contended, but we need a stronger guarantee. Maybe a return with an error after
+                // a reaching a certain number of retries.
             }
         }
     }
 
+    /// Atomically reads the values stored in this vector.
     pub async fn read(&self) -> Result<Vec<Vec<u8>>, Error<Address, Memory::Error>> {
-        // Read a first batch of addresses:
+        // Read from a first batch of addresses:
         // - the header address;
         // - the value addresses derived from the known header.
         let old_header = self.h.clone().unwrap_or_default();
-        let addresses = (old_header.start + 1..old_header.stop + 1)
-            .chain(0..=0)
-            .map(|i| self.a.clone() + i)
+        let addresses = [self.a.clone()]
+            .into_iter()
+            .chain((old_header.start..old_header.stop).map(|i| self.a.clone() + i + 1))
             .collect();
 
-        let mut res = self.m.batch_read(addresses).await?;
+        let res = self.m.batch_read(addresses).await?;
 
-        let cur_header = res
-            .get(&self.a)
-            .ok_or_else(|| Error::MissingValue(self.a.clone()))?
-            .as_ref()
-            .map(|v| Header::try_from(v.as_slice()))
+        let cur_header = res[0]
+            .clone()
+            .map(|v| {
+                println!("{v:?}");
+                Header::try_from(v.as_slice())
+            })
             .transpose()
             .map_err(Error::Conversion)?
             .unwrap_or_default();
 
-        let res = (cur_header.start..cur_header.stop)
-            .map(|i| self.a.clone() + 1 + i)
-            .map(|a| {
-                let v = res.remove(&a).flatten();
-                (a, v)
-            })
-            .collect::<Vec<_>>();
-
-        // Read missing values if any.
-        let mut missing_res = self
+        // Get all missing values, if any.
+        let missing_res = self
             .m
             .batch_read(
-                res.iter()
-                    .filter_map(|(a, v)| if v.is_none() { Some(a) } else { None })
-                    .cloned()
+                (cur_header.start.max(old_header.stop)..cur_header.stop)
+                    .map(|i| self.a.clone() + i + 1)
                     .collect(),
             )
             .await?;
 
         res.into_iter()
-            .map(|(a, maybe_v)| {
-                maybe_v
-                    .or_else(|| missing_res.remove(&a).flatten())
-                    .ok_or_else(|| Error::MissingValue(a.clone()))
-            })
+            .skip(1)
+            .chain(missing_res)
+            .enumerate()
+            .map(|(i, v)| v.ok_or_else(|| Error::MissingValue(self.a.clone() + i as u64)))
             .collect()
     }
 }
@@ -175,14 +174,16 @@ mod tests {
 
     use cosmian_crypto_core::{reexport::rand_core::SeedableRng, CsRng, Secret};
 
-    use crate::{address::Address, kv::KvStore, obf::EncryptionLayer, ovec::OVec, ADDRESS_LENGTH};
+    use crate::{
+        address::Address, kv::KvStore, obf::MemoryEncryptionLayer, ovec::OVec, ADDRESS_LENGTH,
+    };
 
     #[test]
     fn test_vector_push_with_shared_cache() {
         let mut rng = CsRng::from_entropy();
         let seed = Secret::random(&mut rng);
         let kv = KvStore::<Address<ADDRESS_LENGTH>, Vec<u8>>::default();
-        let obf = EncryptionLayer::new(seed, Arc::new(Mutex::new(rng.clone())), kv);
+        let obf = MemoryEncryptionLayer::new(seed, Arc::new(Mutex::new(rng.clone())), kv);
         let address = Address::random(&mut rng);
         let mut vector1 = OVec::new(address.clone(), &obf);
         let mut vector2 = OVec::new(address.clone(), &obf);
@@ -204,8 +205,8 @@ mod tests {
         let seed = Secret::random(&mut rng);
         let kv = KvStore::<Address<ADDRESS_LENGTH>, Vec<u8>>::default();
         let obf1 =
-            EncryptionLayer::new(seed.clone(), Arc::new(Mutex::new(rng.clone())), kv.clone());
-        let obf2 = EncryptionLayer::new(seed, Arc::new(Mutex::new(rng.clone())), kv);
+            MemoryEncryptionLayer::new(seed.clone(), Arc::new(Mutex::new(rng.clone())), kv.clone());
+        let obf2 = MemoryEncryptionLayer::new(seed, Arc::new(Mutex::new(rng.clone())), kv);
         let address = Address::random(&mut rng);
         let mut vector1 = OVec::new(address.clone(), &obf1);
         let mut vector2 = OVec::new(address.clone(), &obf2);

@@ -1,5 +1,4 @@
 use std::{
-    cmp::Ordering,
     collections::{HashMap, HashSet},
     ops::DerefMut,
     sync::{Arc, Mutex, MutexGuard},
@@ -11,12 +10,12 @@ use aes::{
     Aes256,
 };
 use cosmian_crypto_core::{
-    reexport::rand_core::RngCore, Aes256Gcm, CsRng, Dem, FixedSizeCBytes, Instantiable, Nonce,
-    RandomFixedSizeCBytes, Secret, SymmetricKey,
+    Aes256Gcm, CsRng, Dem, FixedSizeCBytes, Instantiable, Nonce, RandomFixedSizeCBytes, Secret,
+    SymmetricKey,
 };
 
 #[derive(Debug)]
-pub struct EncryptionLayer<Memory: Stm<Address = Address<ADDRESS_LENGTH>, Word = Vec<u8>>> {
+pub struct MemoryEncryptionLayer<Memory: Stm<Address = Address<ADDRESS_LENGTH>, Word = Vec<u8>>> {
     permutation_key: SymmetricKey<KEY_LENGTH>,
     encryption_key: SymmetricKey<32>,
     cache: Arc<Mutex<HashMap<(Address<ADDRESS_LENGTH>, Vec<u8>), Vec<u8>>>>,
@@ -24,7 +23,10 @@ pub struct EncryptionLayer<Memory: Stm<Address = Address<ADDRESS_LENGTH>, Word =
     stm: Memory,
 }
 
-impl<Memory: Stm<Address = Address<ADDRESS_LENGTH>, Word = Vec<u8>>> EncryptionLayer<Memory> {
+// NOTE: cannot enforce word length at compile time without hard-coding numbers since constant
+// generics are not yet allowed in constant operations.
+impl<Memory: Stm<Address = Address<ADDRESS_LENGTH>, Word = Vec<u8>>> MemoryEncryptionLayer<Memory> {
+    /// Instantiates a new memory encryption layer.
     pub fn new(seed: Secret<KEY_LENGTH>, rng: Arc<Mutex<CsRng>>, stm: Memory) -> Self {
         let permutation_key = SymmetricKey::derive(&seed, &[0]).expect("secret is large enough");
         let encryption_key = SymmetricKey::derive(&seed, &[0]).expect("secret is large enough");
@@ -37,12 +39,13 @@ impl<Memory: Stm<Address = Address<ADDRESS_LENGTH>, Word = Vec<u8>>> EncryptionL
         }
     }
 
-    pub fn rng(&self) -> MutexGuard<CsRng> {
+    #[inline(always)]
+    fn rng(&self) -> MutexGuard<CsRng> {
         self.rng.lock().expect("poisoned lock")
     }
 
     /// Retains values cached for the given keys only.
-    pub fn retain_cached_keys(&self, keys: &HashSet<(Address<ADDRESS_LENGTH>, Vec<u8>)>) {
+    pub fn retain_cached_keys(&self, keys: &HashSet<(Memory::Address, Vec<u8>)>) {
         self.cache
             .lock()
             .expect("poisoned mutex")
@@ -50,24 +53,12 @@ impl<Memory: Stm<Address = Address<ADDRESS_LENGTH>, Word = Vec<u8>>> EncryptionL
             .retain(|k, _| keys.contains(k));
     }
 
-    /// Shuffles the given list of values.
-    fn shuffle<T>(&self, mut v: Vec<T>) -> Vec<T> {
-        v.sort_by(|_, _| {
-            if self.rng().next_u32() % 2 == 0 {
-                Ordering::Less
-            } else {
-                Ordering::Greater
-            }
-        });
-        v
-    }
-
-    /// Get the encrypted value from the cache, compute it upon cache miss.
+    /// Gets the encrypted value from the cache and computes it upon cache miss.
     pub fn encrypt(
         &self,
         ptx: &[u8],
-        tok: &Address<ADDRESS_LENGTH>,
-    ) -> Result<Vec<u8>, Error<Address<ADDRESS_LENGTH>, Memory::Error>> {
+        tok: &Memory::Address,
+    ) -> Result<Vec<u8>, Error<Memory::Address, Memory::Error>> {
         let k = (tok.clone(), ptx.to_vec());
         if let Some(ctx) = self.find(&k) {
             Ok(ctx)
@@ -82,12 +73,12 @@ impl<Memory: Stm<Address = Address<ADDRESS_LENGTH>, Word = Vec<u8>>> EncryptionL
         }
     }
 
-    /// Decrypt the given value, and cache the ciphertext.
+    /// Decrypts the given value and caches the ciphertext.
     pub fn decrypt(
         &self,
         ctx: Vec<u8>,
-        tok: Address<ADDRESS_LENGTH>,
-    ) -> Result<Vec<u8>, Error<Address<ADDRESS_LENGTH>, Memory::Error>> {
+        tok: Memory::Address,
+    ) -> Result<Vec<u8>, Error<Memory::Address, Memory::Error>> {
         if ctx.len() < Aes256Gcm::NONCE_LENGTH {
             return Err(Error::Parsing("ciphertext too small".to_string()));
         }
@@ -100,19 +91,19 @@ impl<Memory: Stm<Address = Address<ADDRESS_LENGTH>, Word = Vec<u8>>> EncryptionL
         Ok(ptx)
     }
 
-    pub fn reorder(&self, mut a: Address<ADDRESS_LENGTH>) -> Address<ADDRESS_LENGTH> {
+    pub fn reorder(&self, mut a: Memory::Address) -> Memory::Address {
         Aes256::new(GenericArray::from_slice(&self.permutation_key))
             .decrypt_block(GenericArray::from_mut_slice(&mut a));
         a
     }
 
-    pub fn permute(&self, mut a: Address<ADDRESS_LENGTH>) -> Address<ADDRESS_LENGTH> {
+    pub fn permute(&self, mut a: Memory::Address) -> Memory::Address {
         Aes256::new(GenericArray::from_slice(&self.permutation_key))
             .encrypt_block(GenericArray::from_mut_slice(&mut a));
         a
     }
 
-    pub fn bind(&self, k: (Address<ADDRESS_LENGTH>, Vec<u8>), v: Vec<u8>) {
+    pub fn bind(&self, k: (Memory::Address, Vec<u8>), v: Vec<u8>) {
         self.cache
             .lock()
             .expect("poisoned lock")
@@ -133,7 +124,7 @@ impl<Memory: Stm<Address = Address<ADDRESS_LENGTH>, Word = Vec<u8>>> EncryptionL
 impl<
         Memory: Stm<Address = Address<ADDRESS_LENGTH>, Word = Vec<u8>>, // use a `Vec<u8>` because `const` generics
                                                                         // are not allowed in `const` operations
-    > Stm for EncryptionLayer<Memory>
+    > Stm for MemoryEncryptionLayer<Memory>
 {
     type Address = Address<ADDRESS_LENGTH>;
 
@@ -144,22 +135,13 @@ impl<
     async fn batch_read(
         &self,
         addresses: Vec<Self::Address>,
-    ) -> Result<HashMap<Self::Address, Option<Self::Word>>, Self::Error> {
-        let tokens = self
-            .shuffle(addresses)
-            .into_iter()
-            .map(|a| self.permute(a))
-            .collect();
-
-        let bindings = self.stm.batch_read(tokens).await?;
-
+    ) -> Result<Vec<Option<Self::Word>>, Self::Error> {
+        let tokens: Vec<_> = addresses.into_iter().map(|a| self.permute(a)).collect();
+        let bindings = self.stm.batch_read(tokens.clone()).await?;
         bindings
             .into_iter()
-            .map(|(tok, ctx)| {
-                ctx.map(|ctx| self.decrypt(ctx, tok.clone()))
-                    .transpose()
-                    .map(|maybe_ctx| (self.reorder(tok), maybe_ctx))
-            })
+            .zip(tokens)
+            .map(|(ctx, tok)| ctx.map(|ctx| self.decrypt(ctx, tok.clone())).transpose())
             .collect()
     }
 
@@ -193,10 +175,7 @@ impl<
 
 #[cfg(test)]
 mod tests {
-    use std::{
-        collections::HashSet,
-        sync::{Arc, Mutex},
-    };
+    use std::sync::{Arc, Mutex};
 
     use cosmian_crypto_core::{reexport::rand_core::SeedableRng, CsRng, Secret};
     use futures::executor::block_on;
@@ -204,7 +183,7 @@ mod tests {
     use crate::{
         address::Address,
         kv::KvStore,
-        obf::{EncryptionLayer, ADDRESS_LENGTH},
+        obf::{MemoryEncryptionLayer, ADDRESS_LENGTH},
         stm::Stm,
     };
 
@@ -213,7 +192,7 @@ mod tests {
         let mut rng = CsRng::from_entropy();
         let seed = Secret::random(&mut rng);
         let kv = KvStore::<Address<ADDRESS_LENGTH>, Vec<u8>>::default();
-        let obf = EncryptionLayer::new(seed, Arc::new(Mutex::new(rng.clone())), kv);
+        let obf = MemoryEncryptionLayer::new(seed, Arc::new(Mutex::new(rng.clone())), kv);
         let tok = Address::<ADDRESS_LENGTH>::random(&mut rng);
         let ptx = vec![1];
         let ctx = obf.encrypt(&ptx, &tok).unwrap();
@@ -230,7 +209,7 @@ mod tests {
         let mut rng = CsRng::from_entropy();
         let seed = Secret::random(&mut rng);
         let kv = KvStore::<Address<ADDRESS_LENGTH>, Vec<u8>>::default();
-        let obf = EncryptionLayer::new(seed, Arc::new(Mutex::new(rng.clone())), kv);
+        let obf = MemoryEncryptionLayer::new(seed, Arc::new(Mutex::new(rng.clone())), kv);
 
         let header_addr = Address::<ADDRESS_LENGTH>::random(&mut rng);
 
@@ -279,23 +258,21 @@ mod tests {
         );
 
         assert_eq!(
-            HashSet::<(Address<ADDRESS_LENGTH>, Option<Vec<u8>>)>::from_iter([
-                (header_addr.clone(), Some(vec![4])),
-                (val_addr_1.clone(), Some(vec![1])),
-                (val_addr_2.clone(), Some(vec![1])),
-                (val_addr_3.clone(), Some(vec![2])),
-                (val_addr_4.clone(), Some(vec![2]))
-            ]),
-            HashSet::from_iter(
-                block_on(obf.batch_read(vec![
-                    header_addr,
-                    val_addr_1,
-                    val_addr_2,
-                    val_addr_3,
-                    val_addr_4
-                ]))
-                .unwrap()
-            ),
+            vec![
+                Some(vec![4]),
+                Some(vec![1]),
+                Some(vec![1]),
+                Some(vec![2]),
+                Some(vec![2])
+            ],
+            block_on(obf.batch_read(vec![
+                header_addr,
+                val_addr_1,
+                val_addr_2,
+                val_addr_3,
+                val_addr_4
+            ]))
+            .unwrap()
         )
     }
 }

@@ -1,3 +1,8 @@
+//! Boring implementation of a typed byte-vector.
+
+// TODO: Maybe turn all that in a macro (maybe in CryptoCore?) to reuse it for the words and maybe
+// others.
+
 use std::string::FromUtf8Error;
 
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
