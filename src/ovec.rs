@@ -118,9 +118,11 @@ impl<
             } else {
                 self.h = cur;
                 // Findex modifications are only lock-free, hence it does not guarantee a given
-                // client will ever terminate. It arguably will if the index is not highly
-                // contended, but we need a stronger guarantee. Maybe a return with an error after
-                // a reaching a certain number of retries.
+                // client will ever terminate.
+                //
+                // TODO: this loop will arguably terminate if the index is not highly contended,
+                // but we need a stronger guarantee. Maybe a return with an error after a reaching
+                // a certain number of retries.
             }
         }
     }
@@ -149,18 +151,19 @@ impl<
             .unwrap_or_default();
 
         // Get all missing values, if any.
-        let missing_res = self
-            .m
-            .batch_read(
-                (cur_header.start.max(old_header.stop)..cur_header.stop)
-                    .map(|i| self.a.clone() + i + 1)
-                    .collect(),
-            )
-            .await?;
+        let missing_addresses = (cur_header.start.max(old_header.stop)..cur_header.stop)
+            .map(|i| self.a.clone() + i + 1)
+            .collect::<Vec<_>>();
+
+        let missing_values = if missing_addresses.is_empty() {
+            vec![] // only call the memory a second time if needed
+        } else {
+            self.m.batch_read(missing_addresses).await?
+        };
 
         res.into_iter()
             .skip(1)
-            .chain(missing_res)
+            .chain(missing_values)
             .enumerate()
             .map(|(i, v)| v.ok_or_else(|| Error::MissingValue(self.a.clone() + i as u64)))
             .collect()
