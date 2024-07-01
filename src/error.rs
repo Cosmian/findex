@@ -9,6 +9,7 @@ pub enum Error<Address: Debug, MemoryError: std::error::Error> {
     Memory(MemoryError),
     Conversion(String),
     MissingValue(Address),
+    EncryptionLayer(String),
 }
 
 impl<Address: Debug, MemoryError: std::error::Error> Display for Error<Address, MemoryError> {

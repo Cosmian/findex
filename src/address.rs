@@ -53,7 +53,6 @@ impl<const LENGTH: usize> Add<u64> for Address<LENGTH> {
             pos += 1;
 
             if (pos % LENGTH) == 0 {
-                println!("circling");
                 carry -= 1;
             }
         }

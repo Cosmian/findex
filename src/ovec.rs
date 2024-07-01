@@ -142,10 +142,7 @@ impl<
 
         let cur_header = res[0]
             .clone()
-            .map(|v| {
-                println!("{v:?}");
-                Header::try_from(v.as_slice())
-            })
+            .map(|v| Header::try_from(v.as_slice()))
             .transpose()
             .map_err(Error::Conversion)?
             .unwrap_or_default();

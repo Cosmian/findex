@@ -6,7 +6,7 @@ use std::{
 
 use crate::{address::Address, error::Error, Stm, ADDRESS_LENGTH, KEY_LENGTH};
 use aes::{
-    cipher::{generic_array::GenericArray, BlockDecrypt, BlockEncrypt, KeyInit},
+    cipher::{generic_array::GenericArray, BlockEncrypt, KeyInit},
     Aes256,
 };
 use cosmian_crypto_core::{
@@ -18,7 +18,7 @@ use cosmian_crypto_core::{
 pub struct MemoryEncryptionLayer<Memory: Stm<Address = Address<ADDRESS_LENGTH>, Word = Vec<u8>>> {
     permutation_key: SymmetricKey<KEY_LENGTH>,
     encryption_key: SymmetricKey<32>,
-    cache: Arc<Mutex<HashMap<(Address<ADDRESS_LENGTH>, Vec<u8>), Vec<u8>>>>,
+    cache: Arc<Mutex<HashMap<Address<ADDRESS_LENGTH>, HashMap<Vec<u8>, Vec<u8>>>>>,
     rng: Arc<Mutex<CsRng>>,
     stm: Memory,
 }
@@ -45,7 +45,7 @@ impl<Memory: Stm<Address = Address<ADDRESS_LENGTH>, Word = Vec<u8>>> MemoryEncry
     }
 
     /// Retains values cached for the given keys only.
-    pub fn retain_cached_keys(&self, keys: &HashSet<(Memory::Address, Vec<u8>)>) {
+    pub fn retain_cached_keys(&self, keys: &HashSet<Memory::Address>) {
         self.cache
             .lock()
             .expect("poisoned mutex")
@@ -53,71 +53,81 @@ impl<Memory: Stm<Address = Address<ADDRESS_LENGTH>, Word = Vec<u8>>> MemoryEncry
             .retain(|k, _| keys.contains(k));
     }
 
-    /// Gets the encrypted value from the cache and computes it upon cache miss.
-    pub fn encrypt(
+    /// Decrypts the given value and caches the ciphertext.
+    fn find_or_encrypt(
         &self,
         ptx: &[u8],
         tok: &Memory::Address,
     ) -> Result<Vec<u8>, Error<Memory::Address, Memory::Error>> {
-        let k = (tok.clone(), ptx.to_vec());
-        if let Some(ctx) = self.find(&k) {
+        if let Some(ctx) = self.find(tok, ptx) {
             Ok(ctx)
         } else {
-            let nonce = Nonce::<{ Aes256Gcm::NONCE_LENGTH }>::new(&mut *self.rng());
-            let ctx = Aes256Gcm::new(&self.encryption_key)
-                .encrypt(&nonce, ptx, Some(tok))
-                .map_err(Error::Encryption)?;
-            let ctx = [nonce.as_bytes(), &ctx].concat();
-            self.bind(k, ctx.clone());
+            let ctx = self.encrypt(ptx, tok)?;
+            self.bind(tok.clone(), ptx.to_vec(), ctx.clone());
             Ok(ctx)
         }
     }
 
     /// Decrypts the given value and caches the ciphertext.
-    pub fn decrypt(
+    fn bind_and_decrypt(
         &self,
         ctx: Vec<u8>,
         tok: Memory::Address,
+    ) -> Result<Vec<u8>, Error<Memory::Address, Memory::Error>> {
+        let ptx = self.decrypt(&ctx, &tok)?;
+        self.bind(tok, ptx.clone(), ctx);
+        Ok(ptx)
+    }
+
+    fn encrypt(
+        &self,
+        ptx: &[u8],
+        tok: &Memory::Address,
+    ) -> Result<Vec<u8>, Error<Memory::Address, Memory::Error>> {
+        let nonce = Nonce::<{ Aes256Gcm::NONCE_LENGTH }>::new(&mut *self.rng());
+        let ctx = Aes256Gcm::new(&self.encryption_key)
+            .encrypt(&nonce, ptx, Some(tok))
+            .map_err(Error::Encryption)?;
+        Ok([nonce.as_bytes(), &ctx].concat())
+    }
+
+    #[inline]
+    fn decrypt(
+        &self,
+        ctx: &[u8],
+        tok: &Memory::Address,
     ) -> Result<Vec<u8>, Error<Memory::Address, Memory::Error>> {
         if ctx.len() < Aes256Gcm::NONCE_LENGTH {
             return Err(Error::Parsing("ciphertext too small".to_string()));
         }
         let nonce = Nonce::try_from_slice(&ctx[..Aes256Gcm::NONCE_LENGTH])
             .map_err(|e| Error::Parsing(e.to_string()))?;
-        let ptx = Aes256Gcm::new(&self.encryption_key)
-            .decrypt(&nonce, &ctx[Aes256Gcm::NONCE_LENGTH..], Some(&tok))
-            .map_err(Error::Encryption)?;
-        self.bind((tok, ptx.clone()), ctx);
-        Ok(ptx)
+        Aes256Gcm::new(&self.encryption_key)
+            .decrypt(&nonce, &ctx[Aes256Gcm::NONCE_LENGTH..], Some(tok))
+            .map_err(Error::Encryption)
     }
 
-    pub fn reorder(&self, mut a: Memory::Address) -> Memory::Address {
-        Aes256::new(GenericArray::from_slice(&self.permutation_key))
-            .decrypt_block(GenericArray::from_mut_slice(&mut a));
-        a
-    }
-
-    pub fn permute(&self, mut a: Memory::Address) -> Memory::Address {
+    fn permute(&self, mut a: Memory::Address) -> Memory::Address {
         Aes256::new(GenericArray::from_slice(&self.permutation_key))
             .encrypt_block(GenericArray::from_mut_slice(&mut a));
         a
     }
 
-    pub fn bind(&self, k: (Memory::Address, Vec<u8>), v: Vec<u8>) {
-        self.cache
-            .lock()
-            .expect("poisoned lock")
-            .deref_mut()
-            .insert(k, v);
+    fn bind(&self, tok: Memory::Address, ptx: Vec<u8>, ctx: Vec<u8>) {
+        let mut cache = self.cache.lock().expect("poisoned lock");
+        if let Some(bindings) = cache.get_mut(&tok) {
+            bindings.insert(ptx, ctx);
+        }
     }
 
-    pub fn find(&self, k: &(Address<ADDRESS_LENGTH>, Vec<u8>)) -> Option<Vec<u8>> {
-        self.cache
-            .lock()
-            .expect("poisoned lock")
-            .deref_mut()
-            .get(k)
-            .cloned()
+    fn find(&self, tok: &Address<ADDRESS_LENGTH>, ref_ptx: &[u8]) -> Option<Vec<u8>> {
+        let mut cache = self.cache.lock().expect("poisoned lock");
+        if let Some(bindings) = cache.get(tok) {
+            bindings.get(ref_ptx).cloned()
+        } else {
+            cache.insert(tok.clone(), HashMap::new());
+            None
+        }
     }
 }
 
@@ -139,7 +149,7 @@ impl<Memory: Stm<Address = Address<ADDRESS_LENGTH>, Word = Vec<u8>>> Stm
         bindings
             .into_iter()
             .zip(tokens)
-            .map(|(ctx, tok)| ctx.map(|ctx| self.decrypt(ctx, tok.clone())).transpose())
+            .map(|(ctx, tok)| ctx.map(|ctx| self.decrypt(&ctx, &tok)).transpose())
             .collect()
     }
 
@@ -148,26 +158,17 @@ impl<Memory: Stm<Address = Address<ADDRESS_LENGTH>, Word = Vec<u8>>> Stm
         guard: (Self::Address, Option<Self::Word>),
         bindings: Vec<(Self::Address, Self::Word)>,
     ) -> Result<Option<Self::Word>, Self::Error> {
-        let (a, v) = guard;
-        let tok = self.permute(a);
-        let old = v.and_then(|v| self.find(&(tok.clone(), v)));
-
+        let tok = self.permute(guard.0.clone());
+        let old = guard.1.and_then(|ptx| self.find(&tok, &ptx));
         let bindings = bindings
             .into_iter()
             .map(|(a, v)| {
                 let tok = self.permute(a);
-                self.encrypt(&v, &tok).map(|ctx| (tok, ctx))
+                self.find_or_encrypt(&v, &tok).map(|ctx| (tok, ctx))
             })
             .collect::<Result<Vec<_>, _>>()?;
-
-        let ctx = self.stm.guarded_write((tok.clone(), old), bindings).await?;
-
-        if let Some(ctx) = ctx {
-            let ptx = self.decrypt(ctx.clone(), tok)?;
-            Ok(Some(ptx))
-        } else {
-            Ok(None)
-        }
+        let cur = self.stm.guarded_write((tok.clone(), old), bindings).await?;
+        cur.map(|ctx| self.bind_and_decrypt(ctx, tok)).transpose()
     }
 }
 
@@ -194,7 +195,7 @@ mod tests {
         let tok = Address::<ADDRESS_LENGTH>::random(&mut rng);
         let ptx = vec![1];
         let ctx = obf.encrypt(&ptx, &tok).unwrap();
-        let res = obf.decrypt(ctx, tok).unwrap();
+        let res = obf.decrypt(&ctx, &tok).unwrap();
         assert_eq!(ptx.len(), res.len());
         assert_eq!(ptx, res);
     }
