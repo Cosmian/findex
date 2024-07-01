@@ -1,6 +1,7 @@
 #![allow(clippy::type_complexity)]
 
 mod address;
+mod encoding;
 mod error;
 mod findex;
 mod kv;
