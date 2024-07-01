@@ -18,13 +18,14 @@ pub struct Findex<
     TryFromError: std::error::Error,
     Memory: 'a + Stm<Address = Address<ADDRESS_LENGTH>, Word = Vec<u8>>,
 > where
-    Value: TryFrom<Vec<u8>, Error = TryFromError>,
+    // values are serializable (but do not depend on `serde`)
+    for<'z> Value: TryFrom<&'z [u8], Error = TryFromError>,
     Vec<u8>: From<Value>,
 {
     el: MemoryEncryptionLayer<Memory>,
     vectors: Mutex<HashMap<Address<ADDRESS_LENGTH>, OVec<'a, MemoryEncryptionLayer<Memory>>>>,
     encode: Box<fn(Op, HashSet<Value>) -> Vec<Vec<u8>>>,
-    decode: Box<fn(Vec<Vec<u8>>) -> Result<HashSet<Value>, <Value as TryFrom<Vec<u8>>>::Error>>,
+    decode: Box<fn(Vec<Vec<u8>>) -> Result<HashSet<Value>, TryFromError>>,
 }
 
 impl<
@@ -34,7 +35,7 @@ impl<
         Memory: 'a + Stm<Address = Address<ADDRESS_LENGTH>, Word = Vec<u8>>,
     > Findex<'a, Value, TryFromError, Memory>
 where
-    Value: TryFrom<Vec<u8>, Error = TryFromError>,
+    for<'z> Value: TryFrom<&'z [u8], Error = TryFromError>,
     Vec<u8>: From<Value>,
 {
     /// Instantiates Findex with the given seed, and memory.
@@ -43,7 +44,7 @@ where
         rng: Arc<Mutex<CsRng>>,
         stm: Memory,
         encode: fn(Op, HashSet<Value>) -> Vec<Vec<u8>>,
-        decode: fn(Vec<Vec<u8>>) -> Result<HashSet<Value>, <Value as TryFrom<Vec<u8>>>::Error>,
+        decode: fn(Vec<Vec<u8>>) -> Result<HashSet<Value>, TryFromError>,
     ) -> Self {
         // TODO: should the RNG be instantiated here?
         // Creating many instances of Findex would need more work but potentially involve less
@@ -142,12 +143,12 @@ where
 impl<
         'a,
         Keyword: Hash + PartialEq + Eq + AsRef<[u8]>,
-        Value: Hash + PartialEq + Eq + From<Vec<u8>>,
+        Value: Hash + PartialEq + Eq,
         TryFromError: std::error::Error,
         Memory: 'a + Stm<Address = Address<ADDRESS_LENGTH>, Word = Vec<u8>>,
     > Index<'a, Keyword, Value> for Findex<'a, Value, TryFromError, Memory>
 where
-    Value: TryFrom<Vec<u8>, Error = TryFromError>,
+    for<'z> Value: TryFrom<&'z [u8], Error = TryFromError>,
     Vec<u8>: From<Value>,
 {
     type Error = Error<Address<ADDRESS_LENGTH>, <MemoryEncryptionLayer<Memory> as Stm>::Error>;
@@ -193,7 +194,6 @@ where
 mod tests {
     use std::{
         collections::{HashMap, HashSet},
-        hash::Hash,
         sync::{Arc, Mutex},
     };
 
@@ -201,41 +201,11 @@ mod tests {
     use futures::executor::block_on;
 
     use crate::{
-        address::Address, encoding::Op, kv::KvStore, Findex, Index, Value, ADDRESS_LENGTH,
+        address::Address,
+        encoding::{dummy_decode, dummy_encode},
+        kv::KvStore,
+        Findex, Index, Value, ADDRESS_LENGTH,
     };
-
-    fn dummy_encode<Value: Into<Vec<u8>>>(op: Op, vs: HashSet<Value>) -> Vec<Vec<u8>> {
-        vs.into_iter()
-            .map(Into::into)
-            .map(|bytes| {
-                if op == Op::Insert {
-                    [vec![1], bytes].concat()
-                } else {
-                    [vec![0], bytes].concat()
-                }
-            })
-            .collect()
-    }
-
-    fn dummy_decode<
-        TryFromError: std::error::Error,
-        Value: Hash + PartialEq + Eq + TryFrom<Vec<u8>, Error = TryFromError>,
-    >(
-        ws: Vec<Vec<u8>>,
-    ) -> Result<HashSet<Value>, <Value as TryFrom<Vec<u8>>>::Error> {
-        let mut res = HashSet::with_capacity(ws.len());
-        for w in ws {
-            if !w.is_empty() {
-                let v = Value::try_from(w[1..].to_vec())?;
-                if w[0] == 1 {
-                    res.insert(v);
-                } else {
-                    res.remove(&v);
-                }
-            }
-        }
-        Ok(res)
-    }
 
     #[test]
     fn test_insert_search_delete_search() {

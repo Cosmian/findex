@@ -3,6 +3,9 @@ name = "findex-bis"
 version = "0.1.0"
 edition = "2021"
 
+[features]
+bench = []
+
 [dependencies]
 aes = "0.8.4"
 cosmian_crypto_core = {version = "9.4.0", default-features = false, features = ["aes", "sha3"]}
@@ -10,3 +13,8 @@ cosmian_crypto_core = {version = "9.4.0", default-features = false, features = [
 [dev-dependencies]
 futures = "0.3.30"
 cosmian_crypto_core = {version = "9.4.0", default-features = false, features = ["aes", "sha3" , "ser"]}
+criterion = "0.5.1"
+
+[[bench]]
+name = "benches"
+harness = false

@@ -22,6 +22,9 @@ pub use kv::KvStore;
 pub use stm::Stm;
 pub use value::Value;
 
+#[cfg(feature = "bench")]
+pub use encoding::{dummy_decode, dummy_encode};
+
 pub const ADDRESS_LENGTH: usize = 16;
 pub const KEY_LENGTH: usize = 32;
 

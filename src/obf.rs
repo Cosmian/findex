@@ -121,10 +121,8 @@ impl<Memory: Stm<Address = Address<ADDRESS_LENGTH>, Word = Vec<u8>>> MemoryEncry
     }
 }
 
-impl<
-        Memory: Stm<Address = Address<ADDRESS_LENGTH>, Word = Vec<u8>>, // use a `Vec<u8>` because `const` generics
-                                                                        // are not allowed in `const` operations
-    > Stm for MemoryEncryptionLayer<Memory>
+impl<Memory: Stm<Address = Address<ADDRESS_LENGTH>, Word = Vec<u8>>> Stm
+    for MemoryEncryptionLayer<Memory>
 {
     type Address = Address<ADDRESS_LENGTH>;
 
