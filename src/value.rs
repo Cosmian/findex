@@ -8,6 +8,12 @@ use std::string::FromUtf8Error;
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
 pub struct Value(Vec<u8>);
 
+impl AsRef<[u8]> for Value {
+    fn as_ref(&self) -> &[u8] {
+        &self.0
+    }
+}
+
 impl From<&[u8]> for Value {
     fn from(value: &[u8]) -> Self {
         Self(value.to_vec())

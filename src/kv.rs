@@ -5,7 +5,7 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use crate::stm::Stm;
+use crate::MemoryADT;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MemoryError;
@@ -21,7 +21,16 @@ impl std::error::Error for MemoryError {}
 #[derive(Clone, Debug, Default)]
 pub struct KvStore<Address: Hash + Eq, Value>(Arc<Mutex<HashMap<Address, Value>>>);
 
-impl<Address: Hash + Eq + Debug, Value: Clone + Eq + Debug> Stm for KvStore<Address, Value> {
+impl<Address: Hash + Eq + Debug, Value: Clone + Eq + Debug> KvStore<Address, Value> {
+    pub fn clear(&self) {
+        let store = &mut *self.0.lock().expect("poisoned lock");
+        store.clear()
+    }
+}
+
+impl<Address: Send + Sync + Hash + Eq + Debug, Value: Send + Sync + Clone + Eq + Debug> MemoryADT
+    for KvStore<Address, Value>
+{
     type Address = Address;
 
     type Word = Value;
@@ -50,12 +59,25 @@ impl<Address: Hash + Eq + Debug, Value: Clone + Eq + Debug> Stm for KvStore<Addr
     }
 }
 
+#[cfg(feature = "bench")]
+impl<Address: Hash + Eq + Debug + Clone, Value: Clone + Eq + Debug> IntoIterator
+    for KvStore<Address, Value>
+{
+    type Item = (Address, Value);
+
+    type IntoIter = <HashMap<Address, Value> as IntoIterator>::IntoIter;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.lock().expect("poisoned lock").clone().into_iter()
+    }
+}
+
 #[cfg(test)]
 mod tests {
 
     use futures::executor::block_on;
 
-    use crate::Stm;
+    use crate::MemoryADT;
 
     use super::KvStore;
 

@@ -7,50 +7,65 @@ use std::{
 use cosmian_crypto_core::{kdf128, CsRng, Secret};
 
 use crate::{
-    encoding::Op, error::Error, obf::MemoryEncryptionLayer, ovec::OVec, Address, Index, Stm,
-    ADDRESS_LENGTH, KEY_LENGTH,
+    adt::VectorADT, el::MemoryEncryptionLayer, encoding::Op, error::Error, ovec::OVec, Address,
+    IndexADT, MemoryADT, ADDRESS_LENGTH, KEY_LENGTH,
 };
 
-// Lifetime is needed to store a reference of the memory in the vectors.
 pub struct Findex<
-    'a,
-    Value,
+    Value: AsRef<[u8]>,
+    const WORD_LENGTH: usize,
     TryFromError: std::error::Error,
-    Memory: 'a + Stm<Address = Address<ADDRESS_LENGTH>, Word = Vec<u8>>,
+    Memory: Send + Sync + Clone + MemoryADT<Address = Address<ADDRESS_LENGTH>, Word = Vec<u8>>,
 > where
     // values are serializable (but do not depend on `serde`)
     for<'z> Value: TryFrom<&'z [u8], Error = TryFromError>,
-    Vec<u8>: From<Value>,
+    Memory::Error: Send + Sync,
 {
-    el: MemoryEncryptionLayer<Memory>,
-    vectors: Mutex<HashMap<Address<ADDRESS_LENGTH>, OVec<'a, MemoryEncryptionLayer<Memory>>>>,
-    encode: Box<fn(Op, HashSet<Value>) -> Vec<Vec<u8>>>,
-    decode: Box<fn(Vec<Vec<u8>>) -> Result<HashSet<Value>, TryFromError>>,
+    el: MemoryEncryptionLayer<WORD_LENGTH, Memory>,
+    vectors: Mutex<
+        HashMap<
+            Address<ADDRESS_LENGTH>,
+            OVec<WORD_LENGTH, MemoryEncryptionLayer<WORD_LENGTH, Memory>>,
+        >,
+    >,
+    encode: Box<
+        fn(
+            Op,
+            HashSet<Value>,
+        )
+            -> Result<Vec<<MemoryEncryptionLayer<WORD_LENGTH, Memory> as MemoryADT>::Word>, String>,
+    >,
+    decode: Box<
+        fn(
+            Vec<<MemoryEncryptionLayer<WORD_LENGTH, Memory> as MemoryADT>::Word>,
+        ) -> Result<HashSet<Value>, TryFromError>,
+    >,
 }
 
 impl<
-        'a,
-        Value,
+        Value: Send + Sync + Hash + Eq + AsRef<[u8]>,
+        const WORD_LENGTH: usize,
         TryFromError: std::error::Error,
-        Memory: 'a + Stm<Address = Address<ADDRESS_LENGTH>, Word = Vec<u8>>,
-    > Findex<'a, Value, TryFromError, Memory>
+        Memory: Send + Sync + Clone + MemoryADT<Address = Address<ADDRESS_LENGTH>, Word = Vec<u8>>,
+    > Findex<Value, WORD_LENGTH, TryFromError, Memory>
 where
     for<'z> Value: TryFrom<&'z [u8], Error = TryFromError>,
     Vec<u8>: From<Value>,
+    Memory::Error: Send + Sync,
 {
     /// Instantiates Findex with the given seed, and memory.
     pub fn new(
         seed: Secret<KEY_LENGTH>,
         rng: Arc<Mutex<CsRng>>,
-        stm: Memory,
-        encode: fn(Op, HashSet<Value>) -> Vec<Vec<u8>>,
-        decode: fn(Vec<Vec<u8>>) -> Result<HashSet<Value>, TryFromError>,
+        mem: Memory,
+        encode: fn(Op, HashSet<Value>) -> Result<Vec<[u8; WORD_LENGTH]>, String>,
+        decode: fn(Vec<[u8; WORD_LENGTH]>) -> Result<HashSet<Value>, TryFromError>,
     ) -> Self {
         // TODO: should the RNG be instantiated here?
         // Creating many instances of Findex would need more work but potentially involve less
         // waiting for the lock => bench it.
         Self {
-            el: MemoryEncryptionLayer::new(seed, rng, stm),
+            el: MemoryEncryptionLayer::new(seed, rng, mem),
             vectors: Mutex::new(HashMap::new()),
             encode: Box::new(encode),
             decode: Box::new(decode),
@@ -59,9 +74,9 @@ where
 
     /// Caches this vector for this address.
     fn bind(
-        &'a self,
+        &self,
         address: Address<ADDRESS_LENGTH>,
-        vector: OVec<'a, MemoryEncryptionLayer<Memory>>,
+        vector: OVec<WORD_LENGTH, MemoryEncryptionLayer<WORD_LENGTH, Memory>>,
     ) {
         self.vectors
             .lock()
@@ -73,7 +88,7 @@ where
     fn find(
         &self,
         address: &Address<ADDRESS_LENGTH>,
-    ) -> Option<OVec<MemoryEncryptionLayer<Memory>>> {
+    ) -> Option<OVec<WORD_LENGTH, MemoryEncryptionLayer<WORD_LENGTH, Memory>>> {
         self.vectors
             .lock()
             .expect("poisoned mutex")
@@ -90,13 +105,19 @@ where
     /// Pushes the given bindings to the vectors associated to the bound keyword.
     ///
     /// All vector push operations are performed in parallel (via async calls), not batched.
-    async fn push<Keyword: AsRef<[u8]>>(
-        &'a self,
-        bindings: impl Iterator<Item = (Keyword, Vec<Vec<u8>>)>,
-    ) -> Result<(), Error<Address<ADDRESS_LENGTH>, <MemoryEncryptionLayer<Memory> as Stm>::Error>>
-    {
+    async fn push<Keyword: Send + Sync + Hash + Eq + AsRef<[u8]>>(
+        &self,
+        op: Op,
+        bindings: impl Iterator<Item = (Keyword, HashSet<Value>)>,
+    ) -> Result<(), <Self as IndexADT<Keyword, Value>>::Error> {
+        let bindings = bindings
+            .map(|(kw, vals)| (self.encode)(op, vals).map(|words| (kw, words)))
+            .collect::<Result<Vec<_>, String>>()
+            .map_err(|e| Error::<Memory::Address, Memory::Error>::Conversion(e.to_string()))?;
+
         let futures = bindings
-            .map(|(kw, vals)| self.vector_push(kw, vals))
+            .into_iter()
+            .map(|(kw, words)| self.vector_push(kw, words))
             .collect::<Vec<_>>(); // collect for calls do be made
 
         for fut in futures {
@@ -106,34 +127,30 @@ where
         Ok(())
     }
 
-    // TODO: move into push as an async closure when stable.
-    async fn vector_push<Keyword: AsRef<[u8]>>(
-        &'a self,
+    // TODO: move this into `push` when async closures are stable.
+    async fn vector_push<Keyword: Send + Sync + Hash + Eq + AsRef<[u8]>>(
+        &self,
         kw: Keyword,
-        values: Vec<Vec<u8>>,
-    ) -> Result<(), Error<Address<ADDRESS_LENGTH>, <MemoryEncryptionLayer<Memory> as Stm>::Error>>
-    {
+        values: Vec<[u8; WORD_LENGTH]>,
+    ) -> Result<(), <Self as IndexADT<Keyword, Value>>::Error> {
         let a = Self::hash_address(kw.as_ref());
         let mut vector = self
             .find(&a)
-            .unwrap_or_else(|| OVec::new(a.clone(), &self.el));
+            .unwrap_or_else(|| OVec::new(a.clone(), self.el.clone()));
         vector.push(values).await?;
         self.bind(a, vector);
         Ok(())
     }
 
-    // TODO: move into search as an async closure when stable.
-    async fn read<Keyword: AsRef<[u8]>>(
-        &'a self,
+    // TODO: move this into `search` when async closures are stable.
+    async fn read<Keyword: Send + Sync + Hash + Eq + AsRef<[u8]>>(
+        &self,
         kw: Keyword,
-    ) -> Result<
-        (Keyword, Vec<Vec<u8>>),
-        Error<Address<ADDRESS_LENGTH>, <MemoryEncryptionLayer<Memory> as Stm>::Error>,
-    > {
+    ) -> Result<(Keyword, Vec<[u8; WORD_LENGTH]>), <Self as IndexADT<Keyword, Value>>::Error> {
         let a = Self::hash_address(kw.as_ref());
         let vector = self
             .find(&a)
-            .unwrap_or_else(|| OVec::new(a.clone(), &self.el));
+            .unwrap_or_else(|| OVec::new(a.clone(), self.el.clone()));
         let words = vector.read().await?;
         self.bind(a, vector);
         Ok((kw, words))
@@ -141,20 +158,24 @@ where
 }
 
 impl<
-        'a,
-        Keyword: Hash + PartialEq + Eq + AsRef<[u8]>,
-        Value: Hash + PartialEq + Eq,
+        const WORD_LENGTH: usize,
+        Keyword: Send + Sync + Hash + PartialEq + Eq + AsRef<[u8]>,
+        Value: Send + Sync + Hash + PartialEq + Eq + AsRef<[u8]>,
         TryFromError: std::error::Error,
-        Memory: 'a + Stm<Address = Address<ADDRESS_LENGTH>, Word = Vec<u8>>,
-    > Index<'a, Keyword, Value> for Findex<'a, Value, TryFromError, Memory>
+        Memory: Send + Sync + Clone + MemoryADT<Address = Address<ADDRESS_LENGTH>, Word = Vec<u8>>,
+    > IndexADT<Keyword, Value> for Findex<Value, WORD_LENGTH, TryFromError, Memory>
 where
     for<'z> Value: TryFrom<&'z [u8], Error = TryFromError>,
     Vec<u8>: From<Value>,
+    Memory::Error: Send + Sync,
 {
-    type Error = Error<Address<ADDRESS_LENGTH>, <MemoryEncryptionLayer<Memory> as Stm>::Error>;
+    type Error = Error<
+        Address<ADDRESS_LENGTH>,
+        <MemoryEncryptionLayer<WORD_LENGTH, Memory> as MemoryADT>::Error,
+    >;
 
     async fn search(
-        &'a self,
+        &self,
         keywords: impl Iterator<Item = Keyword>,
     ) -> Result<HashMap<Keyword, HashSet<Value>>, Self::Error> {
         let futures = keywords
@@ -174,19 +195,17 @@ where
     }
 
     async fn insert(
-        &'a self,
-        bindings: impl Iterator<Item = (Keyword, HashSet<Value>)>,
+        &self,
+        bindings: impl Sync + Send + Iterator<Item = (Keyword, HashSet<Value>)>,
     ) -> Result<(), Self::Error> {
-        self.push(bindings.map(|(kw, values)| (kw, (self.encode)(Op::Insert, values))))
-            .await
+        self.push(Op::Insert, bindings.into_iter()).await
     }
 
     async fn delete(
-        &'a self,
-        bindings: impl Iterator<Item = (Keyword, HashSet<Value>)>,
+        &self,
+        bindings: impl Sync + Send + Iterator<Item = (Keyword, HashSet<Value>)>,
     ) -> Result<(), Self::Error> {
-        self.push(bindings.map(|(kw, values)| (kw, (self.encode)(Op::Delete, values))))
-            .await
+        self.push(Op::Delete, bindings.into_iter()).await
     }
 }
 
@@ -204,8 +223,10 @@ mod tests {
         address::Address,
         encoding::{dummy_decode, dummy_encode},
         kv::KvStore,
-        Findex, Index, Value, ADDRESS_LENGTH,
+        Findex, IndexADT, Value, ADDRESS_LENGTH,
     };
+
+    const WORD_LENGTH: usize = 16;
 
     #[test]
     fn test_insert_search_delete_search() {
@@ -216,7 +237,7 @@ mod tests {
             seed,
             Arc::new(Mutex::new(rng)),
             kv,
-            dummy_encode,
+            dummy_encode::<WORD_LENGTH, _>,
             dummy_decode,
         );
         let bindings = HashMap::<&str, HashSet<Value>>::from_iter([
