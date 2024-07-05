@@ -6,7 +6,7 @@ use std::{
 };
 
 use cosmian_crypto_core::{
-    reexport::rand_core::{CryptoRngCore, SeedableRng},
+    reexport::rand_core::{CryptoRngCore, RngCore, SeedableRng},
     CsRng, Secret,
 };
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
@@ -122,11 +122,11 @@ fn bench_search(c: &mut Criterion) {
 
 fn bench_insert(c: &mut Criterion) {
     let mut rng = CsRng::from_entropy();
-    let index = build_benchmarking_bindings_index(&mut rng);
     let seed = Secret::random(&mut rng);
 
     // Bench the impact of the binding multiplicity.
     {
+        let index = build_benchmarking_bindings_index(&mut rng);
         let mut group = c.benchmark_group("Multiple bindings insert (same keyword)");
         for (i, (kw, vals)) in index.clone().into_iter().enumerate() {
             let n = 10i32.pow(i as u32) as usize;
@@ -182,25 +182,54 @@ fn bench_insert(c: &mut Criterion) {
 
     // Bench the impact of the keyword multiplicity.
     {
-        let mut group = c.benchmark_group("Multiple bindings insert (same keyword)");
-        for (i, (kw, vals)) in index.clone().into_iter().enumerate() {
-            let n = 10i32.pow(i as u32) as usize;
+        let mut group = c.benchmark_group("Multiple keywords insert (one binding each)");
+        for i in 0..4 {
+            let n = 10usize.pow(i);
+            group
+                .bench_function(format!("inserting {n} words to memory"), |b| {
+                    b.iter_batched(
+                        || {
+                            let seed = seed.clone();
+                            let stm = KvStore::default();
+                            let bindings = (0..2 * n)
+                                .map(|_| {
+                                    let mut a = [0; 16];
+                                    let mut w = [0; 16];
+                                    rng.fill_bytes(&mut a);
+                                    rng.fill_bytes(&mut w);
+                                    (a, w)
+                                })
+                                .collect::<Vec<_>>();
+                            (stm, bindings)
+                        },
+                        |(stm, bindings)| {
+                            block_on(stm.guarded_write(([0; 16], None), bindings))
+                                .expect("search failed");
+                        },
+                        criterion::BatchSize::SmallInput,
+                    );
+                })
+                .measurement_time(Duration::from_secs(60));
             group
                 .bench_function(BenchmarkId::from_parameter(n), |b| {
                     b.iter_batched(
                         || {
-                            let rng = CsRng::from_entropy();
-                            let seed = seed.clone();
-                            let vals = vals.clone();
                             let findex = Findex::new(
-                                seed,
-                                Arc::new(Mutex::new(rng)),
+                                seed.clone(),
+                                Arc::new(Mutex::new(rng.clone())),
                                 KvStore::default(),
                                 dummy_encode::<16, _>,
                                 dummy_decode,
                             );
-                            let bindings = [(kw, vals)].into_iter();
-                            (findex, bindings)
+                            let bindings = (0..n)
+                                .map(|_| {
+                                    (
+                                        rng.next_u64().to_be_bytes(),
+                                        HashSet::from_iter([rng.next_u64().to_be_bytes()]),
+                                    )
+                                })
+                                .collect::<Vec<_>>();
+                            (findex, bindings.into_iter())
                         },
                         |(findex, bindings)| {
                             block_on(findex.insert(bindings)).expect("search failed");
