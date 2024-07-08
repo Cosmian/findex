@@ -13,6 +13,8 @@ use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
 use findex_bis::{dummy_decode, dummy_encode, Findex, IndexADT, KvStore, MemoryADT, Op};
 use futures::executor::block_on;
 
+const WORD_LENGTH: usize = 1 + 8 * 16;
+
 /// Builds an index that associates each `kw_i` to `10^i` values, both random 64-bit values.
 fn build_benchmarking_bindings_index(
     rng: &mut impl CryptoRngCore,
@@ -52,7 +54,7 @@ fn bench_search(c: &mut Criterion) {
             seed.clone(),
             Arc::new(Mutex::new(rng.clone())),
             stm,
-            dummy_encode::<16, _>,
+            dummy_encode::<WORD_LENGTH, _>,
             dummy_decode,
         );
         block_on(findex.insert(index.clone().into_iter())).unwrap();
@@ -80,7 +82,7 @@ fn bench_search(c: &mut Criterion) {
             seed,
             Arc::new(Mutex::new(rng)),
             stm.clone(),
-            dummy_encode::<16, _>,
+            dummy_encode::<WORD_LENGTH, _>,
             dummy_decode,
         );
         block_on(findex.insert(index.clone().into_iter())).unwrap();
@@ -138,7 +140,7 @@ fn bench_insert(c: &mut Criterion) {
                             let seed = seed.clone();
                             let vals = vals.clone();
                             let stm = KvStore::default();
-                            let words = dummy_encode::<16, _>(Op::Insert, vals).unwrap();
+                            let words = dummy_encode::<WORD_LENGTH, _>(Op::Insert, vals).unwrap();
                             let bindings = words
                                 .into_iter()
                                 .enumerate()
@@ -164,7 +166,7 @@ fn bench_insert(c: &mut Criterion) {
                                 seed,
                                 Arc::new(Mutex::new(rng.clone())),
                                 KvStore::default(),
-                                dummy_encode::<16, _>,
+                                dummy_encode::<WORD_LENGTH, _>,
                                 dummy_decode,
                             );
                             let bindings = [(kw, vals)].into_iter();
@@ -194,7 +196,7 @@ fn bench_insert(c: &mut Criterion) {
                             let bindings = (0..2 * n)
                                 .map(|_| {
                                     let mut a = [0; 16];
-                                    let mut w = [0; 16];
+                                    let mut w = [0; WORD_LENGTH];
                                     rng.fill_bytes(&mut a);
                                     rng.fill_bytes(&mut w);
                                     (a, w)
@@ -218,7 +220,7 @@ fn bench_insert(c: &mut Criterion) {
                                 seed.clone(),
                                 Arc::new(Mutex::new(rng.clone())),
                                 KvStore::default(),
-                                dummy_encode::<16, _>,
+                                dummy_encode::<WORD_LENGTH, _>,
                                 dummy_decode,
                             );
                             let bindings = (0..n)

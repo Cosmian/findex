@@ -23,8 +23,8 @@ pub struct MemoryEncryptionLayer<
     const WORD_LENGTH: usize,
     Memory: MemoryADT<Address = Address<ADDRESS_LENGTH>>,
 > {
-    k_p: SymmetricKey<KEY_LENGTH>,
-    k_e: SymmetricKey<KEY_LENGTH>,
+    aes: Aes256,
+    ae: Aes256Gcm,
     cch: Arc<Mutex<HashMap<Address<ADDRESS_LENGTH>, HashMap<[u8; WORD_LENGTH], Memory::Word>>>>,
     rng: Arc<Mutex<CsRng>>,
     mem: Memory,
@@ -37,12 +37,14 @@ impl<
 {
     /// Instantiates a new memory encryption layer.
     pub fn new(seed: Secret<KEY_LENGTH>, rng: Arc<Mutex<CsRng>>, stm: Memory) -> Self {
-        let k_p = SymmetricKey::derive(&seed, &[0]).expect("secret is large enough");
-        let k_e = SymmetricKey::derive(&seed, &[0]).expect("secret is large enough");
+        let k_p = SymmetricKey::<KEY_LENGTH>::derive(&seed, &[0]).expect("secret is large enough");
+        let k_e = SymmetricKey::<KEY_LENGTH>::derive(&seed, &[0]).expect("secret is large enough");
+        let aes = Aes256::new(GenericArray::from_slice(&k_p));
+        let ae = Aes256Gcm::new(&k_e);
         let cch = Arc::new(Mutex::new(HashMap::new()));
         Self {
-            k_p,
-            k_e,
+            aes,
+            ae,
             cch,
             rng,
             mem: stm,
@@ -104,7 +106,8 @@ impl<
         ad: &[u8],
     ) -> Result<Vec<u8>, Error<Memory::Address, Memory::Error>> {
         let nonce = Nonce::<{ Aes256Gcm::NONCE_LENGTH }>::new(&mut *self.rng());
-        let ctx = Aes256Gcm::new(&self.k_e)
+        let ctx = self
+            .ae
             .encrypt(&nonce, ptx, Some(ad))
             .map_err(Error::Crypto)?;
         Ok([nonce.as_bytes(), &ctx].concat())
@@ -121,7 +124,8 @@ impl<
         }
         let nonce = Nonce::try_from_slice(&ctx[..Aes256Gcm::NONCE_LENGTH])
             .map_err(|e| Error::Parsing(e.to_string()))?;
-        let ptx = Aes256Gcm::new(&self.k_e)
+        let ptx = self
+            .ae
             .decrypt(&nonce, &ctx[Aes256Gcm::NONCE_LENGTH..], Some(ad))
             .map_err(Error::Crypto)?;
         <[u8; WORD_LENGTH]>::try_from(ptx.as_slice()).map_err(|e| Error::Conversion(e.to_string()))
@@ -129,8 +133,7 @@ impl<
 
     /// Permutes the given memory address.
     fn permute(&self, mut a: Memory::Address) -> Memory::Address {
-        Aes256::new(GenericArray::from_slice(&self.k_p))
-            .encrypt_block(GenericArray::from_mut_slice(&mut a));
+        self.aes.encrypt_block(GenericArray::from_mut_slice(&mut a));
         a
     }
 

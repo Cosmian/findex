@@ -18,8 +18,14 @@ impl Display for MemoryError {
 
 impl std::error::Error for MemoryError {}
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug)]
 pub struct KvStore<Address: Hash + Eq, Value>(Arc<Mutex<HashMap<Address, Value>>>);
+
+impl<Address: Hash + Eq + Debug, Value: Clone + Eq + Debug> Default for KvStore<Address, Value> {
+    fn default() -> Self {
+        Self(Arc::new(Mutex::new(HashMap::new())))
+    }
+}
 
 impl<Address: Hash + Eq + Debug, Value: Clone + Eq + Debug> KvStore<Address, Value> {
     pub fn clear(&self) {
