@@ -1,3 +1,10 @@
+//! We define here the main abstractions used in this crate, namely:
+//! - the index ADT;
+//! - the vector ADT;
+//! - the memory ADT.
+//!
+//! Each of them strive for simplicity and consistency with the classical CS notions.
+
 use std::{
     collections::{HashMap, HashSet},
     future::Future,
@@ -75,57 +82,63 @@ pub trait MemoryADT {
 #[cfg(test)]
 pub(crate) mod tests {
 
-    use futures::{executor::block_on, future::join_all};
+    pub use vector::*;
 
-    use super::*;
+    mod vector {
+        //! This module defines tests any implementation of the VectorADT interface must pass.
 
-    /// Adding information from different copies of the same vector should be visible by all
-    /// copies.
-    pub async fn test_vector_sequential<const LENGTH: usize>(
-        v: &(impl Clone + VectorADT<Value = [u8; LENGTH]>),
-    ) {
-        let mut v1 = v.clone();
-        let mut v2 = v.clone();
-        let values = (0..10).map(|n| [n; LENGTH]).collect::<Vec<_>>();
-        v1.push(values[..5].to_vec()).await.unwrap();
-        v2.push(values[..5].to_vec()).await.unwrap();
-        v1.push(values[5..].to_vec()).await.unwrap();
-        v2.push(values[5..].to_vec()).await.unwrap();
-        assert_eq!(
-            [&values[..5], &values[..5], &values[5..], &values[5..]].concat(),
-            v.read().await.unwrap()
-        );
-    }
+        use crate::adt::VectorADT;
+        use futures::{executor::block_on, future::join_all};
 
-    pub async fn test_vector_concurrent<
-        const LENGTH: usize,
-        V: 'static + Clone + VectorADT<Value = [u8; LENGTH]>,
-    >(
-        v: &V,
-    ) {
-        let n = 100;
-        let m = 2;
-        let values = (0..n * m).map(|i| [i as u8; LENGTH]).collect::<Vec<_>>();
-        let handles = values
-            .chunks_exact(m)
-            .map(|vals| {
-                let vals = vals.to_vec();
-                let mut vec = v.clone();
-                tokio::spawn(async move {
-                    for val in vals {
-                        vec.push(vec![val]).await.unwrap();
-                    }
-                })
-            })
-            .collect::<Vec<_>>();
-        for h in join_all(handles).await {
-            h.unwrap();
+        /// Adding information from different copies of the same vector should be visible by all
+        /// copies.
+        pub async fn test_vector_sequential<const LENGTH: usize>(
+            v: &(impl Clone + VectorADT<Value = [u8; LENGTH]>),
+        ) {
+            let mut v1 = v.clone();
+            let mut v2 = v.clone();
+            let values = (0..10).map(|n| [n; LENGTH]).collect::<Vec<_>>();
+            v1.push(values[..5].to_vec()).await.unwrap();
+            v2.push(values[..5].to_vec()).await.unwrap();
+            v1.push(values[5..].to_vec()).await.unwrap();
+            v2.push(values[5..].to_vec()).await.unwrap();
+            assert_eq!(
+                [&values[..5], &values[..5], &values[5..], &values[5..]].concat(),
+                v.read().await.unwrap()
+            );
         }
-        let mut res = block_on(v.read()).unwrap();
-        let old = res.clone();
-        res.sort();
-        assert_ne!(old, res);
-        assert_eq!(res.len(), n * m);
-        assert_eq!(res, values);
+
+        /// Concurrently adding data to instances of the same vector should not introduce data loss.
+        pub async fn test_vector_concurrent<
+            const LENGTH: usize,
+            V: 'static + Clone + VectorADT<Value = [u8; LENGTH]>,
+        >(
+            v: &V,
+        ) {
+            let n = 100;
+            let m = 2;
+            let values = (0..n * m).map(|i| [i as u8; LENGTH]).collect::<Vec<_>>();
+            let handles = values
+                .chunks_exact(m)
+                .map(|vals| {
+                    let vals = vals.to_vec();
+                    let mut vec = v.clone();
+                    tokio::spawn(async move {
+                        for val in vals {
+                            vec.push(vec![val]).await.unwrap();
+                        }
+                    })
+                })
+                .collect::<Vec<_>>();
+            for h in join_all(handles).await {
+                h.unwrap();
+            }
+            let mut res = block_on(v.read()).unwrap();
+            let old = res.clone();
+            res.sort();
+            assert_ne!(old, res);
+            assert_eq!(res.len(), n * m);
+            assert_eq!(res, values);
+        }
     }
 }

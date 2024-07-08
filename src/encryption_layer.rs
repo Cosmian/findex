@@ -234,7 +234,7 @@ mod tests {
 
     use crate::{
         address::Address,
-        el::{MemoryEncryptionLayer, ADDRESS_LENGTH},
+        encryption_layer::{MemoryEncryptionLayer, ADDRESS_LENGTH},
         kv::KvStore,
         MemoryADT,
     };

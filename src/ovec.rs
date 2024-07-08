@@ -1,8 +1,26 @@
+//! This module implements a simple vector, defined as a data-structure that preserves the
+//! following invariant:
+//!
+//! > I_v: the value of the counter stored at the vector address is equal to the number of values
+//!        stored in this vector; these values are of homogeneous type and stored in contiguous
+//!        memory words.
+//!
+//! This implementation is based on the assumption that an infinite array starting at the vector's
+//! address has been allocated, and thus stores values after the header:
+//!
+//! ```txt
+//! +------------+-----+-----+-----+
+//! | header (h) | v_0 | ... | v_n |
+//! +------------+-----+-----+-----+
+//!      a         a+1   ...  a+n+1
+//! ```
+
 use std::{fmt::Debug, hash::Hash, ops::Add};
 
 use crate::{adt::VectorADT, error::Error, MemoryADT};
 
 /// Headers contain a counter of the number of values stored in the vector.
+// TODO: header could store metadata (e.g. sparsity budget)
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 struct Header {
     pub(crate) cnt: u64,
@@ -47,18 +65,12 @@ impl TryFrom<&[u8]> for Header {
     }
 }
 
-/// Implementation of a vector using an infinite array (we consider all addresses from a to a + ∞
-/// are allocated to the vector.
-///
-/// ```txt
-/// +------------+-----+-----+-----+
-/// | header (h) | v_0 | ... | v_n |
-/// +------------+-----+-----+-----+
-///      a         a+1   ...  a+n+1
-/// ```
+/// Implementation of a vector in an infinite array.
 #[derive(Debug)]
-pub struct OVec<const WORD_LENGTH: usize, Memory: Clone + MemoryADT<Word = [u8; WORD_LENGTH]>> {
+pub struct IVec<const WORD_LENGTH: usize, Memory: Clone + MemoryADT<Word = [u8; WORD_LENGTH]>> {
+    // backing array address
     a: Memory::Address,
+    // cached header value
     h: Option<Header>,
     m: Memory,
 }
@@ -67,7 +79,7 @@ impl<
         const WORD_LENGTH: usize,
         Address: Clone,
         Memory: Clone + MemoryADT<Address = Address, Word = [u8; WORD_LENGTH]>,
-    > Clone for OVec<WORD_LENGTH, Memory>
+    > Clone for IVec<WORD_LENGTH, Memory>
 {
     fn clone(&self) -> Self {
         Self {
@@ -82,7 +94,7 @@ impl<
         const WORD_LENGTH: usize,
         Address: Hash + Eq + Debug + Clone + Add<u64, Output = Address>,
         Memory: Clone + MemoryADT<Address = Address, Word = [u8; WORD_LENGTH]>,
-    > OVec<WORD_LENGTH, Memory>
+    > IVec<WORD_LENGTH, Memory>
 {
     /// (Lazily) instantiates a new vector at this address in this memory: no value is written
     /// before the first push.
@@ -95,7 +107,7 @@ impl<
         const WORD_LENGTH: usize,
         Address: Send + Sync + Hash + Eq + Debug + Clone + Add<u64, Output = Address>,
         Memory: Send + Sync + Clone + MemoryADT<Address = Address, Word = [u8; WORD_LENGTH]>,
-    > VectorADT for OVec<WORD_LENGTH, Memory>
+    > VectorADT for IVec<WORD_LENGTH, Memory>
 where
     Memory::Error: Send + Sync,
 {
@@ -201,9 +213,9 @@ mod tests {
     use crate::{
         address::Address,
         adt::tests::{test_vector_concurrent, test_vector_sequential},
-        el::MemoryEncryptionLayer,
+        encryption_layer::MemoryEncryptionLayer,
         kv::KvStore,
-        ovec::OVec,
+        ovec::IVec,
         ADDRESS_LENGTH,
     };
     use cosmian_crypto_core::{reexport::rand_core::SeedableRng, CsRng, Secret};
@@ -218,7 +230,7 @@ mod tests {
         let kv = KvStore::<Address<ADDRESS_LENGTH>, Vec<u8>>::default();
         let obf = MemoryEncryptionLayer::new(seed, Arc::new(Mutex::new(rng.clone())), kv.clone());
         let address = Address::random(&mut rng);
-        let v = OVec::<WORD_LENGTH, _>::new(address.clone(), obf);
+        let v = IVec::<WORD_LENGTH, _>::new(address.clone(), obf);
         test_vector_sequential(&v).await;
         kv.clear();
         test_vector_concurrent(&v).await;

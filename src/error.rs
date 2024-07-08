@@ -14,10 +14,7 @@ pub enum Error<Address: Debug, MemoryError: std::error::Error> {
 
 impl<Address: Debug, MemoryError: std::error::Error> Display for Error<Address, MemoryError> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::Parsing(e) => write!(f, "{}", e),
-            _ => write!(f, "Error"),
-        }
+        write!(f, "{:?}", self)
     }
 }
 

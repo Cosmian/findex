@@ -2,6 +2,7 @@ use std::ops::{Add, Deref, DerefMut};
 
 use cosmian_crypto_core::reexport::rand_core::CryptoRngCore;
 
+// NOTE: a more efficient implementation of the address could be a big-int.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Address<const LENGTH: usize>([u8; LENGTH]);
 
@@ -36,7 +37,7 @@ impl<const LENGTH: usize> Address<LENGTH> {
 impl<const LENGTH: usize> Add<u64> for Address<LENGTH> {
     type Output = Address<LENGTH>;
 
-    /// Highly inefficient implementation of a add modulo 2^8^LENGTH in little endian.
+    /// Highly inefficient implementation of an add modulo 2^8^LENGTH in little endian.
     fn add(mut self, mut adder: u64) -> Self::Output {
         let mut carry = 0;
         let mut pos = 0;

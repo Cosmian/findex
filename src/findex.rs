@@ -7,25 +7,25 @@ use std::{
 use cosmian_crypto_core::{kdf128, CsRng, Secret};
 
 use crate::{
-    adt::VectorADT, el::MemoryEncryptionLayer, encoding::Op, error::Error, ovec::OVec, Address,
-    IndexADT, MemoryADT, ADDRESS_LENGTH, KEY_LENGTH,
+    adt::VectorADT, encoding::Op, encryption_layer::MemoryEncryptionLayer, error::Error,
+    ovec::IVec, Address, IndexADT, MemoryADT, ADDRESS_LENGTH, KEY_LENGTH,
 };
 
 pub struct Findex<
-    Value: AsRef<[u8]>,
     const WORD_LENGTH: usize,
+    Value,
     TryFromError: std::error::Error,
     Memory: Send + Sync + Clone + MemoryADT<Address = Address<ADDRESS_LENGTH>, Word = Vec<u8>>,
 > where
     // values are serializable (but do not depend on `serde`)
-    for<'z> Value: TryFrom<&'z [u8], Error = TryFromError>,
+    for<'z> Value: TryFrom<&'z [u8], Error = TryFromError> + AsRef<[u8]>,
     Memory::Error: Send + Sync,
 {
     el: MemoryEncryptionLayer<WORD_LENGTH, Memory>,
     vectors: Mutex<
         HashMap<
             Address<ADDRESS_LENGTH>,
-            OVec<WORD_LENGTH, MemoryEncryptionLayer<WORD_LENGTH, Memory>>,
+            IVec<WORD_LENGTH, MemoryEncryptionLayer<WORD_LENGTH, Memory>>,
         >,
     >,
     encode: Box<
@@ -43,13 +43,13 @@ pub struct Findex<
 }
 
 impl<
-        Value: Send + Sync + Hash + Eq + AsRef<[u8]>,
         const WORD_LENGTH: usize,
+        Value: Send + Sync + Hash + Eq,
         TryFromError: std::error::Error,
         Memory: Send + Sync + Clone + MemoryADT<Address = Address<ADDRESS_LENGTH>, Word = Vec<u8>>,
-    > Findex<Value, WORD_LENGTH, TryFromError, Memory>
+    > Findex<WORD_LENGTH, Value, TryFromError, Memory>
 where
-    for<'z> Value: TryFrom<&'z [u8], Error = TryFromError>,
+    for<'z> Value: TryFrom<&'z [u8], Error = TryFromError> + AsRef<[u8]>,
     Vec<u8>: From<Value>,
     Memory::Error: Send + Sync,
 {
@@ -76,7 +76,7 @@ where
     fn bind(
         &self,
         address: Address<ADDRESS_LENGTH>,
-        vector: OVec<WORD_LENGTH, MemoryEncryptionLayer<WORD_LENGTH, Memory>>,
+        vector: IVec<WORD_LENGTH, MemoryEncryptionLayer<WORD_LENGTH, Memory>>,
     ) {
         self.vectors
             .lock()
@@ -88,7 +88,7 @@ where
     fn find(
         &self,
         address: &Address<ADDRESS_LENGTH>,
-    ) -> Option<OVec<WORD_LENGTH, MemoryEncryptionLayer<WORD_LENGTH, Memory>>> {
+    ) -> Option<IVec<WORD_LENGTH, MemoryEncryptionLayer<WORD_LENGTH, Memory>>> {
         self.vectors
             .lock()
             .expect("poisoned mutex")
@@ -136,7 +136,7 @@ where
         let a = Self::hash_address(kw.as_ref());
         let mut vector = self
             .find(&a)
-            .unwrap_or_else(|| OVec::new(a.clone(), self.el.clone()));
+            .unwrap_or_else(|| IVec::new(a.clone(), self.el.clone()));
         vector.push(values).await?;
         self.bind(a, vector);
         Ok(())
@@ -150,7 +150,7 @@ where
         let a = Self::hash_address(kw.as_ref());
         let vector = self
             .find(&a)
-            .unwrap_or_else(|| OVec::new(a.clone(), self.el.clone()));
+            .unwrap_or_else(|| IVec::new(a.clone(), self.el.clone()));
         let words = vector.read().await?;
         self.bind(a, vector);
         Ok((kw, words))
@@ -160,12 +160,12 @@ where
 impl<
         const WORD_LENGTH: usize,
         Keyword: Send + Sync + Hash + PartialEq + Eq + AsRef<[u8]>,
-        Value: Send + Sync + Hash + PartialEq + Eq + AsRef<[u8]>,
+        Value: Send + Sync + Hash + PartialEq + Eq,
         TryFromError: std::error::Error,
         Memory: Send + Sync + Clone + MemoryADT<Address = Address<ADDRESS_LENGTH>, Word = Vec<u8>>,
-    > IndexADT<Keyword, Value> for Findex<Value, WORD_LENGTH, TryFromError, Memory>
+    > IndexADT<Keyword, Value> for Findex<WORD_LENGTH, Value, TryFromError, Memory>
 where
-    for<'z> Value: TryFrom<&'z [u8], Error = TryFromError>,
+    for<'z> Value: TryFrom<&'z [u8], Error = TryFromError> + AsRef<[u8]>,
     Vec<u8>: From<Value>,
     Memory::Error: Send + Sync,
 {
