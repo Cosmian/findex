@@ -37,7 +37,7 @@ fn main() {
     let entry_table = InMemoryDb::default();
     let chain_table = InMemoryDb::default();
 
-    let index = Index::new(&key, entry_table.clone(), chain_table.clone()).unwrap();
+    let index = Index::new(&key, entry_table, chain_table).unwrap();
 
     block_on(index.add(locations_and_words)).unwrap();
 

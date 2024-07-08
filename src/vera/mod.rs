@@ -18,8 +18,8 @@ pub enum Error<DbConnectionError: std::error::Error> {
 impl<DbConnectionError: std::error::Error> Display for Error<DbConnectionError> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Error::Core(e) => write!(f, "Core error: {e}"),
-            Error::Db(e) => write!(f, "Db connection error: {e}"),
+            Self::Core(e) => write!(f, "Core error: {e}"),
+            Self::Db(e) => write!(f, "Db connection error: {e}"),
         }
     }
 }

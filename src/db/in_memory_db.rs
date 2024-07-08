@@ -8,7 +8,7 @@ use std::{
 use cosmian_crypto_core::bytes_ser_de::Serializable;
 use cosmian_crypto_core::CryptoCoreError;
 
-use super::*;
+use super::{DbInterfaceErrorTrait, Edx, EdxDbInterface, Set};
 use crate::Token;
 
 #[derive(Debug)]

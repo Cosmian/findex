@@ -11,6 +11,7 @@ use std::{
 pub struct Set<Item: Hash + PartialEq + Eq>(HashSet<Item>);
 
 impl<Item: Hash + PartialEq + Eq> Set<Item> {
+    #[must_use]
     pub fn with_capacity(capacity: usize) -> Self {
         Self(HashSet::with_capacity(capacity))
     }
@@ -40,7 +41,7 @@ impl<Item: Hash + PartialEq + Eq + Display> Display for Set<Item> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         writeln!(f, "{{")?;
         for tag in &self.0 {
-            writeln!(f, "  {},", tag)?;
+            writeln!(f, "  {tag},")?;
         }
         writeln!(f, "}}")
     }
@@ -85,7 +86,7 @@ impl<Item: Hash + PartialEq + Eq + Clone> Clone for Set<Item> {
     }
 }
 
-#[derive(PartialEq)]
+#[derive(PartialEq, Eq)]
 pub struct Dx<Tag: Hash + PartialEq + Eq, Item>(HashMap<Tag, Item>);
 
 impl<Tag: Hash + PartialEq + Eq, Item> Default for Dx<Tag, Item> {
@@ -111,7 +112,7 @@ impl<Tag: Hash + PartialEq + Eq, Item> DerefMut for Dx<Tag, Item> {
 impl<Tag: Hash + PartialEq + Eq + Display, Item: Display> Display for Dx<Tag, Item> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         writeln!(f, "Dictionary: {{")?;
-        for (tag, value) in self.0.iter() {
+        for (tag, value) in &self.0 {
             writeln!(f, "'{tag}': {value}")?;
         }
         writeln!(f, "}}")
@@ -189,9 +190,9 @@ impl<Tag: Hash + PartialEq + Eq + Display, Item: Display> Display for Mm<Tag, It
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         writeln!(f, "Multi-Map: {{")?;
         for (tag, items) in self.iter() {
-            writeln!(f, "  '{}': [", tag)?;
+            writeln!(f, "  '{tag}': [")?;
             for i in items {
-                writeln!(f, "    '{}',", i)?;
+                writeln!(f, "    '{i}',")?;
             }
             writeln!(f, "  ],")?;
         }

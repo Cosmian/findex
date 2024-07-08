@@ -26,7 +26,7 @@ in_memory = ["cosmian_crypto_core/ser"]
 all_tests = ["in_memory"]
 
 [dependencies]
-base64 = "0.21.5"
+base64 = "0.21.7"
 cosmian_crypto_core = { git = "https://github.com/Cosmian/crypto_core.git", branch = "develop", default-features = false, features = [
   "aes",
   "sha3",
@@ -37,12 +37,11 @@ cosmian_crypto_core = { git = "https://github.com/Cosmian/crypto_core.git", bran
 never = "0.1.0"
 tiny-keccak = { version = "2.0.2", features = ["kmac", "sha3"] }
 tracing = "0.1"
-zeroize = "1.7.0"
 
 [dev-dependencies]
-actix-rt = "2.9.0"
+actix-rt = "2.10.0"
 criterion = "0.5.1"
-futures = "0.3.29"
+futures = "0.3.30"
 rand = "0.8.5"
 
 [[bench]]
