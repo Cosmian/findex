@@ -122,11 +122,10 @@ where
         // TODO: this loop will arguably terminate if the index is not highly contended, but we
         // need a stronger guarantee. Maybe a return with an error after a reaching a certain
         // number of retries.
-        let mut old = self.h.clone();
         loop {
             let (cur, new) = {
                 // Generates a new header which counter is incremented.
-                let mut new = old.clone().unwrap_or_default();
+                let mut new = self.h.clone().unwrap_or_default();
                 new.cnt += vs.len() as u64;
 
                 // Binds the correct addresses to the values.
@@ -145,7 +144,8 @@ where
                     .guarded_write(
                         (
                             self.a.clone(),
-                            old.clone()
+                            self.h
+                                .as_ref()
                                 .map(<[u8; WORD_LENGTH]>::try_from)
                                 .transpose()
                                 .map_err(|e| Error::Conversion(e))?,
@@ -159,11 +159,11 @@ where
 
                 (cur, new)
             };
-            if cur.as_ref() == old.as_ref() {
+            if cur.as_ref() == self.h.as_ref() {
                 self.h = Some(new);
                 return Ok(());
             } else {
-                old = cur;
+                self.h = cur;
             }
         }
     }
@@ -200,7 +200,7 @@ where
 
         first_batch
             .into_iter()
-            .skip(1)
+            .skip(1) // ignore the header
             .chain(second_batch)
             .enumerate()
             .map(|(i, v)| v.ok_or_else(|| Error::MissingValue(self.a.clone(), i)))
