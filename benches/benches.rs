@@ -5,14 +5,14 @@ use cosmian_crypto_core::{
     CsRng, Secret,
 };
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
-use findex_bis::{dummy_decode, dummy_encode, Findex, IndexADT, KvStore, MemoryADT, Op};
+use findex::{dummy_decode, dummy_encode, Findex, IndexADT, KvStore, MemoryADT, Op};
 use futures::{executor::block_on, future::join_all};
 use lazy_static::lazy_static;
 
 const WORD_LENGTH: usize = 1 + 8 * 16;
 
 lazy_static! {
-    static ref scale: Vec<f32> = make_scale(0, 3, 12);
+    static ref scale: Vec<f32> = make_scale(0, 4, 20);
 }
 
 fn make_scale(start: usize, stop: usize, n: usize) -> Vec<f32> {
@@ -287,17 +287,9 @@ fn bench_insert_multiple_keywords(c: &mut Criterion) {
 fn bench_contention(c: &mut Criterion) {
     let mut rng = CsRng::from_entropy();
     let seed = Secret::random(&mut rng);
-
     let mut group = c.benchmark_group("Concurrent clients (single binding, same keyword)");
     for i in scale.iter() {
         let n = 10f32.powf(*i).ceil() as usize;
-
-        let runtime = tokio::runtime::Builder::new_multi_thread()
-            .worker_threads(n)
-            .enable_all()
-            .build()
-            .unwrap();
-
         let stm = KvStore::with_capacity(n + 1);
         let findex = Findex::new(
             seed.clone(),
@@ -306,6 +298,11 @@ fn bench_contention(c: &mut Criterion) {
             dummy_encode::<WORD_LENGTH, _>,
             dummy_decode,
         );
+        let runtime = tokio::runtime::Builder::new_multi_thread()
+            .worker_threads(n)
+            .enable_all()
+            .build()
+            .unwrap();
 
         group
             .bench_function(BenchmarkId::from_parameter(n), |b| {
@@ -326,16 +323,12 @@ fn bench_contention(c: &mut Criterion) {
                     },
                     |iterator| {
                         runtime.block_on(async {
-                            let handles = iterator
-                                .map(|(findex, binding)| {
-                                    tokio::spawn(async move {
-                                        findex.insert([binding].into_iter()).await
-                                    })
-                                })
-                                .collect::<Vec<_>>();
-                            for res in join_all(handles).await {
-                                res.unwrap().unwrap()
-                            }
+                            join_all(iterator.map(|(findex, binding)| {
+                                tokio::spawn(
+                                    async move { findex.insert([binding].into_iter()).await },
+                                )
+                            }))
+                            .await
                         })
                     },
                     criterion::BatchSize::SmallInput,
@@ -348,9 +341,9 @@ fn bench_contention(c: &mut Criterion) {
 criterion_group!(
     name    = benches;
     config  = Criterion::default().sample_size(5000);
-    targets = bench_search_multiple_bindings, bench_search_multiple_keywords,
+    targets = bench_contention,
+              bench_search_multiple_bindings, bench_search_multiple_keywords,
               bench_insert_multiple_bindings, bench_insert_multiple_keywords,
-              bench_contention,
 );
 
 criterion_main!(benches);
