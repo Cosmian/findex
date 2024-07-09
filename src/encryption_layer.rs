@@ -1,5 +1,5 @@
 use std::{
-    collections::{HashMap, HashSet},
+    collections::HashMap,
     ops::DerefMut,
     sync::{Arc, Mutex, MutexGuard},
 };
@@ -36,10 +36,11 @@ impl<
     > MemoryEncryptionLayer<WORD_LENGTH, Memory>
 {
     /// Instantiates a new memory encryption layer.
-    pub fn new(seed: Secret<KEY_LENGTH>, rng: Arc<Mutex<CsRng>>, stm: Memory) -> Self {
+    pub fn new(seed: Secret<KEY_LENGTH>, rng: CsRng, stm: Memory) -> Self {
         let k_p = SymmetricKey::<KEY_LENGTH>::derive(&seed, &[0]).expect("secret is large enough");
         let k_e = SymmetricKey::<KEY_LENGTH>::derive(&seed, &[0]).expect("secret is large enough");
         let aes = Aes256::new(GenericArray::from_slice(&k_p));
+        let rng = Arc::new(Mutex::new(rng));
         let ae = Aes256Gcm::new(&k_e);
         let cch = Arc::new(Mutex::new(HashMap::new()));
         Self {
@@ -57,12 +58,8 @@ impl<
     }
 
     /// Retains values cached for the given keys only.
-    pub fn retain_cached_keys(&self, keys: &HashSet<Memory::Address>) {
-        self.cch
-            .lock()
-            .expect("poisoned mutex")
-            .deref_mut()
-            .retain(|k, _| keys.contains(k));
+    pub fn clear(&self) {
+        self.cch.lock().expect("poisoned mutex").deref_mut().clear()
     }
 
     /// Decrypts the given value and caches the ciphertext.
@@ -197,7 +194,7 @@ impl<
         bindings
             .into_iter()
             .zip(tokens)
-            .map(|(ctx, tok)| ctx.map(|ctx| self.decrypt_and_bind(ctx, &tok)).transpose())
+            .map(|(ctx, tok)| ctx.map(|ctx| self.decrypt(&ctx, &tok)).transpose())
             .collect()
     }
 
@@ -230,8 +227,6 @@ impl<
 
 #[cfg(test)]
 mod tests {
-    use std::sync::{Arc, Mutex};
-
     use cosmian_crypto_core::{reexport::rand_core::SeedableRng, CsRng, Secret};
     use futures::executor::block_on;
 
@@ -249,7 +244,7 @@ mod tests {
         let mut rng = CsRng::from_entropy();
         let seed = Secret::random(&mut rng);
         let kv = KvStore::<Address<ADDRESS_LENGTH>, Vec<u8>>::default();
-        let obf = MemoryEncryptionLayer::new(seed, Arc::new(Mutex::new(rng.clone())), kv);
+        let obf = MemoryEncryptionLayer::new(seed, rng.clone(), kv);
         let tok = Address::<ADDRESS_LENGTH>::random(&mut rng);
         let ptx = [1; WORD_LENGTH];
         let ctx = obf.encrypt(&ptx, &tok).unwrap();
@@ -266,7 +261,7 @@ mod tests {
         let mut rng = CsRng::from_entropy();
         let seed = Secret::random(&mut rng);
         let kv = KvStore::<Address<ADDRESS_LENGTH>, Vec<u8>>::default();
-        let obf = MemoryEncryptionLayer::new(seed, Arc::new(Mutex::new(rng.clone())), kv);
+        let obf = MemoryEncryptionLayer::new(seed, rng.clone(), kv);
 
         let header_addr = Address::<ADDRESS_LENGTH>::random(&mut rng);
 

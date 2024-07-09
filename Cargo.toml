@@ -15,6 +15,7 @@ futures = "0.3.30"
 cosmian_crypto_core = {git = "https://github.com/Cosmian/crypto_core.git", branch = "tbz/derive-clone-for-symkey", default-features = false, features = ["aes", "sha3"]}
 criterion = "0.5.1"
 tokio = {version = "1.38.0", features = ["rt", "macros", "rt-multi-thread", "time"]}
+lazy_static = "1.5.0"
 
 [[bench]]
 name = "benches"

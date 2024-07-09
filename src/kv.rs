@@ -19,18 +19,27 @@ impl Display for MemoryError {
 impl std::error::Error for MemoryError {}
 
 #[derive(Clone, Debug)]
-pub struct KvStore<Address: Hash + Eq, Value>(Arc<Mutex<HashMap<Address, Value>>>);
+pub struct KvStore<Address: Hash + Eq, Value> {
+    inner: Arc<Mutex<HashMap<Address, Value>>>,
+}
 
 impl<Address: Hash + Eq + Debug, Value: Clone + Eq + Debug> Default for KvStore<Address, Value> {
     fn default() -> Self {
-        Self(Arc::new(Mutex::new(HashMap::new())))
+        Self {
+            inner: Arc::new(Mutex::new(HashMap::new())),
+        }
     }
 }
 
 impl<Address: Hash + Eq + Debug, Value: Clone + Eq + Debug> KvStore<Address, Value> {
+    pub fn with_capacity(c: usize) -> Self {
+        Self {
+            inner: Arc::new(Mutex::new(HashMap::with_capacity(c))),
+        }
+    }
+
     pub fn clear(&self) {
-        let store = &mut *self.0.lock().expect("poisoned lock");
-        store.clear()
+        self.inner.lock().expect("poisoned lock").clear();
     }
 }
 
@@ -44,8 +53,8 @@ impl<Address: Send + Sync + Hash + Eq + Debug, Value: Send + Sync + Clone + Eq +
     type Error = MemoryError;
 
     async fn batch_read(&self, a: Vec<Address>) -> Result<Vec<Option<Value>>, Self::Error> {
-        let store = &mut *self.0.lock().expect("poisoned lock");
-        Ok(a.into_iter().map(|k| store.get(&k).cloned()).collect())
+        let store = self.inner.lock().expect("poisoned lock");
+        Ok(a.iter().map(|k| store.get(k).cloned()).collect())
     }
 
     async fn guarded_write(
@@ -53,7 +62,7 @@ impl<Address: Send + Sync + Hash + Eq + Debug, Value: Send + Sync + Clone + Eq +
         guard: (Self::Address, Option<Self::Word>),
         bindings: Vec<(Self::Address, Self::Word)>,
     ) -> Result<Option<Self::Word>, Self::Error> {
-        let store = &mut *self.0.lock().expect("poisoned lock");
+        let store = &mut *self.inner.lock().expect("poisoned lock");
         let (a, old) = guard;
         let cur = store.get(&a).cloned();
         if old == cur {
@@ -74,7 +83,11 @@ impl<Address: Hash + Eq + Debug + Clone, Value: Clone + Eq + Debug> IntoIterator
     type IntoIter = <HashMap<Address, Value> as IntoIterator>::IntoIter;
 
     fn into_iter(self) -> Self::IntoIter {
-        self.0.lock().expect("poisoned lock").clone().into_iter()
+        self.inner
+            .lock()
+            .expect("poisoned lock")
+            .clone()
+            .into_iter()
     }
 }
 

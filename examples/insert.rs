@@ -1,7 +1,4 @@
-use std::{
-    collections::HashSet,
-    sync::{Arc, Mutex},
-};
+use std::collections::HashSet;
 
 use cosmian_crypto_core::{
     reexport::rand_core::{CryptoRngCore, SeedableRng},
@@ -28,7 +25,7 @@ fn main() {
     let seed = Secret::random(&mut rng);
     let findex = Findex::new(
         seed,
-        Arc::new(Mutex::new(rng)),
+        rng,
         KvStore::default(),
         dummy_encode::<16, _>,
         dummy_decode,

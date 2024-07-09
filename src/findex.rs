@@ -11,6 +11,7 @@ use crate::{
     ovec::IVec, Address, IndexADT, MemoryADT, ADDRESS_LENGTH, KEY_LENGTH,
 };
 
+#[derive(Clone, Debug)]
 pub struct Findex<
     const WORD_LENGTH: usize,
     Value,
@@ -22,20 +23,22 @@ pub struct Findex<
     Memory::Error: Send + Sync,
 {
     el: MemoryEncryptionLayer<WORD_LENGTH, Memory>,
-    vectors: Mutex<
-        HashMap<
-            Address<ADDRESS_LENGTH>,
-            IVec<WORD_LENGTH, MemoryEncryptionLayer<WORD_LENGTH, Memory>>,
+    vectors: Arc<
+        Mutex<
+            HashMap<
+                Address<ADDRESS_LENGTH>,
+                IVec<WORD_LENGTH, MemoryEncryptionLayer<WORD_LENGTH, Memory>>,
+            >,
         >,
     >,
-    encode: Box<
+    encode: Arc<
         fn(
             Op,
             HashSet<Value>,
         )
             -> Result<Vec<<MemoryEncryptionLayer<WORD_LENGTH, Memory> as MemoryADT>::Word>, String>,
     >,
-    decode: Box<
+    decode: Arc<
         fn(
             Vec<<MemoryEncryptionLayer<WORD_LENGTH, Memory> as MemoryADT>::Word>,
         ) -> Result<HashSet<Value>, TryFromError>,
@@ -56,7 +59,7 @@ where
     /// Instantiates Findex with the given seed, and memory.
     pub fn new(
         seed: Secret<KEY_LENGTH>,
-        rng: Arc<Mutex<CsRng>>,
+        rng: CsRng,
         mem: Memory,
         encode: fn(Op, HashSet<Value>) -> Result<Vec<[u8; WORD_LENGTH]>, String>,
         decode: fn(Vec<[u8; WORD_LENGTH]>) -> Result<HashSet<Value>, TryFromError>,
@@ -66,10 +69,15 @@ where
         // waiting for the lock => bench it.
         Self {
             el: MemoryEncryptionLayer::new(seed, rng, mem),
-            vectors: Mutex::new(HashMap::new()),
-            encode: Box::new(encode),
-            decode: Box::new(decode),
+            vectors: Arc::new(Mutex::new(HashMap::new())),
+            encode: Arc::new(encode),
+            decode: Arc::new(decode),
         }
+    }
+
+    pub fn clear(&self) {
+        self.vectors.lock().unwrap().clear();
+        self.el.clear();
     }
 
     /// Caches this vector for this address.
@@ -211,10 +219,7 @@ where
 
 #[cfg(test)]
 mod tests {
-    use std::{
-        collections::{HashMap, HashSet},
-        sync::{Arc, Mutex},
-    };
+    use std::collections::{HashMap, HashSet};
 
     use cosmian_crypto_core::{reexport::rand_core::SeedableRng, CsRng, Secret};
     use futures::executor::block_on;
@@ -233,13 +238,7 @@ mod tests {
         let mut rng = CsRng::from_entropy();
         let seed = Secret::random(&mut rng);
         let kv = KvStore::<Address<ADDRESS_LENGTH>, Vec<u8>>::default();
-        let findex = Findex::new(
-            seed,
-            Arc::new(Mutex::new(rng)),
-            kv,
-            dummy_encode::<WORD_LENGTH, _>,
-            dummy_decode,
-        );
+        let findex = Findex::new(seed, rng, kv, dummy_encode::<WORD_LENGTH, _>, dummy_decode);
         let bindings = HashMap::<&str, HashSet<Value>>::from_iter([
             (
                 "cat",
