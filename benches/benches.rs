@@ -12,16 +12,15 @@ use lazy_static::lazy_static;
 const WORD_LENGTH: usize = 1 + 8 * 16;
 
 lazy_static! {
-    static ref scale: Vec<f32> = make_scale(0, 3, 8);
+    static ref scale: Vec<f32> = make_scale(0, 3, 12);
 }
 
 fn make_scale(start: usize, stop: usize, n: usize) -> Vec<f32> {
     let step = ((stop - start) as f32) / n as f32;
     let mut points = Vec::with_capacity(n);
-    for i in 0..n {
+    for i in 0..=n {
         points.push(start as f32 + i as f32 * step);
     }
-    points.push(stop as f32);
     points
 }
 
