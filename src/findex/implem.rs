@@ -241,7 +241,7 @@ impl<
                     .unroll(entry_tag.as_ref())
                     .into_iter()
                     .zip(new_links),
-            )
+            );
         }
         Ok(added_chain_dx)
     }
@@ -264,7 +264,7 @@ impl<
                 Metadata::new(metadata.start - n_links, metadata.start)
                     .unroll(entry_tag.as_ref())
                     .into_iter(),
-            )
+            );
         }
         Ok(deleted_chain_tags)
     }
@@ -481,12 +481,12 @@ mod tests {
     fn decomposition() {
         let added_values = vec![
             vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
-            "I am a very long test string".as_bytes().to_vec(),
+            b"I am a very long test string".to_vec(),
             "I am a second very long test string".as_bytes().to_vec(),
         ];
         let deleted_values = vec![
-            "I am a deleted-only string".as_bytes().to_vec(),
-            "I am a very long test string".as_bytes().to_vec(),
+            b"I am a deleted-only string".to_vec(),
+            b"I am a very long test string".to_vec(),
         ];
 
         let mut chain = decompose(Operation::Insert, &added_values).unwrap();
@@ -525,7 +525,7 @@ mod tests {
             .map(|i| {
                 let tag = Tag::random(&mut rng);
                 let data = (0..=i as u8).map(|j| vec![j]).collect::<Vec<_>>();
-                let mm = mm!((tag, data.clone()));
+                let mm = mm!((tag, data));
                 block_on(findex.insert(mm.clone()))?;
                 Ok((i, mm))
             })
@@ -534,7 +534,7 @@ mod tests {
 
         let mut inserted_mm = inserted_mm
             .into_values()
-            .flat_map(|mm| mm.into_iter())
+            .flat_map(std::iter::IntoIterator::into_iter)
             .collect::<Mm<Tag, Vec<u8>>>();
 
         let fetched_mm =
@@ -646,7 +646,7 @@ mod tests {
             .map(|i| {
                 let tag = Tag::random(&mut rng);
                 let data = (0..=i as u8).map(|j| vec![j]).collect::<Vec<_>>();
-                let mm = mm!((tag, data.clone()));
+                let mm = mm!((tag, data));
                 block_on(findex.insert(mm.clone()))?;
                 Ok((i, mm))
             })
@@ -655,7 +655,7 @@ mod tests {
 
         let inserted_mm = inserted_mm
             .into_values()
-            .flat_map(|mm| mm.into_iter())
+            .flat_map(std::iter::IntoIterator::into_iter)
             .collect::<Mm<Tag, Vec<u8>>>();
 
         let seed = Secret::<32>::random(&mut rng);
@@ -681,15 +681,15 @@ mod tests {
         let tag = Tag::random(&mut rng);
         let added_values = vec![
             vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
-            "I am a very long test string".as_bytes().to_vec(),
+            b"I am a very long test string".to_vec(),
             "I am a second very long test string".as_bytes().to_vec(),
         ];
         let deleted_values = vec![
-            "I am a deleted-only string".as_bytes().to_vec(),
+            b"I am a deleted-only string".to_vec(),
             "I am a second very long test string".as_bytes().to_vec(),
         ];
 
-        block_on(findex.insert(mm!((tag, added_values.clone())))).unwrap();
+        block_on(findex.insert(mm!((tag, added_values)))).unwrap();
         block_on(findex.delete(mm!((tag, deleted_values)))).unwrap();
 
         let chain_len_pre = db.1.len();
@@ -702,7 +702,7 @@ mod tests {
             fetched_mm_post.get(&tag),
             Some(&vec![
                 vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
-                "I am a very long test string".as_bytes().to_vec(),
+                b"I am a very long test string".to_vec(),
             ])
         );
         assert!(chain_len_post < chain_len_pre);

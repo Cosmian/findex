@@ -16,10 +16,12 @@ pub struct Metadata {
 impl Metadata {
     pub const LENGTH: usize = 8;
 
-    pub fn new(start: u32, stop: u32) -> Self {
+    #[must_use]
+    pub const fn new(start: u32, stop: u32) -> Self {
         Self { start, stop }
     }
 
+    #[must_use]
     pub fn unroll<const TAG_LENGTH: usize, Tag: From<[u8; TAG_LENGTH]> + Into<[u8; TAG_LENGTH]>>(
         &self,
         seed: &[u8],
@@ -83,7 +85,8 @@ pub const LINK_LENGTH: usize = 1 + LINE_WIDTH * (1 + BLOCK_LENGTH);
 impl_byte_array!(Link, LINK_LENGTH, "Link");
 
 impl Link {
-    pub fn new() -> Self {
+    #[must_use]
+    pub const fn new() -> Self {
         Self([0; LINK_LENGTH])
     }
 
@@ -99,7 +102,7 @@ impl Link {
         if pos < LINE_WIDTH {
             Ok((
                 Flag::try_from(self.0[1 + pos * (1 + BLOCK_LENGTH)])?,
-                &self.0[2 + pos * (1 + BLOCK_LENGTH)..1 + (pos + 1) * (1 + BLOCK_LENGTH)],
+                &self.0[(2 + pos * (1 + BLOCK_LENGTH))..=((pos + 1) * (1 + BLOCK_LENGTH))],
             ))
         } else {
             Err(CoreError::Conversion(format!(
@@ -111,7 +114,7 @@ impl Link {
     pub fn set_block(&mut self, pos: usize, flag: Flag, block: &Block) -> Result<(), CoreError> {
         if pos < LINE_WIDTH {
             self.0[1 + pos * (1 + BLOCK_LENGTH)] = flag.try_into()?;
-            self.0[2 + pos * (1 + BLOCK_LENGTH)..1 + (pos + 1) * (1 + BLOCK_LENGTH)]
+            self.0[(2 + pos * (1 + BLOCK_LENGTH))..=((pos + 1) * (1 + BLOCK_LENGTH))]
                 .copy_from_slice(block);
             Ok(())
         } else {
@@ -134,7 +137,7 @@ impl TryFrom<Flag> for u8 {
 
     fn try_from(flag: Flag) -> Result<Self, Self::Error> {
         match flag {
-            Flag::Terminating(length) => <u8>::try_from(length).map_err(|_| {
+            Flag::Terminating(length) => <Self>::try_from(length).map_err(|_| {
                 CoreError::Conversion("`BLOCK_LENGTH` should be smaller than `u8::MAX`".to_string())
             }),
             Flag::Padding => Ok(0),

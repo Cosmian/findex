@@ -60,7 +60,7 @@ impl<EntryDbConnection: EdxDbInterface, ChainDbConnection: EdxDbInterface>
                 (tag, kw)
             })
             .collect();
-        let res = self.0.search(tag2kw.keys().cloned().collect()).await?;
+        let res = self.0.search(tag2kw.keys().copied().collect()).await?;
         res.into_iter()
             .map(|(tag, values)| {
                 tag2kw

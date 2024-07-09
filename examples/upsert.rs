@@ -23,7 +23,7 @@ fn main() {
     let entry_table = InMemoryDb::default();
     let chain_table = InMemoryDb::default();
 
-    let index = Index::new(&key, entry_table.clone(), chain_table.clone()).unwrap();
+    let index = Index::new(&key, entry_table, chain_table).unwrap();
 
     for _ in 0..1_000_000 {
         block_on(index.add(indexed_value_to_keywords.clone())).unwrap();

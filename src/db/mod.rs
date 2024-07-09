@@ -20,7 +20,7 @@ pub trait EdxDbInterface {
     /// 1. if there is no old value and no value stored, inserts the new value;
     /// 2. if there is an old value but no value stored, returns an error;
     /// 3. if the old value is equal to the value stored, updates the value stored
-    /// with the new value;
+    ///    with the new value;
     /// 4. else returns the value stored with its associated token.
     ///
     /// A summary of the different cases is presented in the following table:

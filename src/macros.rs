@@ -187,7 +187,7 @@ macro_rules! set {
         $crate::Set::default()
     };
     ($($elt:expr $(,)?)+) => {
-	$crate::Set::from_iter([$($elt,)+])
+    $crate::Set::from_iter([$($elt,)+])
     }
 }
 
@@ -198,7 +198,7 @@ macro_rules! dx {
         $crate::Dx::default()
     };
     ($($elt:expr $(,)?)+) => {
-	$crate::Dx::from_iter([$($elt,)+])
+    $crate::Dx::from_iter([$($elt,)+])
     }
 }
 
@@ -209,7 +209,7 @@ macro_rules! edx {
         $crate::Edx::default()
     };
     ($($elt:expr $(,)?)+) => {
-	$crate::Edx::from_iter([$($elt,)+])
+    $crate::Edx::from_iter([$($elt,)+])
     }
 }
 
@@ -220,6 +220,6 @@ macro_rules! mm {
         $crate::Mm::default()
     };
     ($($elt:expr $(,)?)+) => {
-	$crate::Mm::from_iter([$($elt,)+])
+    $crate::Mm::from_iter([$($elt,)+])
     }
 }
