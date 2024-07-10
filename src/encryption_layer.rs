@@ -16,7 +16,7 @@ pub struct MemoryEncryptionLayer<
     Memory: MemoryADT<Address = Address<ADDRESS_LENGTH>>,
 > {
     aes: Aes256,
-    k_e: SymmetricKey<KEY_LENGTH>,
+    k_e: SymmetricKey<KEY_LENGTH>, // `Xts128` does not implement Clone
     mem: Memory,
 }
 
@@ -33,6 +33,13 @@ impl<
         Self { aes, k_e, mem: stm }
     }
 
+    /// Permutes the given memory address.
+    fn permute(&self, mut a: Memory::Address) -> Memory::Address {
+        self.aes
+            .encrypt_block(GenericArray::from_mut_slice(&mut *a));
+        a
+    }
+
     /// Encrypts this plaintext using its encrypted memory address as tweak.
     fn encrypt(&self, mut ptx: [u8; WORD_LENGTH], tok: [u8; ADDRESS_LENGTH]) -> [u8; WORD_LENGTH] {
         let cipher_1 = Aes256::new(GenericArray::from_slice(&self.k_e[..32]));
@@ -47,13 +54,6 @@ impl<
         let cipher_2 = Aes256::new(GenericArray::from_slice(&self.k_e[32..]));
         Xts128::new(cipher_1, cipher_2).decrypt_sector(&mut ctx, tok);
         ctx
-    }
-
-    /// Permutes the given memory address.
-    fn permute(&self, mut a: Memory::Address) -> Memory::Address {
-        self.aes
-            .encrypt_block(GenericArray::from_mut_slice(&mut *a));
-        a
     }
 }
 
@@ -105,7 +105,11 @@ impl<
 
 #[cfg(test)]
 mod tests {
-    use cosmian_crypto_core::{reexport::rand_core::SeedableRng, CsRng, Secret};
+    use aes::{
+        cipher::{generic_array::GenericArray, BlockDecrypt, KeyInit},
+        Aes256,
+    };
+    use cosmian_crypto_core::{reexport::rand_core::SeedableRng, CsRng, Secret, SymmetricKey};
     use futures::executor::block_on;
 
     use crate::{
@@ -116,6 +120,21 @@ mod tests {
     };
 
     const WORD_LENGTH: usize = 128;
+
+    #[test]
+    fn test_address_permutation() {
+        let mut rng = CsRng::from_entropy();
+        let seed = Secret::random(&mut rng);
+        let k_p = SymmetricKey::<32>::derive(&seed, &[0]).expect("secret is large enough");
+        let aes = Aes256::new(GenericArray::from_slice(&k_p));
+        let kv = KvStore::<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>::default();
+        let obf = MemoryEncryptionLayer::new(seed, kv);
+        let a = Address::<ADDRESS_LENGTH>::random(&mut rng);
+        let mut tok = obf.permute(a.clone());
+        assert_ne!(a, tok);
+        aes.decrypt_block(GenericArray::from_mut_slice(&mut *tok));
+        assert_eq!(a, tok);
+    }
 
     #[test]
     fn test_encrypt_decrypt() {
