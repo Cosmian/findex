@@ -79,7 +79,6 @@ where
 
     pub fn clear(&self) {
         self.vectors.lock().unwrap().clear();
-        self.el.clear();
     }
 
     /// Caches this vector for this address.

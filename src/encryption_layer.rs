@@ -1,9 +1,3 @@
-use std::{
-    collections::HashMap,
-    ops::DerefMut,
-    sync::{Arc, Mutex},
-};
-
 use crate::{address::Address, error::Error, MemoryADT, ADDRESS_LENGTH, KEY_LENGTH};
 use aes::{
     cipher::{generic_array::GenericArray, BlockEncrypt, KeyInit},
@@ -23,7 +17,6 @@ pub struct MemoryEncryptionLayer<
 > {
     aes: Aes256,
     k_e: SymmetricKey<KEY_LENGTH>,
-    cch: Arc<Mutex<HashMap<Address<ADDRESS_LENGTH>, HashMap<[u8; WORD_LENGTH], Memory::Word>>>>,
     mem: Memory,
 }
 
@@ -37,51 +30,10 @@ impl<
         let k_p = SymmetricKey::<32>::derive(&seed, &[0]).expect("secret is large enough");
         let k_e = SymmetricKey::<KEY_LENGTH>::derive(&seed, &[0]).expect("secret is large enough");
         let aes = Aes256::new(GenericArray::from_slice(&k_p));
-        let cch = Arc::new(Mutex::new(HashMap::new()));
-        Self {
-            aes,
-            k_e,
-            cch,
-            mem: stm,
-        }
+        Self { aes, k_e, mem: stm }
     }
 
-    /// Retains values cached for the given keys only.
-    pub fn clear(&self) {
-        self.cch.lock().expect("poisoned mutex").deref_mut().clear()
-    }
-
-    /// Decrypts the given value and caches the ciphertext.
-    fn find_or_encrypt(
-        &self,
-        ptx: <Self as MemoryADT>::Word,
-        tok: Memory::Address,
-    ) -> Memory::Word {
-        let mut cache = self.cch.lock().expect("poisoned lock");
-        if let Some(bindings) = cache.get_mut(&tok) {
-            let ctx = bindings.get(&ptx).cloned();
-            if let Some(ctx) = ctx {
-                ctx
-            } else {
-                let ctx = self.encrypt(ptx, *tok);
-                bindings.insert(ptx, ctx);
-                ctx
-            }
-        } else {
-            // token is not marked
-            drop(cache);
-            self.encrypt(ptx, *tok)
-        }
-    }
-
-    /// Decrypts the given value and caches the ciphertext.
-    fn decrypt_and_bind(&self, ctx: [u8; WORD_LENGTH], tok: Memory::Address) -> [u8; WORD_LENGTH] {
-        let ptx = self.decrypt(ctx, *tok);
-        self.bind(&tok, ptx, ctx);
-        ptx
-    }
-
-    /// Encrypts this plaintext under this associated data
+    /// Encrypts this plaintext using its encrypted memory address as tweak.
     fn encrypt(&self, mut ptx: [u8; WORD_LENGTH], tok: [u8; ADDRESS_LENGTH]) -> [u8; WORD_LENGTH] {
         let cipher_1 = Aes256::new(GenericArray::from_slice(&self.k_e[..32]));
         let cipher_2 = Aes256::new(GenericArray::from_slice(&self.k_e[32..]));
@@ -89,7 +41,7 @@ impl<
         ptx
     }
 
-    /// Decrypts this ciphertext under this associated data.
+    /// Decrypts this ciphertext using its encrypted memory address as tweak.
     fn decrypt(&self, mut ctx: [u8; WORD_LENGTH], tok: [u8; ADDRESS_LENGTH]) -> [u8; WORD_LENGTH] {
         let cipher_1 = Aes256::new(GenericArray::from_slice(&self.k_e[..32]));
         let cipher_2 = Aes256::new(GenericArray::from_slice(&self.k_e[32..]));
@@ -102,37 +54,6 @@ impl<
         self.aes
             .encrypt_block(GenericArray::from_mut_slice(&mut *a));
         a
-    }
-
-    /// Binds the given (tok, ptx, ctx) triple iff this token is marked.
-    fn bind(&self, tok: &Memory::Address, ptx: [u8; WORD_LENGTH], ctx: Memory::Word) {
-        let mut cache = self.cch.lock().expect("poisoned lock");
-        if let Some(bindings) = cache.get_mut(tok) {
-            bindings.insert(ptx, ctx);
-        }
-    }
-
-    /// Retrieves the ciphertext bound to the given (tok, ptx) couple.
-    /// Marks the token for later binding if it does not belong to any binding.
-    fn find_or_mark(
-        &self,
-        tok: &Memory::Address,
-        ptx: &Option<[u8; WORD_LENGTH]>,
-    ) -> Result<Option<Memory::Word>, <Self as MemoryADT>::Error> {
-        let mut cache = self.cch.lock().expect("poisoned lock");
-        if let Some(ptx) = ptx {
-            if let Some(bindings) = cache.get(tok) {
-                // This token is marked.
-                if let Some(ctx) = bindings.get(ptx) {
-                    return Ok(Some(*ctx));
-                }
-                return Err(Error::CorruptedMemoryCache);
-            }
-        }
-        // marking a token consists in binding it to an empty map that can later be used to
-        // store ctx/ptx bindings.
-        cache.entry(tok.clone()).or_default();
-        Ok(None)
     }
 }
 
@@ -167,17 +88,17 @@ impl<
     ) -> Result<Option<Self::Word>, Self::Error> {
         let (a, v) = guard;
         let tok = self.permute(a);
-        let old = self.find_or_mark(&tok, &v)?;
+        let old = v.map(|v| self.encrypt(v, *tok));
         let bindings = bindings
             .into_iter()
             .map(|(a, v)| {
                 let tok = self.permute(a);
-                let ctx = self.find_or_encrypt(v, tok.clone());
+                let ctx = self.encrypt(v, *tok);
                 (tok, ctx)
             })
             .collect();
         let cur = self.mem.guarded_write((tok.clone(), old), bindings).await?;
-        let res = cur.map(|ctx| self.decrypt_and_bind(ctx, tok));
+        let res = cur.map(|ctx| self.decrypt(ctx, *tok));
         Ok(res)
     }
 }
