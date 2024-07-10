@@ -29,6 +29,7 @@ fn main() {
         dummy_encode::<16, _>,
         dummy_decode,
     );
-    block_on(findex.insert(index.clone().into_iter())).expect("insert failed");
-    block_on(findex.search(vec![index[5].0; 1000].into_iter())).expect("search failed");
+    let kw = index[1].0;
+    block_on(findex.insert(index.into_iter())).expect("insert failed");
+    block_on(findex.search(vec![kw; 10000].into_iter())).expect("search failed");
 }

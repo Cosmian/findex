@@ -23,7 +23,7 @@ pub struct Findex<
     Memory::Error: Send + Sync,
 {
     el: MemoryEncryptionLayer<WORD_LENGTH, Memory>,
-    vectors: Arc<
+    cache: Arc<
         Mutex<
             HashMap<
                 Address<ADDRESS_LENGTH>,
@@ -66,19 +66,16 @@ where
         encode: fn(Op, HashSet<Value>) -> Result<Vec<[u8; WORD_LENGTH]>, String>,
         decode: fn(Vec<[u8; WORD_LENGTH]>) -> Result<HashSet<Value>, TryFromError>,
     ) -> Self {
-        // TODO: should the RNG be instantiated here?
-        // Creating many instances of Findex would need more work but potentially involve less
-        // waiting for the lock => bench it.
         Self {
             el: MemoryEncryptionLayer::new(seed, mem),
-            vectors: Arc::new(Mutex::new(HashMap::new())),
+            cache: Arc::new(Mutex::new(HashMap::new())),
             encode: Arc::new(encode),
             decode: Arc::new(decode),
         }
     }
 
     pub fn clear(&self) {
-        self.vectors.lock().unwrap().clear();
+        self.cache.lock().unwrap().clear();
     }
 
     /// Caches this vector for this address.
@@ -87,7 +84,7 @@ where
         address: Address<ADDRESS_LENGTH>,
         vector: IVec<WORD_LENGTH, MemoryEncryptionLayer<WORD_LENGTH, Memory>>,
     ) {
-        self.vectors
+        self.cache
             .lock()
             .expect("poisoned mutex")
             .insert(address, vector);
@@ -98,7 +95,7 @@ where
         &self,
         address: &Address<ADDRESS_LENGTH>,
     ) -> Option<IVec<WORD_LENGTH, MemoryEncryptionLayer<WORD_LENGTH, Memory>>> {
-        self.vectors
+        self.cache
             .lock()
             .expect("poisoned mutex")
             .get(address)
@@ -122,7 +119,7 @@ where
         let bindings = bindings
             .map(|(kw, vals)| (self.encode)(op, vals).map(|words| (kw, words)))
             .collect::<Result<Vec<_>, String>>()
-            .map_err(|e| Error::<Memory::Address, Memory::Error>::Conversion(e.to_string()))?;
+            .map_err(|e| Error::<_, Memory::Error>::Conversion(e.to_string()))?;
 
         let futures = bindings
             .into_iter()
@@ -143,11 +140,11 @@ where
         values: Vec<[u8; WORD_LENGTH]>,
     ) -> Result<(), <Self as IndexADT<Keyword, Value>>::Error> {
         let a = Self::hash_address(kw.as_ref());
-        let mut vector = self
+        let mut ivec = self
             .find(&a)
             .unwrap_or_else(|| IVec::new(a.clone(), self.el.clone()));
-        vector.push(values).await?;
-        self.bind(a, vector);
+        ivec.push(values).await?;
+        self.bind(a, ivec);
         Ok(())
     }
 
@@ -193,7 +190,7 @@ where
         let futures = keywords
             .map(|kw| self.read::<Keyword>(kw))
             .collect::<Vec<_>>();
-        let mut bindings = HashMap::new();
+        let mut bindings = HashMap::with_capacity(futures.len());
         for fut in futures {
             let (kw, vals) = fut.await?;
             bindings.insert(
@@ -210,14 +207,14 @@ where
         &self,
         bindings: impl Sync + Send + Iterator<Item = (Keyword, HashSet<Value>)>,
     ) -> Result<(), Self::Error> {
-        self.push(Op::Insert, bindings.into_iter()).await
+        self.push(Op::Insert, bindings).await
     }
 
     async fn delete(
         &self,
         bindings: impl Sync + Send + Iterator<Item = (Keyword, HashSet<Value>)>,
     ) -> Result<(), Self::Error> {
-        self.push(Op::Delete, bindings.into_iter()).await
+        self.push(Op::Delete, bindings).await
     }
 }
 

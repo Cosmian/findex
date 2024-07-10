@@ -1,3 +1,5 @@
+use std::{fmt::Debug, ops::Deref, sync::Arc};
+
 use crate::{address::Address, error::Error, MemoryADT, ADDRESS_LENGTH, KEY_LENGTH};
 use aes::{
     cipher::{generic_array::GenericArray, BlockEncrypt, KeyInit},
@@ -5,6 +7,23 @@ use aes::{
 };
 use cosmian_crypto_core::{Secret, SymmetricKey};
 use xts_mode::Xts128;
+
+#[derive(Clone)]
+struct ClonableXts(Arc<Xts128<Aes256>>);
+
+impl Debug for ClonableXts {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_tuple("ClonableXts").finish()
+    }
+}
+
+impl Deref for ClonableXts {
+    type Target = Xts128<Aes256>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
 
 /// The encryption layers is built on top of an encrypted memory implementing the `MemoryADT` and
 /// exposes a plaintext virtual memory interface implementing the `MemoryADT`.
@@ -16,7 +35,7 @@ pub struct MemoryEncryptionLayer<
     Memory: MemoryADT<Address = Address<ADDRESS_LENGTH>>,
 > {
     aes: Aes256,
-    k_e: SymmetricKey<KEY_LENGTH>, // `Xts128` does not implement Clone
+    xts: ClonableXts,
     mem: Memory,
 }
 
@@ -30,7 +49,10 @@ impl<
         let k_p = SymmetricKey::<32>::derive(&seed, &[0]).expect("secret is large enough");
         let k_e = SymmetricKey::<KEY_LENGTH>::derive(&seed, &[0]).expect("secret is large enough");
         let aes = Aes256::new(GenericArray::from_slice(&k_p));
-        Self { aes, k_e, mem: stm }
+        let aes_e1 = Aes256::new(GenericArray::from_slice(&k_e[..32]));
+        let aes_e2 = Aes256::new(GenericArray::from_slice(&k_e[32..]));
+        let xts = ClonableXts(Arc::new(Xts128::new(aes_e1, aes_e2)));
+        Self { aes, xts, mem: stm }
     }
 
     /// Permutes the given memory address.
@@ -42,17 +64,13 @@ impl<
 
     /// Encrypts this plaintext using its encrypted memory address as tweak.
     fn encrypt(&self, mut ptx: [u8; WORD_LENGTH], tok: [u8; ADDRESS_LENGTH]) -> [u8; WORD_LENGTH] {
-        let cipher_1 = Aes256::new(GenericArray::from_slice(&self.k_e[..32]));
-        let cipher_2 = Aes256::new(GenericArray::from_slice(&self.k_e[32..]));
-        Xts128::new(cipher_1, cipher_2).encrypt_sector(&mut ptx, tok);
+        self.xts.encrypt_sector(&mut ptx, tok);
         ptx
     }
 
     /// Decrypts this ciphertext using its encrypted memory address as tweak.
     fn decrypt(&self, mut ctx: [u8; WORD_LENGTH], tok: [u8; ADDRESS_LENGTH]) -> [u8; WORD_LENGTH] {
-        let cipher_1 = Aes256::new(GenericArray::from_slice(&self.k_e[..32]));
-        let cipher_2 = Aes256::new(GenericArray::from_slice(&self.k_e[32..]));
-        Xts128::new(cipher_1, cipher_2).decrypt_sector(&mut ctx, tok);
+        self.xts.decrypt_sector(&mut ctx, tok);
         ctx
     }
 }
