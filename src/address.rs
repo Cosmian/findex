@@ -7,7 +7,7 @@ use cosmian_crypto_core::reexport::rand_core::CryptoRngCore;
 pub struct Address<const LENGTH: usize>([u8; LENGTH]);
 
 impl<const LENGTH: usize> Deref for Address<LENGTH> {
-    type Target = [u8];
+    type Target = [u8; LENGTH];
 
     fn deref(&self) -> &Self::Target {
         &self.0
@@ -29,7 +29,7 @@ impl<const LENGTH: usize> Default for Address<LENGTH> {
 impl<const LENGTH: usize> Address<LENGTH> {
     pub fn random(rng: &mut impl CryptoRngCore) -> Self {
         let mut res = Self([0; LENGTH]);
-        rng.fill_bytes(&mut res);
+        rng.fill_bytes(&mut *res);
         res
     }
 }

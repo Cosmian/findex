@@ -4,7 +4,7 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use cosmian_crypto_core::{kdf128, CsRng, Secret};
+use cosmian_crypto_core::{kdf128, Secret};
 
 use crate::{
     adt::VectorADT, encoding::Op, encryption_layer::MemoryEncryptionLayer, error::Error,
@@ -16,7 +16,7 @@ pub struct Findex<
     const WORD_LENGTH: usize,
     Value,
     TryFromError: std::error::Error,
-    Memory: Send + Sync + Clone + MemoryADT<Address = Address<ADDRESS_LENGTH>, Word = Vec<u8>>,
+    Memory: Send + Sync + Clone + MemoryADT<Address = Address<ADDRESS_LENGTH>, Word = [u8; WORD_LENGTH]>,
 > where
     // values are serializable (but do not depend on `serde`)
     for<'z> Value: TryFrom<&'z [u8], Error = TryFromError> + AsRef<[u8]>,
@@ -49,7 +49,10 @@ impl<
         const WORD_LENGTH: usize,
         Value: Send + Sync + Hash + Eq,
         TryFromError: std::error::Error,
-        Memory: Send + Sync + Clone + MemoryADT<Address = Address<ADDRESS_LENGTH>, Word = Vec<u8>>,
+        Memory: Send
+            + Sync
+            + Clone
+            + MemoryADT<Address = Address<ADDRESS_LENGTH>, Word = [u8; WORD_LENGTH]>,
     > Findex<WORD_LENGTH, Value, TryFromError, Memory>
 where
     for<'z> Value: TryFrom<&'z [u8], Error = TryFromError> + AsRef<[u8]>,
@@ -59,7 +62,6 @@ where
     /// Instantiates Findex with the given seed, and memory.
     pub fn new(
         seed: Secret<KEY_LENGTH>,
-        rng: CsRng,
         mem: Memory,
         encode: fn(Op, HashSet<Value>) -> Result<Vec<[u8; WORD_LENGTH]>, String>,
         decode: fn(Vec<[u8; WORD_LENGTH]>) -> Result<HashSet<Value>, TryFromError>,
@@ -68,7 +70,7 @@ where
         // Creating many instances of Findex would need more work but potentially involve less
         // waiting for the lock => bench it.
         Self {
-            el: MemoryEncryptionLayer::new(seed, rng, mem),
+            el: MemoryEncryptionLayer::new(seed, mem),
             vectors: Arc::new(Mutex::new(HashMap::new())),
             encode: Arc::new(encode),
             decode: Arc::new(decode),
@@ -106,7 +108,7 @@ where
 
     fn hash_address(bytes: &[u8]) -> Address<ADDRESS_LENGTH> {
         let mut a = Address::<ADDRESS_LENGTH>::default();
-        kdf128!(&mut a, bytes);
+        kdf128!(&mut *a, bytes);
         a
     }
 
@@ -170,7 +172,10 @@ impl<
         Keyword: Send + Sync + Hash + PartialEq + Eq + AsRef<[u8]>,
         Value: Send + Sync + Hash + PartialEq + Eq,
         TryFromError: std::error::Error,
-        Memory: Send + Sync + Clone + MemoryADT<Address = Address<ADDRESS_LENGTH>, Word = Vec<u8>>,
+        Memory: Send
+            + Sync
+            + Clone
+            + MemoryADT<Address = Address<ADDRESS_LENGTH>, Word = [u8; WORD_LENGTH]>,
     > IndexADT<Keyword, Value> for Findex<WORD_LENGTH, Value, TryFromError, Memory>
 where
     for<'z> Value: TryFrom<&'z [u8], Error = TryFromError> + AsRef<[u8]>,
@@ -237,8 +242,8 @@ mod tests {
     fn test_insert_search_delete_search() {
         let mut rng = CsRng::from_entropy();
         let seed = Secret::random(&mut rng);
-        let kv = KvStore::<Address<ADDRESS_LENGTH>, Vec<u8>>::default();
-        let findex = Findex::new(seed, rng, kv, dummy_encode::<WORD_LENGTH, _>, dummy_decode);
+        let kv = KvStore::<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>::default();
+        let findex = Findex::new(seed, kv, dummy_encode::<WORD_LENGTH, _>, dummy_decode);
         let bindings = HashMap::<&str, HashSet<Value>>::from_iter([
             (
                 "cat",

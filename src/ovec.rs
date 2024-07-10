@@ -226,8 +226,8 @@ mod tests {
     async fn test_ovec() {
         let mut rng = CsRng::from_entropy();
         let seed = Secret::random(&mut rng);
-        let kv = KvStore::<Address<ADDRESS_LENGTH>, Vec<u8>>::default();
-        let obf = MemoryEncryptionLayer::new(seed, rng.clone(), kv.clone());
+        let kv = KvStore::<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>::default();
+        let obf = MemoryEncryptionLayer::new(seed, kv.clone());
         let address = Address::random(&mut rng);
         let v = IVec::<WORD_LENGTH, _>::new(address.clone(), obf);
         test_vector_sequential(&v).await;

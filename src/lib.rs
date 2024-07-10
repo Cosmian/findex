@@ -17,7 +17,7 @@ pub use value::Value;
 #[cfg(any(test, feature = "bench"))]
 mod kv;
 #[cfg(feature = "bench")]
-pub use encoding::{dummy_decode, dummy_encode, Op};
+pub use encoding::{dummy_decode, dummy_encode, Op, WORD_LENGTH};
 #[cfg(feature = "bench")]
 pub use kv::KvStore;
 
@@ -37,4 +37,4 @@ pub const ADDRESS_LENGTH: usize = 16;
 
 /// Using 32-byte cryptographic keys allow achieving post-quantum resistance if the adequate
 /// primitives are used (e.g. AES).
-pub const KEY_LENGTH: usize = 32;
+pub const KEY_LENGTH: usize = 64;

@@ -5,11 +5,9 @@ use cosmian_crypto_core::{
     CsRng, Secret,
 };
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
-use findex::{dummy_decode, dummy_encode, Findex, IndexADT, KvStore, MemoryADT, Op};
+use findex::{dummy_decode, dummy_encode, Findex, IndexADT, KvStore, MemoryADT, Op, WORD_LENGTH};
 use futures::{executor::block_on, future::join_all};
 use lazy_static::lazy_static;
-
-const WORD_LENGTH: usize = 1 + 8 * 16;
 
 lazy_static! {
     static ref scale: Vec<f32> = make_scale(0, 4, 20);
@@ -60,7 +58,6 @@ fn bench_search_multiple_bindings(c: &mut Criterion) {
     let index = build_benchmarking_bindings_index(&mut rng);
     let findex = Findex::new(
         seed.clone(),
-        rng.clone(),
         stm,
         dummy_encode::<WORD_LENGTH, _>,
         dummy_decode,
@@ -92,7 +89,6 @@ fn bench_search_multiple_keywords(c: &mut Criterion) {
     let index = build_benchmarking_keywords_index(&mut rng);
     let findex = Findex::new(
         seed,
-        rng,
         stm.clone(),
         dummy_encode::<WORD_LENGTH, _>,
         dummy_decode,
@@ -185,7 +181,6 @@ fn bench_insert_multiple_bindings(c: &mut Criterion) {
             let stm = KvStore::with_capacity(n_max + 1);
             let findex = Findex::new(
                 seed.clone(),
-                rng.clone(),
                 stm.clone(),
                 dummy_encode::<WORD_LENGTH, _>,
                 dummy_decode,
@@ -252,7 +247,6 @@ fn bench_insert_multiple_keywords(c: &mut Criterion) {
             let stm = KvStore::with_capacity(2 * n);
             let findex = Findex::new(
                 seed.clone(),
-                rng.clone(),
                 stm.clone(),
                 dummy_encode::<WORD_LENGTH, _>,
                 dummy_decode,
@@ -293,7 +287,6 @@ fn bench_contention(c: &mut Criterion) {
         let stm = KvStore::with_capacity(n + 1);
         let findex = Findex::new(
             seed.clone(),
-            rng.clone(),
             stm.clone(),
             dummy_encode::<WORD_LENGTH, _>,
             dummy_decode,

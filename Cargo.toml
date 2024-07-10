@@ -9,6 +9,7 @@ bench = []
 [dependencies]
 aes = "0.8.4"
 cosmian_crypto_core = {version = "9.5", default-features = false, features = ["aes", "sha3"]}
+xts-mode = "0.5.1"
 
 [dev-dependencies]
 futures = "0.3.30"

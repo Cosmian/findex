@@ -17,6 +17,9 @@ pub enum Mode {
     Offset(usize),
 }
 
+#[cfg(feature = "bench")]
+pub use one_byte_metadata_uid_optimized::*;
+
 mod one_byte_metadata_uid_optimized {
     //! This module defines a compact (only one systematic metadata byte) encoding that can be used
     //! to serialize up to two different operations. It defines two *modes*:
@@ -59,7 +62,7 @@ mod one_byte_metadata_uid_optimized {
     /// The chunk length is the size of the available space in a word.
     const CHUNK_LENGTH: usize = 8 * BLOCK_LENGTH;
 
-    const WORD_LENGTH: usize = 1 + CHUNK_LENGTH;
+    pub const WORD_LENGTH: usize = 1 + CHUNK_LENGTH;
 
     pub(crate) fn encode<Value: Into<Vec<u8>>>(_op: Op, vs: HashSet<Value>) -> Vec<Vec<u8>> {
         let mut serialized_values = vs.into_iter().map(Into::into).collect::<Vec<_>>();

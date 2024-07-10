@@ -25,7 +25,6 @@ fn main() {
     let seed = Secret::random(&mut rng);
     let findex = Findex::new(
         seed,
-        rng,
         KvStore::default(),
         dummy_encode::<16, _>,
         dummy_decode,
