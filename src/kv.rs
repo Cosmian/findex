@@ -32,6 +32,7 @@ impl<Address: Hash + Eq + Debug, Value: Clone + Eq + Debug> Default for KvStore<
 }
 
 impl<Address: Hash + Eq + Debug, Value: Clone + Eq + Debug> KvStore<Address, Value> {
+    #[cfg(feature = "bench")]
     pub fn with_capacity(c: usize) -> Self {
         Self {
             inner: Arc::new(Mutex::new(HashMap::with_capacity(c))),

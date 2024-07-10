@@ -30,6 +30,9 @@ pub use kv::KvStore;
 /// mitigated by marking n bit of the addresses, allowing to statistically store up to 2^((64-n)/2)
 /// keywords, and reducing the number of words that can be used to store associated values to
 /// sqrt(2^64 - 2^n).
+#[cfg(not(feature = "small"))]
+pub const ADDRESS_LENGTH: usize = 16;
+#[cfg(feature = "small")]
 pub const ADDRESS_LENGTH: usize = 16;
 
 /// Using 32-byte cryptographic keys allow achieving post-quantum resistance if the adequate
