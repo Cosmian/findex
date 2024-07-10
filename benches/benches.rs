@@ -279,55 +279,119 @@ fn bench_insert_multiple_keywords(c: &mut Criterion) {
 }
 
 fn bench_contention(c: &mut Criterion) {
+    const N_BINDINGS: usize = 100;
+    const N_CLIENTS: usize = 8;
     let mut rng = CsRng::from_entropy();
     let seed = Secret::random(&mut rng);
-    let mut group = c.benchmark_group("Concurrent clients (single binding, same keyword)");
-    for i in scale.iter() {
-        let n = 10f32.powf(*i).ceil() as usize;
-        let stm = KvStore::with_capacity(n + 1);
-        let findex = Findex::new(
-            seed.clone(),
-            stm.clone(),
-            dummy_encode::<WORD_LENGTH, _>,
-            dummy_decode,
-        );
-        let runtime = tokio::runtime::Builder::new_multi_thread()
-            .worker_threads(n)
-            .enable_all()
-            .build()
-            .unwrap();
+    let kws = (0..N_CLIENTS)
+        .map(|_| rng.next_u64().to_be_bytes())
+        .collect::<Vec<_>>();
 
-        group
-            .bench_function(BenchmarkId::from_parameter(n), |b| {
-                b.iter_batched(
-                    || {
-                        stm.clear();
-                        findex.clear();
-                        let instances = (0..n).map(|_| findex.clone()).collect::<Vec<_>>();
-                        let bindings = (0..n)
-                            .map(|_| {
-                                (
-                                    rng.next_u64().to_be_bytes(),
-                                    HashSet::from_iter([rng.next_u64().to_be_bytes()]),
-                                )
+    // Reference: parallel clients.
+    {
+        let mut group =
+            c.benchmark_group("Parallel clients ({N_BINDINGS} binding, different keywords)");
+        for i in 1..=N_CLIENTS {
+            let stm = KvStore::with_capacity(N_BINDINGS * i + 1);
+            let findex = Findex::new(
+                seed.clone(),
+                stm.clone(),
+                dummy_encode::<WORD_LENGTH, _>,
+                dummy_decode,
+            );
+            let runtime = tokio::runtime::Builder::new_multi_thread()
+                .worker_threads(i)
+                .enable_all()
+                .build()
+                .unwrap();
+
+            let instances = (0..i).map(|_| findex.clone()).collect::<Vec<_>>();
+            let bindings = kws
+                .clone()
+                .into_iter()
+                .map(|kw| {
+                    (
+                        kw, // All clients use a different keyword.
+                        HashSet::from_iter((0..N_BINDINGS).map(|_| rng.next_u64().to_be_bytes())),
+                    )
+                })
+                .collect::<Vec<_>>();
+
+            group
+                .bench_function(BenchmarkId::from_parameter(i), |b| {
+                    b.iter_batched(
+                        || {
+                            stm.clear();
+                            findex.clear();
+                            instances.clone().into_iter().zip(bindings.clone())
+                        },
+                        |iterator| {
+                            runtime.block_on(async {
+                                join_all(iterator.map(|(findex, binding)| {
+                                    tokio::spawn(async move {
+                                        findex.insert([binding].into_iter()).await
+                                    })
+                                }))
+                                .await
                             })
-                            .collect::<Vec<_>>();
-                        instances.into_iter().zip(bindings)
-                    },
-                    |iterator| {
-                        runtime.block_on(async {
-                            join_all(iterator.map(|(findex, binding)| {
-                                tokio::spawn(
-                                    async move { findex.insert([binding].into_iter()).await },
-                                )
-                            }))
-                            .await
-                        })
-                    },
-                    criterion::BatchSize::SmallInput,
-                );
-            })
-            .measurement_time(Duration::from_secs(60));
+                        },
+                        criterion::BatchSize::SmallInput,
+                    );
+                })
+                .measurement_time(Duration::from_secs(60));
+        }
+    }
+
+    // Concurrent clients.
+    {
+        let mut group = c.benchmark_group("Concurrent clients (single binding, same keyword)");
+        for i in 1..=N_CLIENTS {
+            let stm = KvStore::with_capacity(N_BINDINGS * i + 1);
+            let findex = Findex::new(
+                seed.clone(),
+                stm.clone(),
+                dummy_encode::<WORD_LENGTH, _>,
+                dummy_decode,
+            );
+            let runtime = tokio::runtime::Builder::new_multi_thread()
+                .worker_threads(i)
+                .enable_all()
+                .build()
+                .unwrap();
+
+            let instances = (0..i).map(|_| findex.clone()).collect::<Vec<_>>();
+            let bindings = (0..i)
+                .map(|_| {
+                    (
+                        kws[0], // All clients use the same keyword
+                        HashSet::from_iter((0..N_BINDINGS).map(|_| rng.next_u64().to_be_bytes())),
+                    )
+                })
+                .collect::<Vec<_>>();
+
+            group
+                .bench_function(BenchmarkId::from_parameter(i), |b| {
+                    b.iter_batched(
+                        || {
+                            stm.clear();
+                            findex.clear();
+                            instances.clone().into_iter().zip(bindings.clone())
+                        },
+                        |iterator| {
+                            runtime.block_on(async {
+                                join_all(iterator.map(|(findex, binding)| {
+                                    tokio::spawn(async move {
+                                        findex.insert([binding].into_iter()).await
+                                    })
+                                }))
+                                .await
+                            })
+                        },
+                        criterion::BatchSize::SmallInput,
+                    );
+                })
+                .measurement_time(Duration::from_secs(60));
+        }
     }
 }
 
