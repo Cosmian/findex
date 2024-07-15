@@ -12,7 +12,7 @@ pub enum Op {
     Delete,
 }
 
-pub enum Mode {
+pub(crate) enum Mode {
     EqBlock(usize),
     Offset(usize),
 }
@@ -54,7 +54,7 @@ mod one_byte_metadata_uid_optimized {
     //! - in the block mode, they designate the block-length (2 bits) of the values stored in this
     //!   word, and the number of such values stored in this word (3 bits).
 
-    use super::*;
+    use super::{HashSet, Op, Ordering};
 
     /// Blocks are the smallest unit size in block mode, 16 bytes is optimized to store UUIDs.
     const BLOCK_LENGTH: usize = 16;

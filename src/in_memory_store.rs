@@ -33,6 +33,7 @@ impl<Address: Hash + Eq + Debug, Value: Clone + Eq + Debug> Default for InMemory
 
 impl<Address: Hash + Eq + Debug, Value: Clone + Eq + Debug> InMemory<Address, Value> {
     #[cfg(feature = "bench")]
+    #[must_use]
     pub fn with_capacity(c: usize) -> Self {
         Self {
             inner: Arc::new(Mutex::new(HashMap::with_capacity(c))),
@@ -48,10 +49,8 @@ impl<Address: Send + Sync + Hash + Eq + Debug, Value: Send + Sync + Clone + Eq +
     for InMemory<Address, Value>
 {
     type Address = Address;
-
-    type Word = Value;
-
     type Error = MemoryError;
+    type Word = Value;
 
     async fn batch_read(&self, a: Vec<Address>) -> Result<Vec<Option<Value>>, Self::Error> {
         let store = self.inner.lock().expect("poisoned lock");
@@ -79,9 +78,8 @@ impl<Address: Send + Sync + Hash + Eq + Debug, Value: Send + Sync + Clone + Eq +
 impl<Address: Hash + Eq + Debug + Clone, Value: Clone + Eq + Debug> IntoIterator
     for InMemory<Address, Value>
 {
-    type Item = (Address, Value);
-
     type IntoIter = <HashMap<Address, Value> as IntoIterator>::IntoIter;
+    type Item = (Address, Value);
 
     fn into_iter(self) -> Self::IntoIter {
         self.inner
@@ -97,13 +95,13 @@ mod tests {
 
     use futures::executor::block_on;
 
-    use crate::MemoryADT;
-
     use super::InMemory;
+    use crate::MemoryADT;
 
     /// Ensures a transaction can express a vector push operation:
     /// - the counter is correctly incremented and all values are written;
-    /// - using the wrong value in the guard fails the operation and returns the current value.
+    /// - using the wrong value in the guard fails the operation and returns the
+    ///   current value.
     #[test]
     fn test_vector_push() {
         let memory = InMemory::<u8, u8>::default();

@@ -17,7 +17,7 @@ fn make_scale(start: usize, stop: usize, n: usize) -> Vec<f32> {
     let step = ((stop - start) as f32) / n as f32;
     let mut points = Vec::with_capacity(n);
     for i in 0..=n {
-        points.push(start as f32 + i as f32 * step);
+        points.push((i as f32).mul_add(step, start as f32));
     }
     points
 }
@@ -56,16 +56,11 @@ fn bench_search_multiple_bindings(c: &mut Criterion) {
     let seed = Secret::random(&mut rng);
     let stm = InMemory::default();
     let index = build_benchmarking_bindings_index(&mut rng);
-    let findex = Findex::new(
-        seed.clone(),
-        stm,
-        dummy_encode::<WORD_LENGTH, _>,
-        dummy_decode,
-    );
+    let findex = Findex::new(seed, stm, dummy_encode::<WORD_LENGTH, _>, dummy_decode);
     block_on(findex.insert(index.clone().into_iter())).unwrap();
 
     let mut group = c.benchmark_group("Multiple bindings search (1 keyword)");
-    for (kw, vals) in index.clone().into_iter() {
+    for (kw, vals) in index {
         group.bench_function(BenchmarkId::from_parameter(vals.len()), |b| {
             b.iter_batched(
                 || {
@@ -127,7 +122,7 @@ fn bench_search_multiple_keywords(c: &mut Criterion) {
                         findex.clear();
                         // Using .cloned() instead of .clone() reduces the overhead (maybe because it
                         // only clones what is needed)
-                        index.iter().map(|(kw, _)| kw).take(n).cloned()
+                        index.iter().map(|(kw, _)| kw).take(n).copied()
                     },
                     |kws| {
                         block_on(findex.search(kws)).expect("search failed");
@@ -329,7 +324,7 @@ fn bench_contention(c: &mut Criterion) {
                             runtime.block_on(async {
                                 join_all(iterator.map(|(findex, binding)| {
                                     tokio::spawn(async move {
-                                        findex.insert([binding].into_iter()).await
+                                        findex.insert(std::iter::once(binding)).await
                                     })
                                 }))
                                 .await
@@ -381,7 +376,7 @@ fn bench_contention(c: &mut Criterion) {
                             runtime.block_on(async {
                                 join_all(iterator.map(|(findex, binding)| {
                                     tokio::spawn(async move {
-                                        findex.insert([binding].into_iter()).await
+                                        findex.insert(std::iter::once(binding)).await
                                     })
                                 }))
                                 .await

@@ -35,7 +35,7 @@ impl<const LENGTH: usize> Address<LENGTH> {
 }
 
 impl<const LENGTH: usize> Add<u64> for Address<LENGTH> {
-    type Output = Address<LENGTH>;
+    type Output = Self;
 
     /// Highly inefficient implementation of an add modulo 2^8^LENGTH in little endian.
     fn add(mut self, mut adder: u64) -> Self::Output {
@@ -45,7 +45,7 @@ impl<const LENGTH: usize> Add<u64> for Address<LENGTH> {
             // add bytes
             let lhs = &mut self[pos % LENGTH];
             let rhs = adder % 256;
-            let res = *lhs as i32 + rhs as i32 + carry;
+            let res = i32::from(*lhs) + rhs as i32 + carry;
 
             // update states
             *lhs = (res % 256) as u8;

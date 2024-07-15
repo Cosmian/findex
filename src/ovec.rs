@@ -2,8 +2,8 @@
 //! following invariant:
 //!
 //! > I_v: the value of the counter stored at the vector address is equal to the number of values
-//!        stored in this vector; these values are of homogeneous type and stored in contiguous
-//!        memory words.
+//! > stored in this vector; these values are of homogeneous type and stored in contiguous
+//! > memory words.
 //!
 //! This implementation is based on the assumption that an infinite array starting at the vector's
 //! address has been allocated, and thus stores values after the header:
@@ -67,7 +67,10 @@ impl TryFrom<&[u8]> for Header {
 
 /// Implementation of a vector in an infinite array.
 #[derive(Debug)]
-pub struct IVec<const WORD_LENGTH: usize, Memory: Clone + MemoryADT<Word = [u8; WORD_LENGTH]>> {
+pub(crate) struct IVec<
+    const WORD_LENGTH: usize,
+    Memory: Clone + MemoryADT<Word = [u8; WORD_LENGTH]>,
+> {
     // backing array address
     a: Memory::Address,
     // cached header value
@@ -98,7 +101,7 @@ impl<
 {
     /// (Lazily) instantiates a new vector at this address in this memory: no value is written
     /// before the first push.
-    pub fn new(a: Address, m: Memory) -> Self {
+    pub(crate) const fn new(a: Address, m: Memory) -> Self {
         Self { a, h: None, m }
     }
 }

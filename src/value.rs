@@ -28,7 +28,7 @@ impl From<Vec<u8>> for Value {
 
 impl From<&Value> for Vec<u8> {
     fn from(value: &Value) -> Self {
-        value.0.to_vec()
+        value.0.clone()
     }
 }
 
@@ -48,7 +48,7 @@ impl TryFrom<Value> for String {
     type Error = FromUtf8Error;
 
     fn try_from(value: Value) -> Result<Self, Self::Error> {
-        String::from_utf8(value.0)
+        Self::from_utf8(value.0)
     }
 }
 
