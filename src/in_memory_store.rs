@@ -19,11 +19,11 @@ impl Display for MemoryError {
 impl std::error::Error for MemoryError {}
 
 #[derive(Clone, Debug)]
-pub struct KvStore<Address: Hash + Eq, Value> {
+pub struct InMemory<Address: Hash + Eq, Value> {
     inner: Arc<Mutex<HashMap<Address, Value>>>,
 }
 
-impl<Address: Hash + Eq + Debug, Value: Clone + Eq + Debug> Default for KvStore<Address, Value> {
+impl<Address: Hash + Eq + Debug, Value: Clone + Eq + Debug> Default for InMemory<Address, Value> {
     fn default() -> Self {
         Self {
             inner: Arc::new(Mutex::new(HashMap::new())),
@@ -31,7 +31,7 @@ impl<Address: Hash + Eq + Debug, Value: Clone + Eq + Debug> Default for KvStore<
     }
 }
 
-impl<Address: Hash + Eq + Debug, Value: Clone + Eq + Debug> KvStore<Address, Value> {
+impl<Address: Hash + Eq + Debug, Value: Clone + Eq + Debug> InMemory<Address, Value> {
     #[cfg(feature = "bench")]
     pub fn with_capacity(c: usize) -> Self {
         Self {
@@ -45,7 +45,7 @@ impl<Address: Hash + Eq + Debug, Value: Clone + Eq + Debug> KvStore<Address, Val
 }
 
 impl<Address: Send + Sync + Hash + Eq + Debug, Value: Send + Sync + Clone + Eq + Debug> MemoryADT
-    for KvStore<Address, Value>
+    for InMemory<Address, Value>
 {
     type Address = Address;
 
@@ -77,7 +77,7 @@ impl<Address: Send + Sync + Hash + Eq + Debug, Value: Send + Sync + Clone + Eq +
 
 #[cfg(feature = "bench")]
 impl<Address: Hash + Eq + Debug + Clone, Value: Clone + Eq + Debug> IntoIterator
-    for KvStore<Address, Value>
+    for InMemory<Address, Value>
 {
     type Item = (Address, Value);
 
@@ -99,30 +99,30 @@ mod tests {
 
     use crate::MemoryADT;
 
-    use super::KvStore;
+    use super::InMemory;
 
-    /// Ensures a transaction can express an vector push operation:
+    /// Ensures a transaction can express a vector push operation:
     /// - the counter is correctly incremented and all values are written;
     /// - using the wrong value in the guard fails the operation and returns the current value.
     #[test]
     fn test_vector_push() {
-        let kv = KvStore::<u8, u8>::default();
+        let memory = InMemory::<u8, u8>::default();
 
         assert_eq!(
-            block_on(kv.guarded_write((0, None), vec![(0, 2), (1, 1), (2, 1)])).unwrap(),
+            block_on(memory.guarded_write((0, None), vec![(0, 2), (1, 1), (2, 1)])).unwrap(),
             None
         );
         assert_eq!(
-            block_on(kv.guarded_write((0, None), vec![(0, 4), (3, 2), (4, 2)])).unwrap(),
+            block_on(memory.guarded_write((0, None), vec![(0, 4), (3, 2), (4, 2)])).unwrap(),
             Some(2)
         );
         assert_eq!(
-            block_on(kv.guarded_write((0, Some(2)), vec![(0, 4), (3, 3), (4, 3)])).unwrap(),
+            block_on(memory.guarded_write((0, Some(2)), vec![(0, 4), (3, 3), (4, 3)])).unwrap(),
             Some(2)
         );
         assert_eq!(
             vec![Some(1), Some(1), Some(3), Some(3)],
-            block_on(kv.batch_read(vec![1, 2, 3, 4])).unwrap(),
+            block_on(memory.batch_read(vec![1, 2, 3, 4])).unwrap(),
         )
     }
 }

@@ -15,11 +15,11 @@ pub use findex::Findex;
 pub use value::Value;
 
 #[cfg(any(test, feature = "bench"))]
-mod kv;
+mod in_memory_store;
 #[cfg(feature = "bench")]
 pub use encoding::{dummy_decode, dummy_encode, Op, WORD_LENGTH};
 #[cfg(feature = "bench")]
-pub use kv::KvStore;
+pub use in_memory_store::InMemory;
 
 /// 16-byte addresses ensure a high collision resistance that poses virtually no limitation on the
 /// index.
@@ -35,6 +35,5 @@ pub const ADDRESS_LENGTH: usize = 16;
 #[cfg(feature = "small")]
 pub const ADDRESS_LENGTH: usize = 16;
 
-/// Using 32-byte cryptographic keys allow achieving post-quantum resistance if the adequate
-/// primitives are used (e.g. AES).
+/// Using 32-byte cryptographic keys allows achieving post-quantum resistance with the AES primitive.
 pub const KEY_LENGTH: usize = 64;

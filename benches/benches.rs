@@ -5,7 +5,7 @@ use cosmian_crypto_core::{
     CsRng, Secret,
 };
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
-use findex::{dummy_decode, dummy_encode, Findex, IndexADT, KvStore, MemoryADT, Op, WORD_LENGTH};
+use findex::{dummy_decode, dummy_encode, Findex, IndexADT, InMemory, MemoryADT, Op, WORD_LENGTH};
 use futures::{executor::block_on, future::join_all};
 use lazy_static::lazy_static;
 
@@ -54,7 +54,7 @@ fn build_benchmarking_keywords_index(
 fn bench_search_multiple_bindings(c: &mut Criterion) {
     let mut rng = CsRng::from_entropy();
     let seed = Secret::random(&mut rng);
-    let stm = KvStore::default();
+    let stm = InMemory::default();
     let index = build_benchmarking_bindings_index(&mut rng);
     let findex = Findex::new(
         seed.clone(),
@@ -85,7 +85,7 @@ fn bench_search_multiple_keywords(c: &mut Criterion) {
     let mut rng = CsRng::from_entropy();
     let seed = Secret::random(&mut rng);
 
-    let stm = KvStore::default();
+    let stm = InMemory::default();
     let index = build_benchmarking_keywords_index(&mut rng);
     let findex = Findex::new(
         seed,
@@ -150,7 +150,7 @@ fn bench_insert_multiple_bindings(c: &mut Criterion) {
     {
         let mut group = c.benchmark_group("write n words to memory");
         for (_, vals) in index.clone().into_iter() {
-            let stm = KvStore::with_capacity(n_max + 1);
+            let stm = InMemory::with_capacity(n_max + 1);
             group
                 .bench_function(BenchmarkId::from_parameter(vals.len()), |b| {
                     b.iter_batched(
@@ -178,7 +178,7 @@ fn bench_insert_multiple_bindings(c: &mut Criterion) {
     {
         let mut group = c.benchmark_group("Multiple bindings insert (same keyword)");
         for (kw, vals) in index.clone().into_iter() {
-            let stm = KvStore::with_capacity(n_max + 1);
+            let stm = InMemory::with_capacity(n_max + 1);
             let findex = Findex::new(
                 seed.clone(),
                 stm.clone(),
@@ -213,7 +213,7 @@ fn bench_insert_multiple_keywords(c: &mut Criterion) {
         let mut group = c.benchmark_group("write 2n words to memory");
         for i in scale.iter() {
             let n = 10f32.powf(*i).ceil() as usize;
-            let stm = KvStore::with_capacity(2 * n);
+            let stm = InMemory::with_capacity(2 * n);
             group
                 .bench_function(BenchmarkId::from_parameter(n), |b| {
                     b.iter_batched(
@@ -244,7 +244,7 @@ fn bench_insert_multiple_keywords(c: &mut Criterion) {
         let mut group = c.benchmark_group("Multiple keywords insert (one binding each)");
         for i in scale.iter() {
             let n = 10f32.powf(*i).ceil() as usize;
-            let stm = KvStore::with_capacity(2 * n);
+            let stm = InMemory::with_capacity(2 * n);
             let findex = Findex::new(
                 seed.clone(),
                 stm.clone(),
@@ -292,7 +292,7 @@ fn bench_contention(c: &mut Criterion) {
         let mut group =
             c.benchmark_group("Parallel clients ({N_BINDINGS} binding, different keywords)");
         for i in 1..=N_CLIENTS {
-            let stm = KvStore::with_capacity(N_BINDINGS * i + 1);
+            let stm = InMemory::with_capacity(N_BINDINGS * i + 1);
             let findex = Findex::new(
                 seed.clone(),
                 stm.clone(),
@@ -346,7 +346,7 @@ fn bench_contention(c: &mut Criterion) {
     {
         let mut group = c.benchmark_group("Concurrent clients (single binding, same keyword)");
         for i in 1..=N_CLIENTS {
-            let stm = KvStore::with_capacity(N_BINDINGS * i + 1);
+            let stm = InMemory::with_capacity(N_BINDINGS * i + 1);
             let findex = Findex::new(
                 seed.clone(),
                 stm.clone(),
