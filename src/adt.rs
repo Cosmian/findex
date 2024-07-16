@@ -12,8 +12,7 @@ use std::{
 };
 
 /// An index stores *bindings*, that associate a keyword with a value. All values bound to the same
-/// keyword are said to be *indexed under* this keyword. The number of such values is called the
-/// volume of a keyword.
+/// keyword are said to be *indexed under* this keyword.
 pub trait IndexADT<Keyword: Send + Sync + Hash, Value: Send + Sync + Hash> {
     type Error: Send + Sync + std::error::Error;
 
@@ -71,7 +70,7 @@ pub trait MemoryADT {
     ) -> impl Send + Sync + Future<Output = Result<Vec<Option<Self::Word>>, Self::Error>>;
 
     /// Write the given words at the given addresses if the word currently stored at the guard
-    /// address is the one given, and returns this guard word.
+    /// address is the given one, and returns this guard word.
     fn guarded_write(
         &self,
         guard: (Self::Address, Option<Self::Word>),

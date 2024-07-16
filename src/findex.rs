@@ -228,7 +228,7 @@ mod tests {
     use crate::{
         address::Address,
         encoding::{dummy_decode, dummy_encode},
-        kv::KvStore,
+        in_memory_store::InMemory,
         Findex, IndexADT, Value, ADDRESS_LENGTH,
     };
 
@@ -238,8 +238,8 @@ mod tests {
     fn test_insert_search_delete_search() {
         let mut rng = CsRng::from_entropy();
         let seed = Secret::random(&mut rng);
-        let kv = KvStore::<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>::default();
-        let findex = Findex::new(seed, kv, dummy_encode::<WORD_LENGTH, _>, dummy_decode);
+        let memory = InMemory::<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>::default();
+        let findex = Findex::new(seed, memory, dummy_encode::<WORD_LENGTH, _>, dummy_decode);
         let bindings = HashMap::<&str, HashSet<Value>>::from_iter([
             (
                 "cat",

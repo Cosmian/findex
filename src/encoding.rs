@@ -1,6 +1,6 @@
 //! This module defines encoding operations that are used to serialize an operation.
 //! Currently, the only supported operations are the insertion and deletion, but there is no
-//! theorical restriction on the kind of operation that can be used.
+//! theoretical restriction on the kind of operation that can be used.
 
 #![allow(dead_code)]
 
@@ -98,7 +98,7 @@ pub fn dummy_encode<const WORD_LENGTH: usize, Value: AsRef<[u8]>>(
             let bytes = v.as_ref();
             if WORD_LENGTH - 2 < bytes.len() {
                 return Err(format!(
-                    "unsufficient bytes in a word to fit a value of length {}",
+                    "insufficient bytes in a word to fit a value of length {}",
                     bytes.len(),
                 ));
             }

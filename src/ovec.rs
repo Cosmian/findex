@@ -120,11 +120,11 @@ where
         // ever terminate.
         //
         // TODO: this loop will arguably terminate if the index is not highly contended, but we
-        // need a stronger guarantee. Maybe a return with an error after a reaching a certain
+        // need a stronger guarantee. Maybe a return with an error after reaching a certain
         // number of retries.
         loop {
             let (cur, new) = {
-                // Generates a new header which counter is incremented.
+                // Generates a new header with incremented counter.
                 let mut new = self.h.clone().unwrap_or_default();
                 new.cnt += vs.len() as u64;
 
@@ -214,7 +214,7 @@ mod tests {
         address::Address,
         adt::tests::{test_vector_concurrent, test_vector_sequential},
         encryption_layer::MemoryEncryptionLayer,
-        kv::KvStore,
+        in_memory_store::InMemory,
         ovec::IVec,
         ADDRESS_LENGTH,
     };
@@ -226,12 +226,12 @@ mod tests {
     async fn test_ovec() {
         let mut rng = CsRng::from_entropy();
         let seed = Secret::random(&mut rng);
-        let kv = KvStore::<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>::default();
-        let obf = MemoryEncryptionLayer::new(seed, kv.clone());
+        let memory = InMemory::<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>::default();
+        let obf = MemoryEncryptionLayer::new(seed, memory.clone());
         let address = Address::random(&mut rng);
         let v = IVec::<WORD_LENGTH, _>::new(address.clone(), obf);
         test_vector_sequential(&v).await;
-        kv.clear();
+        memory.clear();
         test_vector_concurrent(&v).await;
     }
 }

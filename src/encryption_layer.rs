@@ -133,7 +133,7 @@ mod tests {
     use crate::{
         address::Address,
         encryption_layer::{MemoryEncryptionLayer, ADDRESS_LENGTH},
-        kv::KvStore,
+        in_memory_store::InMemory,
         MemoryADT,
     };
 
@@ -145,8 +145,8 @@ mod tests {
         let seed = Secret::random(&mut rng);
         let k_p = SymmetricKey::<32>::derive(&seed, &[0]).expect("secret is large enough");
         let aes = Aes256::new(GenericArray::from_slice(&k_p));
-        let kv = KvStore::<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>::default();
-        let obf = MemoryEncryptionLayer::new(seed, kv);
+        let memory = InMemory::<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>::default();
+        let obf = MemoryEncryptionLayer::new(seed, memory);
         let a = Address::<ADDRESS_LENGTH>::random(&mut rng);
         let mut tok = obf.permute(a.clone());
         assert_ne!(a, tok);
@@ -158,8 +158,8 @@ mod tests {
     fn test_encrypt_decrypt() {
         let mut rng = CsRng::from_entropy();
         let seed = Secret::random(&mut rng);
-        let kv = KvStore::<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>::default();
-        let obf = MemoryEncryptionLayer::new(seed, kv);
+        let memory = InMemory::<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>::default();
+        let obf = MemoryEncryptionLayer::new(seed, memory);
         let tok = Address::<ADDRESS_LENGTH>::random(&mut rng);
         let ptx = [1; WORD_LENGTH];
         let ctx = obf.encrypt(ptx, *tok);
@@ -168,15 +168,15 @@ mod tests {
         assert_eq!(ptx, res);
     }
 
-    /// Ensures a transaction can express an vector push operation:
+    /// Ensures a transaction can express a vector push operation:
     /// - the counter is correctly incremented and all values are written;
     /// - using the wrong value in the guard fails the operation and returns the current value.
     #[test]
     fn test_vector_push() {
         let mut rng = CsRng::from_entropy();
         let seed = Secret::random(&mut rng);
-        let kv = KvStore::<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>::default();
-        let obf = MemoryEncryptionLayer::new(seed, kv);
+        let memory = InMemory::<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>::default();
+        let obf = MemoryEncryptionLayer::new(seed, memory);
 
         let header_addr = Address::<ADDRESS_LENGTH>::random(&mut rng);
 
