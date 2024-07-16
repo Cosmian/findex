@@ -121,6 +121,6 @@ mod tests {
         assert_eq!(
             vec![Some(1), Some(1), Some(3), Some(3)],
             block_on(memory.batch_read(vec![1, 2, 3, 4])).unwrap(),
-        )
+        );
     }
 }

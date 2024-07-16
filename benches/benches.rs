@@ -5,7 +5,7 @@ use cosmian_crypto_core::{
     CsRng, Secret,
 };
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
-use findex::{dummy_decode, dummy_encode, Findex, IndexADT, InMemory, MemoryADT, Op, WORD_LENGTH};
+use findex::{dummy_decode, dummy_encode, Findex, InMemory, IndexADT, MemoryADT, Op, WORD_LENGTH};
 use futures::{executor::block_on, future::join_all};
 use lazy_static::lazy_static;
 
@@ -144,7 +144,7 @@ fn bench_insert_multiple_bindings(c: &mut Criterion) {
     // Reference: write one word per value inserted.
     {
         let mut group = c.benchmark_group("write n words to memory");
-        for (_, vals) in index.clone().into_iter() {
+        for (_, vals) in index.clone() {
             let stm = InMemory::with_capacity(n_max + 1);
             group
                 .bench_function(BenchmarkId::from_parameter(vals.len()), |b| {
@@ -172,7 +172,7 @@ fn bench_insert_multiple_bindings(c: &mut Criterion) {
     // Bench it
     {
         let mut group = c.benchmark_group("Multiple bindings insert (same keyword)");
-        for (kw, vals) in index.clone().into_iter() {
+        for (kw, vals) in index {
             let stm = InMemory::with_capacity(n_max + 1);
             let findex = Findex::new(
                 seed.clone(),
