@@ -5,6 +5,7 @@ edition = "2021"
 
 [features]
 bench = []
+small = []
 
 [dependencies]
 aes = "0.8.4"

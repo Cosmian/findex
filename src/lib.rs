@@ -23,17 +23,17 @@ pub use in_memory_store::InMemory;
 
 /// 16-byte addresses ensure a high collision resistance that poses virtually no limitation on the
 /// index.
-///
+#[cfg(not(feature = "small"))]
+pub const ADDRESS_LENGTH: usize = 16;
+
 /// 8-byte addresses can also be used for smaller indexes if storage is the limiting factor, in
 /// which case the number of addresses in used at which collisions are to be expected is
 /// approximately 2^32 (see the birthday paradox for more details). Keyword collision can be
 /// mitigated by marking n bit of the addresses, allowing to statistically store up to 2^((64-n)/2)
 /// keywords, and reducing the number of words that can be used to store associated values to
 /// sqrt(2^64 - 2^n).
-#[cfg(not(feature = "small"))]
-pub const ADDRESS_LENGTH: usize = 16;
 #[cfg(feature = "small")]
-pub const ADDRESS_LENGTH: usize = 16;
+pub const ADDRESS_LENGTH: usize = 8;
 
 /// Using 32-byte cryptographic keys allows achieving post-quantum resistance with the AES primitive.
 pub const KEY_LENGTH: usize = 64;

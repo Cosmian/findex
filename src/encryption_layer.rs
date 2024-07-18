@@ -45,14 +45,23 @@ impl<
     > MemoryEncryptionLayer<WORD_LENGTH, Memory>
 {
     /// Instantiates a new memory encryption layer.
-    pub fn new(seed: Secret<KEY_LENGTH>, stm: Memory) -> Self {
+    pub fn new(
+        seed: Secret<KEY_LENGTH>,
+        stm: Memory,
+    ) -> Result<Self, Error<Address<ADDRESS_LENGTH>, Memory::Error>> {
+        if 16 < ADDRESS_LENGTH {
+            return Err(Error::Conversion(
+                "addresses must be smaller than 16 bytes to be used as tweaks in AES XTS encryptions"
+                    .to_string(),
+            ));
+        }
         let k_p = SymmetricKey::<32>::derive(&seed, &[0]).expect("secret is large enough");
         let k_e = SymmetricKey::<KEY_LENGTH>::derive(&seed, &[0]).expect("secret is large enough");
         let aes = Aes256::new(GenericArray::from_slice(&k_p));
         let aes_e1 = Aes256::new(GenericArray::from_slice(&k_e[..32]));
         let aes_e2 = Aes256::new(GenericArray::from_slice(&k_e[32..]));
         let xts = ClonableXts(Arc::new(Xts128::new(aes_e1, aes_e2)));
-        Self { aes, xts, mem: stm }
+        Ok(Self { aes, xts, mem: stm })
     }
 
     /// Permutes the given memory address.
@@ -63,14 +72,18 @@ impl<
     }
 
     /// Encrypts this plaintext using its encrypted memory address as tweak.
-    fn encrypt(&self, mut ptx: [u8; WORD_LENGTH], tok: [u8; ADDRESS_LENGTH]) -> [u8; WORD_LENGTH] {
-        self.xts.encrypt_sector(&mut ptx, tok);
+    fn encrypt(&self, mut ptx: [u8; WORD_LENGTH], tok: &[u8; ADDRESS_LENGTH]) -> [u8; WORD_LENGTH] {
+        let mut tweak = [0; 16];
+        tweak[..ADDRESS_LENGTH].copy_from_slice(tok);
+        self.xts.encrypt_sector(&mut ptx, tweak);
         ptx
     }
 
     /// Decrypts this ciphertext using its encrypted memory address as tweak.
-    fn decrypt(&self, mut ctx: [u8; WORD_LENGTH], tok: [u8; ADDRESS_LENGTH]) -> [u8; WORD_LENGTH] {
-        self.xts.decrypt_sector(&mut ctx, tok);
+    fn decrypt(&self, mut ctx: [u8; WORD_LENGTH], tok: &[u8; ADDRESS_LENGTH]) -> [u8; WORD_LENGTH] {
+        let mut tweak = [0; 16];
+        tweak[..ADDRESS_LENGTH].copy_from_slice(tok);
+        self.xts.decrypt_sector(&mut ctx, tweak);
         ctx
     }
 }
@@ -95,7 +108,7 @@ impl<
         Ok(bindings
             .into_iter()
             .zip(tokens)
-            .map(|(ctx, tok)| ctx.map(|ctx| self.decrypt(ctx, *tok)))
+            .map(|(ctx, tok)| ctx.map(|ctx| self.decrypt(ctx, &tok)))
             .collect())
     }
 
@@ -106,17 +119,17 @@ impl<
     ) -> Result<Option<Self::Word>, Self::Error> {
         let (a, v) = guard;
         let tok = self.permute(a);
-        let old = v.map(|v| self.encrypt(v, *tok));
+        let old = v.map(|v| self.encrypt(v, &tok));
         let bindings = bindings
             .into_iter()
             .map(|(a, v)| {
                 let tok = self.permute(a);
-                let ctx = self.encrypt(v, *tok);
+                let ctx = self.encrypt(v, &tok);
                 (tok, ctx)
             })
             .collect();
         let cur = self.mem.guarded_write((tok.clone(), old), bindings).await?;
-        let res = cur.map(|ctx| self.decrypt(ctx, *tok));
+        let res = cur.map(|ctx| self.decrypt(ctx, &tok));
         Ok(res)
     }
 }
@@ -146,7 +159,7 @@ mod tests {
         let k_p = SymmetricKey::<32>::derive(&seed, &[0]).expect("secret is large enough");
         let aes = Aes256::new(GenericArray::from_slice(&k_p));
         let memory = InMemory::<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>::default();
-        let obf = MemoryEncryptionLayer::new(seed, memory);
+        let obf = MemoryEncryptionLayer::new(seed, memory).unwrap();
         let a = Address::<ADDRESS_LENGTH>::random(&mut rng);
         let mut tok = obf.permute(a.clone());
         assert_ne!(a, tok);
@@ -159,11 +172,11 @@ mod tests {
         let mut rng = CsRng::from_entropy();
         let seed = Secret::random(&mut rng);
         let memory = InMemory::<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>::default();
-        let obf = MemoryEncryptionLayer::new(seed, memory);
+        let obf = MemoryEncryptionLayer::new(seed, memory).unwrap();
         let tok = Address::<ADDRESS_LENGTH>::random(&mut rng);
         let ptx = [1; WORD_LENGTH];
-        let ctx = obf.encrypt(ptx, *tok);
-        let res = obf.decrypt(ctx, *tok);
+        let ctx = obf.encrypt(ptx, &tok);
+        let res = obf.decrypt(ctx, &tok);
         assert_eq!(ptx.len(), res.len());
         assert_eq!(ptx, res);
     }
@@ -176,7 +189,7 @@ mod tests {
         let mut rng = CsRng::from_entropy();
         let seed = Secret::random(&mut rng);
         let memory = InMemory::<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>::default();
-        let obf = MemoryEncryptionLayer::new(seed, memory);
+        let obf = MemoryEncryptionLayer::new(seed, memory).unwrap();
 
         let header_addr = Address::<ADDRESS_LENGTH>::random(&mut rng);
 

@@ -5,7 +5,7 @@ use cosmian_crypto_core::{
     CsRng, Secret,
 };
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
-use findex::{dummy_decode, dummy_encode, Findex, IndexADT, InMemory, MemoryADT, Op, WORD_LENGTH};
+use findex::{dummy_decode, dummy_encode, Findex, InMemory, IndexADT, MemoryADT, Op, WORD_LENGTH};
 use futures::{executor::block_on, future::join_all};
 use lazy_static::lazy_static;
 
@@ -61,7 +61,8 @@ fn bench_search_multiple_bindings(c: &mut Criterion) {
         stm,
         dummy_encode::<WORD_LENGTH, _>,
         dummy_decode,
-    );
+    )
+    .unwrap();
     block_on(findex.insert(index.clone().into_iter())).unwrap();
 
     let mut group = c.benchmark_group("Multiple bindings search (1 keyword)");
@@ -92,7 +93,8 @@ fn bench_search_multiple_keywords(c: &mut Criterion) {
         stm.clone(),
         dummy_encode::<WORD_LENGTH, _>,
         dummy_decode,
-    );
+    )
+    .unwrap();
     block_on(findex.insert(index.clone().into_iter())).unwrap();
     // Reference timings
     {
@@ -184,7 +186,8 @@ fn bench_insert_multiple_bindings(c: &mut Criterion) {
                 stm.clone(),
                 dummy_encode::<WORD_LENGTH, _>,
                 dummy_decode,
-            );
+            )
+            .unwrap();
             group
                 .bench_function(BenchmarkId::from_parameter(vals.len()), |b| {
                     b.iter_batched(
@@ -250,7 +253,8 @@ fn bench_insert_multiple_keywords(c: &mut Criterion) {
                 stm.clone(),
                 dummy_encode::<WORD_LENGTH, _>,
                 dummy_decode,
-            );
+            )
+            .unwrap();
             group
                 .bench_function(BenchmarkId::from_parameter(n), |b| {
                     b.iter_batched(
@@ -298,7 +302,8 @@ fn bench_contention(c: &mut Criterion) {
                 stm.clone(),
                 dummy_encode::<WORD_LENGTH, _>,
                 dummy_decode,
-            );
+            )
+            .unwrap();
             let runtime = tokio::runtime::Builder::new_multi_thread()
                 .worker_threads(i)
                 .enable_all()
@@ -352,7 +357,8 @@ fn bench_contention(c: &mut Criterion) {
                 stm.clone(),
                 dummy_encode::<WORD_LENGTH, _>,
                 dummy_decode,
-            );
+            )
+            .unwrap();
             let runtime = tokio::runtime::Builder::new_multi_thread()
                 .worker_threads(i)
                 .enable_all()

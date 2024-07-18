@@ -65,13 +65,13 @@ where
         mem: Memory,
         encode: fn(Op, HashSet<Value>) -> Result<Vec<[u8; WORD_LENGTH]>, String>,
         decode: fn(Vec<[u8; WORD_LENGTH]>) -> Result<HashSet<Value>, TryFromError>,
-    ) -> Self {
-        Self {
-            el: MemoryEncryptionLayer::new(seed, mem),
+    ) -> Result<Self, Error<Address<ADDRESS_LENGTH>, Memory::Error>> {
+        Ok(Self {
+            el: MemoryEncryptionLayer::new(seed, mem)?,
             cache: Arc::new(Mutex::new(HashMap::new())),
             encode: Arc::new(encode),
             decode: Arc::new(decode),
-        }
+        })
     }
 
     pub fn clear(&self) {
@@ -239,7 +239,8 @@ mod tests {
         let mut rng = CsRng::from_entropy();
         let seed = Secret::random(&mut rng);
         let memory = InMemory::<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>::default();
-        let findex = Findex::new(seed, memory, dummy_encode::<WORD_LENGTH, _>, dummy_decode);
+        let findex =
+            Findex::new(seed, memory, dummy_encode::<WORD_LENGTH, _>, dummy_decode).unwrap();
         let bindings = HashMap::<&str, HashSet<Value>>::from_iter([
             (
                 "cat",

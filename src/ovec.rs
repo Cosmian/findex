@@ -227,7 +227,7 @@ mod tests {
         let mut rng = CsRng::from_entropy();
         let seed = Secret::random(&mut rng);
         let memory = InMemory::<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>::default();
-        let obf = MemoryEncryptionLayer::new(seed, memory.clone());
+        let obf = MemoryEncryptionLayer::new(seed, memory.clone()).unwrap();
         let address = Address::random(&mut rng);
         let v = IVec::<WORD_LENGTH, _>::new(address.clone(), obf);
         test_vector_sequential(&v).await;
