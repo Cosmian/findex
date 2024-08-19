@@ -16,6 +16,7 @@ pub use value::Value;
 
 #[cfg(any(test, feature = "bench"))]
 mod in_memory_store;
+mod postgres_memory_store;
 #[cfg(feature = "bench")]
 pub use encoding::{dummy_decode, dummy_encode, Op, WORD_LENGTH};
 #[cfg(feature = "bench")]
