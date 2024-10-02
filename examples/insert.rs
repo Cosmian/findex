@@ -4,7 +4,7 @@ use cosmian_crypto_core::{
     reexport::rand_core::{CryptoRngCore, SeedableRng},
     CsRng, Secret,
 };
-use findex::{dummy_decode, dummy_encode, Findex, IndexADT, InMemory, Value};
+use findex::{dummy_decode, dummy_encode, Findex, InMemory, IndexADT, Value};
 use futures::executor::block_on;
 
 fn build_benchmarking_index(rng: &mut impl CryptoRngCore) -> Vec<([u8; 8], HashSet<Value>)> {

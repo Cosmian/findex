@@ -1,9 +1,8 @@
 //! This module implements a simple vector, defined as a data-structure that preserves the
 //! following invariant:
 //!
-//! > I_v: the value of the counter stored at the vector address is equal to the number of values
-//!        stored in this vector; these values are of homogeneous type and stored in contiguous
-//!        memory words.
+//! I_v: the value of the counter stored at the vector address is equal to the number of values
+//! stored in this vector; these values are of homogeneous type and stored in contiguous memory words.
 //!
 //! This implementation is based on the assumption that an infinite array starting at the vector's
 //! address has been allocated, and thus stores values after the header:

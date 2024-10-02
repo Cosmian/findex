@@ -5,7 +5,7 @@ use cosmian_crypto_core::{
     CsRng, Secret,
 };
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
-use findex::{dummy_decode, dummy_encode, Findex, IndexADT, InMemory, MemoryADT, Op, WORD_LENGTH};
+use findex::{dummy_decode, dummy_encode, Findex, InMemory, IndexADT, MemoryADT, Op, WORD_LENGTH};
 use futures::{executor::block_on, future::join_all};
 use lazy_static::lazy_static;
 
