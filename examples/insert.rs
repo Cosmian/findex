@@ -1,11 +1,9 @@
 use std::collections::HashSet;
 
-use cosmian_crypto_core::{
-    reexport::rand_core::{CryptoRngCore, SeedableRng},
-    CsRng, Secret,
-};
-use findex::{dummy_decode, dummy_encode, Findex, InMemory, IndexADT, Value};
+use findex::{dummy_decode, dummy_encode, Findex, InMemory, IndexADT, Secret, Value};
 use futures::executor::block_on;
+use rand_chacha::ChaChaRng;
+use rand_core::{CryptoRngCore, SeedableRng};
 
 fn build_benchmarking_index(rng: &mut impl CryptoRngCore) -> Vec<([u8; 8], HashSet<Value>)> {
     (0..6)
@@ -20,7 +18,7 @@ fn build_benchmarking_index(rng: &mut impl CryptoRngCore) -> Vec<([u8; 8], HashS
 }
 
 fn main() {
-    let mut rng = CsRng::from_entropy();
+    let mut rng = ChaChaRng::from_entropy();
     let index = build_benchmarking_index(&mut rng);
     let seed = Secret::random(&mut rng);
     let findex = Findex::new(

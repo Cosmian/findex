@@ -1,6 +1,6 @@
 use std::ops::{Add, Deref, DerefMut};
 
-use cosmian_crypto_core::reexport::rand_core::CryptoRngCore;
+use rand_core::CryptoRngCore;
 
 // NOTE: a more efficient implementation of the address could be a big-int.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]

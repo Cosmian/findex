@@ -8,7 +8,6 @@ A copy of this license is available below.
 # Commercial License
 
 All usages, not covered by the Open Source License, are covered by a commercial license.
-Please contact Cosmian for pricing and details.
 
 # Affero GPL/v3 License
 

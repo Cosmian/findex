@@ -1,13 +1,13 @@
 use std::{collections::HashSet, time::Duration};
 
-use cosmian_crypto_core::{
-    reexport::rand_core::{CryptoRngCore, RngCore, SeedableRng},
-    CsRng, Secret,
-};
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
-use findex::{dummy_decode, dummy_encode, Findex, InMemory, IndexADT, MemoryADT, Op, WORD_LENGTH};
+use findex::{
+    dummy_decode, dummy_encode, Findex, InMemory, IndexADT, MemoryADT, Op, Secret, WORD_LENGTH,
+};
 use futures::{executor::block_on, future::join_all};
 use lazy_static::lazy_static;
+use rand_chacha::ChaChaRng;
+use rand_core::{CryptoRngCore, RngCore, SeedableRng};
 
 lazy_static! {
     static ref scale: Vec<f32> = make_scale(0, 4, 20);
@@ -52,7 +52,7 @@ fn build_benchmarking_keywords_index(
 }
 
 fn bench_search_multiple_bindings(c: &mut Criterion) {
-    let mut rng = CsRng::from_entropy();
+    let mut rng = ChaChaRng::from_entropy();
     let seed = Secret::random(&mut rng);
     let stm = InMemory::default();
     let index = build_benchmarking_bindings_index(&mut rng);
@@ -82,7 +82,7 @@ fn bench_search_multiple_bindings(c: &mut Criterion) {
 }
 
 fn bench_search_multiple_keywords(c: &mut Criterion) {
-    let mut rng = CsRng::from_entropy();
+    let mut rng = ChaChaRng::from_entropy();
     let seed = Secret::random(&mut rng);
 
     let stm = InMemory::default();
@@ -140,7 +140,7 @@ fn bench_search_multiple_keywords(c: &mut Criterion) {
 }
 
 fn bench_insert_multiple_bindings(c: &mut Criterion) {
-    let mut rng = CsRng::from_entropy();
+    let mut rng = ChaChaRng::from_entropy();
     let seed = Secret::random(&mut rng);
 
     let index = build_benchmarking_bindings_index(&mut rng);
@@ -205,7 +205,7 @@ fn bench_insert_multiple_bindings(c: &mut Criterion) {
 }
 
 fn bench_insert_multiple_keywords(c: &mut Criterion) {
-    let mut rng = CsRng::from_entropy();
+    let mut rng = ChaChaRng::from_entropy();
     let seed = Secret::random(&mut rng);
 
     // Reference: write one word per value inserted.
@@ -281,7 +281,7 @@ fn bench_insert_multiple_keywords(c: &mut Criterion) {
 fn bench_contention(c: &mut Criterion) {
     const N_BINDINGS: usize = 100;
     const N_CLIENTS: usize = 8;
-    let mut rng = CsRng::from_entropy();
+    let mut rng = ChaChaRng::from_entropy();
     let seed = Secret::random(&mut rng);
     let kws = (0..N_CLIENTS)
         .map(|_| rng.next_u64().to_be_bytes())

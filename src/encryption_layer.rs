@@ -1,11 +1,13 @@
 use std::{fmt::Debug, ops::Deref, sync::Arc};
 
-use crate::{address::Address, error::Error, MemoryADT, ADDRESS_LENGTH, KEY_LENGTH};
+use crate::{
+    address::Address, error::Error, secret::Secret, symmetric_key::SymmetricKey, MemoryADT,
+    ADDRESS_LENGTH, KEY_LENGTH,
+};
 use aes::{
     cipher::{generic_array::GenericArray, BlockEncrypt, KeyInit},
     Aes256,
 };
-use cosmian_crypto_core::{Secret, SymmetricKey};
 use xts_mode::Xts128;
 
 #[derive(Clone)]
@@ -127,13 +129,16 @@ mod tests {
         cipher::{generic_array::GenericArray, BlockDecrypt, KeyInit},
         Aes256,
     };
-    use cosmian_crypto_core::{reexport::rand_core::SeedableRng, CsRng, Secret, SymmetricKey};
     use futures::executor::block_on;
+    use rand_chacha::ChaChaRng;
+    use rand_core::SeedableRng;
 
     use crate::{
         address::Address,
         encryption_layer::{MemoryEncryptionLayer, ADDRESS_LENGTH},
         in_memory_store::InMemory,
+        secret::Secret,
+        symmetric_key::SymmetricKey,
         MemoryADT,
     };
 
@@ -141,7 +146,7 @@ mod tests {
 
     #[test]
     fn test_address_permutation() {
-        let mut rng = CsRng::from_entropy();
+        let mut rng = ChaChaRng::from_entropy();
         let seed = Secret::random(&mut rng);
         let k_p = SymmetricKey::<32>::derive(&seed, &[0]).expect("secret is large enough");
         let aes = Aes256::new(GenericArray::from_slice(&k_p));
@@ -156,7 +161,7 @@ mod tests {
 
     #[test]
     fn test_encrypt_decrypt() {
-        let mut rng = CsRng::from_entropy();
+        let mut rng = ChaChaRng::from_entropy();
         let seed = Secret::random(&mut rng);
         let memory = InMemory::<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>::default();
         let obf = MemoryEncryptionLayer::new(seed, memory);
@@ -173,7 +178,7 @@ mod tests {
     /// - using the wrong value in the guard fails the operation and returns the current value.
     #[test]
     fn test_vector_push() {
-        let mut rng = CsRng::from_entropy();
+        let mut rng = ChaChaRng::from_entropy();
         let seed = Secret::random(&mut rng);
         let memory = InMemory::<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>::default();
         let obf = MemoryEncryptionLayer::new(seed, memory);

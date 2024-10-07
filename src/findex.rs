@@ -4,11 +4,11 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use cosmian_crypto_core::{kdf128, Secret};
+use tiny_keccak::{Hasher, Sha3};
 
 use crate::{
     adt::VectorADT, encoding::Op, encryption_layer::MemoryEncryptionLayer, error::Error,
-    ovec::IVec, Address, IndexADT, MemoryADT, ADDRESS_LENGTH, KEY_LENGTH,
+    ovec::IVec, secret::Secret, Address, IndexADT, MemoryADT, ADDRESS_LENGTH, KEY_LENGTH,
 };
 
 #[derive(Clone, Debug)]
@@ -104,7 +104,9 @@ where
 
     fn hash_address(bytes: &[u8]) -> Address<ADDRESS_LENGTH> {
         let mut a = Address::<ADDRESS_LENGTH>::default();
-        kdf128!(&mut *a, bytes);
+        let mut hash = Sha3::v256();
+        hash.update(bytes);
+        hash.finalize(&mut *a);
         a
     }
 
@@ -222,13 +224,15 @@ where
 mod tests {
     use std::collections::{HashMap, HashSet};
 
-    use cosmian_crypto_core::{reexport::rand_core::SeedableRng, CsRng, Secret};
     use futures::executor::block_on;
+    use rand_chacha::ChaChaRng;
+    use rand_core::SeedableRng;
 
     use crate::{
         address::Address,
         encoding::{dummy_decode, dummy_encode},
         in_memory_store::InMemory,
+        secret::Secret,
         Findex, IndexADT, Value, ADDRESS_LENGTH,
     };
 
@@ -236,7 +240,7 @@ mod tests {
 
     #[test]
     fn test_insert_search_delete_search() {
-        let mut rng = CsRng::from_entropy();
+        let mut rng = ChaChaRng::from_entropy();
         let seed = Secret::random(&mut rng);
         let memory = InMemory::<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>::default();
         let findex = Findex::new(seed, memory, dummy_encode::<WORD_LENGTH, _>, dummy_decode);

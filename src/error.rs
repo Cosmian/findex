@@ -1,11 +1,8 @@
 use std::fmt::{Debug, Display};
 
-use cosmian_crypto_core::CryptoCoreError;
-
 #[derive(Debug)]
 pub enum Error<Address: Debug, MemoryError: std::error::Error> {
     Parsing(String),
-    Crypto(CryptoCoreError),
     Memory(MemoryError),
     Conversion(String),
     MissingValue(Address, usize),

@@ -7,11 +7,14 @@ mod encryption_layer;
 mod error;
 mod findex;
 mod ovec;
+mod secret;
+mod symmetric_key;
 mod value;
 
 pub use address::Address;
 pub use adt::{IndexADT, MemoryADT};
 pub use findex::Findex;
+pub use secret::Secret;
 pub use value::Value;
 
 #[cfg(any(test, feature = "bench"))]
