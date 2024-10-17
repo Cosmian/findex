@@ -176,7 +176,7 @@ pub mod in_memory {
     use crate::{error::DbInterfaceErrorTrait, EncryptedValue};
 
     #[derive(Debug)]
-    pub struct InMemoryDbError(String);
+    pub struct InMemoryDbError(pub String);
 
     impl From<CryptoCoreError> for InMemoryDbError {
         fn from(value: CryptoCoreError) -> Self {

@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [6.0.1] - 2024-10-17
+
+### Features
+
+- Add missing serialization impls for structs `Tokens`, `TokenWithEncryptedValueList` and `TokenToEncryptedValueMap`.
+
 ## [6.0.0] - 2023-11-21
 
 ### Features

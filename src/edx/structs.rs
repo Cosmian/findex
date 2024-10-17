@@ -7,8 +7,10 @@ use std::{
 
 use base64::engine::{general_purpose::STANDARD, Engine};
 use cosmian_crypto_core::{
-    reexport::rand_core::CryptoRngCore, Aes256Gcm, DemInPlace, FixedSizeCBytes, Instantiable,
-    Nonce, RandomFixedSizeCBytes, SymmetricKey,
+    bytes_ser_de::{to_leb128_len, Deserializer, Serializable, Serializer},
+    reexport::rand_core::CryptoRngCore,
+    Aes256Gcm, DemInPlace, FixedSizeCBytes, Instantiable, Nonce, RandomFixedSizeCBytes,
+    SymmetricKey,
 };
 use zeroize::{Zeroize, ZeroizeOnDrop};
 
@@ -114,6 +116,32 @@ impl From<Tokens> for HashSet<Token> {
     }
 }
 
+impl Serializable for Tokens {
+    type Error = CoreError;
+
+    fn length(&self) -> usize {
+        self.iter().map(|token| token.0.len()).sum()
+    }
+
+    fn write(&self, ser: &mut Serializer) -> Result<usize, Self::Error> {
+        let mut n = ser.write_leb128_u64(self.len() as u64)?;
+        for token in self.iter() {
+            n += ser.write_array(token)?;
+        }
+        Ok(n)
+    }
+
+    fn read(de: &mut Deserializer) -> Result<Self, Self::Error> {
+        let length = de.read_leb128_u64()? as usize;
+        let mut res = HashSet::with_capacity(length);
+        for _ in 0..length {
+            let token = de.read_array::<{ Token::LENGTH }>()?;
+            res.insert(Token::from(token));
+        }
+        Ok(Self(res))
+    }
+}
+
 /// Seed used to derive a key.
 #[derive(Debug)]
 pub struct Seed<const LENGTH: usize>([u8; LENGTH]);
@@ -206,7 +234,7 @@ impl<const VALUE_LENGTH: usize> TryFrom<&[u8]> for EncryptedValue<VALUE_LENGTH> 
     fn try_from(value: &[u8]) -> Result<Self, Self::Error> {
         if value.len() != Self::LENGTH {
             return Err(Self::Error::Conversion(format!(
-                "incorrect length for encrypted value: {} bytes give, {} bytes expected",
+                "incorrect length for encrypted value: {} bytes given, {} bytes expected",
                 value.len(),
                 Self::LENGTH
             )));
@@ -330,6 +358,40 @@ impl<const VALUE_LENGTH: usize> IntoIterator for TokenWithEncryptedValueList<VAL
     }
 }
 
+impl<const VALUE_LENGTH: usize> Serializable for TokenWithEncryptedValueList<VALUE_LENGTH> {
+    type Error = CoreError;
+
+    fn length(&self) -> usize {
+        self.iter()
+            .map(|(_, _)| {
+                Token::LENGTH
+                    + to_leb128_len(EncryptedValue::<VALUE_LENGTH>::LENGTH)
+                    + EncryptedValue::<VALUE_LENGTH>::LENGTH
+            })
+            .sum()
+    }
+
+    fn write(&self, ser: &mut Serializer) -> Result<usize, Self::Error> {
+        let mut n = ser.write_leb128_u64(self.len() as u64)?;
+        for (token, encrypted_value) in self.iter() {
+            n += ser.write_array(token)?;
+            n += ser.write_vec(&<Vec<u8>>::from(encrypted_value))?;
+        }
+        Ok(n)
+    }
+
+    fn read(de: &mut cosmian_crypto_core::bytes_ser_de::Deserializer) -> Result<Self, Self::Error> {
+        let length = de.read_leb128_u64()? as usize;
+        let mut res = Vec::with_capacity(length);
+        for _ in 0..length {
+            let token = de.read_array::<{ Token::LENGTH }>()?;
+            let encrypted_value = EncryptedValue::try_from(de.read_vec()?.as_slice())?;
+            res.push((Token::from(token), encrypted_value));
+        }
+        Ok(Self(res))
+    }
+}
+
 #[derive(Default, Debug, Clone, PartialEq, Eq)]
 pub struct TokenToEncryptedValueMap<const VALUE_LENGTH: usize>(
     pub HashMap<Token, EncryptedValue<VALUE_LENGTH>>,
@@ -389,5 +451,39 @@ impl<const VALUE_LENGTH: usize> IntoIterator for TokenToEncryptedValueMap<VALUE_
 
     fn into_iter(self) -> Self::IntoIter {
         self.0.into_iter()
+    }
+}
+
+impl<const VALUE_LENGTH: usize> Serializable for TokenToEncryptedValueMap<VALUE_LENGTH> {
+    type Error = CoreError;
+
+    fn length(&self) -> usize {
+        self.iter()
+            .map(|(_, _)| {
+                Token::LENGTH
+                    + to_leb128_len(EncryptedValue::<VALUE_LENGTH>::LENGTH)
+                    + EncryptedValue::<VALUE_LENGTH>::LENGTH
+            })
+            .sum()
+    }
+
+    fn write(&self, ser: &mut Serializer) -> Result<usize, Self::Error> {
+        let mut n = ser.write_leb128_u64(self.len() as u64)?;
+        for (token, encrypted_value) in self.iter() {
+            n += ser.write_array(token)?;
+            n += ser.write_vec(&<Vec<u8>>::from(encrypted_value))?;
+        }
+        Ok(n)
+    }
+
+    fn read(de: &mut cosmian_crypto_core::bytes_ser_de::Deserializer) -> Result<Self, Self::Error> {
+        let length = de.read_leb128_u64()? as usize;
+        let mut res = HashMap::with_capacity(length);
+        for _ in 0..length {
+            let token = de.read_array::<{ Token::LENGTH }>()?;
+            let encrypted_value = EncryptedValue::try_from(de.read_vec()?.as_slice())?;
+            res.insert(Token::from(token), encrypted_value);
+        }
+        Ok(Self(res))
     }
 }
