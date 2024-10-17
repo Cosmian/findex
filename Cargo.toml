@@ -1,6 +1,6 @@
 [package]
 name = "cosmian_findex"
-version = "6.0.0"
+version = "6.0.1"
 authors = [
   "Chloé Hébant <chloe.hebant@cosmian.com>",
   "Bruno Grieder <bruno.grieder@cosmian.com>",
@@ -31,6 +31,7 @@ base64 = "0.21.5"
 cosmian_crypto_core = { version = "9.3.0", default-features = false, features = [
   "aes",
   "sha3",
+  "ser",
 ] }
 # Once available in stable Rust, use `!` std primitive
 # <https://doc.rust-lang.org/std/primitive.never.html>
