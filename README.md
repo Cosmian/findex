@@ -9,9 +9,11 @@ Findex aims to solve the following problem:
 > How to securely recover the _location_ of an encrypted data matching a given
 > _keyword_?
 
-It is a cryptographic protocol designed to securely make search queries on an
-untrusted cloud server. Thanks to its encrypted indexes, large databases can
-securely be outsourced without compromising usability.
+It is a cryptographic protocol designed to make search queries on an
+untrusted cloud server securely. Findex is concurrent and database-independent, 
+allowing large database indexes to be outsourced securely without compromising usability.
+
+Scientific paper: https://eprint.iacr.org/2024/1541
 
 Findex is part of Cosmian Cloudproof Encryption.
 
