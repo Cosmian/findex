@@ -195,7 +195,7 @@ impl<
             let rng = &mut *rng.lock().expect("could not lock mutex");
             for (token, entry) in continuation.entries {
                 old_entries.insert(token);
-                if remaining_entry_tokens.get(&token).is_some() {
+                if remaining_entry_tokens.contains(&token) {
                     new_entries.insert(
                         self.entry_table
                             .tokenize(new_key, &entry.tag_hash, Some(new_label)),

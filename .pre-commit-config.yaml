@@ -121,11 +121,10 @@ repos:
     rev: v1.0.16
     hooks:
       - id: stable-cargo-format
-      - id: cargo-upgrade
-      - id: cargo-update
+      # - id: dprint-toml-fix
+      # - id: cargo-upgrade
+      # - id: cargo-update
       - id: cargo-machete
-      - id: cargo-outdated
-      - id: cargo-udeps
       - id: cargo-tests-all
       - id: cargo-test-doc
       - id: clippy-autofix-all
