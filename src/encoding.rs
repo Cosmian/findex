@@ -1,6 +1,7 @@
-//! This module defines encoding operations that are used to serialize an operation.
-//! Currently, the only supported operations are the insertion and deletion, but there is no
-//! theoretical restriction on the kind of operation that can be used.
+//! This module defines encoding operations that are used to serialize an
+//! operation. Currently, the only supported operations are the insertion and
+//! deletion, but there is no theoretical restriction on the kind of operation
+//! that can be used.
 
 #![allow(dead_code)]
 
@@ -17,7 +18,8 @@ pub enum Mode {
     Offset(usize),
 }
 
-/// Blocks are the smallest unit size in block mode, 16 bytes is optimized to store UUIDs.
+/// Blocks are the smallest unit size in block mode, 16 bytes is optimized to
+/// store UUIDs.
 const BLOCK_LENGTH: usize = 16;
 
 /// The chunk length is the size of the available space in a word.
