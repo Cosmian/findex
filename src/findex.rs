@@ -1,14 +1,23 @@
 use std::{
     collections::{HashMap, HashSet},
+    fmt,
     hash::Hash,
     sync::{Arc, Mutex},
 };
 
+use redis::{
+    FromRedisValue, RedisError, RedisResult, RedisWrite, ToRedisArgs, Value as RedisValue,
+};
 use tiny_keccak::{Hasher, Sha3};
 
 use crate::{
-    ADDRESS_LENGTH, Address, IndexADT, KEY_LENGTH, MemoryADT, adt::VectorADT, encoding::Op,
-    encryption_layer::MemoryEncryptionLayer, error::Error, ovec::IVec, secret::Secret,
+    ADDRESS_LENGTH, Address, IndexADT, KEY_LENGTH, MemoryADT,
+    adt::VectorADT,
+    encoding::{Op, WORD_LENGTH},
+    encryption_layer::MemoryEncryptionLayer,
+    error::Error,
+    ovec::IVec,
+    secret::Secret,
 };
 
 #[derive(Clone, Debug)]
@@ -223,45 +232,26 @@ mod tests {
     use futures::executor::block_on;
     use rand_chacha::ChaChaRng;
     use rand_core::SeedableRng;
+    use redis::{RedisWrite, ToRedisArgs};
 
+    use super::*;
     use crate::{
         ADDRESS_LENGTH, Findex, IndexADT, Value,
         address::Address,
         encoding::{dummy_decode, dummy_encode},
         in_memory_store::InMemory,
+        redis_store::RedisMemory,
         secret::Secret,
     };
 
-    const WORD_LENGTH: usize = 16;
-
     #[test]
     fn test_insert_search_delete_search() {
-        use redis::Commands;
-
-        let mut connection: redis::Connection = match redis::Client::open("redis://127.0.0.1/") {
-            Ok(client) => match client.get_connection() {
-                Ok(con) => con,
-                Err(e) => {
-                    eprintln!("Failed to connect to Redis: {}", e);
-                    return;
-                }
-            },
-            Err(e) => {
-                eprintln!("Failed to connect to Redis: {}", e);
-                return;
-            }
-        };
-        let _: () = match connection.set("my_key", 42) {
-            Ok(res) => res,
-            Err(e) => {
-                eprintln!("Failed to set key in Redis: {}", e);
-                return;
-            }
-        };
-
         let mut rng = ChaChaRng::from_entropy();
         let seed = Secret::random(&mut rng);
-        let memory = InMemory::<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>::default();
+        let memory = RedisMemory::<Address<ADDRESS_LENGTH>, RedisWord>::default();
+
+        // let memory = InMemory::<Address<ADDRESS_LENGTH>, [u8;
+        // WORD_LENGTH]>::default();
         let findex = Findex::new(seed, memory, dummy_encode::<WORD_LENGTH, _>, dummy_decode);
         let bindings = HashMap::<&str, HashSet<Value>>::from_iter([
             (

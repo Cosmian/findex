@@ -1,6 +1,10 @@
-use std::ops::{Add, Deref, DerefMut};
+use std::{
+    fmt,
+    ops::{Add, Deref, DerefMut},
+};
 
 use rand_core::CryptoRngCore;
+use redis::{RedisWrite, ToRedisArgs};
 
 // NOTE: a more efficient implementation of the address could be a big-int.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -59,6 +63,21 @@ impl<const LENGTH: usize> Add<u64> for Address<LENGTH> {
             }
         }
         self
+    }
+}
+
+impl<const N: usize> fmt::Display for Address<N> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{:?}", &self.0)
+    }
+}
+
+impl<const N: usize> ToRedisArgs for Address<N> {
+    fn write_redis_args<W>(&self, out: &mut W)
+    where
+        W: ?Sized + RedisWrite,
+    {
+        out.write_arg(self.to_string().as_bytes());
     }
 }
 
