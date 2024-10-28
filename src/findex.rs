@@ -240,7 +240,7 @@ mod tests {
         address::Address,
         encoding::{dummy_decode, dummy_encode},
         in_memory_store::InMemory,
-        redis_store::RedisMemory,
+        redis_memory::RedisMemory,
         secret::Secret,
     };
 
@@ -248,10 +248,9 @@ mod tests {
     fn test_insert_search_delete_search() {
         let mut rng = ChaChaRng::from_entropy();
         let seed = Secret::random(&mut rng);
-        let memory = RedisMemory::<Address<ADDRESS_LENGTH>, RedisWord>::default();
+        let memory = InMemory::<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>::default();
+        let memory = RedisMemory::<Address<ADDRESS_LENGTH>, WORD_LENGTH>::default();
 
-        // let memory = InMemory::<Address<ADDRESS_LENGTH>, [u8;
-        // WORD_LENGTH]>::default();
         let findex = Findex::new(seed, memory, dummy_encode::<WORD_LENGTH, _>, dummy_decode);
         let bindings = HashMap::<&str, HashSet<Value>>::from_iter([
             (

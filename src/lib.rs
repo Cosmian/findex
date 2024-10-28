@@ -40,4 +40,4 @@ pub const ADDRESS_LENGTH: usize = 16;
 /// with the AES primitive.
 pub const KEY_LENGTH: usize = 64;
 
-pub mod redis_store;
+mod redis_memory;
