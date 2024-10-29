@@ -1,23 +1,14 @@
 use std::{
     collections::{HashMap, HashSet},
-    fmt,
     hash::Hash,
     sync::{Arc, Mutex},
 };
 
-use redis::{
-    FromRedisValue, RedisError, RedisResult, RedisWrite, ToRedisArgs, Value as RedisValue,
-};
 use tiny_keccak::{Hasher, Sha3};
 
 use crate::{
-    ADDRESS_LENGTH, Address, IndexADT, KEY_LENGTH, MemoryADT,
-    adt::VectorADT,
-    encoding::{Op, WORD_LENGTH},
-    encryption_layer::MemoryEncryptionLayer,
-    error::Error,
-    ovec::IVec,
-    secret::Secret,
+    ADDRESS_LENGTH, Address, IndexADT, KEY_LENGTH, MemoryADT, adt::VectorADT, encoding::Op,
+    encryption_layer::MemoryEncryptionLayer, error::Error, ovec::IVec, secret::Secret,
 };
 
 #[derive(Clone, Debug)]
@@ -232,13 +223,11 @@ mod tests {
     use futures::executor::block_on;
     use rand_chacha::ChaChaRng;
     use rand_core::SeedableRng;
-    use redis::{RedisWrite, ToRedisArgs};
 
-    use super::*;
     use crate::{
         ADDRESS_LENGTH, Findex, IndexADT, Value,
         address::Address,
-        encoding::{dummy_decode, dummy_encode},
+        encoding::{WORD_LENGTH, dummy_decode, dummy_encode},
         in_memory_store::InMemory,
         redis_memory::RedisMemory,
         secret::Secret,
@@ -249,7 +238,6 @@ mod tests {
         let mut rng = ChaChaRng::from_entropy();
         let seed = Secret::random(&mut rng);
         let memory = InMemory::<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>::default();
-        let memory = RedisMemory::<Address<ADDRESS_LENGTH>, WORD_LENGTH>::default();
 
         let findex = Findex::new(seed, memory, dummy_encode::<WORD_LENGTH, _>, dummy_decode);
         let bindings = HashMap::<&str, HashSet<Value>>::from_iter([
@@ -270,6 +258,85 @@ mod tests {
         let res = block_on(findex.search(bindings.keys().cloned())).unwrap();
         assert_eq!(
             HashMap::from_iter([("cat", HashSet::new()), ("dog", HashSet::new())]),
+            res
+        );
+    }
+
+    #[test]
+    fn test_insert_search_delete_search_redis() {
+        let mut rng = ChaChaRng::from_entropy();
+        let seed = Secret::random(&mut rng);
+        let memory = RedisMemory::<Address<ADDRESS_LENGTH>, WORD_LENGTH>::default();
+        memory.flush_db().unwrap();
+
+        let findex = Findex::new(seed, memory, dummy_encode::<WORD_LENGTH, _>, dummy_decode);
+
+        // Initial bindings
+        let bindings = HashMap::<&str, HashSet<Value>>::from_iter([
+            (
+                "Alice",
+                HashSet::from_iter([Value::from(1), Value::from(3), Value::from(5)]),
+            ),
+            (
+                "Bob",
+                HashSet::from_iter([Value::from(0), Value::from(2), Value::from(4)]),
+            ),
+        ]);
+
+        // Insert data
+        block_on(findex.insert(bindings.clone().into_iter())).unwrap();
+
+        // Search the same data
+        let res = block_on(findex.search(bindings.keys().cloned())).unwrap();
+        assert_eq!(bindings, res);
+
+        // Delete the data of Bob
+        block_on(findex.delete(bindings.clone().into_iter().filter(|(k, _)| *k == "Bob"))).unwrap();
+        let res = block_on(findex.search(bindings.keys().cloned())).unwrap();
+        assert_eq!(
+            HashMap::from_iter([
+                (
+                    "Alice",
+                    HashSet::from_iter([Value::from(1), Value::from(3), Value::from(5)])
+                ),
+                ("Bob", HashSet::new())
+            ]),
+            res
+        );
+
+        // Test insertion of empty data
+        let empty_bindings = HashMap::<&str, HashSet<Value>>::new();
+        block_on(findex.insert(empty_bindings.clone().into_iter())).unwrap();
+        let res = block_on(findex.search(empty_bindings.keys().cloned())).unwrap();
+        assert_eq!(empty_bindings, res);
+
+        // Test deletion of non-existent data
+        let non_existent_bindings = HashMap::<&str, HashSet<Value>>::from_iter([(
+            "Charlie",
+            HashSet::from_iter([Value::from(7), Value::from(8), Value::from(9)]),
+        )]);
+        block_on(findex.delete(non_existent_bindings.clone().into_iter())).unwrap();
+        let res = block_on(findex.search(non_existent_bindings.keys().cloned())).unwrap();
+        assert_eq!(HashMap::from_iter([("Charlie", HashSet::new())]), res);
+
+        // Test insertion of overlapping data
+        let overlapping_bindings = HashMap::<&str, HashSet<Value>>::from_iter([(
+            "Alice",
+            HashSet::from_iter([Value::from(5), Value::from(6)]), /* Number 5 is the overlapping
+                                                                   * data */
+        )]);
+        block_on(findex.insert(overlapping_bindings.clone().into_iter())).unwrap();
+        let res = block_on(findex.search(overlapping_bindings.keys().cloned())).unwrap();
+        assert_eq!(
+            HashMap::from_iter([(
+                "Alice",
+                HashSet::from_iter([
+                    Value::from(1),
+                    Value::from(3),
+                    Value::from(5),
+                    Value::from(6)
+                ])
+            )]),
             res
         );
     }

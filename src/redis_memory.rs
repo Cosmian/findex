@@ -34,7 +34,6 @@ impl Display for RedisMemoryError {
 pub struct RedisMemory<Address, const WORD_LENGTH: usize>
 where
     Address: Hash + Eq,
-    // Value: Clone + Eq,
 {
     connection: Arc<Mutex<redis::Connection>>,
     _marker: PhantomData<Address>,
@@ -66,6 +65,10 @@ impl<Address: Hash + Eq, const WORD_LENGTH: usize> Default for RedisMemory<Addre
     }
 }
 
+/**
+ * Flushes the Redis database.
+ * WARNING: This is irreversible, do not run in production.
+ */
 #[cfg(test)]
 impl<Address: Hash + Eq + Debug, const WORD_LENGTH: usize> RedisMemory<Address, WORD_LENGTH> {
     pub fn flush_db(&self) -> Result<(), redis::RedisError> {
@@ -95,7 +98,10 @@ impl<Address: Send + Sync + Hash + Eq + Debug + Clone + ToRedisArgs, const WORD_
     ) -> Result<Vec<Option<Self::Word>>, Self::Error> {
         let safe_connection = &mut *self.connection.lock().expect("Poisoned lock.");
         let refs: Vec<&Address> = addresses.iter().collect(); // Redis MGET requires references to the values
-        let res: Vec<Option<Self::Word>> = safe_connection.mget(&refs).unwrap();
+        let res: Vec<Option<Self::Word>> =
+            safe_connection.mget(&refs).map_err(|e| RedisMemoryError {
+                details: e.to_string(),
+            })?;
         Ok(res)
     }
 
@@ -158,16 +164,32 @@ impl<Address: Send + Sync + Hash + Eq + Debug + Clone + ToRedisArgs, const WORD_
     }
 }
 
-// cargo test --package findex --lib -- redis_store::redis_memory::tests
-// --show-output
-//
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn test_flush_db() {
+        let memory = RedisMemory::<u8, 1>::default();
+        memory.flush_db().unwrap();
+
+        assert_eq!(
+            block_on(memory.guarded_write((0, None), vec![(1, [2])])).unwrap(),
+            None
+        );
+
+        assert_eq!(
+            vec![Some([2])],
+            block_on(memory.batch_read(vec![1])).unwrap(),
+        );
+        memory.flush_db().unwrap(); // flush !
+
+        assert_eq!(vec![None], block_on(memory.batch_read(vec![1])).unwrap(),);
+        memory.flush_db().unwrap(); // prevent future tests from failing
+    }
 
     use futures::executor::block_on;
 
     use super::*;
-    use crate::{Address, MemoryADT};
+    use crate::MemoryADT;
 
     /// Ensures a transaction can express a vector push operation:
     /// - the counter is correctly incremented and all values are written;
@@ -176,8 +198,6 @@ mod tests {
 
     #[test]
     fn test_vector_push() {
-        // let memory = RedisMemory::<u8, u8>::default();
-        // const ADDRESS_LENGTH: usize = 16;
         let memory = RedisMemory::<u8, 1>::default();
         memory.flush_db().unwrap(); // prevent future tests from failing
 
@@ -205,6 +225,18 @@ mod tests {
             block_on(memory.batch_read(vec![1, 2, 3, 4])).unwrap(),
         );
 
-        memory.flush_db().unwrap(); // prevent future tests from failing
+        memory.flush_db().unwrap();
+    }
+
+    #[test]
+    #[ignore]
+    fn test_batch_read_error_handling() {
+        todo!("Not implemented");
+    }
+
+    #[test]
+    #[ignore]
+    fn test_guarded_write_error_handling() {
+        todo!("Not implemented");
     }
 }
