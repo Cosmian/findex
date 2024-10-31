@@ -16,6 +16,7 @@ pub use adt::{IndexADT, MemoryADT};
 pub use findex::Findex;
 pub use secret::Secret;
 pub use value::Value;
+pub use encoding::{dummy_encode, dummy_decode};
 
 #[cfg(any(test, feature = "bench"))]
 mod in_memory_store;
