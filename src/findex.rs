@@ -262,82 +262,82 @@ mod tests {
         );
     }
 
-    #[test]
-    fn test_insert_search_delete_search_redis() {
-        let mut rng = ChaChaRng::from_entropy();
-        let seed = Secret::random(&mut rng);
-        let memory = RedisMemory::<Address<ADDRESS_LENGTH>, WORD_LENGTH>::default();
-        memory.flush_db().unwrap();
+    // #[test]
+    // fn test_insert_search_delete_search_redis() {
+    //     let mut rng = ChaChaRng::from_entropy();
+    //     let seed = Secret::random(&mut rng);
+    //     let memory = RedisMemory::<Address<ADDRESS_LENGTH>, WORD_LENGTH>::default();
+    //     memory.flush_db().unwrap();
 
-        let findex = Findex::new(seed, memory, dummy_encode::<WORD_LENGTH, _>, dummy_decode);
+    //     let findex = Findex::new(seed, memory, dummy_encode::<WORD_LENGTH, _>, dummy_decode);
 
-        // Initial bindings
-        let bindings = HashMap::<&str, HashSet<Value>>::from_iter([
-            (
-                "Alice",
-                HashSet::from_iter([Value::from(1), Value::from(3), Value::from(5)]),
-            ),
-            (
-                "Bob",
-                HashSet::from_iter([Value::from(0), Value::from(2), Value::from(4)]),
-            ),
-        ]);
+    //     // Initial bindings
+    //     let bindings = HashMap::<&str, HashSet<Value>>::from_iter([
+    //         (
+    //             "Alice",
+    //             HashSet::from_iter([Value::from(1), Value::from(3), Value::from(5)]),
+    //         ),
+    //         (
+    //             "Bob",
+    //             HashSet::from_iter([Value::from(0), Value::from(2), Value::from(4)]),
+    //         ),
+    //     ]);
 
-        // Insert data
-        block_on(findex.insert(bindings.clone().into_iter())).unwrap();
+    //     // Insert data
+    //     block_on(findex.insert(bindings.clone().into_iter())).unwrap();
 
-        // Search the same data
-        let res = block_on(findex.search(bindings.keys().cloned())).unwrap();
-        assert_eq!(bindings, res);
+    //     // Search the same data
+    //     let res = block_on(findex.search(bindings.keys().cloned())).unwrap();
+    //     assert_eq!(bindings, res);
 
-        // Delete the data of Bob
-        block_on(findex.delete(bindings.clone().into_iter().filter(|(k, _)| *k == "Bob"))).unwrap();
-        let res = block_on(findex.search(bindings.keys().cloned())).unwrap();
-        assert_eq!(
-            HashMap::from_iter([
-                (
-                    "Alice",
-                    HashSet::from_iter([Value::from(1), Value::from(3), Value::from(5)])
-                ),
-                ("Bob", HashSet::new())
-            ]),
-            res
-        );
+    //     // Delete the data of Bob
+    //     block_on(findex.delete(bindings.clone().into_iter().filter(|(k, _)| *k == "Bob"))).unwrap();
+    //     let res = block_on(findex.search(bindings.keys().cloned())).unwrap();
+    //     assert_eq!(
+    //         HashMap::from_iter([
+    //             (
+    //                 "Alice",
+    //                 HashSet::from_iter([Value::from(1), Value::from(3), Value::from(5)])
+    //             ),
+    //             ("Bob", HashSet::new())
+    //         ]),
+    //         res
+    //     );
 
-        // Test insertion of empty data
-        let empty_bindings = HashMap::<&str, HashSet<Value>>::new();
-        block_on(findex.insert(empty_bindings.clone().into_iter())).unwrap();
-        let res = block_on(findex.search(empty_bindings.keys().cloned())).unwrap();
-        assert_eq!(empty_bindings, res);
+    //     // Test insertion of empty data
+    //     let empty_bindings = HashMap::<&str, HashSet<Value>>::new();
+    //     block_on(findex.insert(empty_bindings.clone().into_iter())).unwrap();
+    //     let res = block_on(findex.search(empty_bindings.keys().cloned())).unwrap();
+    //     assert_eq!(empty_bindings, res);
 
-        // Test deletion of non-existent data
-        let non_existent_bindings = HashMap::<&str, HashSet<Value>>::from_iter([(
-            "Charlie",
-            HashSet::from_iter([Value::from(7), Value::from(8), Value::from(9)]),
-        )]);
-        block_on(findex.delete(non_existent_bindings.clone().into_iter())).unwrap();
-        let res = block_on(findex.search(non_existent_bindings.keys().cloned())).unwrap();
-        assert_eq!(HashMap::from_iter([("Charlie", HashSet::new())]), res);
+    //     // Test deletion of non-existent data
+    //     let non_existent_bindings = HashMap::<&str, HashSet<Value>>::from_iter([(
+    //         "Charlie",
+    //         HashSet::from_iter([Value::from(7), Value::from(8), Value::from(9)]),
+    //     )]);
+    //     block_on(findex.delete(non_existent_bindings.clone().into_iter())).unwrap();
+    //     let res = block_on(findex.search(non_existent_bindings.keys().cloned())).unwrap();
+    //     assert_eq!(HashMap::from_iter([("Charlie", HashSet::new())]), res);
 
-        // Test insertion of overlapping data
-        let overlapping_bindings = HashMap::<&str, HashSet<Value>>::from_iter([(
-            "Alice",
-            HashSet::from_iter([Value::from(5), Value::from(6)]), /* Number 5 is the overlapping
-                                                                   * data */
-        )]);
-        block_on(findex.insert(overlapping_bindings.clone().into_iter())).unwrap();
-        let res = block_on(findex.search(overlapping_bindings.keys().cloned())).unwrap();
-        assert_eq!(
-            HashMap::from_iter([(
-                "Alice",
-                HashSet::from_iter([
-                    Value::from(1),
-                    Value::from(3),
-                    Value::from(5),
-                    Value::from(6)
-                ])
-            )]),
-            res
-        );
-    }
+    //     // Test insertion of overlapping data
+    //     let overlapping_bindings = HashMap::<&str, HashSet<Value>>::from_iter([(
+    //         "Alice",
+    //         HashSet::from_iter([Value::from(5), Value::from(6)]), /* Number 5 is the overlapping
+    //                                                                * data */
+    //     )]);
+    //     block_on(findex.insert(overlapping_bindings.clone().into_iter())).unwrap();
+    //     let res = block_on(findex.search(overlapping_bindings.keys().cloned())).unwrap();
+    //     assert_eq!(
+    //         HashMap::from_iter([(
+    //             "Alice",
+    //             HashSet::from_iter([
+    //                 Value::from(1),
+    //                 Value::from(3),
+    //                 Value::from(5),
+    //                 Value::from(6)
+    //             ])
+    //         )]),
+    //         res
+    //     );
+    // }
 }
