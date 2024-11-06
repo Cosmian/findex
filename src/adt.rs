@@ -26,13 +26,13 @@ pub trait IndexADT<Keyword: Send + Sync + Hash, Value: Send + Sync + Hash> {
     fn insert(
         &self,
         bindings: impl Sync + Send + Iterator<Item = (Keyword, HashSet<Value>)>,
-    ) -> impl Send + Sync + Future<Output = Result<(), Self::Error>>;
+    ) -> impl Send + Future<Output = Result<(), Self::Error>>;
 
     /// Removes the given bindings from the index.
     fn delete(
         &self,
         bindings: impl Sync + Send + Iterator<Item = (Keyword, HashSet<Value>)>,
-    ) -> impl Send + Sync + Future<Output = Result<(), Self::Error>>;
+    ) -> impl Send + Future<Output = Result<(), Self::Error>>;
 }
 
 pub trait VectorADT: Send + Sync {
@@ -46,10 +46,10 @@ pub trait VectorADT: Send + Sync {
     fn push(
         &mut self,
         vs: Vec<Self::Value>,
-    ) -> impl Send + Sync + Future<Output = Result<(), Self::Error>>;
+    ) -> impl Send + Future<Output = Result<(), Self::Error>>;
 
     /// Reads all values stored in this vector.
-    fn read(&self) -> impl Send + Sync + Future<Output = Result<Vec<Self::Value>, Self::Error>>;
+    fn read(&self) -> impl Send + Future<Output = Result<Vec<Self::Value>, Self::Error>>;
 }
 
 /// A Software Transactional Memory: all operations exposed are atomic.
@@ -67,7 +67,7 @@ pub trait MemoryADT {
     fn batch_read(
         &self,
         a: Vec<Self::Address>,
-    ) -> impl Send + Sync + Future<Output = Result<Vec<Option<Self::Word>>, Self::Error>>;
+    ) -> impl Send + Future<Output = Result<Vec<Option<Self::Word>>, Self::Error>>;
 
     /// Write the given words at the given addresses if the word currently stored at the guard
     /// address is the given one, and returns this guard word.
@@ -75,7 +75,7 @@ pub trait MemoryADT {
         &self,
         guard: (Self::Address, Option<Self::Word>),
         tasks: Vec<(Self::Address, Self::Word)>,
-    ) -> impl Send + Sync + Future<Output = Result<Option<Self::Word>, Self::Error>>;
+    ) -> impl Send + Future<Output = Result<Option<Self::Word>, Self::Error>>;
 }
 
 #[cfg(test)]
