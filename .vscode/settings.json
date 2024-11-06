@@ -1,3 +1,2 @@
 {
-  "rust-analyzer.cargo.features": ["in_memory"]
 }
