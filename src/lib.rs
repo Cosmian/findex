@@ -13,11 +13,15 @@ mod value;
 
 pub use address::Address;
 pub use adt::{IndexADT, MemoryADT};
+pub use encoding::{dummy_decode, dummy_encode};
 pub use findex::Findex;
 pub use secret::Secret;
 pub use value::Value;
-pub use encoding::{dummy_encode, dummy_decode};
 
+#[cfg(feature = "cloudproof")]
+pub use adt::memory_tests::{
+    test_correct_guard, test_guarded_write_concurrent, test_single_write_and_read, test_wrong_guard,
+};
 #[cfg(any(test, feature = "bench"))]
 mod in_memory_store;
 #[cfg(feature = "bench")]
