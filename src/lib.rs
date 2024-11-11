@@ -9,6 +9,7 @@ mod findex;
 mod ovec;
 mod secret;
 mod symmetric_key;
+#[cfg(any(test, feature = "bench", feature = "test-utils"))]
 mod test;
 mod value;
 
@@ -19,6 +20,7 @@ pub use findex::Findex;
 pub use secret::Secret;
 pub use value::Value;
 
+#[cfg(feature = "test-utils")]
 pub use test::memory::{
     test_guarded_write_concurrent, test_single_write_and_read, test_wrong_guard,
 };
