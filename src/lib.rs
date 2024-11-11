@@ -9,6 +9,7 @@ mod findex;
 mod ovec;
 mod secret;
 mod symmetric_key;
+mod test;
 mod value;
 
 pub use address::Address;
@@ -18,9 +19,8 @@ pub use findex::Findex;
 pub use secret::Secret;
 pub use value::Value;
 
-#[cfg(feature = "cloudproof")]
-pub use adt::memory_tests::{
-    test_correct_guard, test_guarded_write_concurrent, test_single_write_and_read, test_wrong_guard,
+pub use test::memory::{
+    test_guarded_write_concurrent, test_single_write_and_read, test_wrong_guard,
 };
 #[cfg(any(test, feature = "bench"))]
 mod in_memory_store;
