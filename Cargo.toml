@@ -5,6 +5,7 @@ edition = "2021"
 
 [features]
 bench = []
+test-utils = []
 
 [dependencies]
 aes = "0.8.4"
@@ -19,7 +20,12 @@ zeroize = { version = "1.8.1", features = ["derive"] }
 criterion = "0.5.1"
 futures = "0.3.30"
 lazy_static = "1.5.0"
-tokio = {version = "1.38.0", features = ["rt", "macros", "rt-multi-thread", "time"]}
+tokio = { version = "1.38.0", features = [
+    "rt",
+    "macros",
+    "rt-multi-thread",
+    "time",
+] }
 
 [[bench]]
 name = "benches"
