@@ -20,7 +20,7 @@ impl std::error::Error for MemoryError {}
 
 #[derive(Clone, Debug)]
 pub struct InMemory<Address: Hash + Eq, Value> {
-    inner: Arc<Mutex<HashMap<Address, Value>>>, // kk
+    inner: Arc<Mutex<HashMap<Address, Value>>>,
 }
 
 impl<Address: Hash + Eq + Debug, Value: Clone + Eq + Debug> Default for InMemory<Address, Value> {
@@ -97,7 +97,13 @@ mod tests {
 
     use futures::executor::block_on;
 
-    use crate::MemoryADT;
+    use crate::{
+        in_memory_store,
+        test::memory::{
+            test_guarded_write_concurrent, test_single_write_and_read, test_wrong_guard,
+        },
+        MemoryADT,
+    };
 
     use super::InMemory;
 
@@ -124,5 +130,23 @@ mod tests {
             vec![Some(1), Some(1), Some(3), Some(3)],
             block_on(memory.batch_read(vec![1, 2, 3, 4])).unwrap(),
         )
+    }
+
+    #[tokio::test]
+    async fn test_sequential_read_write() {
+        let memory = in_memory_store::InMemory::<u128, u128>::default();
+        test_single_write_and_read(&memory, rand::random()).await;
+    }
+
+    #[tokio::test]
+    async fn test_sequential_wrong_guard() {
+        let memory = in_memory_store::InMemory::<u128, u128>::default();
+        test_wrong_guard(&memory).await;
+    }
+
+    #[tokio::test]
+    async fn test_concurrent_read_write() {
+        let memory = in_memory_store::InMemory::<u8, u8>::default();
+        test_guarded_write_concurrent(memory, rand::random()).await;
     }
 }
