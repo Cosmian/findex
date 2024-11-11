@@ -77,6 +77,205 @@ pub trait MemoryADT {
         tasks: Vec<(Self::Address, Self::Word)>,
     ) -> impl Send + Future<Output = Result<Option<Self::Word>, Self::Error>>;
 }
+// ! This module defines tests any implementation of the MemoryADT interface must pass.
+#[cfg(feature = "cloudproof")]
+pub mod memory_tests {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::sync::Arc;
+    // TODO : make those generic
+    use futures::future::join_all;
+    use rand::{rngs::StdRng, Rng, SeedableRng};
+    use tokio::spawn;
+
+    use super::MemoryADT;
+
+    pub async fn test_single_write_and_read<T>(memory: &T, seed: [u8; 32])
+    where
+        T: MemoryADT,
+        T::Address: std::fmt::Debug + PartialEq + Default + From<u8>,
+        T::Word: std::fmt::Debug + PartialEq + Default + From<u8>,
+        T::Error: std::fmt::Debug,
+    {
+        let mut rng = StdRng::from_seed(seed);
+
+        // Test batch_read of random addresses, expected to be all empty at this point
+        let empty_read_result = memory
+            .batch_read(vec![
+                T::Address::from(rng.gen::<u8>()),
+                T::Address::from(rng.gen::<u8>()),
+                T::Address::from(rng.gen::<u8>()),
+            ])
+            .await
+            .unwrap();
+        let expected_result = vec![None, None, None];
+        assert_eq!(
+            empty_read_result, expected_result,
+            "Test batch_read of empty addresses failed.\nExpected result : {:?}. Got : {:?}. Seed : {:?}",
+            expected_result, empty_read_result, seed
+        );
+
+        // Generate a random address and a random word that we save
+        let random_address = rng.gen::<u8>();
+        let random_word = rng.gen::<u8>();
+
+        // Write the word to the address
+        let write_result = memory
+            .guarded_write(
+                (T::Address::from(random_address), None),
+                vec![(T::Address::from(random_address), T::Word::from(random_word))],
+            )
+            .await
+            .unwrap();
+        assert_eq!(write_result, None);
+
+        // Retrieve the same value
+        let read_result: Vec<Option<<T as MemoryADT>::Word>> = memory
+            .batch_read(vec![T::Address::from(random_address)])
+            .await
+            .unwrap();
+        assert_eq!(
+            read_result,
+            vec![Some(T::Word::from(random_word))],
+            "test_single_write_and_read failed.\nExpected result : {:?}. Got : {:?} with seed : {:?}",
+            vec![Some(T::Word::from(random_word))],
+            read_result,
+            seed
+        );
+    }
+
+    pub async fn test_wrong_guard<T>(memory: &T)
+    where
+        T: MemoryADT,
+        T::Address: std::fmt::Debug + PartialEq + Default,
+        T::Word: std::fmt::Debug + PartialEq + Default,
+        T::Error: std::fmt::Debug,
+    {
+        // Write something
+        memory
+            .guarded_write(
+                (T::Address::default(), None),
+                vec![(T::Address::default(), T::Word::default())],
+            )
+            .await
+            .unwrap();
+
+        // Attempt conflicting write with wrong guard value
+        let conflict_result = memory
+            .guarded_write(
+                (T::Address::default(), None),
+                vec![(T::Address::default(), T::Word::default())],
+            )
+            .await
+            .unwrap();
+
+        // Should return current value and not perform write
+        assert_eq!(
+            conflict_result,
+            Some(T::Word::default()),
+            "test_wrong_guard failed : {:?}",
+            conflict_result
+        );
+
+        // Verify value wasn't changed
+        let read_result = memory
+            .batch_read(vec![T::Address::default()])
+            .await
+            .unwrap();
+        assert_eq!(read_result, vec![Some(T::Word::default())]);
+    }
+
+    pub async fn test_correct_guard<T>(memory: &T)
+    where
+        T: MemoryADT,
+        T::Address: std::fmt::Debug + PartialEq + Default,
+        T::Word: std::fmt::Debug + PartialEq + Default,
+        T::Error: std::fmt::Debug,
+    {
+        // Initial write
+        memory
+            .guarded_write(
+                (T::Address::default(), None),
+                vec![(T::Address::default(), T::Word::default())],
+            )
+            .await
+            .unwrap();
+
+        // Conditional write with correct guard value
+        let write_result = memory
+            .guarded_write(
+                (T::Address::default(), Some(T::Word::default())),
+                vec![(T::Address::default(), T::Word::default())],
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(write_result, Some(T::Word::default()));
+
+        // Verify new value
+        let read_result = memory
+            .batch_read(vec![T::Address::default()])
+            .await
+            .unwrap();
+        assert_eq!(
+            read_result,
+            vec![Some(T::Word::default())],
+            "test_correct_guard failed : {:?}",
+            read_result
+        );
+    }
+
+    pub async fn test_guarded_write_concurrent<T>(memory: T, seed: [u8; 32])
+    where
+        T: MemoryADT<Address = u8, Word = u8> + Send + Sync + 'static + Clone,
+        T::Error: std::fmt::Debug,
+    {
+        {
+            let mut rng = StdRng::from_seed(seed);
+
+            let n: usize = 100; // number of elements to be written in the memory
+            let m: usize = 4; // number of elements written by each concurrent task
+            let workers: usize = n / m; // number of concurrent workers
+            let guard_address = rng.gen_range(0..n) as u8; // address used as guard
+            let write_counter = Arc::new(AtomicUsize::new(0));
+
+            let handles = (0..n)
+                .map(|i| i as u8)
+                .collect::<Vec<_>>()
+                // Split the values into chunks of size m
+                .chunks_exact(workers)
+                .map(|vals| {
+                    let vals = vals.to_vec();
+                    let mem = memory.clone(); // A reference to the same memory
+                    let counter_ref = write_counter.clone();
+                    // Spawn a new task
+                    spawn(async move {
+                        for _ in vals {
+                            // All concurrent tasks will try to write to write to the same address
+                            // As the operation is atomic, only one of them should succeed.
+                            let current_value = mem
+                                .guarded_write((guard_address, None), vec![(guard_address, 1)])
+                                .await
+                                .unwrap();
+                            if current_value.is_none() {
+                                counter_ref.fetch_add(1, Ordering::SeqCst);
+                            }
+                        }
+                    })
+                })
+                .collect::<Vec<_>>();
+
+            for h in join_all(handles).await {
+                h.unwrap();
+            }
+
+            assert_eq!(
+                write_counter.load(Ordering::Relaxed),
+                1,
+                "{:?} threads were able to write to memory. Only one should have been able to, is batch_write atomic ?\n Debug seed : {:?}.", write_counter.load(Ordering::Relaxed), seed
+            );
+        }
+    }
+}
 
 #[cfg(test)]
 pub(crate) mod tests {
@@ -150,173 +349,12 @@ pub(crate) mod tests {
         };
 
         use super::super::MemoryADT;
-        use futures::{executor::block_on, future::join_all};
+        use futures::executor::block_on;
 
-        /// Runs all tests
-        pub async fn run_memory_adt_tests<T>(memory: T)
-        where
-            T: MemoryADT,
-            T::Address: std::fmt::Debug + PartialEq + Default,
-            T::Word: std::fmt::Debug + PartialEq + Default,
-            T::Error: std::fmt::Debug,
-        {
-            block_on(test_batch_read_empty(&memory));
-            block_on(test_single_write_and_read(&memory));
-            block_on(test_wrong_guard(&memory));
-            block_on(test_correct_guard(&memory));
-            block_on(test_multiple_writes(&memory));
-        }
-
-        async fn test_batch_read_empty<T>(memory: &T)
-        where
-            T: MemoryADT,
-            T::Address: std::fmt::Debug + PartialEq + Default,
-            T::Word: std::fmt::Debug + PartialEq + Default,
-            T::Error: std::fmt::Debug,
-        {
-            let addresses = vec![
-                T::Address::default(),
-                T::Address::default(),
-                T::Address::default(),
-            ];
-            let result = memory.batch_read(addresses).await.unwrap();
-            assert_eq!(result, vec![None, None, None]);
-        }
-
-        async fn test_single_write_and_read<T>(memory: &T)
-        where
-            T: MemoryADT,
-            T::Address: std::fmt::Debug + PartialEq + Default,
-            T::Word: std::fmt::Debug + PartialEq + Default,
-            T::Error: std::fmt::Debug,
-        {
-            // Write a single value
-            let write_result = memory
-                .guarded_write(
-                    (T::Address::default(), None),
-                    vec![(T::Address::default(), T::Word::default())],
-                )
-                .await
-                .unwrap();
-            assert_eq!(write_result, None);
-
-            // Retrieve the same value
-            let read_result = memory
-                .batch_read(vec![T::Address::default()])
-                .await
-                .unwrap();
-            assert_eq!(read_result, vec![Some(T::Word::default())]);
-        }
-
-        async fn test_wrong_guard<T>(memory: &T)
-        where
-            T: MemoryADT,
-            T::Address: std::fmt::Debug + PartialEq + Default,
-            T::Word: std::fmt::Debug + PartialEq + Default,
-            T::Error: std::fmt::Debug,
-        {
-            // Write something
-            memory
-                .guarded_write(
-                    (T::Address::default(), None),
-                    vec![(T::Address::default(), T::Word::default())],
-                )
-                .await
-                .unwrap();
-
-            // Attempt conflicting write with wrong guard value
-            let conflict_result = memory
-                .guarded_write(
-                    (T::Address::default(), None),
-                    vec![(T::Address::default(), T::Word::default())],
-                )
-                .await
-                .unwrap();
-
-            // Should return current value and not perform write
-            assert_eq!(conflict_result, Some(T::Word::default()));
-
-            // Verify value wasn't changed
-            let read_result = memory
-                .batch_read(vec![T::Address::default()])
-                .await
-                .unwrap();
-            assert_eq!(read_result, vec![Some(T::Word::default())]);
-        }
-
-        async fn test_correct_guard<T>(memory: &T)
-        where
-            T: MemoryADT,
-            T::Address: std::fmt::Debug + PartialEq + Default,
-            T::Word: std::fmt::Debug + PartialEq + Default,
-            T::Error: std::fmt::Debug,
-        {
-            // Initial write
-            memory
-                .guarded_write(
-                    (T::Address::default(), None),
-                    vec![(T::Address::default(), T::Word::default())],
-                )
-                .await
-                .unwrap();
-
-            // Conditional write with correct guard value
-            let write_result = memory
-                .guarded_write(
-                    (T::Address::default(), Some(T::Word::default())),
-                    vec![(T::Address::default(), T::Word::default())],
-                )
-                .await
-                .unwrap();
-
-            assert_eq!(write_result, Some(T::Word::default()));
-
-            // Verify new value
-            let read_result = memory
-                .batch_read(vec![T::Address::default()])
-                .await
-                .unwrap();
-            assert_eq!(read_result, vec![Some(T::Word::default())]);
-        }
-
-        async fn test_multiple_writes<T>(memory: &T)
-        where
-            T: MemoryADT,
-            T::Address: std::fmt::Debug + PartialEq + Default,
-            T::Word: std::fmt::Debug + PartialEq + Default,
-            T::Error: std::fmt::Debug,
-        {
-            // Write multiple values atomically
-            memory
-                .guarded_write(
-                    (T::Address::default(), None),
-                    vec![
-                        (T::Address::default(), T::Word::default()),
-                        (T::Address::default(), T::Word::default()),
-                        (T::Address::default(), T::Word::default()),
-                    ],
-                )
-                .await
-                .unwrap();
-
-            // Read back all values
-            let read_result = memory
-                .batch_read(vec![
-                    T::Address::default(),
-                    T::Address::default(),
-                    T::Address::default(),
-                ])
-                .await
-                .unwrap();
-            assert_eq!(
-                read_result,
-                vec![
-                    Some(T::Word::default()),
-                    Some(T::Word::default()),
-                    Some(T::Word::default())
-                ]
-            );
-        }
+        use super::super::memory_tests::{
+            test_correct_guard, test_guarded_write_concurrent, test_single_write_and_read,
+            test_wrong_guard,
+        };
 
         #[derive(Default, Clone)]
         struct MockMemory {
@@ -366,62 +404,15 @@ pub(crate) mod tests {
         #[tokio::test]
         async fn test_sequential_memory_adt_with_mock() {
             let memory = MockMemory::default();
-            run_memory_adt_tests(memory).await;
-        }
-
-        async fn test_concurrent<T>(memory: T)
-        where
-            T: MemoryADT<Address = u8, Word = u8> + Send + Sync + 'static + Clone,
-            T::Error: std::fmt::Debug,
-        {
-            // Write multiple values concurrently
-            let n: usize = 100;
-            let workers: usize = 2;
-            let adr_value_pair: Vec<(u8, u8)> = (0..n * workers)
-                .map(|i| (i as u8, i as u8))
-                .collect::<Vec<_>>();
-            let addresses: Vec<u8> = (0..n * workers).map(|i| i as u8).collect::<Vec<_>>();
-
-            let handles = adr_value_pair
-                .chunks_exact(workers)
-                .map(|vals| {
-                    let vals = vals.to_vec();
-                    let mem = memory.clone(); // A reference to the same memory
-
-                    // Spawn a new task
-                    tokio::spawn(async move {
-                        for (adr, val) in vals {
-                            mem.guarded_write((T::Address::default(), None), vec![(adr, val)])
-                                .await
-                                .unwrap();
-                        }
-                    })
-                })
-                .collect::<Vec<_>>();
-
-            for h in join_all(handles).await {
-                h.unwrap();
-            }
-            let mut res = block_on(memory.batch_read(addresses.clone())).unwrap();
-            let old = res.clone();
-            res.sort();
-            assert_ne!(old, res);
-            assert_eq!(res.len(), n * workers);
-            assert_eq!(
-                res,
-                addresses
-                    .into_iter()
-                    .map(|opt| Some(opt))
-                    .collect::<Vec<_>>()
-            );
+            block_on(test_single_write_and_read(&memory, rand::random()));
+            block_on(test_wrong_guard(&memory));
+            block_on(test_correct_guard(&memory));
         }
 
         #[tokio::test]
-        async fn testccr() {
-            // TODO : fixme !
-
+        async fn test_concurrency_with_mock() {
             let memory = MockMemory::default();
-            test_concurrent(memory).await;
+            test_guarded_write_concurrent(memory, rand::random()).await;
         }
     }
 }

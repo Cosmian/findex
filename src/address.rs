@@ -1,8 +1,9 @@
-use std::{ops::{Add, Deref, DerefMut}};
+use std::ops::{Add, Deref, DerefMut};
 
 use rand_core::CryptoRngCore;
+#[cfg(feature = "cloudproof")]
+use redis::{RedisWrite, ToRedisArgs};
 use std::fmt;
-use redis::{ToRedisArgs, RedisWrite};
 
 // NOTE: a more efficient implementation of the address could be a big-int.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -63,12 +64,14 @@ impl<const LENGTH: usize> Add<u64> for Address<LENGTH> {
     }
 }
 
+#[cfg(feature = "cloudproof")]
 impl<const N: usize> fmt::Display for Address<N> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{:?}", &self.0)
     }
 }
 
+#[cfg(feature = "cloudproof")]
 impl<const N: usize> ToRedisArgs for Address<N> {
     fn write_redis_args<W>(&self, out: &mut W)
     where

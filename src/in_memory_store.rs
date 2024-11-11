@@ -20,7 +20,7 @@ impl std::error::Error for MemoryError {}
 
 #[derive(Clone, Debug)]
 pub struct InMemory<Address: Hash + Eq, Value> {
-    inner: Arc<Mutex<HashMap<Address, Value>>>,
+    inner: Arc<Mutex<HashMap<Address, Value>>>, // kk
 }
 
 impl<Address: Hash + Eq + Debug, Value: Clone + Eq + Debug> Default for InMemory<Address, Value> {
