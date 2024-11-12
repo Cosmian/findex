@@ -126,31 +126,53 @@ where
     {
         const N: usize = 1000; // number of threads
         let mut rng = StdRng::from_seed(seed);
-        let guard_address = rng.gen::<u128>(); // address used as guard
+        let counter_addr = rng.gen::<u128>(); // Random address for a counter
+
+        // Initialize counter to 0
+        memory
+            .guarded_write((counter_addr, None), vec![(counter_addr, 0)])
+            .await
+            .unwrap();
 
         let handles: Vec<_> = (0..N)
             .map(|_| {
                 let mem = memory.clone();
                 std::thread::spawn(move || async move {
-                    // All concurrent tasks will try to write to the same address
-                    // As the operation is atomic, only one of them should succeed and return true.
-                    mem.guarded_write((guard_address, None), vec![(guard_address, 1)])
-                        .await
-                        .unwrap()
-                        .is_none()
+                    loop {
+                        // Read current value
+                        let current = mem.batch_read(vec![counter_addr]).await.unwrap()[0]
+                            .expect("Counter should exist");
+
+                        // Try to increment if the current value is still the same
+                        if mem
+                            .guarded_write(
+                                (counter_addr, Some(current)),
+                                vec![(counter_addr, current + 1)],
+                            )
+                            .await
+                            .unwrap()
+                            == Some(current)
+                        {
+                            return; // Successfully incremented, quit
+                        }
+                        // Failed to increment, retry
+                    }
                 })
             })
-            .collect::<Vec<_>>();
+            .collect();
 
-        let mut write_counter = 0;
+        // wait for all threads to finish
         for handle in handles {
-            write_counter += if handle.join().unwrap().await { 1 } else { 0 };
+            handle.join().unwrap().await;
         }
 
+        let final_count =
+            memory.batch_read(vec![counter_addr]).await.unwrap()[0].expect("Counter should exist");
+
         assert_eq!(
-                write_counter,
-                1,
-                "{:?} threads were able to write to memory. Only one should have been able to, is batch_write atomic ?\n Debug seed : {:?}.", write_counter, seed
-            );
+            final_count, N as u128,
+            "test_guarded_write_concurrent failed.{:?} threads were able to write to memory, expected {:?}.\nDebug seed : {:?}.",
+            final_count, N as u128, seed
+        );
     }
 }
