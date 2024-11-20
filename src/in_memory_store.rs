@@ -92,8 +92,7 @@ impl<Address: Hash + Eq + Debug + Clone, Value: Clone + Eq + Debug> IntoIterator
     }
 }
 
-#[cfg(feature = "test-utils")]
-#[cfg(test)]
+#[any(cfg(test), cfg(feature = "test-utils")]
 mod tests {
 
     use crate::{
