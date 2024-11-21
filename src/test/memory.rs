@@ -128,34 +128,32 @@ where
         let mut rng = StdRng::from_seed(seed);
         let counter_addr = rng.gen::<u128>(); // Random address for a counter
 
-        // Initialize counter to 0
-        memory
-            .guarded_write((counter_addr, None), vec![(counter_addr, 0)])
-            .await
-            .unwrap();
-
         let handles: Vec<_> = (0..N)
             .map(|_| {
                 let mem = memory.clone();
                 std::thread::spawn(move || async move {
+                    let mut current_guard = None;
                     loop {
-                        // Read current value
-                        let current = mem.batch_read(vec![counter_addr]).await.unwrap()[0]
-                            .expect("Counter should exist");
-
-                        // Try to increment if the current value is still the same
-                        if mem
+                        // Try to increment
+                        let read_value = mem
                             .guarded_write(
-                                (counter_addr, Some(current)),
-                                vec![(counter_addr, current + 1)],
+                                (counter_addr, current_guard),
+                                vec![(
+                                    counter_addr,
+                                    if current_guard.is_none() {
+                                        1
+                                    } else {
+                                        current_guard.unwrap() + 1
+                                    },
+                                )],
                             )
                             .await
-                            .unwrap()
-                            == Some(current)
-                        {
+                            .unwrap();
+                        if read_value == current_guard {
                             return; // Successfully incremented, quit
+                        } else {
+                            current_guard = read_value; // Guard failed, retry with the new value
                         }
-                        // Failed to increment, retry
                     }
                 })
             })
@@ -171,8 +169,8 @@ where
 
         assert_eq!(
             final_count, N as u128,
-            "test_guarded_write_concurrent failed.{:?} threads were able to write to memory, expected {:?}.\nDebug seed : {:?}.",
-            final_count, N as u128, seed
+            "test_guarded_write_concurrent failed. Expected the counter to be at {:?}, found {:?}.\nDebug seed : {:?}.",
+            N as u128, final_count, seed
         );
     }
 }
