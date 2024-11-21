@@ -6,9 +6,9 @@ use crate::MemoryADT;
 pub async fn test_single_write_and_read<T>(memory: &T, seed: [u8; 32])
 where
     T: MemoryADT,
-    T::Address: std::fmt::Debug + PartialEq + Default + From<u128>,
-    T::Word: std::fmt::Debug + PartialEq + Default + From<u128>,
-    T::Error: std::fmt::Debug,
+    T::Address: std::fmt::Debug + PartialEq + From<u128>,
+    T::Word: std::fmt::Debug + PartialEq + From<u128>,
+    T::Error: std::error::Error,
 {
     let mut rng = StdRng::from_seed(seed);
 
@@ -58,18 +58,25 @@ where
         );
 }
 
-pub async fn test_wrong_guard<T>(memory: &T)
+pub async fn test_wrong_guard<T>(memory: &T, seed: [u8; 32])
 where
     T: MemoryADT,
-    T::Address: std::fmt::Debug + PartialEq + Default,
-    T::Word: std::fmt::Debug + PartialEq + Default,
-    T::Error: std::fmt::Debug,
+    T::Address: std::fmt::Debug + PartialEq + From<u128>,
+    T::Word: std::fmt::Debug + PartialEq + From<u128>,
+    T::Error: std::error::Error,
 {
-    // Write something
+    let mut rng = StdRng::from_seed(seed);
+    let random_address = rng.gen::<u128>();
+    let word_to_write = rng.gen::<u128>();
+
+    // Write something to a random address
     memory
         .guarded_write(
-            (T::Address::default(), None),
-            vec![(T::Address::default(), T::Word::default())],
+            (T::Address::from(random_address), None),
+            vec![(
+                T::Address::from(random_address),
+                T::Word::from(word_to_write),
+            )],
         )
         .await
         .unwrap();
@@ -77,8 +84,11 @@ where
     // Attempt conflicting write with wrong guard value
     let conflict_result = memory
         .guarded_write(
-            (T::Address::default(), None),
-            vec![(T::Address::default(), T::Word::default())],
+            (T::Address::from(random_address), None),
+            vec![(
+                T::Address::from(random_address),
+                T::Word::from(rng.gen::<u128>()),
+            )],
         )
         .await
         .unwrap();
@@ -86,53 +96,71 @@ where
     // Should return current value and not perform write
     assert_eq!(
         conflict_result,
-        Some(T::Word::default()),
-        "test_wrong_guard failed : {:?}",
-        conflict_result
+        Some(T::Word::from(word_to_write)),
+        "test_wrong_guard failed.\nExpected value {:?} after write. Got : {:?}.\nDebug seed : {:?}",
+        conflict_result,
+        Some(T::Word::from(word_to_write)),
+        seed
     );
 
     // Verify value wasn't changed
     let read_result = memory
-        .batch_read(vec![T::Address::default()])
+        .batch_read(vec![T::Address::from(random_address)])
         .await
         .unwrap();
-    assert_eq!(read_result, vec![Some(T::Word::default())]);
+    assert_eq!(
+        vec![Some(T::Word::from(word_to_write)),],
+        read_result,
+        "test_wrong_guard failed. Value was overwritten, violating the guard. Expected : {:?}, got : {:?}. Debug seed : {:?}",
+        vec![Some(T::Word::from(word_to_write)),],
+        read_result,
+        seed
+    );
 }
 
 pub async fn test_guarded_write_concurrent<T>(memory: T, seed: [u8; 32])
 where
-    T: MemoryADT<Address = u8, Word = u8> + Send + 'static + Clone,
+    T: MemoryADT<Address = u128, Word = u128> + Send + 'static + Clone,
     T::Error: std::error::Error,
 {
     {
         const N: usize = 1000; // number of threads
         let mut rng = StdRng::from_seed(seed);
-        let guard_address = rng.gen::<u8>(); // address used as guard
+        let a = rng.gen::<u128>(); // Random address for a counter
 
         let handles: Vec<_> = (0..N)
             .map(|_| {
                 let mem = memory.clone();
-                let adr = guard_address;
                 std::thread::spawn(move || async move {
-                    // All concurrent tasks will try to write to the same address
-                    // As the operation is atomic, only one of them should succeed and return true.
-                    mem.guarded_write((adr, None), vec![(guard_address, 1)])
-                        .await
-                        .unwrap()
-                        .is_none()
+                    let mut old_cnt = None;
+                    loop {
+                        // Try to increment
+                        let cur_cnt = mem
+                            .guarded_write((a, old_cnt), vec![(a, old_cnt.unwrap_or_default() + 1)])
+                            .await
+                            .unwrap();
+                        if cur_cnt == old_cnt {
+                            return; // Successfully incremented, quit
+                        } else {
+                            old_cnt = cur_cnt; // Guard failed, retry with the new value
+                        }
+                    }
                 })
             })
-            .collect::<Vec<_>>();
+            .collect();
 
-        let mut write_counter = 0;
+        // wait for all threads to finish
         for handle in handles {
-            write_counter += if handle.join().unwrap().await { 1 } else { 0 };
+            handle.join().unwrap().await;
         }
 
+        let final_count =
+            memory.batch_read(vec![a]).await.unwrap()[0].expect("Counter should exist");
+
         assert_eq!(
-                write_counter,
-                1,
-                "{:?} threads were able to write to memory. Only one should have been able to, is batch_write atomic ?\n Debug seed : {:?}.", write_counter, seed
-            );
+            final_count, N as u128,
+            "test_guarded_write_concurrent failed. Expected the counter to be at {:?}, found {:?}.\nDebug seed : {:?}.",
+            N as u128, final_count, seed
+        );
     }
 }
