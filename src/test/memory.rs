@@ -126,33 +126,23 @@ where
     {
         const N: usize = 1000; // number of threads
         let mut rng = StdRng::from_seed(seed);
-        let counter_addr = rng.gen::<u128>(); // Random address for a counter
+        let a = rng.gen::<u128>(); // Random address for a counter
 
         let handles: Vec<_> = (0..N)
             .map(|_| {
                 let mem = memory.clone();
                 std::thread::spawn(move || async move {
-                    let mut current_guard = None;
+                    let mut old_cnt = None;
                     loop {
                         // Try to increment
-                        let read_value = mem
-                            .guarded_write(
-                                (counter_addr, current_guard),
-                                vec![(
-                                    counter_addr,
-                                    if current_guard.is_none() {
-                                        1
-                                    } else {
-                                        current_guard.unwrap() + 1
-                                    },
-                                )],
-                            )
+                        let cur_cnt = mem
+                            .guarded_write((a, old_cnt), vec![(a, old_cnt.unwrap_or_default() + 1)])
                             .await
                             .unwrap();
-                        if read_value == current_guard {
+                        if cur_cnt == old_cnt {
                             return; // Successfully incremented, quit
                         } else {
-                            current_guard = read_value; // Guard failed, retry with the new value
+                            old_cnt = cur_cnt; // Guard failed, retry with the new value
                         }
                     }
                 })
@@ -165,7 +155,7 @@ where
         }
 
         let final_count =
-            memory.batch_read(vec![counter_addr]).await.unwrap()[0].expect("Counter should exist");
+            memory.batch_read(vec![a]).await.unwrap()[0].expect("Counter should exist");
 
         assert_eq!(
             final_count, N as u128,

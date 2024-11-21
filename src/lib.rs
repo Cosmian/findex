@@ -9,7 +9,7 @@ mod findex;
 mod ovec;
 mod secret;
 mod symmetric_key;
-#[cfg(any(test, feature = "bench", feature = "test-utils"))]
+#[cfg(any(test, feature = "test-utils"))]
 mod test;
 mod value;
 
