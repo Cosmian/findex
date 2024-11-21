@@ -5,6 +5,7 @@ edition = "2021"
 
 [features]
 bench = []
+test-utils = ["tokio"]
 
 [dependencies]
 aes = "0.8.4"
@@ -14,12 +15,21 @@ rand_core = "0.6.4"
 tiny-keccak = { version = "2.0.2", features = ["sha3"] }
 xts-mode = "0.5.1"
 zeroize = { version = "1.8.1", features = ["derive"] }
+tokio = { version = "1.38.0", features = [
+    "macros",
+    "rt-multi-thread",
+], optional = true }
 
 [dev-dependencies]
 criterion = "0.5.1"
 futures = "0.3.30"
 lazy_static = "1.5.0"
-tokio = {version = "1.38.0", features = ["rt", "macros", "rt-multi-thread", "time"]}
+tokio = { version = "1.38.0", features = [
+    "rt",
+    "macros",
+    "rt-multi-thread",
+    "time",
+] }
 
 [[bench]]
 name = "benches"
