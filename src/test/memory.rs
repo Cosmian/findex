@@ -6,7 +6,7 @@ use crate::MemoryADT;
 pub async fn test_single_write_and_read<T>(memory: &T, seed: [u8; 32])
 where
     T: MemoryADT,
-    T::Address: std::fmt::Debug + PartialEq + From<u128>,
+    T::Address: std::fmt::Debug + PartialEq + From<[u8; 16]>,
     T::Word: std::fmt::Debug + PartialEq + From<u128>,
     T::Error: std::error::Error,
 {
@@ -15,9 +15,9 @@ where
     // Test batch_read of random addresses, expected to be all empty at this point
     let empty_read_result = memory
         .batch_read(vec![
-            T::Address::from(rng.gen::<u128>()),
-            T::Address::from(rng.gen::<u128>()),
-            T::Address::from(rng.gen::<u128>()),
+            T::Address::from(rng.gen::<u128>().to_le_bytes()),
+            T::Address::from(rng.gen::<u128>().to_le_bytes()),
+            T::Address::from(rng.gen::<u128>().to_le_bytes()),
         ])
         .await
         .unwrap();
@@ -29,7 +29,7 @@ where
         );
 
     // Generate a random address and a random word that we save
-    let random_address = rng.gen::<u128>();
+    let random_address = rng.gen::<u128>().to_le_bytes();
     let random_word = rng.gen::<u128>();
 
     // Write the word to the address
