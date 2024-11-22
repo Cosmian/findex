@@ -120,7 +120,9 @@ where
 
 pub async fn test_guarded_write_concurrent<T>(memory: T, seed: [u8; 32])
 where
-    T: MemoryADT<Address = [u8; 16], Word = [u8; 16]> + Send + 'static + Clone,
+    T: MemoryADT + Send + 'static + Clone,
+    T::Address: std::fmt::Debug + PartialEq + From<[u8; 16]> + Send,
+    T::Word: std::fmt::Debug + PartialEq + From<[u8; 16]> + Into<[u8; 16]> + Send + Clone + Default,
     T::Error: std::error::Error,
 {
     {
@@ -137,11 +139,14 @@ where
                         // Try to increment
                         let cur_cnt = mem
                             .guarded_write(
-                                (a, old_cnt),
+                                (a.into(), old_cnt.clone()),
                                 vec![(
-                                    a,
-                                    (u128::from_be_bytes(old_cnt.unwrap_or_default()) + 1)
-                                        .to_be_bytes(),
+                                    a.into(),
+                                    (u128::from_be_bytes(
+                                        old_cnt.clone().unwrap_or_default().into(),
+                                    ) + 1)
+                                        .to_be_bytes()
+                                        .into(),
                                 )],
                             )
                             .await
@@ -161,13 +166,14 @@ where
             handle.join().unwrap().await;
         }
 
-        let final_count =
-            memory.batch_read(vec![a]).await.unwrap()[0].expect("Counter should exist");
+        let final_count = memory.batch_read(vec![a.into()]).await.unwrap()[0]
+            .clone()
+            .expect("Counter should exist");
 
         assert_eq!(
-            u128::from_be_bytes(final_count), N as u128,
+            u128::from_be_bytes(final_count.clone().into()), N as u128,
             "test_guarded_write_concurrent failed. Expected the counter to be at {:?}, found {:?}.\nDebug seed : {:?}.",
-            N as u128, u128::from_be_bytes(final_count), seed
+            N as u128, u128::from_be_bytes(final_count.into()), seed
         );
     }
 }
