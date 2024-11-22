@@ -101,19 +101,19 @@ mod tests {
 
     #[tokio::test]
     async fn test_sequential_read_write() {
-        let memory = in_memory_store::InMemory::<[u8; 16], u128>::default();
+        let memory = in_memory_store::InMemory::<[u8; 16], [u8; 16]>::default();
         test_single_write_and_read(&memory, rand::random()).await;
     }
 
     #[tokio::test]
     async fn test_sequential_wrong_guard() {
-        let memory = in_memory_store::InMemory::<u128, u128>::default();
+        let memory = in_memory_store::InMemory::<[u8; 16], [u8; 16]>::default();
         test_wrong_guard(&memory, rand::random()).await;
     }
 
     #[tokio::test]
     async fn test_concurrent_read_write() {
-        let memory = in_memory_store::InMemory::<u128, u128>::default();
+        let memory = in_memory_store::InMemory::<[u8; 16], [u8; 16]>::default();
         test_guarded_write_concurrent(memory, rand::random()).await;
     }
 }

@@ -7,7 +7,7 @@ pub async fn test_single_write_and_read<T>(memory: &T, seed: [u8; 32])
 where
     T: MemoryADT,
     T::Address: std::fmt::Debug + PartialEq + From<[u8; 16]>,
-    T::Word: std::fmt::Debug + PartialEq + From<u128>,
+    T::Word: std::fmt::Debug + PartialEq + From<[u8; 16]>,
     T::Error: std::error::Error,
 {
     let mut rng = StdRng::from_seed(seed);
@@ -15,9 +15,9 @@ where
     // Test batch_read of random addresses, expected to be all empty at this point
     let empty_read_result = memory
         .batch_read(vec![
-            T::Address::from(rng.gen::<u128>().to_le_bytes()),
-            T::Address::from(rng.gen::<u128>().to_le_bytes()),
-            T::Address::from(rng.gen::<u128>().to_le_bytes()),
+            T::Address::from(rng.gen::<u128>().to_be_bytes()),
+            T::Address::from(rng.gen::<u128>().to_be_bytes()),
+            T::Address::from(rng.gen::<u128>().to_be_bytes()),
         ])
         .await
         .unwrap();
@@ -29,8 +29,8 @@ where
         );
 
     // Generate a random address and a random word that we save
-    let random_address = rng.gen::<u128>().to_le_bytes();
-    let random_word = rng.gen::<u128>();
+    let random_address = rng.gen::<u128>().to_be_bytes();
+    let random_word = rng.gen::<u128>().to_be_bytes();
 
     // Write the word to the address
     let write_result = memory
@@ -61,13 +61,13 @@ where
 pub async fn test_wrong_guard<T>(memory: &T, seed: [u8; 32])
 where
     T: MemoryADT,
-    T::Address: std::fmt::Debug + PartialEq + From<u128>,
-    T::Word: std::fmt::Debug + PartialEq + From<u128>,
+    T::Address: std::fmt::Debug + PartialEq + From<[u8; 16]>,
+    T::Word: std::fmt::Debug + PartialEq + From<[u8; 16]>,
     T::Error: std::error::Error,
 {
     let mut rng = StdRng::from_seed(seed);
-    let random_address = rng.gen::<u128>();
-    let word_to_write = rng.gen::<u128>();
+    let random_address = rng.gen::<u128>().to_be_bytes();
+    let word_to_write = rng.gen::<u128>().to_be_bytes();
 
     // Write something to a random address
     memory
@@ -87,7 +87,7 @@ where
             (T::Address::from(random_address), None),
             vec![(
                 T::Address::from(random_address),
-                T::Word::from(rng.gen::<u128>()),
+                T::Word::from(rng.gen::<u128>().to_be_bytes()),
             )],
         )
         .await
@@ -120,13 +120,13 @@ where
 
 pub async fn test_guarded_write_concurrent<T>(memory: T, seed: [u8; 32])
 where
-    T: MemoryADT<Address = u128, Word = u128> + Send + 'static + Clone,
+    T: MemoryADT<Address = [u8; 16], Word = [u8; 16]> + Send + 'static + Clone,
     T::Error: std::error::Error,
 {
     {
         const N: usize = 1000; // number of threads
         let mut rng = StdRng::from_seed(seed);
-        let a = rng.gen::<u128>(); // Random address for a counter
+        let a = rng.gen::<u128>().to_be_bytes(); // Random address for a counter
 
         let handles: Vec<_> = (0..N)
             .map(|_| {
@@ -136,7 +136,14 @@ where
                     loop {
                         // Try to increment
                         let cur_cnt = mem
-                            .guarded_write((a, old_cnt), vec![(a, old_cnt.unwrap_or_default() + 1)])
+                            .guarded_write(
+                                (a, old_cnt),
+                                vec![(
+                                    a,
+                                    (u128::from_be_bytes(old_cnt.unwrap_or_default()) + 1)
+                                        .to_be_bytes(),
+                                )],
+                            )
                             .await
                             .unwrap();
                         if cur_cnt == old_cnt {
@@ -158,9 +165,9 @@ where
             memory.batch_read(vec![a]).await.unwrap()[0].expect("Counter should exist");
 
         assert_eq!(
-            final_count, N as u128,
+            u128::from_be_bytes(final_count), N as u128,
             "test_guarded_write_concurrent failed. Expected the counter to be at {:?}, found {:?}.\nDebug seed : {:?}.",
-            N as u128, final_count, seed
+            N as u128, u128::from_be_bytes(final_count), seed
         );
     }
 }
