@@ -17,6 +17,7 @@ pub use address::Address;
 pub use adt::{IndexADT, MemoryADT};
 #[cfg(feature = "test-utils")]
 pub use encoding::{dummy_decode, dummy_encode};
+pub use error::Error;
 pub use findex::Findex;
 pub use secret::Secret;
 pub use value::Value;
