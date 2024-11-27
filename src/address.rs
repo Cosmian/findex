@@ -14,6 +14,18 @@ impl<const LENGTH: usize> Deref for Address<LENGTH> {
     }
 }
 
+impl<const LENGTH: usize> From<[u8; LENGTH]> for Address<LENGTH> {
+    fn from(bytes: [u8; LENGTH]) -> Self {
+        Self(bytes)
+    }
+}
+
+impl<const LENGTH: usize> From<Address<LENGTH>> for [u8; LENGTH] {
+    fn from(address: Address<LENGTH>) -> Self {
+        address.0
+    }
+}
+
 impl<const LENGTH: usize> DerefMut for Address<LENGTH> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.0
