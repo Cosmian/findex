@@ -266,7 +266,8 @@ mod tests {
         );
     }
 
-    pub fn get_redis_url() -> String {
+    #[cfg(feature = "redis-store")]
+    fn get_redis_url() -> String {
         if let Ok(var_env) = std::env::var("REDIS_HOST") {
             format!("redis://{var_env}:6379")
         } else {
@@ -274,18 +275,39 @@ mod tests {
         }
     }
 
-    const TEST_ADR_WORD_LENGTH: usize = 16;
-
+    #[tokio::test]
     #[cfg(feature = "redis-store")]
-    use crate::memory::db_stores::RedisBackend;
+    async fn test_redis_insert_search_delete_search() {
+        use crate::RedisStore;
 
-    #[cfg(feature = "redis-store")]
-    async fn init_test_redis_db(
-    ) -> RedisBackend<Address<TEST_ADR_WORD_LENGTH>, TEST_ADR_WORD_LENGTH> {
-        RedisBackend::<Address<TEST_ADR_WORD_LENGTH>, TEST_ADR_WORD_LENGTH>::connect(
+        let mut rng = ChaChaRng::from_entropy();
+        let seed = Secret::random(&mut rng);
+        const TEST_ADR_WORD_LENGTH: usize = 16;
+        let memory = RedisStore::<Address<TEST_ADR_WORD_LENGTH>, TEST_ADR_WORD_LENGTH>::connect(
             &get_redis_url(),
         )
         .await
-        .unwrap()
+        .unwrap();
+        let findex = Findex::new(seed, memory, dummy_encode::<WORD_LENGTH, _>, dummy_decode);
+        let bindings = HashMap::<&str, HashSet<Value>>::from_iter([
+            (
+                "cat",
+                HashSet::from_iter([Value::from(1), Value::from(3), Value::from(5)]),
+            ),
+            (
+                "dog",
+                HashSet::from_iter([Value::from(0), Value::from(2), Value::from(4)]),
+            ),
+        ]);
+        block_on(findex.insert(bindings.clone().into_iter())).unwrap();
+        let res = block_on(findex.search(bindings.keys().cloned())).unwrap();
+        assert_eq!(bindings, res);
+
+        block_on(findex.delete(bindings.clone().into_iter())).unwrap();
+        let res = block_on(findex.search(bindings.keys().cloned())).unwrap();
+        assert_eq!(
+            HashMap::from_iter([("cat", HashSet::new()), ("dog", HashSet::new())]),
+            res
+        );
     }
 }

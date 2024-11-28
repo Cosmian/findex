@@ -1,7 +1,4 @@
 //! Redis implementation of the Findex backends.
-//!
-//!
-use error::DbStoreError;
 use redis::{Commands, Connection};
 use std::{
     fmt::{self, Debug, Display},
@@ -11,8 +8,10 @@ use std::{
     sync::{Arc, Mutex},
 };
 
+use crate::MemoryADT;
+
 #[derive(Clone)]
-pub struct RedisBackend<Address: Hash + Eq, const WORD_LENGTH: usize> {
+pub struct RedisStore<Address: Hash + Eq, const WORD_LENGTH: usize> {
     // todo(hatem) : use connection manager
     connection: Arc<Mutex<Connection>>,
     write_script_hash: String,
@@ -44,7 +43,7 @@ return value
 
 const POISONED_LOCK_ERROR_MSG: &str = "Poisoned lock error";
 
-impl<Address: Hash + Eq, const WORD_LENGTH: usize> Debug for RedisBackend<Address, WORD_LENGTH> {
+impl<Address: Hash + Eq, const WORD_LENGTH: usize> Debug for RedisStore<Address, WORD_LENGTH> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("RedisMemory")
             .field("connection", &"<redis::Connection>") // We don't want to debug the actual connection
@@ -53,9 +52,9 @@ impl<Address: Hash + Eq, const WORD_LENGTH: usize> Debug for RedisBackend<Addres
     }
 }
 
-impl<Address: Hash + Eq, const WORD_LENGTH: usize> RedisBackend<Address, WORD_LENGTH> {
+impl<Address: Hash + Eq, const WORD_LENGTH: usize> RedisStore<Address, WORD_LENGTH> {
     /// Connects to a Redis server using the given URL.
-    pub async fn connect(url: &str) -> Result<Self, DbStoreError> {
+    pub async fn connect(url: &str) -> Result<Self, RedisStoreError> {
         let mut connection = match redis::Client::open(url) {
             Ok(client) => match client.get_connection() {
                 Ok(con) => con,
@@ -106,7 +105,7 @@ impl<
         Address: Send + Sync + Hash + Eq + Debug + Clone + Deref<Target = [u8; ADDRESS_LENGTH]>,
         const ADDRESS_LENGTH: usize,
         const WORD_LENGTH: usize,
-    > MemoryADT for RedisBackend<Address, WORD_LENGTH>
+    > MemoryADT for RedisStore<Address, WORD_LENGTH>
 {
     type Address = Address;
     type Error = RedisStoreError;
@@ -148,79 +147,80 @@ impl<
     }
 }
 
-// #[cfg(test)]
-// mod tests {
+#[cfg(test)]
+mod tests {
 
-//     use findex::{
-//         test_guarded_write_concurrent, test_single_write_and_read, test_wrong_guard, Address,
-//     };
-//     use futures::executor::block_on;
-//     use serial_test::serial;
+    use crate::{
+        test::memory::{
+            test_guarded_write_concurrent, test_single_write_and_read, test_wrong_guard,
+        },
+        Address,
+    };
+    use futures::executor::block_on;
+    use serial_test::serial;
 
-//     use super::*;
+    use super::*;
 
-//     pub fn get_redis_url() -> String {
-//         if let Ok(var_env) = std::env::var("REDIS_HOST") {
-//             format!("redis://{var_env}:6379")
-//         } else {
-//             "redis://localhost:6379".to_string()
-//         }
-//     }
+    pub fn get_redis_url() -> String {
+        if let Ok(var_env) = std::env::var("REDIS_HOST") {
+            format!("redis://{var_env}:6379")
+        } else {
+            "redis://localhost:6379".to_string()
+        }
+    }
 
-//     const TEST_ADR_WORD_LENGTH: usize = 16;
+    const TEST_ADR_WORD_LENGTH: usize = 16;
 
-//     async fn init_test_redis_db(
-//     ) -> RedisBackend<Address<TEST_ADR_WORD_LENGTH>, TEST_ADR_WORD_LENGTH> {
-//         RedisBackend::<Address<TEST_ADR_WORD_LENGTH>, TEST_ADR_WORD_LENGTH>::connect(
-//             &get_redis_url(),
-//         )
-//         .await
-//         .unwrap()
-//     }
+    async fn init_test_redis_db() -> RedisStore<Address<TEST_ADR_WORD_LENGTH>, TEST_ADR_WORD_LENGTH>
+    {
+        RedisStore::<Address<TEST_ADR_WORD_LENGTH>, TEST_ADR_WORD_LENGTH>::connect(&get_redis_url())
+            .await
+            .unwrap()
+    }
 
-//     #[actix_rt::test]
-//     #[serial]
-//     async fn test_db_flush() -> Result<(), DbStoreError> {
-//         let memory = init_test_redis_db().await;
+    #[tokio::test]
+    #[serial]
+    async fn test_db_flush() -> Result<(), RedisStoreError> {
+        let memory = init_test_redis_db().await;
 
-//         let addr = Address::from([1; 16]);
-//         let word = [2; 16];
+        let addr = Address::from([1; 16]);
+        let word = [2; 16];
 
-//         block_on(memory.guarded_write((addr.clone(), None), vec![(addr.clone(), word)])).unwrap();
+        block_on(memory.guarded_write((addr.clone(), None), vec![(addr.clone(), word)])).unwrap();
 
-//         let result = block_on(memory.batch_read(vec![addr.clone()])).unwrap();
-//         assert_eq!(result, vec![Some([2; 16])]);
-//         memory.clear_indexes().unwrap();
+        let result = block_on(memory.batch_read(vec![addr.clone()])).unwrap();
+        assert_eq!(result, vec![Some([2; 16])]);
+        memory.clear_indexes().unwrap();
 
-//         let result = block_on(memory.batch_read(vec![addr])).unwrap();
-//         assert_eq!(result, vec![None]);
-//         Ok(())
-//     }
+        let result = block_on(memory.batch_read(vec![addr])).unwrap();
+        assert_eq!(result, vec![None]);
+        Ok(())
+    }
 
-//     #[actix_rt::test]
-//     #[serial]
-//     async fn test_rw_seq() -> Result<(), DbStoreError> {
-//         let memory = init_test_redis_db().await;
-//         memory.clear_indexes().unwrap();
-//         block_on(test_single_write_and_read(&memory, rand::random()));
-//         Ok(())
-//     }
+    #[tokio::test]
+    #[serial]
+    async fn test_rw_seq() -> Result<(), RedisStoreError> {
+        let memory = init_test_redis_db().await;
+        memory.clear_indexes().unwrap();
+        block_on(test_single_write_and_read(&memory, rand::random()));
+        Ok(())
+    }
 
-//     #[actix_rt::test]
-//     #[serial]
-//     async fn test_guard_seq() -> Result<(), DbStoreError> {
-//         let memory = init_test_redis_db().await;
-//         memory.clear_indexes().unwrap();
-//         block_on(test_wrong_guard(&memory, rand::random()));
-//         Ok(())
-//     }
+    #[tokio::test]
+    #[serial]
+    async fn test_guard_seq() -> Result<(), RedisStoreError> {
+        let memory = init_test_redis_db().await;
+        memory.clear_indexes().unwrap();
+        block_on(test_wrong_guard(&memory, rand::random()));
+        Ok(())
+    }
 
-//     #[actix_rt::test]
-//     #[serial]
-//     async fn test_rw_ccr() -> Result<(), DbStoreError> {
-//         let memory = init_test_redis_db().await;
-//         memory.clear_indexes().unwrap();
-//         block_on(test_guarded_write_concurrent(memory, rand::random()));
-//         Ok(())
-//     }
-// }
+    #[tokio::test]
+    #[serial]
+    async fn test_rw_ccr() -> Result<(), RedisStoreError> {
+        let memory = init_test_redis_db().await;
+        memory.clear_indexes().unwrap();
+        block_on(test_guarded_write_concurrent(memory, rand::random()));
+        Ok(())
+    }
+}

@@ -1,8 +1,11 @@
 // ! This module defines tests any implementation of the MemoryADT interface must pass.
+#[cfg(feature = "test-utils")]
 use rand::{rngs::StdRng, Rng, SeedableRng};
 
+#[cfg(feature = "test-utils")]
 use crate::MemoryADT;
 
+#[cfg(feature = "test-utils")]
 pub async fn test_single_write_and_read<T>(memory: &T, seed: [u8; 32])
 where
     T: MemoryADT,
@@ -58,6 +61,7 @@ where
         );
 }
 
+#[cfg(feature = "test-utils")]
 pub async fn test_wrong_guard<T>(memory: &T, seed: [u8; 32])
 where
     T: MemoryADT,
@@ -118,6 +122,7 @@ where
     );
 }
 
+#[cfg(feature = "test-utils")]
 pub async fn test_guarded_write_concurrent<T>(memory: T, seed: [u8; 32])
 where
     T: MemoryADT + Send + 'static + Clone,

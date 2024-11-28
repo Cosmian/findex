@@ -1,22 +1,23 @@
 use core::fmt::Display;
-use std::{array::TryFromSliceError, num::TryFromIntError};
+use std::num::TryFromIntError;
 
-use cosmian_crypto_core::CryptoCoreError;
-use cosmian_findex::{CoreError as FindexCoreError, DbStoreErrorTrait};
 #[cfg(feature = "redis-store")]
-use redis::RedisStoreError;
+use super::redis_store::RedisStoreError;
+use crate::{error::Error as FindexCoreError, Address};
+use cosmian_crypto_core::CryptoCoreError;
 
+macro_rules! findex_core_error {
+    () => {
+        FindexCoreError<Address<{ crate::ADDRESS_LENGTH }>, Box<DbStoreError>> // todo(hatem) : wrong type solve infinite size loop
+    };
+}
 #[derive(Debug)]
 pub enum DbStoreError {
     #[cfg(feature = "redis-store")]
     Redis(RedisStoreError),
-    MissingCallback(String),
-    Findex(FindexCoreError),
+    Findex(findex_core_error!()),
     CryptoCore(CryptoCoreError),
-    Serialization(String),
     IntConversion(TryFromIntError),
-    SliceConversion(TryFromSliceError),
-    Other(String),
     Io(std::io::Error),
 }
 
@@ -25,21 +26,17 @@ impl Display for DbStoreError {
         match self {
             #[cfg(feature = "redis-store")]
             Self::Redis(err) => write!(f, "redis: {err}"),
-            Self::MissingCallback(err) => write!(f, "unknown callback: {err}"),
             Self::CryptoCore(err) => write!(f, "crypto_core: {err}"),
             Self::Findex(err) => write!(f, "findex: {err}"),
             Self::Io(err) => write!(f, "io: {err}"),
-            Self::Serialization(err) => write!(f, "serialization: {err}"),
             Self::IntConversion(err) => write!(f, "conversion: {err}"),
-            Self::SliceConversion(err) => write!(f, "conversion: {err}"),
-            Self::Other(err) => write!(f, "{err}"),
         }
     }
 }
 
 impl std::error::Error for DbStoreError {}
 
-impl DbStoreErrorTrait for DbStoreError {}
+// impl DbStoreErrorTrait for DbStoreError {}
 
 #[cfg(feature = "redis-store")]
 impl From<RedisStoreError> for DbStoreError {
@@ -60,8 +57,8 @@ impl From<CryptoCoreError> for DbStoreError {
     }
 }
 
-impl From<FindexCoreError> for DbStoreError {
-    fn from(e: FindexCoreError) -> Self {
+impl From<findex_core_error!()> for DbStoreError {
+    fn from(e: findex_core_error!()) -> Self {
         Self::Findex(e)
     }
 }
