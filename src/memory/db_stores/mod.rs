@@ -1,1 +1,4 @@
-pub use error::DbStoreError;
+mod error;
+
+#[cfg(feature = "redis-store")]
+pub mod redis_store;
