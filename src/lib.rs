@@ -26,12 +26,15 @@ pub use value::Value;
 pub use test::memory::{
     test_guarded_write_concurrent, test_single_write_and_read, test_wrong_guard,
 };
-#[cfg(any(test, feature = "bench"))]
-mod in_memory_store;
+mod memory;
+// #[cfg(any(test, feature = "bench"))]
+// mod memory {
+//     pub mod in_memory_store; // todo(hatem) : this looks fishy
+// }
 #[cfg(feature = "bench")]
 pub use encoding::{Op, WORD_LENGTH};
 #[cfg(feature = "bench")]
-pub use in_memory_store::InMemory;
+pub use memory::in_memory_store::InMemory;
 
 /// 16-byte addresses ensure a high collision resistance that poses virtually no limitation on the
 /// index.

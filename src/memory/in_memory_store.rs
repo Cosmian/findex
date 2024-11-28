@@ -31,6 +31,7 @@ impl<Address: Hash + Eq + Debug, Value: Clone + Eq + Debug> Default for InMemory
     }
 }
 
+#[cfg(any(test, feature = "bench"))]
 impl<Address: Hash + Eq + Debug, Value: Clone + Eq + Debug> InMemory<Address, Value> {
     #[cfg(feature = "bench")]
     pub fn with_capacity(c: usize) -> Self {
@@ -96,7 +97,7 @@ mod tests {
 
     #[cfg(feature = "test-utils")]
     use crate::{
-        in_memory_store, test_guarded_write_concurrent, test_single_write_and_read,
+        memory::in_memory_store, test_guarded_write_concurrent, test_single_write_and_read,
         test_wrong_guard,
     };
 

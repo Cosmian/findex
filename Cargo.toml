@@ -6,6 +6,7 @@ edition = "2021"
 [features]
 bench = []
 test-utils = []
+redis-store = ["redis"]
 
 [dependencies]
 aes = "0.8.4"
@@ -15,7 +16,13 @@ rand_core = "0.6.4"
 tiny-keccak = { version = "2.0.2", features = ["sha3"] }
 xts-mode = "0.5.1"
 zeroize = { version = "1.8.1", features = ["derive"] }
-
+redis = { version = "0.27.5", features = [
+    "aio",
+    "ahash",
+    "script",
+    "tokio-comp",
+    "connection-manager",
+], optional = true }
 
 [dev-dependencies]
 criterion = "0.5.1"
