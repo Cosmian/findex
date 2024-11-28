@@ -228,7 +228,7 @@ mod tests {
         ADDRESS_LENGTH, Findex, IndexADT, Value,
         address::Address,
         encoding::{dummy_decode, dummy_encode},
-        in_memory_store::InMemory,
+        memory::in_memory_store::InMemory,
         secret::Secret,
     };
 
@@ -260,5 +260,28 @@ mod tests {
             HashMap::from_iter([("cat", HashSet::new()), ("dog", HashSet::new())]),
             res
         );
+    }
+
+    pub fn get_redis_url() -> String {
+        if let Ok(var_env) = std::env::var("REDIS_HOST") {
+            format!("redis://{var_env}:6379")
+        } else {
+            "redis://localhost:6379".to_string()
+        }
+    }
+
+    const TEST_ADR_WORD_LENGTH: usize = 16;
+
+    #[cfg(feature = "redis-store")]
+    use crate::memory::db_stores::RedisBackend;
+
+    #[cfg(feature = "redis-store")]
+    async fn init_test_redis_db(
+    ) -> RedisBackend<Address<TEST_ADR_WORD_LENGTH>, TEST_ADR_WORD_LENGTH> {
+        RedisBackend::<Address<TEST_ADR_WORD_LENGTH>, TEST_ADR_WORD_LENGTH>::connect(
+            &get_redis_url(),
+        )
+        .await
+        .unwrap()
     }
 }

@@ -141,8 +141,8 @@ mod tests {
     use crate::{
         MemoryADT,
         address::Address,
-        encryption_layer::{ADDRESS_LENGTH, MemoryEncryptionLayer},
-        in_memory_store::InMemory,
+        encryption_layer::{MemoryEncryptionLayer, ADDRESS_LENGTH},
+        memory::in_memory_store::InMemory,
         secret::Secret,
         symmetric_key::SymmetricKey,
     };
