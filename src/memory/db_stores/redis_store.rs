@@ -1,19 +1,17 @@
 //! Redis implementation of the Findex backends.
-use redis::{Commands, Connection};
+use redis::{aio::ConnectionManager, AsyncCommands};
 use std::{
     fmt::{self, Debug, Display},
     hash::Hash,
     marker::PhantomData,
     ops::Deref,
-    sync::{Arc, Mutex},
 };
 
 use crate::MemoryADT;
 
 #[derive(Clone)]
 pub struct RedisStore<Address: Hash + Eq, const WORD_LENGTH: usize> {
-    // todo(hatem) : use connection manager
-    connection: Arc<Mutex<Connection>>,
+    manager: ConnectionManager,
     write_script_hash: String,
     _marker_adr: PhantomData<Address>,
 }
@@ -41,8 +39,6 @@ end
 return value
 "#;
 
-const POISONED_LOCK_ERROR_MSG: &str = "Poisoned lock error";
-
 impl<Address: Hash + Eq, const WORD_LENGTH: usize> Debug for RedisStore<Address, WORD_LENGTH> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("RedisMemory")
@@ -55,32 +51,37 @@ impl<Address: Hash + Eq, const WORD_LENGTH: usize> Debug for RedisStore<Address,
 impl<Address: Hash + Eq, const WORD_LENGTH: usize> RedisStore<Address, WORD_LENGTH> {
     /// Connects to a Redis server using the given URL.
     pub async fn connect(url: &str) -> Result<Self, RedisStoreError> {
-        let mut connection = match redis::Client::open(url) {
-            Ok(client) => match client.get_connection() {
-                Ok(con) => con,
-                Err(e) => {
-                    panic!("Failed to connect to Redis: {}", e);
-                }
-            },
-            Err(e) => panic!("Error creating redis client: {:?}", e),
-        };
+        let client = redis::Client::open(url)?;
+        let mut manager = client.get_connection_manager().await?;
         let write_script_hash = redis::cmd("SCRIPT")
             .arg("LOAD")
             .arg(GUARDED_WRITE_LUA_SCRIPT)
-            .query(&mut connection)?;
+            .query_async(&mut manager)
+            .await?;
         Ok(Self {
-            connection: Arc::new(Mutex::new(connection)),
+            manager,
             write_script_hash,
             _marker_adr: PhantomData,
         })
     }
 
-    // todo(hatem) : add 'connect with manager' equivalent
+    /// Connects to a Redis server with a `ConnectionManager`.
+    pub async fn connect_with_manager(manager: ConnectionManager) -> Result<Self, RedisStoreError> {
+        Ok(Self {
+            manager: manager.clone(),
+            write_script_hash: redis::cmd("SCRIPT")
+                .arg("LOAD")
+                .arg(GUARDED_WRITE_LUA_SCRIPT)
+                .query_async(&mut manager.clone())
+                .await?,
+            _marker_adr: PhantomData,
+        })
+    }
 
-    pub fn clear_indexes(&self) -> Result<(), redis::RedisError> {
-        let safe_connection = &mut *self.connection.lock().expect(POISONED_LOCK_ERROR_MSG);
-        redis::cmd("FLUSHDB").exec(safe_connection)?;
-        Ok(())
+    pub async fn clear_indexes(&self) -> Result<(), redis::RedisError> {
+        redis::cmd("FLUSHDB")
+            .query_async(&mut self.manager.clone())
+            .await
     }
 }
 
@@ -115,11 +116,12 @@ impl<
         &self,
         addresses: Vec<Address>,
     ) -> Result<Vec<Option<Self::Word>>, Self::Error> {
-        let safe_connection = &mut *self.connection.lock().expect(POISONED_LOCK_ERROR_MSG);
         let refs: Vec<&[u8; ADDRESS_LENGTH]> =
             addresses.iter().map(|address| address.deref()).collect();
-        safe_connection
+        self.manager
+            .clone()
             .mget::<_, Vec<_>>(&refs)
+            .await
             .map_err(Self::Error::from)
     }
 
@@ -128,7 +130,6 @@ impl<
         guard: (Self::Address, Option<Self::Word>),
         bindings: Vec<(Self::Address, Self::Word)>,
     ) -> Result<Option<Self::Word>, Self::Error> {
-        let mut safe_connection = self.connection.lock().expect(POISONED_LOCK_ERROR_MSG);
         let (guard_address, guard_value) = guard;
         let mut cmd = redis::cmd("EVALSHA")
             .arg(self.write_script_hash.clone())
@@ -143,10 +144,13 @@ impl<
         for (address, word) in bindings {
             cmd = cmd.arg(&*address).arg(&word).clone();
         }
-        cmd.query(&mut safe_connection).map_err(|e| e.into())
+        cmd.query_async(&mut self.manager.clone())
+            .await
+            .map_err(|e| e.into())
     }
 }
 
+#[cfg(feature = "test-utils")]
 #[cfg(test)]
 mod tests {
 
@@ -156,7 +160,6 @@ mod tests {
         },
         Address,
     };
-    use futures::executor::block_on;
     use serial_test::serial;
 
     use super::*;
@@ -186,13 +189,16 @@ mod tests {
         let addr = Address::from([1; 16]);
         let word = [2; 16];
 
-        block_on(memory.guarded_write((addr.clone(), None), vec![(addr.clone(), word)])).unwrap();
+        memory
+            .guarded_write((addr.clone(), None), vec![(addr.clone(), word)])
+            .await
+            .unwrap();
 
-        let result = block_on(memory.batch_read(vec![addr.clone()])).unwrap();
+        let result = memory.batch_read(vec![addr.clone()]).await.unwrap();
         assert_eq!(result, vec![Some([2; 16])]);
-        memory.clear_indexes().unwrap();
+        memory.clear_indexes().await.unwrap();
 
-        let result = block_on(memory.batch_read(vec![addr])).unwrap();
+        let result = memory.batch_read(vec![addr]).await.unwrap();
         assert_eq!(result, vec![None]);
         Ok(())
     }
@@ -201,8 +207,8 @@ mod tests {
     #[serial]
     async fn test_rw_seq() -> Result<(), RedisStoreError> {
         let memory = init_test_redis_db().await;
-        memory.clear_indexes().unwrap();
-        block_on(test_single_write_and_read(&memory, rand::random()));
+        memory.clear_indexes().await.unwrap();
+        test_single_write_and_read(&memory, rand::random()).await;
         Ok(())
     }
 
@@ -210,8 +216,8 @@ mod tests {
     #[serial]
     async fn test_guard_seq() -> Result<(), RedisStoreError> {
         let memory = init_test_redis_db().await;
-        memory.clear_indexes().unwrap();
-        block_on(test_wrong_guard(&memory, rand::random()));
+        memory.clear_indexes().await.unwrap();
+        test_wrong_guard(&memory, rand::random()).await;
         Ok(())
     }
 
@@ -219,8 +225,8 @@ mod tests {
     #[serial]
     async fn test_rw_ccr() -> Result<(), RedisStoreError> {
         let memory = init_test_redis_db().await;
-        memory.clear_indexes().unwrap();
-        block_on(test_guarded_write_concurrent(memory, rand::random()));
+        memory.clear_indexes().await.unwrap();
+        test_guarded_write_concurrent(memory, rand::random()).await;
         Ok(())
     }
 }
