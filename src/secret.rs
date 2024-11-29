@@ -3,9 +3,8 @@ use std::{
     pin::Pin,
 };
 
-use zeroize::{Zeroize, ZeroizeOnDrop};
-
 use rand_core::CryptoRngCore;
+use zeroize::{Zeroize, ZeroizeOnDrop};
 
 /// Holds a secret information of `LENGTH` bytes.
 ///

@@ -1,6 +1,7 @@
-// ! This module defines tests any implementation of the MemoryADT interface must pass.
+// ! This module defines tests any implementation of the MemoryADT interface
+// must pass.
 #[cfg(feature = "test-utils")]
-use rand::{rngs::StdRng, Rng, SeedableRng};
+use rand::{Rng, SeedableRng, rngs::StdRng};
 
 #[cfg(feature = "test-utils")]
 use crate::MemoryADT;
@@ -28,10 +29,11 @@ where
         .unwrap();
     let expected_result = vec![None, None, None];
     assert_eq!(
-            empty_read_result, expected_result,
-            "Test batch_read of empty addresses failed.\nExpected result : {:?}. Got : {:?}. Seed : {:?}",
-            expected_result, empty_read_result, seed
-        );
+        empty_read_result, expected_result,
+        "Test batch_read of empty addresses failed.\nExpected result : {:?}. Got : {:?}. Seed : \
+         {:?}",
+        expected_result, empty_read_result, seed
+    );
 
     // Generate a random address and a random word that we save
     let random_address = rng.gen::<u128>().to_be_bytes();
@@ -39,10 +41,10 @@ where
 
     // Write the word to the address
     let write_result = memory
-        .guarded_write(
-            (T::Address::from(random_address), None),
-            vec![(T::Address::from(random_address), T::Word::from(random_word))],
-        )
+        .guarded_write((T::Address::from(random_address), None), vec![(
+            T::Address::from(random_address),
+            T::Word::from(random_word),
+        )])
         .await
         .unwrap();
     assert_eq!(write_result, None);
@@ -54,13 +56,11 @@ where
         .unwrap();
     let expected_result = vec![Some(T::Word::from(random_word))];
     assert_eq!(
-            read_result,
-            expected_result,
-            "test_single_write_and_read failed.\nExpected result : {:?}, got : {:?}.\nDebug seed : {:?}",
-            expected_result,
-            read_result,
-            seed
-        );
+        read_result, expected_result,
+        "test_single_write_and_read failed.\nExpected result : {:?}, got : {:?}.\nDebug seed : \
+         {:?}",
+        expected_result, read_result, seed
+    );
 }
 
 #[cfg(feature = "test-utils")]
@@ -77,25 +77,19 @@ where
 
     // Write something to a random address
     memory
-        .guarded_write(
-            (T::Address::from(random_address), None),
-            vec![(
-                T::Address::from(random_address),
-                T::Word::from(word_to_write),
-            )],
-        )
+        .guarded_write((T::Address::from(random_address), None), vec![(
+            T::Address::from(random_address),
+            T::Word::from(word_to_write),
+        )])
         .await
         .unwrap();
 
     // Attempt conflicting write with wrong guard value
     let conflict_result = memory
-        .guarded_write(
-            (T::Address::from(random_address), None),
-            vec![(
-                T::Address::from(random_address),
-                T::Word::from(rng.gen::<u128>().to_be_bytes()),
-            )],
-        )
+        .guarded_write((T::Address::from(random_address), None), vec![(
+            T::Address::from(random_address),
+            T::Word::from(rng.gen::<u128>().to_be_bytes()),
+        )])
         .await
         .unwrap();
 
@@ -117,7 +111,8 @@ where
     assert_eq!(
         vec![Some(T::Word::from(word_to_write)),],
         read_result,
-        "test_wrong_guard failed. Value was overwritten, violating the guard. Expected : {:?}, got : {:?}. Debug seed : {:?}",
+        "test_wrong_guard failed. Value was overwritten, violating the guard. Expected : {:?}, \
+         got : {:?}. Debug seed : {:?}",
         vec![Some(T::Word::from(word_to_write)),],
         read_result,
         seed
@@ -145,17 +140,13 @@ where
                     loop {
                         // Try to increment
                         let cur_cnt = mem
-                            .guarded_write(
-                                (a.into(), old_cnt.clone()),
-                                vec![(
-                                    a.into(),
-                                    (u128::from_be_bytes(
-                                        old_cnt.clone().unwrap_or_default().into(),
-                                    ) + 1)
-                                        .to_be_bytes()
-                                        .into(),
-                                )],
-                            )
+                            .guarded_write((a.into(), old_cnt.clone()), vec![(
+                                a.into(),
+                                (u128::from_be_bytes(old_cnt.clone().unwrap_or_default().into())
+                                    + 1)
+                                .to_be_bytes()
+                                .into(),
+                            )])
                             .await
                             .unwrap();
                         if cur_cnt == old_cnt {
@@ -178,9 +169,13 @@ where
             .expect("Counter should exist");
 
         assert_eq!(
-            u128::from_be_bytes(final_count.clone().into()), N as u128,
-            "test_guarded_write_concurrent failed. Expected the counter to be at {:?}, found {:?}.\nDebug seed : {:?}.",
-            N as u128, u128::from_be_bytes(final_count.into()), seed
+            u128::from_be_bytes(final_count.clone().into()),
+            N as u128,
+            "test_guarded_write_concurrent failed. Expected the counter to be at {:?}, found \
+             {:?}.\nDebug seed : {:?}.",
+            N as u128,
+            u128::from_be_bytes(final_count.into()),
+            seed
         );
     }
 }

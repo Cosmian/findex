@@ -49,7 +49,8 @@ impl<const LENGTH: usize> Address<LENGTH> {
 impl<const LENGTH: usize> Add<u64> for Address<LENGTH> {
     type Output = Address<LENGTH>;
 
-    /// Highly inefficient implementation of an add modulo 2^8^LENGTH in little endian.
+    /// Highly inefficient implementation of an add modulo 2^8^LENGTH in little
+    /// endian.
     fn add(mut self, mut adder: u64) -> Self::Output {
         let mut carry = 0;
         let mut pos = 0;
