@@ -22,7 +22,8 @@ fn make_scale(start: usize, stop: usize, n: usize) -> Vec<f32> {
     points
 }
 
-/// Builds an index that associates each `kw_i` to x values, both random 64-bit values.
+/// Builds an index that associates each `kw_i` to x values, both random 64-bit
+/// values.
 fn build_benchmarking_bindings_index(
     rng: &mut impl CryptoRngCore,
 ) -> Vec<([u8; 8], HashSet<[u8; 8]>)> {
@@ -38,7 +39,8 @@ fn build_benchmarking_bindings_index(
         .collect()
 }
 
-/// Builds an index that associates 10^3 `kw_i` to a single value, both random 64-bit values.
+/// Builds an index that associates 10^3 `kw_i` to a single value, both random
+/// 64-bit values.
 fn build_benchmarking_keywords_index(
     rng: &mut impl CryptoRngCore,
 ) -> Vec<([u8; 8], HashSet<[u8; 8]>)> {
@@ -95,8 +97,8 @@ fn bench_search_multiple_keywords(c: &mut Criterion) {
         for i in scale.iter() {
             let n = 10f32.powf(*i).ceil() as usize;
             group.bench_function(BenchmarkId::from_parameter(n), |b| {
-                // Attempts to bench all external costs (somehow, cloning the keywords impacts the
-                // benches).
+                // Attempts to bench all external costs (somehow, cloning the keywords impacts
+                // the benches).
                 b.iter_batched(
                     || {
                         stm.clone()
@@ -120,8 +122,8 @@ fn bench_search_multiple_keywords(c: &mut Criterion) {
                 b.iter_batched(
                     || {
                         findex.clear();
-                        // Using .cloned() instead of .clone() reduces the overhead (maybe because it
-                        // only clones what is needed)
+                        // Using .cloned() instead of .clone() reduces the overhead (maybe because
+                        // it only clones what is needed)
                         index.iter().map(|(kw, _)| kw).take(n).cloned()
                     },
                     |kws| {

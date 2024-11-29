@@ -3,7 +3,8 @@
 //! - the vector ADT;
 //! - the memory ADT.
 //!
-//! Each of them strive for simplicity and consistency with the classical CS notions.
+//! Each of them strive for simplicity and consistency with the classical CS
+//! notions.
 
 use std::{
     collections::{HashMap, HashSet},
@@ -11,8 +12,9 @@ use std::{
     hash::Hash,
 };
 
-/// An index stores *bindings*, that associate a keyword with a value. All values bound to the same
-/// keyword are said to be *indexed under* this keyword.
+/// An index stores *bindings*, that associate a keyword with a value. All
+/// values bound to the same keyword are said to be *indexed under* this
+/// keyword.
 pub trait IndexADT<Keyword: Send + Sync + Hash, Value: Send + Sync + Hash> {
     type Error: Send + Sync + std::error::Error;
 
@@ -69,8 +71,9 @@ pub trait MemoryADT {
         a: Vec<Self::Address>,
     ) -> impl Send + Future<Output = Result<Vec<Option<Self::Word>>, Self::Error>>;
 
-    /// Write the given words at the given addresses if the word currently stored at the guard
-    /// address is the given one, and returns this guard word.
+    /// Write the given words at the given addresses if the word currently
+    /// stored at the guard address is the given one, and returns this guard
+    /// word.
     fn guarded_write(
         &self,
         guard: (Self::Address, Option<Self::Word>),
@@ -84,14 +87,17 @@ pub mod tests {
     pub use vector::*;
 
     mod vector {
-        //! This module defines tests any implementation of the VectorADT interface must pass.
+        //! This module defines tests any implementation of the VectorADT
+        //! interface must pass.
 
-        use crate::adt::VectorADT;
-        use futures::executor::block_on;
         use std::thread::spawn;
 
-        /// Adding information from different copies of the same vector should be visible by all
-        /// copies.
+        use futures::executor::block_on;
+
+        use crate::adt::VectorADT;
+
+        /// Adding information from different copies of the same vector should
+        /// be visible by all copies.
         pub async fn test_vector_sequential<const LENGTH: usize>(
             v: &(impl Clone + VectorADT<Value = [u8; LENGTH]>),
         ) {
@@ -108,7 +114,8 @@ pub mod tests {
             );
         }
 
-        /// Concurrently adding data to instances of the same vector should not introduce data loss.
+        /// Concurrently adding data to instances of the same vector should not
+        /// introduce data loss.
         pub async fn test_vector_concurrent<
             const LENGTH: usize,
             V: 'static + Clone + VectorADT<Value = [u8; LENGTH]>,

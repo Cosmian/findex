@@ -109,9 +109,11 @@ where
         a
     }
 
-    /// Pushes the given bindings to the vectors associated to the bound keyword.
+    /// Pushes the given bindings to the vectors associated to the bound
+    /// keyword.
     ///
-    /// All vector push operations are performed in parallel (via async calls), not batched.
+    /// All vector push operations are performed in parallel (via async calls),
+    /// not batched.
     async fn push<Keyword: Send + Sync + Hash + Eq + AsRef<[u8]>>(
         &self,
         op: Op,
@@ -295,12 +297,12 @@ mod tests {
                 HashSet::from_iter([Value::from(0), Value::from(2), Value::from(4)]),
             ),
         ]);
-        block_on(findex.insert(bindings.clone().into_iter())).unwrap();
-        let res = block_on(findex.search(bindings.keys().cloned())).unwrap();
+        findex.insert(bindings.clone().into_iter()).await.unwrap(); // using block_on here causes a never ending execution
+        let res = findex.search(bindings.keys().cloned()).await.unwrap();
         assert_eq!(bindings, res);
 
-        block_on(findex.delete(bindings.clone().into_iter())).unwrap();
-        let res = block_on(findex.search(bindings.keys().cloned())).unwrap();
+        findex.delete(bindings.clone().into_iter()).await.unwrap();
+        let res = findex.search(bindings.keys().cloned()).await.unwrap();
         assert_eq!(
             HashMap::from_iter([("cat", HashSet::new()), ("dog", HashSet::new())]),
             res

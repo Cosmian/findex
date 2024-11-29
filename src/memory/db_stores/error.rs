@@ -1,10 +1,11 @@
 use core::fmt::Display;
 use std::num::TryFromIntError;
 
+use cosmian_crypto_core::CryptoCoreError;
+
 #[cfg(feature = "redis-store")]
 use super::redis_store::RedisStoreError;
-use crate::{error::Error as FindexCoreError, Address};
-use cosmian_crypto_core::CryptoCoreError;
+use crate::{Address, error::Error as FindexCoreError};
 
 macro_rules! findex_core_error {
     () => {

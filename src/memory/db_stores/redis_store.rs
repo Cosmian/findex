@@ -1,11 +1,12 @@
 //! Redis implementation of the Findex backends.
-use redis::{aio::ConnectionManager, AsyncCommands};
 use std::{
     fmt::{self, Debug, Display},
     hash::Hash,
     marker::PhantomData,
     ops::Deref,
 };
+
+use redis::{AsyncCommands, aio::ConnectionManager};
 
 use crate::MemoryADT;
 
@@ -103,10 +104,10 @@ impl Display for RedisStoreError {
 }
 
 impl<
-        Address: Send + Sync + Hash + Eq + Debug + Clone + Deref<Target = [u8; ADDRESS_LENGTH]>,
-        const ADDRESS_LENGTH: usize,
-        const WORD_LENGTH: usize,
-    > MemoryADT for RedisStore<Address, WORD_LENGTH>
+    Address: Send + Sync + Hash + Eq + Debug + Clone + Deref<Target = [u8; ADDRESS_LENGTH]>,
+    const ADDRESS_LENGTH: usize,
+    const WORD_LENGTH: usize,
+> MemoryADT for RedisStore<Address, WORD_LENGTH>
 {
     type Address = Address;
     type Error = RedisStoreError;
@@ -154,15 +155,15 @@ impl<
 #[cfg(test)]
 mod tests {
 
-    use crate::{
-        test::memory::{
-            test_guarded_write_concurrent, test_single_write_and_read, test_wrong_guard,
-        },
-        Address,
-    };
     use serial_test::serial;
 
     use super::*;
+    use crate::{
+        Address,
+        test::memory::{
+            test_guarded_write_concurrent, test_single_write_and_read, test_wrong_guard,
+        },
+    };
 
     pub fn get_redis_url() -> String {
         if let Ok(var_env) = std::env::var("REDIS_HOST") {
