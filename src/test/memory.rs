@@ -5,6 +5,8 @@ use rand::{rngs::StdRng, Rng, SeedableRng};
 #[cfg(feature = "test-utils")]
 use crate::MemoryADT;
 
+// TODO: should return a result type and proper errors
+
 #[cfg(feature = "test-utils")]
 pub async fn test_single_write_and_read<T>(memory: &T, seed: [u8; 32])
 where
