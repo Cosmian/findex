@@ -1,4 +1,4 @@
 mod error;
 
-#[cfg(feature = "redis-store")]
+#[cfg(feature = "redis-mem")]
 pub(crate) mod redis_store;

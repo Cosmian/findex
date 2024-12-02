@@ -22,7 +22,7 @@ path = "src/lib.rs"
 [features]
 bench = []
 test-utils = []
-redis-store = ["redis"]
+redis-mem = ["redis"]
 
 [dependencies]
 aes = "0.8.4"
