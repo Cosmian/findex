@@ -117,7 +117,7 @@ where
 }
 
 #[cfg(feature = "test-utils")]
-pub async fn test_guarded_write_concurrent<T>(memory: T, seed: [u8; 32])
+pub async fn test_guarded_write_concurrent<T>(memory: &T, seed: [u8; 32])
 where
     T: MemoryADT + Send + 'static + Clone,
     T::Address: std::fmt::Debug + PartialEq + From<[u8; 16]> + Send,
