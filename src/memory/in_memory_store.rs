@@ -5,9 +5,8 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use crate::MemoryADT;
-
 use super::error::MemoryError;
+use crate::MemoryADT;
 
 #[derive(Clone, Debug)]
 pub struct InMemory<Address: Hash + Eq, Value> {
