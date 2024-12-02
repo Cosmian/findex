@@ -1,61 +1,30 @@
 use core::fmt::Display;
-use std::num::TryFromIntError;
 
 #[cfg(feature = "redis-mem")]
-use super::redis_store::RedisStoreError;
-use crate::{Address, error::Error as FindexCoreError};
+use redis::RedisError;
 
-macro_rules! findex_core_error {
-    () => {
-        FindexCoreError<Address<{ crate::ADDRESS_LENGTH }>, Box<DbStoreError>> // todo(hatem) : wrong type solve infinite size loop
-    };
-}
 #[derive(Debug)]
-pub(crate) enum DbStoreError {
+pub enum MemoryError {
     #[cfg(feature = "redis-mem")]
-    Redis(RedisStoreError),
-    Findex(findex_core_error!()),
-    IntConversion(TryFromIntError),
-    Io(std::io::Error),
+    Redis(RedisError),
 }
 
-impl Display for DbStoreError {
+impl Display for MemoryError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             #[cfg(feature = "redis-mem")]
             Self::Redis(err) => write!(f, "redis: {err}"),
-            Self::Findex(err) => write!(f, "findex: {err}"),
-            Self::Io(err) => write!(f, "io: {err}"),
-            Self::IntConversion(err) => write!(f, "conversion: {err}"),
+            #[cfg(not(feature = "redis-mem"))]
+            _ => write!(f, "unknown error"),
         }
     }
 }
 
-impl std::error::Error for DbStoreError {}
-
-// impl DbStoreErrorTrait for DbStoreError {}
+impl std::error::Error for MemoryError {}
 
 #[cfg(feature = "redis-mem")]
-impl From<RedisStoreError> for DbStoreError {
-    fn from(e: RedisStoreError) -> Self {
+impl From<RedisError> for MemoryError {
+    fn from(e: RedisError) -> Self {
         Self::Redis(e)
-    }
-}
-
-impl From<TryFromIntError> for DbStoreError {
-    fn from(e: TryFromIntError) -> Self {
-        Self::IntConversion(e)
-    }
-}
-
-impl From<findex_core_error!()> for DbStoreError {
-    fn from(e: findex_core_error!()) -> Self {
-        Self::Findex(e)
-    }
-}
-
-impl From<std::io::Error> for DbStoreError {
-    fn from(e: std::io::Error) -> Self {
-        Self::Io(e)
     }
 }
