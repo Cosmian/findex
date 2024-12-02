@@ -1,7 +1,7 @@
 // ! This module defines tests any implementation of the MemoryADT interface
 // must pass.
 #[cfg(feature = "test-utils")]
-use rand::{Rng, SeedableRng, rngs::StdRng};
+use rand::{rngs::StdRng, Rng, SeedableRng};
 
 #[cfg(feature = "test-utils")]
 use crate::MemoryADT;
@@ -30,9 +30,8 @@ where
     let expected_result = vec![None, None, None];
     assert_eq!(
         empty_read_result, expected_result,
-        "Test batch_read of empty addresses failed.\nExpected result : {:?}. Got : {:?}. Seed : \
-         {:?}",
-        expected_result, empty_read_result, seed
+        "Test batch_read of empty addresses failed.\nExpected result : {expected_result:?}. Got : \
+         {empty_read_result:?}. Seed : {seed:?}"
     );
 
     // Generate a random address and a random word that we save
@@ -41,10 +40,10 @@ where
 
     // Write the word to the address
     let write_result = memory
-        .guarded_write((T::Address::from(random_address), None), vec![(
-            T::Address::from(random_address),
-            T::Word::from(random_word),
-        )])
+        .guarded_write(
+            (T::Address::from(random_address), None),
+            vec![(T::Address::from(random_address), T::Word::from(random_word))],
+        )
         .await
         .unwrap();
     assert_eq!(write_result, None);
@@ -57,9 +56,8 @@ where
     let expected_result = vec![Some(T::Word::from(random_word))];
     assert_eq!(
         read_result, expected_result,
-        "test_single_write_and_read failed.\nExpected result : {:?}, got : {:?}.\nDebug seed : \
-         {:?}",
-        expected_result, read_result, seed
+        "test_single_write_and_read failed.\nExpected result : {expected_result:?}, got : \
+         {read_result:?}.\nDebug seed : {seed:?}"
     );
 }
 
@@ -77,19 +75,25 @@ where
 
     // Write something to a random address
     memory
-        .guarded_write((T::Address::from(random_address), None), vec![(
-            T::Address::from(random_address),
-            T::Word::from(word_to_write),
-        )])
+        .guarded_write(
+            (T::Address::from(random_address), None),
+            vec![(
+                T::Address::from(random_address),
+                T::Word::from(word_to_write),
+            )],
+        )
         .await
         .unwrap();
 
     // Attempt conflicting write with wrong guard value
     let conflict_result = memory
-        .guarded_write((T::Address::from(random_address), None), vec![(
-            T::Address::from(random_address),
-            T::Word::from(rng.gen::<u128>().to_be_bytes()),
-        )])
+        .guarded_write(
+            (T::Address::from(random_address), None),
+            vec![(
+                T::Address::from(random_address),
+                T::Word::from(rng.gen::<u128>().to_be_bytes()),
+            )],
+        )
         .await
         .unwrap();
 
@@ -140,19 +144,24 @@ where
                     loop {
                         // Try to increment
                         let cur_cnt = mem
-                            .guarded_write((a.into(), old_cnt.clone()), vec![(
-                                a.into(),
-                                (u128::from_be_bytes(old_cnt.clone().unwrap_or_default().into())
-                                    + 1)
-                                .to_be_bytes()
-                                .into(),
-                            )])
+                            .guarded_write(
+                                (a.into(), old_cnt.clone()),
+                                vec![(
+                                    a.into(),
+                                    (u128::from_be_bytes(
+                                        old_cnt.clone().unwrap_or_default().into(),
+                                    ) + 1)
+                                        .to_be_bytes()
+                                        .into(),
+                                )],
+                            )
                             .await
                             .unwrap();
                         if cur_cnt == old_cnt {
                             return; // Successfully incremented, quit
                         } else {
-                            old_cnt = cur_cnt; // Guard failed, retry with the new value
+                            // Guard failed, retry with the new value
+                            old_cnt = cur_cnt;
                         }
                     }
                 })

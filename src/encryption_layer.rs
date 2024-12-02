@@ -1,14 +1,14 @@
 use std::{fmt::Debug, ops::Deref, sync::Arc};
 
 use aes::{
+    cipher::{generic_array::GenericArray, BlockEncrypt, KeyInit},
     Aes256,
-    cipher::{BlockEncrypt, KeyInit, generic_array::GenericArray},
 };
 use xts_mode::Xts128;
 
 use crate::{
-    ADDRESS_LENGTH, KEY_LENGTH, MemoryADT, address::Address, error::Error, secret::Secret,
-    symmetric_key::SymmetricKey,
+    address::Address, error::Error, secret::Secret, symmetric_key::SymmetricKey, MemoryADT,
+    ADDRESS_LENGTH, KEY_LENGTH,
 };
 
 #[derive(Clone)]
@@ -44,9 +44,9 @@ pub struct MemoryEncryptionLayer<
 }
 
 impl<
-    const WORD_LENGTH: usize,
-    Memory: Send + Sync + MemoryADT<Address = Address<ADDRESS_LENGTH>, Word = [u8; WORD_LENGTH]>,
-> MemoryEncryptionLayer<WORD_LENGTH, Memory>
+        const WORD_LENGTH: usize,
+        Memory: Send + Sync + MemoryADT<Address = Address<ADDRESS_LENGTH>, Word = [u8; WORD_LENGTH]>,
+    > MemoryEncryptionLayer<WORD_LENGTH, Memory>
 {
     /// Instantiates a new memory encryption layer.
     pub fn new(seed: Secret<KEY_LENGTH>, stm: Memory) -> Self {
@@ -80,9 +80,9 @@ impl<
 }
 
 impl<
-    const WORD_LENGTH: usize,
-    Memory: Send + Sync + MemoryADT<Address = Address<ADDRESS_LENGTH>, Word = [u8; WORD_LENGTH]>,
-> MemoryADT for MemoryEncryptionLayer<WORD_LENGTH, Memory>
+        const WORD_LENGTH: usize,
+        Memory: Send + Sync + MemoryADT<Address = Address<ADDRESS_LENGTH>, Word = [u8; WORD_LENGTH]>,
+    > MemoryADT for MemoryEncryptionLayer<WORD_LENGTH, Memory>
 {
     type Address = Address<ADDRESS_LENGTH>;
     type Error = Error<Self::Address, Memory::Error>;
@@ -126,20 +126,20 @@ impl<
 #[cfg(test)]
 mod tests {
     use aes::{
+        cipher::{generic_array::GenericArray, BlockDecrypt, KeyInit},
         Aes256,
-        cipher::{BlockDecrypt, KeyInit, generic_array::GenericArray},
     };
     use futures::executor::block_on;
     use rand_chacha::ChaChaRng;
     use rand_core::SeedableRng;
 
     use crate::{
-        MemoryADT,
         address::Address,
-        encryption_layer::{ADDRESS_LENGTH, MemoryEncryptionLayer},
+        encryption_layer::{MemoryEncryptionLayer, ADDRESS_LENGTH},
         memory::in_memory_store::InMemory,
         secret::Secret,
         symmetric_key::SymmetricKey,
+        MemoryADT,
     };
 
     const WORD_LENGTH: usize = 128;
@@ -192,33 +192,40 @@ mod tests {
         let val_addr_4 = Address::<ADDRESS_LENGTH>::random(&mut rng);
 
         assert_eq!(
-            block_on(obf.guarded_write((header_addr.clone(), None), vec![
-                (header_addr.clone(), [2; WORD_LENGTH]),
-                (val_addr_1.clone(), [1; WORD_LENGTH]),
-                (val_addr_2.clone(), [1; WORD_LENGTH])
-            ]))
+            block_on(obf.guarded_write(
+                (header_addr.clone(), None),
+                vec![
+                    (header_addr.clone(), [2; WORD_LENGTH]),
+                    (val_addr_1.clone(), [1; WORD_LENGTH]),
+                    (val_addr_2.clone(), [1; WORD_LENGTH])
+                ]
+            ))
             .unwrap(),
             None
         );
 
         assert_eq!(
-            block_on(obf.guarded_write((header_addr.clone(), None), vec![
-                (header_addr.clone(), [2; WORD_LENGTH]),
-                (val_addr_1.clone(), [3; WORD_LENGTH]),
-                (val_addr_2.clone(), [3; WORD_LENGTH])
-            ]))
+            block_on(obf.guarded_write(
+                (header_addr.clone(), None),
+                vec![
+                    (header_addr.clone(), [2; WORD_LENGTH]),
+                    (val_addr_1.clone(), [3; WORD_LENGTH]),
+                    (val_addr_2.clone(), [3; WORD_LENGTH])
+                ]
+            ))
             .unwrap(),
             Some([2; WORD_LENGTH])
         );
 
         assert_eq!(
-            block_on(
-                obf.guarded_write((header_addr.clone(), Some([2; WORD_LENGTH])), vec![
+            block_on(obf.guarded_write(
+                (header_addr.clone(), Some([2; WORD_LENGTH])),
+                vec![
                     (header_addr.clone(), [4; WORD_LENGTH]),
                     (val_addr_3.clone(), [2; WORD_LENGTH]),
                     (val_addr_4.clone(), [2; WORD_LENGTH])
-                ])
-            )
+                ]
+            ))
             .unwrap(),
             Some([2; WORD_LENGTH])
         );
@@ -239,6 +246,6 @@ mod tests {
                 val_addr_4
             ]))
             .unwrap()
-        )
+        );
     }
 }

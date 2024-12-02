@@ -33,7 +33,7 @@ impl<const LENGTH: usize> Default for SymmetricKey<LENGTH> {
 
 impl<const LENGTH: usize> From<SymmetricKey<LENGTH>> for Zeroizing<Vec<u8>> {
     fn from(value: SymmetricKey<LENGTH>) -> Self {
-        Zeroizing::new(value.0.to_vec())
+        Self::new(value.0.to_vec())
     }
 }
 
@@ -54,8 +54,8 @@ impl<const KEY_LENGTH: usize> SymmetricKey<KEY_LENGTH> {
     ) -> Result<Self, String> {
         if SECRET_LENGTH < KEY_LENGTH {
             return Err(format!(
-                "insufficient entropy to derive {}-byte key from a {}-byte secret",
-                KEY_LENGTH, SECRET_LENGTH,
+                "insufficient entropy to derive {KEY_LENGTH}-byte key from a {SECRET_LENGTH}-byte \
+                 secret",
             ));
         }
         let mut key = Self::default();

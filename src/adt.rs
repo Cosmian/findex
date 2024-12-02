@@ -37,7 +37,7 @@ pub trait IndexADT<Keyword: Send + Sync + Hash, Value: Send + Sync + Hash> {
     ) -> impl Send + Future<Output = Result<(), Self::Error>>;
 }
 
-pub trait VectorADT: Send + Sync {
+pub(crate) trait VectorADT: Send + Sync {
     /// Vectors are homogeneous.
     type Value: Send + Sync;
 
@@ -84,10 +84,10 @@ pub trait MemoryADT {
 #[cfg(test)]
 pub(crate) mod tests {
 
-    pub use vector::*;
+    pub(crate) use vector::*;
 
     mod vector {
-        //! This module defines tests any implementation of the VectorADT
+        //! This module defines tests any implementation of the `VectorADT`
         //! interface must pass.
 
         use std::thread::spawn;
@@ -98,7 +98,7 @@ pub(crate) mod tests {
 
         /// Adding information from different copies of the same vector should
         /// be visible by all copies.
-        pub async fn test_vector_sequential<const LENGTH: usize>(
+        pub(crate) async fn test_vector_sequential<const LENGTH: usize>(
             v: &(impl Clone + VectorADT<Value = [u8; LENGTH]>),
         ) {
             let mut v1 = v.clone();
@@ -116,7 +116,7 @@ pub(crate) mod tests {
 
         /// Concurrently adding data to instances of the same vector should not
         /// introduce data loss.
-        pub async fn test_vector_concurrent<
+        pub(crate) async fn test_vector_concurrent<
             const LENGTH: usize,
             V: 'static + Clone + VectorADT<Value = [u8; LENGTH]>,
         >(
@@ -138,10 +138,10 @@ pub(crate) mod tests {
                 })
                 .collect::<Vec<_>>();
             for h in handles {
-                let _ = h.join().unwrap().await;
+                let () = h.join().unwrap().await;
             }
             let mut res = block_on(v.read()).unwrap();
-            res.sort();
+            res.sort_unstable();
             assert_eq!(res.len(), n * m);
             assert_eq!(res, values);
         }
