@@ -1,7 +1,6 @@
 use std::{collections::HashSet, time::Duration};
 
 use cosmian_findex::{Findex, InMemory, IndexADT, MemoryADT, Op, Secret, WORD_LENGTH};
-#[cfg(feature = "test-utils")]
 use cosmian_findex::{dummy_decode, dummy_encode};
 use criterion::{BenchmarkId, Criterion, criterion_group, criterion_main};
 use futures::{executor::block_on, future::join_all};

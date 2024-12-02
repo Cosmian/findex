@@ -1,7 +1,6 @@
 use std::collections::HashSet;
 
 use cosmian_findex::{Findex, InMemory, IndexADT, Secret, Value};
-#[cfg(feature = "test-utils")]
 use cosmian_findex::{dummy_decode, dummy_encode};
 use futures::executor::block_on;
 use rand_chacha::ChaChaRng;

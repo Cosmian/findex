@@ -22,7 +22,6 @@ impl<Address: Hash + Eq + Debug, Value: Clone + Eq + Debug> Default for InMemory
     }
 }
 
-#[cfg(any(test))]
 impl<Address: Hash + Eq + Debug, Value: Clone + Eq + Debug> InMemory<Address, Value> {
     #[cfg(feature = "bench")]
     pub fn with_capacity(c: usize) -> Self {
@@ -31,6 +30,7 @@ impl<Address: Hash + Eq + Debug, Value: Clone + Eq + Debug> InMemory<Address, Va
         }
     }
 
+    #[cfg(any(test, feature = "bench"))]
     pub fn clear(&self) {
         self.inner.lock().expect("poisoned lock").clear();
     }
