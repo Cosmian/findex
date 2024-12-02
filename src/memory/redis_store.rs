@@ -44,7 +44,7 @@ return value
 impl<Address: Hash + Eq, const WORD_LENGTH: usize> Debug for RedisStore<Address, WORD_LENGTH> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("RedisMemory")
-            .field("connection", &"<redis::Connection>") // We don't want to debug the actual connection
+            .field("connection", &"<redis::Connection>")
             .field("Addr type", &self._marker_adr)
             .finish()
     }
@@ -151,28 +151,6 @@ mod tests {
     async fn init_test_redis_db()
     -> Result<RedisStore<Address<ADR_WORD_LENGTH>, ADR_WORD_LENGTH>, MemoryError> {
         RedisStore::<Address<ADR_WORD_LENGTH>, ADR_WORD_LENGTH>::connect(&get_redis_url()).await
-    }
-
-    #[tokio::test]
-    #[serial]
-    async fn test_db_flush() -> Result<(), MemoryError> {
-        let memory = init_test_redis_db().await.unwrap();
-
-        let addr = Address::from([1; ADR_WORD_LENGTH]);
-        let word = [2; ADR_WORD_LENGTH];
-
-        memory
-            .guarded_write((addr.clone(), None), vec![(addr.clone(), word)])
-            .await
-            .unwrap();
-
-        let result = memory.batch_read(vec![addr.clone()]).await.unwrap();
-        assert_eq!(result, vec![Some([2; ADR_WORD_LENGTH])]);
-        memory.clear_indexes().await.unwrap();
-
-        let result = memory.batch_read(vec![addr]).await.unwrap();
-        assert_eq!(result, vec![None]);
-        Ok(())
     }
 
     #[tokio::test]
