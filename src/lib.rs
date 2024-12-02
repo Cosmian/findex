@@ -23,7 +23,7 @@ pub use findex::Findex;
 #[cfg(feature = "bench")]
 pub use memory::in_memory_store::InMemory;
 #[cfg(feature = "redis-mem")]
-pub use memory::redis_store::RedisStore;
+pub use memory::redis_store::RedisMemory;
 pub use secret::Secret;
 #[cfg(feature = "test-utils")]
 pub use test::memory::{
