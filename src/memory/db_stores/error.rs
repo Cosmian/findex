@@ -5,7 +5,7 @@ use cosmian_crypto_core::CryptoCoreError;
 
 #[cfg(feature = "redis-store")]
 use super::redis_store::RedisStoreError;
-use crate::{Address, error::Error as FindexCoreError};
+use crate::{error::Error as FindexCoreError, Address};
 
 macro_rules! findex_core_error {
     () => {
@@ -13,7 +13,7 @@ macro_rules! findex_core_error {
     };
 }
 #[derive(Debug)]
-pub enum DbStoreError {
+pub(crate) enum DbStoreError {
     #[cfg(feature = "redis-store")]
     Redis(RedisStoreError),
     Findex(findex_core_error!()),

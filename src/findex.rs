@@ -48,11 +48,14 @@ pub struct Findex<
 }
 
 impl<
-    const WORD_LENGTH: usize,
-    Value: Send + Sync + Hash + Eq,
-    TryFromError: std::error::Error,
-    Memory: Send + Sync + Clone + MemoryADT<Address = Address<ADDRESS_LENGTH>, Word = [u8; WORD_LENGTH]>,
-> Findex<WORD_LENGTH, Value, TryFromError, Memory>
+        const WORD_LENGTH: usize,
+        Value: Send + Sync + Hash + Eq,
+        TryFromError: std::error::Error,
+        Memory: Send
+            + Sync
+            + Clone
+            + MemoryADT<Address = Address<ADDRESS_LENGTH>, Word = [u8; WORD_LENGTH]>,
+    > Findex<WORD_LENGTH, Value, TryFromError, Memory>
 where
     for<'z> Value: TryFrom<&'z [u8], Error = TryFromError> + AsRef<[u8]>,
     Vec<u8>: From<Value>,
@@ -167,12 +170,15 @@ where
 }
 
 impl<
-    const WORD_LENGTH: usize,
-    Keyword: Send + Sync + Hash + PartialEq + Eq + AsRef<[u8]>,
-    Value: Send + Sync + Hash + PartialEq + Eq,
-    TryFromError: std::error::Error,
-    Memory: Send + Sync + Clone + MemoryADT<Address = Address<ADDRESS_LENGTH>, Word = [u8; WORD_LENGTH]>,
-> IndexADT<Keyword, Value> for Findex<WORD_LENGTH, Value, TryFromError, Memory>
+        const WORD_LENGTH: usize,
+        Keyword: Send + Sync + Hash + PartialEq + Eq + AsRef<[u8]>,
+        Value: Send + Sync + Hash + PartialEq + Eq,
+        TryFromError: std::error::Error,
+        Memory: Send
+            + Sync
+            + Clone
+            + MemoryADT<Address = Address<ADDRESS_LENGTH>, Word = [u8; WORD_LENGTH]>,
+    > IndexADT<Keyword, Value> for Findex<WORD_LENGTH, Value, TryFromError, Memory>
 where
     for<'z> Value: TryFrom<&'z [u8], Error = TryFromError> + AsRef<[u8]>,
     Vec<u8>: From<Value>,
@@ -227,11 +233,11 @@ mod tests {
     use rand_core::SeedableRng;
 
     use crate::{
-        ADDRESS_LENGTH, Findex, IndexADT, Value,
         address::Address,
         encoding::{dummy_decode, dummy_encode},
         memory::in_memory_store::InMemory,
         secret::Secret,
+        Findex, IndexADT, Value, ADDRESS_LENGTH,
     };
 
     const WORD_LENGTH: usize = 16;
@@ -253,11 +259,11 @@ mod tests {
             ),
         ]);
         block_on(findex.insert(bindings.clone().into_iter())).unwrap();
-        let res = block_on(findex.search(bindings.keys().cloned())).unwrap();
+        let res = block_on(findex.search(bindings.keys().copied())).unwrap();
         assert_eq!(bindings, res);
 
         block_on(findex.delete(bindings.clone().into_iter())).unwrap();
-        let res = block_on(findex.search(bindings.keys().cloned())).unwrap();
+        let res = block_on(findex.search(bindings.keys().copied())).unwrap();
         assert_eq!(
             HashMap::from_iter([("cat", HashSet::new()), ("dog", HashSet::new())]),
             res
@@ -269,7 +275,7 @@ mod tests {
         if let Ok(var_env) = std::env::var("REDIS_HOST") {
             format!("redis://{var_env}:6379")
         } else {
-            "redis://localhost:6379".to_string()
+            "redis://localhost:6379".to_owned()
         }
     }
 
@@ -298,11 +304,11 @@ mod tests {
             ),
         ]);
         findex.insert(bindings.clone().into_iter()).await.unwrap(); // using block_on here causes a never ending execution
-        let res = findex.search(bindings.keys().cloned()).await.unwrap();
+        let res = findex.search(bindings.keys().copied()).await.unwrap();
         assert_eq!(bindings, res);
 
         findex.delete(bindings.clone().into_iter()).await.unwrap();
-        let res = findex.search(bindings.keys().cloned()).await.unwrap();
+        let res = findex.search(bindings.keys().copied()).await.unwrap();
         assert_eq!(
             HashMap::from_iter([("cat", HashSet::new()), ("dog", HashSet::new())]),
             res

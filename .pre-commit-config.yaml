@@ -7,7 +7,7 @@
 
 # See https://pre-commit.com for more information
 # See https://pre-commit.com/hooks.html for more hooks
-exclude: datasets|tests_data|documentation/Findex.pdf|tests/first_names.txt
+exclude: datasets|tests_data|documentation/Findex.pdf|tests/first_names.txt|benches/data
 repos:
   - repo: https://github.com/compilerla/conventional-pre-commit
     rev: v2.1.1
@@ -118,20 +118,27 @@ repos:
         args: [--skip-string-normalization]
 
   - repo: https://github.com/Cosmian/git-hooks.git
-    rev: v1.0.16
+    rev: v1.0.32
     hooks:
       - id: stable-cargo-format
-      - id: cargo-upgrade
-      - id: cargo-update
+      # - id: cargo-upgrade
+      # - id: cargo-update
       - id: cargo-machete
-      - id: cargo-outdated
-      - id: cargo-udeps
+      - id: docker-compose-up
       - id: cargo-tests-all
       - id: cargo-test-doc
-      - id: clippy-autofix-all
-      - id: clippy-autofix-pedantic
-      - id: clippy-autofix-others
+      - id: clippy-autofix-unreachable-pub
+      - id: clippy-autofix-all-targets-all-features
+      - id: clippy-autofix-all-targets
       - id: clippy-all-targets-all-features
+      - id: clippy-all-targets
       - id: stable-cargo-format
       - id: cargo-dry-publish
         args: [--allow-dirty]
+      - id: docker-compose-down
+
+  - repo: https://github.com/EmbarkStudios/cargo-deny
+    rev: 0.16.1 # choose your preferred tag
+    hooks:
+      - id: cargo-deny
+        args: [--all-features, check]

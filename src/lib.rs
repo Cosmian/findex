@@ -16,10 +16,10 @@ mod value;
 
 pub use address::Address;
 pub use adt::{IndexADT, MemoryADT};
-#[cfg(feature = "bench")]
-pub use encoding::{Op, WORD_LENGTH};
 #[cfg(feature = "test-utils")]
 pub use encoding::{dummy_decode, dummy_encode};
+#[cfg(feature = "bench")]
+pub use encoding::{Op, WORD_LENGTH};
 pub use error::Error;
 pub use findex::Findex;
 #[cfg(feature = "redis-store")]

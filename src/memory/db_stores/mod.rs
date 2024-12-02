@@ -1,4 +1,4 @@
 mod error;
 
 #[cfg(feature = "redis-store")]
-pub mod redis_store;
+pub(crate) mod redis_store;

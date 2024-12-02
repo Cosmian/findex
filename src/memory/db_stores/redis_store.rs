@@ -6,7 +6,7 @@ use std::{
     ops::Deref,
 };
 
-use redis::{AsyncCommands, aio::ConnectionManager};
+use redis::{aio::ConnectionManager, AsyncCommands};
 
 use crate::MemoryADT;
 
@@ -22,7 +22,7 @@ pub struct RedisStore<Address: Hash + Eq, const WORD_LENGTH: usize> {
 // 2. Guard value.
 // 3. Vector length.
 // 4+. Vector elements (address, word).
-const GUARDED_WRITE_LUA_SCRIPT: &str = r#"
+const GUARDED_WRITE_LUA_SCRIPT: &str = r"
 local guard_address = ARGV[1]
 local guard_value = ARGV[2]
 local length = ARGV[3]
@@ -38,7 +38,7 @@ if((value==false) or (not(value == false) and (guard_value == value))) then
     end
 end
 return value
-"#;
+";
 
 impl<Address: Hash + Eq, const WORD_LENGTH: usize> Debug for RedisStore<Address, WORD_LENGTH> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -104,10 +104,10 @@ impl Display for RedisStoreError {
 }
 
 impl<
-    Address: Send + Sync + Hash + Eq + Debug + Clone + Deref<Target = [u8; ADDRESS_LENGTH]>,
-    const ADDRESS_LENGTH: usize,
-    const WORD_LENGTH: usize,
-> MemoryADT for RedisStore<Address, WORD_LENGTH>
+        Address: Send + Sync + Hash + Eq + Debug + Clone + Deref<Target = [u8; ADDRESS_LENGTH]>,
+        const ADDRESS_LENGTH: usize,
+        const WORD_LENGTH: usize,
+    > MemoryADT for RedisStore<Address, WORD_LENGTH>
 {
     type Address = Address;
     type Error = RedisStoreError;
@@ -117,8 +117,7 @@ impl<
         &self,
         addresses: Vec<Address>,
     ) -> Result<Vec<Option<Self::Word>>, Self::Error> {
-        let refs: Vec<&[u8; ADDRESS_LENGTH]> =
-            addresses.iter().map(|address| address.deref()).collect();
+        let refs: Vec<&[u8; ADDRESS_LENGTH]> = addresses.iter().map(|address| &**address).collect();
         self.manager
             .clone()
             .mget::<_, Vec<_>>(&refs)
@@ -140,14 +139,14 @@ impl<
         cmd = if let Some(byte_array) = guard_value {
             cmd.arg(&byte_array).arg(bindings.len()).clone()
         } else {
-            cmd.arg("false".to_string()).arg(bindings.len()).clone()
+            cmd.arg("false".to_owned()).arg(bindings.len()).clone()
         };
         for (address, word) in bindings {
             cmd = cmd.arg(&*address).arg(&word).clone();
         }
         cmd.query_async(&mut self.manager.clone())
             .await
-            .map_err(|e| e.into())
+            .map_err(std::convert::Into::into)
     }
 }
 
@@ -159,17 +158,17 @@ mod tests {
 
     use super::*;
     use crate::{
-        Address,
         test::memory::{
             test_guarded_write_concurrent, test_single_write_and_read, test_wrong_guard,
         },
+        Address,
     };
 
-    pub fn get_redis_url() -> String {
+    pub(crate) fn get_redis_url() -> String {
         if let Ok(var_env) = std::env::var("REDIS_HOST") {
             format!("redis://{var_env}:6379")
         } else {
-            "redis://localhost:6379".to_string()
+            "redis://localhost:6379".to_owned()
         }
     }
 

@@ -17,10 +17,10 @@
       \addplot[color=red] table [y={create col/linear regression}] {./data/search.dat};
       \addlegendentry{search-time(\#bindings)}
       \addlegendentry{
-	$ y =
-	\pgfmathprintnumber{\pgfplotstableregressiona}
-	\cdot b
-	\pgfmathprintnumber[print sign]{\pgfplotstableregressionb}$
+    $ y =
+    \pgfmathprintnumber{\pgfplotstableregressiona}
+    \cdot b
+    \pgfmathprintnumber[print sign]{\pgfplotstableregressionb}$
       }
     \end{axis}
   \end{tikzpicture}
@@ -36,10 +36,10 @@
       \addplot[color=red] table [y={create col/linear regression}] {./data/insert.dat};
       \addlegendentry{insertion-time(\#bindings)}
       \addlegendentry{
-	$ y =
-	\pgfmathprintnumber{\pgfplotstableregressiona}
-	\cdot b
-	\pgfmathprintnumber[print sign]{\pgfplotstableregressionb}$
+    $ y =
+    \pgfmathprintnumber{\pgfplotstableregressiona}
+    \cdot b
+    \pgfmathprintnumber[print sign]{\pgfplotstableregressionb}$
       }
     \end{axis}
   \end{tikzpicture}
