@@ -1,5 +1,4 @@
-// ! This module defines tests any implementation of the MemoryADT interface
-// must pass.
+// ! This module defines tests any implementation of the MemoryADT interface must pass.
 #[cfg(feature = "test-utils")]
 use rand::{Rng, SeedableRng, rngs::StdRng};
 
@@ -73,7 +72,6 @@ where
     let random_address = rng.gen::<u128>().to_be_bytes();
     let word_to_write = rng.gen::<u128>().to_be_bytes();
 
-    // Write something to a random address
     memory
         .guarded_write((T::Address::from(random_address), None), vec![(
             T::Address::from(random_address),
@@ -128,7 +126,7 @@ where
     {
         const N: usize = 1000; // number of threads
         let mut rng = StdRng::from_seed(seed);
-        let a = rng.gen::<u128>().to_be_bytes(); // Random address for a counter
+        let a = rng.gen::<u128>().to_be_bytes();
 
         let handles: Vec<_> = (0..N)
             .map(|_| {

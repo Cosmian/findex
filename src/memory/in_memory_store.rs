@@ -1,22 +1,13 @@
 use std::{
     collections::HashMap,
-    fmt::{Debug, Display},
+    fmt::Debug,
     hash::Hash,
     sync::{Arc, Mutex},
 };
 
 use crate::MemoryADT;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct MemoryError;
-
-impl Display for MemoryError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Memory Error")
-    }
-}
-
-impl std::error::Error for MemoryError {}
+use super::error::MemoryError;
 
 #[derive(Clone, Debug)]
 pub struct InMemory<Address: Hash + Eq, Value> {
@@ -31,7 +22,7 @@ impl<Address: Hash + Eq + Debug, Value: Clone + Eq + Debug> Default for InMemory
     }
 }
 
-#[cfg(any(test, feature = "bench"))]
+#[cfg(any(test))]
 impl<Address: Hash + Eq + Debug, Value: Clone + Eq + Debug> InMemory<Address, Value> {
     #[cfg(feature = "bench")]
     pub fn with_capacity(c: usize) -> Self {
