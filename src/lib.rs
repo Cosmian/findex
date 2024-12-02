@@ -20,10 +20,10 @@ pub use encoding::{Op, WORD_LENGTH};
 pub use encoding::{dummy_decode, dummy_encode};
 pub use error::Error;
 pub use findex::Findex;
-#[cfg(feature = "redis-mem")]
-pub use memory::db_stores::redis_store::RedisStore;
 #[cfg(feature = "bench")]
 pub use memory::in_memory_store::InMemory;
+#[cfg(feature = "redis-mem")]
+pub use memory::redis_store::RedisStore;
 pub use secret::Secret;
 #[cfg(feature = "test-utils")]
 pub use test::memory::{
