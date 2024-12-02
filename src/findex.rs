@@ -230,7 +230,7 @@ mod tests {
         ADDRESS_LENGTH, Findex, IndexADT, Value,
         address::Address,
         encoding::{dummy_decode, dummy_encode},
-        memory::in_memory_store::InMemory,
+        memory::in_memory::InMemory,
         secret::Secret,
     };
 
