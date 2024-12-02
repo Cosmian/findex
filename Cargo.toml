@@ -20,6 +20,7 @@ name = "cosmian_findex"
 path = "src/lib.rs"
 
 [features]
+default = []
 bench = []
 test-utils = []
 redis-mem = ["redis"]
@@ -31,11 +32,9 @@ rand_chacha = "0.3.1"
 rand_core = "0.6.4"
 tiny-keccak = { version = "2.0.2", features = ["sha3"] }
 xts-mode = "0.5.1"
-zeroize = { version = "1.8.1", features = ["derive"] }
-redis = { version = "0.27.5", features = [
+zeroize = { version = "1.8", features = ["derive"] }
+redis = { version = "0.27", features = [
     "aio",
-    "ahash",
-    "script",
     "tokio-comp",
     "connection-manager",
 ], optional = true }

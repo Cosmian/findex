@@ -10,12 +10,12 @@ pub enum MemoryError {
 }
 
 impl Display for MemoryError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, _f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             #[cfg(feature = "redis-mem")]
-            Self::Redis(err) => write!(f, "redis: {err}"),
+            Self::Redis(err) => write!(_f, "redis: {err}"),
             #[cfg(not(feature = "redis-mem"))]
-            _ => write!(f, "unknown error"),
+            _ => panic!("no other variant"),
         }
     }
 }
