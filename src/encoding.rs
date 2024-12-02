@@ -13,7 +13,7 @@ pub enum Op {
     Delete,
 }
 
-pub enum Mode {
+pub(crate) enum Mode {
     EqBlock(usize),
     Offset(usize),
 }
@@ -32,7 +32,7 @@ pub fn dummy_encode<const WORD_LENGTH: usize, Value: AsRef<[u8]>>(
     vs: HashSet<Value>,
 ) -> Result<Vec<[u8; WORD_LENGTH]>, String> {
     if (u8::MAX as usize) < WORD_LENGTH {
-        return Err("WORD_LENGTH too big for this encoding".to_string());
+        return Err("WORD_LENGTH too big for this encoding".to_owned());
     }
 
     vs.into_iter()

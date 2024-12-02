@@ -1,8 +1,6 @@
 use core::fmt::Display;
 use std::num::TryFromIntError;
 
-use cosmian_crypto_core::CryptoCoreError;
-
 #[cfg(feature = "redis-store")]
 use super::redis_store::RedisStoreError;
 use crate::{Address, error::Error as FindexCoreError};
@@ -13,11 +11,10 @@ macro_rules! findex_core_error {
     };
 }
 #[derive(Debug)]
-pub enum DbStoreError {
+pub(crate) enum DbStoreError {
     #[cfg(feature = "redis-store")]
     Redis(RedisStoreError),
     Findex(findex_core_error!()),
-    CryptoCore(CryptoCoreError),
     IntConversion(TryFromIntError),
     Io(std::io::Error),
 }
@@ -27,7 +24,6 @@ impl Display for DbStoreError {
         match self {
             #[cfg(feature = "redis-store")]
             Self::Redis(err) => write!(f, "redis: {err}"),
-            Self::CryptoCore(err) => write!(f, "crypto_core: {err}"),
             Self::Findex(err) => write!(f, "findex: {err}"),
             Self::Io(err) => write!(f, "io: {err}"),
             Self::IntConversion(err) => write!(f, "conversion: {err}"),
@@ -49,12 +45,6 @@ impl From<RedisStoreError> for DbStoreError {
 impl From<TryFromIntError> for DbStoreError {
     fn from(e: TryFromIntError) -> Self {
         Self::IntConversion(e)
-    }
-}
-
-impl From<CryptoCoreError> for DbStoreError {
-    fn from(e: CryptoCoreError) -> Self {
-        Self::CryptoCore(e)
     }
 }
 

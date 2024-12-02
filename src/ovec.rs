@@ -1,7 +1,7 @@
 //! This module implements a simple vector, defined as a data-structure that
 //! preserves the following invariant:
 //!
-//! I_v: the value of the counter stored at the vector address is equal to the
+//! `I_v`: the value of the counter stored at the vector address is equal to the
 //! number of values stored in this vector; these values are of homogeneous type
 //! and stored in contiguous memory words.
 //!
@@ -32,7 +32,7 @@ impl<const WORD_LENGTH: usize> TryFrom<&Header> for [u8; WORD_LENGTH] {
 
     fn try_from(header: &Header) -> Result<Self, Self::Error> {
         if WORD_LENGTH < 8 {
-            return Err("insufficient word length: should be at least 16 bytes".to_string());
+            return Err("insufficient word length: should be at least 16 bytes".to_owned());
         }
         let mut res = [0; WORD_LENGTH];
         res[..8].copy_from_slice(&header.cnt.to_be_bytes());
@@ -68,7 +68,10 @@ impl TryFrom<&[u8]> for Header {
 
 /// Implementation of a vector in an infinite array.
 #[derive(Debug)]
-pub struct IVec<const WORD_LENGTH: usize, Memory: Clone + MemoryADT<Word = [u8; WORD_LENGTH]>> {
+pub(crate) struct IVec<
+    const WORD_LENGTH: usize,
+    Memory: Clone + MemoryADT<Word = [u8; WORD_LENGTH]>,
+> {
     // backing array address
     a: Memory::Address,
     // cached header value
@@ -99,7 +102,7 @@ impl<
 {
     /// (Lazily) instantiates a new vector at this address in this memory: no
     /// value is written before the first push.
-    pub fn new(a: Address, m: Memory) -> Self {
+    pub(crate) const fn new(a: Address, m: Memory) -> Self {
         Self { a, h: None, m }
     }
 }

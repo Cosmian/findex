@@ -30,9 +30,8 @@ where
     let expected_result = vec![None, None, None];
     assert_eq!(
         empty_read_result, expected_result,
-        "Test batch_read of empty addresses failed.\nExpected result : {:?}. Got : {:?}. Seed : \
-         {:?}",
-        expected_result, empty_read_result, seed
+        "Test batch_read of empty addresses failed.\nExpected result : {expected_result:?}. Got : \
+         {empty_read_result:?}. Seed : {seed:?}"
     );
 
     // Generate a random address and a random word that we save
@@ -57,9 +56,8 @@ where
     let expected_result = vec![Some(T::Word::from(random_word))];
     assert_eq!(
         read_result, expected_result,
-        "test_single_write_and_read failed.\nExpected result : {:?}, got : {:?}.\nDebug seed : \
-         {:?}",
-        expected_result, read_result, seed
+        "test_single_write_and_read failed.\nExpected result : {expected_result:?}, got : \
+         {read_result:?}.\nDebug seed : {seed:?}"
     );
 }
 
@@ -152,7 +150,8 @@ where
                         if cur_cnt == old_cnt {
                             return; // Successfully incremented, quit
                         } else {
-                            old_cnt = cur_cnt; // Guard failed, retry with the new value
+                            // Guard failed, retry with the new value
+                            old_cnt = cur_cnt;
                         }
                     }
                 })

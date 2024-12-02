@@ -1,5 +1,3 @@
-#![allow(clippy::type_complexity)]
-
 mod address;
 mod adt;
 mod encoding;

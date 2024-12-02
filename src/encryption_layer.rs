@@ -239,6 +239,6 @@ mod tests {
                 val_addr_4
             ]))
             .unwrap()
-        )
+        );
     }
 }

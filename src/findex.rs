@@ -1,3 +1,5 @@
+#![allow(clippy::type_complexity)]
+
 use std::{
     collections::{HashMap, HashSet},
     hash::Hash,
@@ -120,7 +122,7 @@ where
         let bindings = bindings
             .map(|(kw, vals)| (self.encode)(op, vals).map(|words| (kw, words)))
             .collect::<Result<Vec<_>, String>>()
-            .map_err(|e| Error::<_, Memory::Error>::Conversion(e.to_string()))?;
+            .map_err(Error::<_, Memory::Error>::Conversion)?;
 
         let futures = bindings
             .into_iter()
@@ -251,11 +253,11 @@ mod tests {
             ),
         ]);
         block_on(findex.insert(bindings.clone().into_iter())).unwrap();
-        let res = block_on(findex.search(bindings.keys().cloned())).unwrap();
+        let res = block_on(findex.search(bindings.keys().copied())).unwrap();
         assert_eq!(bindings, res);
 
         block_on(findex.delete(bindings.clone().into_iter())).unwrap();
-        let res = block_on(findex.search(bindings.keys().cloned())).unwrap();
+        let res = block_on(findex.search(bindings.keys().copied())).unwrap();
         assert_eq!(
             HashMap::from_iter([("cat", HashSet::new()), ("dog", HashSet::new())]),
             res
@@ -267,7 +269,7 @@ mod tests {
         if let Ok(var_env) = std::env::var("REDIS_HOST") {
             format!("redis://{var_env}:6379")
         } else {
-            "redis://localhost:6379".to_string()
+            "redis://localhost:6379".to_owned()
         }
     }
 
@@ -296,11 +298,11 @@ mod tests {
             ),
         ]);
         findex.insert(bindings.clone().into_iter()).await.unwrap(); // using block_on here causes a never ending execution
-        let res = findex.search(bindings.keys().cloned()).await.unwrap();
+        let res = findex.search(bindings.keys().copied()).await.unwrap();
         assert_eq!(bindings, res);
 
         findex.delete(bindings.clone().into_iter()).await.unwrap();
-        let res = findex.search(bindings.keys().cloned()).await.unwrap();
+        let res = findex.search(bindings.keys().copied()).await.unwrap();
         assert_eq!(
             HashMap::from_iter([("cat", HashSet::new()), ("dog", HashSet::new())]),
             res

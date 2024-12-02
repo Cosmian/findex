@@ -47,7 +47,7 @@ impl<const LENGTH: usize> Address<LENGTH> {
 }
 
 impl<const LENGTH: usize> Add<u64> for Address<LENGTH> {
-    type Output = Address<LENGTH>;
+    type Output = Self;
 
     /// Highly inefficient implementation of an add modulo 2^8^LENGTH in little
     /// endian.
@@ -58,7 +58,7 @@ impl<const LENGTH: usize> Add<u64> for Address<LENGTH> {
             // add bytes
             let lhs = &mut self[pos % LENGTH];
             let rhs = adder % 256;
-            let res = *lhs as i32 + rhs as i32 + carry;
+            let res = i32::from(*lhs) + rhs as i32 + carry;
 
             // update states
             *lhs = (res % 256) as u8;
@@ -95,6 +95,7 @@ mod tests {
         assert_eq!(229 + 100 - 256, 73); // there will be a carry
         assert_eq!(Address([100, 10]) + 4325, Address([73, 27]));
 
-        assert_eq!(Address([0, 0]) + (1 << 16), Address([0, 0])); // 2^16 is the neutral element
+        // 2^16 is the neutral element
+        assert_eq!(Address([0, 0]) + (1 << 16), Address([0, 0]));
     }
 }
