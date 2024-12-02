@@ -6,32 +6,38 @@ mod encoding;
 mod encryption_layer;
 mod error;
 mod findex;
-mod memory;
 mod ovec;
 mod secret;
 mod symmetric_key;
-#[cfg(any(test, feature = "test-utils"))]
-mod test;
 mod value;
 
 pub use address::Address;
 pub use adt::{IndexADT, MemoryADT};
+pub use error::Error;
+pub use findex::Findex;
+pub use secret::Secret;
+pub use value::Value;
+
 #[cfg(feature = "bench")]
 pub use encoding::{Op, WORD_LENGTH};
 #[cfg(any(feature = "bench", feature = "test-utils"))]
 pub use encoding::{dummy_decode, dummy_encode};
-pub use error::Error;
-pub use findex::Findex;
+
+#[cfg(any(test, feature = "redis-mem", feature = "bench"))]
+mod memory;
+
 #[cfg(feature = "bench")]
 pub use memory::in_memory_store::InMemory;
 #[cfg(feature = "redis-mem")]
 pub use memory::redis_store::RedisMemory;
-pub use secret::Secret;
+
+#[cfg(any(test, feature = "test-utils"))]
+mod test;
+
 #[cfg(feature = "test-utils")]
 pub use test::memory::{
     test_guarded_write_concurrent, test_single_write_and_read, test_wrong_guard,
 };
-pub use value::Value;
 
 /// 16-byte addresses ensure a high collision resistance that poses virtually no
 /// limitation on the index.
