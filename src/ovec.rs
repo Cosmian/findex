@@ -221,7 +221,7 @@ mod tests {
         address::Address,
         adt::tests::{test_vector_concurrent, test_vector_sequential},
         encryption_layer::MemoryEncryptionLayer,
-        memory::in_memory_store::InMemory,
+        memory::in_memory::InMemory,
         ovec::IVec,
         secret::Secret,
     };
