@@ -43,8 +43,8 @@ impl<Address: Send + Sync + Hash + Eq + Debug, Value: Send + Sync + Clone + Eq +
     type Word = Value;
 
     async fn batch_read(&self, a: Vec<Address>) -> Result<Vec<Option<Value>>, Self::Error> {
-        let store = self.inner.lock().expect("poisoned lock");
-        Ok(a.iter().map(|k| store.get(k).cloned()).collect())
+        let m = self.inner.lock().expect("poisoned lock");
+        Ok(a.iter().map(|k| m.get(k).cloned()).collect())
     }
 
     async fn guarded_write(
@@ -52,12 +52,12 @@ impl<Address: Send + Sync + Hash + Eq + Debug, Value: Send + Sync + Clone + Eq +
         guard: (Self::Address, Option<Self::Word>),
         bindings: Vec<(Self::Address, Self::Word)>,
     ) -> Result<Option<Self::Word>, Self::Error> {
-        let store = &mut *self.inner.lock().expect("poisoned lock");
+        let m = &mut *self.inner.lock().expect("poisoned lock");
         let (a, old) = guard;
-        let cur = store.get(&a).cloned();
+        let cur = m.get(&a).cloned();
         if old == cur {
             for (k, v) in bindings {
-                store.insert(k, v);
+                m.insert(k, v);
             }
         }
         Ok(cur)
@@ -84,28 +84,28 @@ mod tests {
 
     #[cfg(feature = "test-utils")]
     use crate::{
-        memory::in_memory_store, test_guarded_write_concurrent, test_single_write_and_read,
+        memory::in_memory, test_guarded_write_concurrent, test_single_write_and_read,
         test_wrong_guard,
     };
 
     #[cfg(feature = "test-utils")]
     #[tokio::test]
     async fn test_sequential_read_write() {
-        let memory = in_memory_store::InMemory::<[u8; 16], [u8; 16]>::default();
+        let memory = in_memory::InMemory::<[u8; 16], [u8; 16]>::default();
         test_single_write_and_read(&memory, rand::random()).await;
     }
 
     #[cfg(feature = "test-utils")]
     #[tokio::test]
     async fn test_sequential_wrong_guard() {
-        let memory = in_memory_store::InMemory::<[u8; 16], [u8; 16]>::default();
+        let memory = in_memory::InMemory::<[u8; 16], [u8; 16]>::default();
         test_wrong_guard(&memory, rand::random()).await;
     }
 
     #[cfg(feature = "test-utils")]
     #[tokio::test]
     async fn test_concurrent_read_write() {
-        let memory = in_memory_store::InMemory::<[u8; 16], [u8; 16]>::default();
+        let memory = in_memory::InMemory::<[u8; 16], [u8; 16]>::default();
         test_guarded_write_concurrent(&memory, rand::random()).await;
     }
 }

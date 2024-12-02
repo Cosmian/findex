@@ -21,9 +21,9 @@ pub use encoding::{dummy_decode, dummy_encode};
 pub use error::Error;
 pub use findex::Findex;
 #[cfg(feature = "bench")]
-pub use memory::in_memory_store::InMemory;
+pub use memory::in_memory::InMemory;
 #[cfg(feature = "redis-mem")]
-pub use memory::redis_store::RedisMemory;
+pub use memory::redis::RedisMemory;
 pub use secret::Secret;
 #[cfg(feature = "test-utils")]
 pub use test::memory::{

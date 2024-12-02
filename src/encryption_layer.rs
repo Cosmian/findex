@@ -137,7 +137,7 @@ mod tests {
         MemoryADT,
         address::Address,
         encryption_layer::{ADDRESS_LENGTH, MemoryEncryptionLayer},
-        memory::in_memory_store::InMemory,
+        memory::in_memory::InMemory,
         secret::Secret,
         symmetric_key::SymmetricKey,
     };
