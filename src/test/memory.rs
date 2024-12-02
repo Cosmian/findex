@@ -1,7 +1,7 @@
 // ! This module defines tests any implementation of the MemoryADT interface
 // must pass.
 #[cfg(feature = "test-utils")]
-use rand::{rngs::StdRng, Rng, SeedableRng};
+use rand::{Rng, SeedableRng, rngs::StdRng};
 
 #[cfg(feature = "test-utils")]
 use crate::MemoryADT;
@@ -40,10 +40,10 @@ where
 
     // Write the word to the address
     let write_result = memory
-        .guarded_write(
-            (T::Address::from(random_address), None),
-            vec![(T::Address::from(random_address), T::Word::from(random_word))],
-        )
+        .guarded_write((T::Address::from(random_address), None), vec![(
+            T::Address::from(random_address),
+            T::Word::from(random_word),
+        )])
         .await
         .unwrap();
     assert_eq!(write_result, None);
@@ -75,25 +75,19 @@ where
 
     // Write something to a random address
     memory
-        .guarded_write(
-            (T::Address::from(random_address), None),
-            vec![(
-                T::Address::from(random_address),
-                T::Word::from(word_to_write),
-            )],
-        )
+        .guarded_write((T::Address::from(random_address), None), vec![(
+            T::Address::from(random_address),
+            T::Word::from(word_to_write),
+        )])
         .await
         .unwrap();
 
     // Attempt conflicting write with wrong guard value
     let conflict_result = memory
-        .guarded_write(
-            (T::Address::from(random_address), None),
-            vec![(
-                T::Address::from(random_address),
-                T::Word::from(rng.gen::<u128>().to_be_bytes()),
-            )],
-        )
+        .guarded_write((T::Address::from(random_address), None), vec![(
+            T::Address::from(random_address),
+            T::Word::from(rng.gen::<u128>().to_be_bytes()),
+        )])
         .await
         .unwrap();
 
@@ -144,17 +138,13 @@ where
                     loop {
                         // Try to increment
                         let cur_cnt = mem
-                            .guarded_write(
-                                (a.into(), old_cnt.clone()),
-                                vec![(
-                                    a.into(),
-                                    (u128::from_be_bytes(
-                                        old_cnt.clone().unwrap_or_default().into(),
-                                    ) + 1)
-                                        .to_be_bytes()
-                                        .into(),
-                                )],
-                            )
+                            .guarded_write((a.into(), old_cnt.clone()), vec![(
+                                a.into(),
+                                (u128::from_be_bytes(old_cnt.clone().unwrap_or_default().into())
+                                    + 1)
+                                .to_be_bytes()
+                                .into(),
+                            )])
                             .await
                             .unwrap();
                         if cur_cnt == old_cnt {

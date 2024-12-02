@@ -39,7 +39,6 @@ redis = { version = "0.27.5", features = [
     "tokio-comp",
     "connection-manager",
 ], optional = true }
-cosmian_crypto_core = "9.6.1"
 
 [dev-dependencies]
 criterion = "0.5.1"

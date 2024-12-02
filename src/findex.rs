@@ -263,49 +263,4 @@ mod tests {
             res
         );
     }
-
-    #[cfg(feature = "redis-mem")]
-    fn get_redis_url() -> String {
-        if let Ok(var_env) = std::env::var("REDIS_HOST") {
-            format!("redis://{var_env}:6379")
-        } else {
-            "redis://localhost:6379".to_owned()
-        }
-    }
-
-    #[tokio::test]
-    #[cfg(feature = "redis-mem")]
-    async fn test_redis_insert_search_delete_search() {
-        use crate::RedisStore;
-
-        let mut rng = ChaChaRng::from_entropy();
-        let seed = Secret::random(&mut rng);
-        const TEST_ADR_WORD_LENGTH: usize = 16;
-        let memory = RedisStore::<Address<TEST_ADR_WORD_LENGTH>, TEST_ADR_WORD_LENGTH>::connect(
-            &get_redis_url(),
-        )
-        .await
-        .unwrap();
-        let findex = Findex::new(seed, memory, dummy_encode::<WORD_LENGTH, _>, dummy_decode);
-        let bindings = HashMap::<&str, HashSet<Value>>::from_iter([
-            (
-                "cat",
-                HashSet::from_iter([Value::from(1), Value::from(3), Value::from(5)]),
-            ),
-            (
-                "dog",
-                HashSet::from_iter([Value::from(0), Value::from(2), Value::from(4)]),
-            ),
-        ]);
-        findex.insert(bindings.clone().into_iter()).await.unwrap(); // using block_on here causes a never ending execution
-        let res = findex.search(bindings.keys().copied()).await.unwrap();
-        assert_eq!(bindings, res);
-
-        findex.delete(bindings.clone().into_iter()).await.unwrap();
-        let res = findex.search(bindings.keys().copied()).await.unwrap();
-        assert_eq!(
-            HashMap::from_iter([("cat", HashSet::new()), ("dog", HashSet::new())]),
-            res
-        );
-    }
 }

@@ -17,7 +17,7 @@
 
 use std::{fmt::Debug, hash::Hash, ops::Add};
 
-use crate::{adt::VectorADT, error::Error, MemoryADT};
+use crate::{MemoryADT, adt::VectorADT, error::Error};
 
 /// Headers contain a counter of the number of values stored in the vector.
 // TODO: header could store metadata (e.g. sparsity budget)
@@ -79,10 +79,10 @@ pub(crate) struct IVec<
 }
 
 impl<
-        const WORD_LENGTH: usize,
-        Address: Clone,
-        Memory: Clone + MemoryADT<Address = Address, Word = [u8; WORD_LENGTH]>,
-    > Clone for IVec<WORD_LENGTH, Memory>
+    const WORD_LENGTH: usize,
+    Address: Clone,
+    Memory: Clone + MemoryADT<Address = Address, Word = [u8; WORD_LENGTH]>,
+> Clone for IVec<WORD_LENGTH, Memory>
 {
     fn clone(&self) -> Self {
         Self {
@@ -94,10 +94,10 @@ impl<
 }
 
 impl<
-        const WORD_LENGTH: usize,
-        Address: Hash + Eq + Debug + Clone + Add<u64, Output = Address>,
-        Memory: Clone + MemoryADT<Address = Address, Word = [u8; WORD_LENGTH]>,
-    > IVec<WORD_LENGTH, Memory>
+    const WORD_LENGTH: usize,
+    Address: Hash + Eq + Debug + Clone + Add<u64, Output = Address>,
+    Memory: Clone + MemoryADT<Address = Address, Word = [u8; WORD_LENGTH]>,
+> IVec<WORD_LENGTH, Memory>
 {
     /// (Lazily) instantiates a new vector at this address in this memory: no value is written
     /// before the first push.
@@ -107,10 +107,10 @@ impl<
 }
 
 impl<
-        const WORD_LENGTH: usize,
-        Address: Send + Sync + Hash + Eq + Debug + Clone + Add<u64, Output = Address>,
-        Memory: Send + Sync + Clone + MemoryADT<Address = Address, Word = [u8; WORD_LENGTH]>,
-    > VectorADT for IVec<WORD_LENGTH, Memory>
+    const WORD_LENGTH: usize,
+    Address: Send + Sync + Hash + Eq + Debug + Clone + Add<u64, Output = Address>,
+    Memory: Send + Sync + Clone + MemoryADT<Address = Address, Word = [u8; WORD_LENGTH]>,
+> VectorADT for IVec<WORD_LENGTH, Memory>
 where
     Memory::Error: Send + Sync,
 {
@@ -215,13 +215,13 @@ mod tests {
     use rand_core::SeedableRng;
 
     use crate::{
+        ADDRESS_LENGTH,
         address::Address,
         adt::tests::{test_vector_concurrent, test_vector_sequential},
         encryption_layer::MemoryEncryptionLayer,
         memory::in_memory_store::InMemory,
         ovec::IVec,
         secret::Secret,
-        ADDRESS_LENGTH,
     };
 
     const WORD_LENGTH: usize = 16;
