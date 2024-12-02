@@ -7,9 +7,8 @@ use std::{
 
 use redis::{AsyncCommands, aio::ConnectionManager};
 
-use crate::MemoryADT;
-
 use super::error::MemoryError;
+use crate::MemoryADT;
 
 #[derive(Clone)]
 pub struct RedisStore<Address: Hash + Eq, const WORD_LENGTH: usize> {
@@ -63,6 +62,7 @@ impl<Address: Hash + Eq, const WORD_LENGTH: usize> RedisStore<Address, WORD_LENG
             _marker_adr: PhantomData,
         })
     }
+
     /// Connects to a Redis server using the given URL.
     pub async fn connect(url: &str) -> Result<Self, MemoryError> {
         let client = redis::Client::open(url)?;

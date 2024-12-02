@@ -1,4 +1,5 @@
-// ! This module defines tests any implementation of the MemoryADT interface must pass.
+// ! This module defines tests any implementation of the MemoryADT interface
+// must pass.
 #[cfg(feature = "test-utils")]
 use rand::{Rng, SeedableRng, rngs::StdRng};
 
