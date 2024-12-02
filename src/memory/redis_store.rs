@@ -11,7 +11,7 @@ use super::error::MemoryError;
 use crate::MemoryADT;
 
 #[derive(Clone)]
-pub struct RedisStore<Address: Hash + Eq, const WORD_LENGTH: usize> {
+pub struct RedisMemory<Address: Hash + Eq, const WORD_LENGTH: usize> {
     manager: ConnectionManager,
     script_hash: String,
     _marker_adr: PhantomData<Address>,
@@ -40,7 +40,7 @@ end
 return value
 ";
 
-impl<Address: Hash + Eq, const WORD_LENGTH: usize> Debug for RedisStore<Address, WORD_LENGTH> {
+impl<Address: Hash + Eq, const WORD_LENGTH: usize> Debug for RedisMemory<Address, WORD_LENGTH> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("RedisMemory")
             .field("connection", &"<redis::Connection>")
@@ -49,7 +49,7 @@ impl<Address: Hash + Eq, const WORD_LENGTH: usize> Debug for RedisStore<Address,
     }
 }
 
-impl<Address: Hash + Eq, const WORD_LENGTH: usize> RedisStore<Address, WORD_LENGTH> {
+impl<Address: Hash + Eq, const WORD_LENGTH: usize> RedisMemory<Address, WORD_LENGTH> {
     /// Connects to a Redis server with a `ConnectionManager`.
     pub async fn connect_with_manager(manager: ConnectionManager) -> Result<Self, MemoryError> {
         Ok(Self {
@@ -81,7 +81,7 @@ impl<
     Address: Send + Sync + Hash + Eq + Debug + Clone + Deref<Target = [u8; ADDRESS_LENGTH]>,
     const ADDRESS_LENGTH: usize,
     const WORD_LENGTH: usize,
-> MemoryADT for RedisStore<Address, WORD_LENGTH>
+> MemoryADT for RedisMemory<Address, WORD_LENGTH>
 {
     type Address = Address;
     type Error = MemoryError;
@@ -149,8 +149,8 @@ mod tests {
     const ADR_WORD_LENGTH: usize = 16;
 
     async fn init_test_redis_db()
-    -> Result<RedisStore<Address<ADR_WORD_LENGTH>, ADR_WORD_LENGTH>, MemoryError> {
-        RedisStore::<Address<ADR_WORD_LENGTH>, ADR_WORD_LENGTH>::connect(&get_redis_url()).await
+    -> Result<RedisMemory<Address<ADR_WORD_LENGTH>, ADR_WORD_LENGTH>, MemoryError> {
+        RedisMemory::<Address<ADR_WORD_LENGTH>, ADR_WORD_LENGTH>::connect(&get_redis_url()).await
     }
 
     #[tokio::test]
