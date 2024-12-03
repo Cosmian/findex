@@ -23,8 +23,6 @@
 # dependencies not shared by any other crates, would be ignored, as the target
 # list here is effectively saying which targets you are building for.
 targets = [
-
-
   # The triple can be any string, but only the target triples built in to
   # rustc (as of 1.40) can be checked against actual config expressions
   # "x86_64-unknown-linux-musl",
@@ -72,7 +70,6 @@ feature-depth = 1
 # A list of advisory IDs to ignore. Note that ignored advisories will still
 # output a note when they are encountered.
 ignore = [
-  # { id = "RUSTSEC-2023-0071", reason = "rsa" },
   # { id = "RUSTSEC-0000-0000", reason = "you can specify a reason the advisory is ignored" },
   # "a-crate-that-is-yanked@0.1.1", # you can also ignore yanked crate versions if you wish
   # { crate = "a-crate-that-is-yanked@0.1.1", reason = "you can specify why you are ignoring the yanked crate" },
@@ -95,7 +92,6 @@ allow = [
   "Apache-2.0",
   "Apache-2.0 WITH LLVM-exception",
   "Zlib",
-  "BSD-2-Clause",
   "BSD-3-Clause",
   "Unicode-DFS-2016",
   "BUSL-1.1",
@@ -110,29 +106,9 @@ confidence-threshold = 0.8
 # Allow 1 or more licenses on a per-crate basis, so that particular licenses
 # aren't accepted for every possible crate as with the normal allow list
 exceptions = [
-
-
   # Each entry is the crate and version constraint, and its specific allow
   # list
   # { allow = ["Zlib"], crate = "adler32" },
-]
-
-# Some crates don't have (easily) machine readable licensing information,
-# adding a clarification entry for it allows you to manually specify the
-# licensing information
-[[licenses.clarify]]
-# The package spec the clarification applies to
-crate = "ring"
-# The SPDX expression for the license requirements of the crate
-expression = "MIT AND ISC AND OpenSSL"
-# One or more files in the crate's source used as the "source of truth" for
-# the license expression. If the contents match, the clarification will be used
-# when running the license check, otherwise the clarification will be ignored
-# and the crate will be checked normally, which may produce warnings or errors
-# depending on the rest of your configuration
-license-files = [
-  # Each entry is a crate relative path, and the (opaque) hash of its contents
-  { path = "LICENSE", hash = 0xbd0eed23 },
 ]
 
 [licenses.private]
@@ -145,8 +121,6 @@ ignore = false
 # is only published to private registries, and ignore is true, the crate will
 # not have its license(s) checked
 registries = [
-
-
   # "https://sekretz.com/registry
 ]
 
@@ -174,15 +148,11 @@ workspace-default-features = "allow"
 external-default-features = "allow"
 # List of crates that are allowed. Use with care!
 allow = [
-
-
   # "ansi_term@0.11.0",
   # { crate = "ansi_term@0.11.0", reason = "you can specify a reason it is allowed" },
 ]
 # List of crates to deny
 deny = [
-
-
   # "ansi_term@0.11.0",
   # { crate = "ansi_term@0.11.0", reason = "you can specify a reason it is banned" },
   # Wrapper crates can optionally be specified to allow the crate when it
@@ -190,33 +160,8 @@ deny = [
   # { crate = "ansi_term@0.11.0", wrappers = ["this-crate-directly-depends-on-ansi_term"] },
 ]
 
-# List of features to allow/deny
-# Each entry the name of a crate and a version range. If version is
-# not specified, all versions will be matched.
-# [[bans.features]]
-# crate = "reqwest"
-# Features to not allow
-# deny = ["json"]
-# Features to allow
-# allow = [
-#    "rustls",
-#    "__rustls",
-#    "__tls",
-#    "hyper-rustls",
-#    "rustls",
-#    "rustls-pemfile",
-#    "rustls-tls-webpki-roots",
-#    "tokio-rustls",
-#    "webpki-roots",
-# ]
-# If true, the allowed features must exactly match the enabled feature set. If
-# this is set there is no point setting `deny`
-# exact = true
-
 # Certain crates/versions that will be skipped when doing duplicate detection.
 skip = [
-
-
   # "ansi_term@0.11.0",
   # { crate = "ansi_term@0.11.0", reason = "you can specify a reason why it can't be updated/removed" },
 ]
@@ -225,8 +170,6 @@ skip = [
 # dependencies starting at the specified crate, up to a certain depth, which is
 # by default infinite.
 skip-tree = [
-
-
   # "ansi_term@0.11.0", # will be skipped along with _all_ of its direct and transitive dependencies
   # { crate = "ansi_term@0.11.0", depth = 20 },
 ]
