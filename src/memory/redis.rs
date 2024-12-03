@@ -117,7 +117,6 @@ impl<const WORD_LENGTH: usize> MemoryADT
     }
 }
 
-#[cfg(feature = "test-utils")]
 #[cfg(test)]
 mod tests {
 
