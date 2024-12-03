@@ -118,13 +118,13 @@ repos:
         args: [--skip-string-normalization]
 
   - repo: https://github.com/Cosmian/git-hooks.git
-    rev: v1.0.32
+    rev: v1.0.35
     hooks:
       - id: cargo-format
       # - id: cargo-upgrade
       # - id: cargo-update
       - id: cargo-machete
-      - id: docker-compose-up
+      - id: redis-container-up
       - id: cargo-tests-all
       - id: cargo-test-doc
       - id: clippy-autofix-unreachable-pub
@@ -135,7 +135,7 @@ repos:
       - id: cargo-format
       - id: cargo-dry-publish
         args: [--allow-dirty]
-      - id: docker-compose-down
+      - id: redis-container-down
 
   - repo: https://github.com/EmbarkStudios/cargo-deny
     rev: 0.16.1 # choose your preferred tag
