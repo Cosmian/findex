@@ -29,7 +29,6 @@ impl<Address: Hash + Eq + Debug, Value: Clone + Eq + Debug> InMemory<Address, Va
         }
     }
 
-    #[cfg(any(test, feature = "bench"))]
     pub fn clear(&self) {
         self.inner.lock().expect("poisoned lock").clear();
     }
@@ -79,30 +78,26 @@ impl<Address: Hash + Eq + Debug + Clone, Value: Clone + Eq + Debug> IntoIterator
             .into_iter()
     }
 }
+
 #[cfg(test)]
 mod tests {
-
-    #[cfg(feature = "test-utils")]
     use crate::{
         memory::in_memory, test_guarded_write_concurrent, test_single_write_and_read,
         test_wrong_guard,
     };
 
-    #[cfg(feature = "test-utils")]
     #[tokio::test]
     async fn test_sequential_read_write() {
         let memory = in_memory::InMemory::<[u8; 16], [u8; 16]>::default();
         test_single_write_and_read(&memory, rand::random()).await;
     }
 
-    #[cfg(feature = "test-utils")]
     #[tokio::test]
     async fn test_sequential_wrong_guard() {
         let memory = in_memory::InMemory::<[u8; 16], [u8; 16]>::default();
         test_wrong_guard(&memory, rand::random()).await;
     }
 
-    #[cfg(feature = "test-utils")]
     #[tokio::test]
     async fn test_concurrent_read_write() {
         let memory = in_memory::InMemory::<[u8; 16], [u8; 16]>::default();

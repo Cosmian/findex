@@ -20,9 +20,7 @@ name = "cosmian_findex"
 path = "src/lib.rs"
 
 [features]
-default = []
 bench = []
-test-utils = []
 redis-mem = ["redis"]
 
 [dependencies]
