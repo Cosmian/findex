@@ -28,7 +28,7 @@ return value
 
 #[derive(Clone)]
 pub struct RedisMemory<Address, Word> {
-    manager: ConnectionManager,
+    pub manager: ConnectionManager,
     script_hash: String,
     a: PhantomData<Address>,
     w: PhantomData<Word>,
