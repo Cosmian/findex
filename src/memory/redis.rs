@@ -1,6 +1,6 @@
 use super::error::MemoryError;
-use crate::{ADDRESS_LENGTH, Address, MemoryADT};
-use redis::{AsyncCommands, aio::ConnectionManager};
+use crate::{Address, MemoryADT, ADDRESS_LENGTH};
+use redis::{aio::ConnectionManager, AsyncCommands};
 use std::{fmt, marker::PhantomData};
 
 // Arguments passed to the LUA script, in order:
