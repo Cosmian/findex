@@ -28,10 +28,10 @@ return value
 
 #[derive(Clone)]
 pub struct RedisMemory<Address, Word> {
-    pub manager: ConnectionManager,
-    script_hash: String,
-    a: PhantomData<Address>,
-    w: PhantomData<Word>,
+    pub manager: ConnectionManager, // is Send + Sync : https://docs.rs/redis/latest/redis/aio/struct.ConnectionManager.html#impl-Send-for-ConnectionManager
+    script_hash: String,            // trivially Send + Sync
+    a: PhantomData<Address>, // is send + Sync because the underlying address we will use in findex is Send + Sync ([u8; ADDRESS_LENGTH])
+    w: PhantomData<Word>,    // same as above
 }
 
 impl<Address, Word> fmt::Debug for RedisMemory<Address, Word> {
@@ -64,7 +64,7 @@ impl<Address, Word> RedisMemory<Address, Word> {
         Self::connect_with_manager(manager).await
     }
 
-    pub async fn clear_indexes(&self) -> Result<(), redis::RedisError> {
+    pub async fn clear_redis_db(&self) -> Result<(), redis::RedisError> {
         redis::cmd("FLUSHDB")
             .query_async(&mut self.manager.clone())
             .await
@@ -142,7 +142,7 @@ mod tests {
         let m = RedisMemory::<_, [u8; WORD_LENGTH]>::connect(&get_redis_url())
             .await
             .unwrap();
-        m.clear_indexes().await.unwrap();
+        m.clear_redis_db().await.unwrap();
         test_single_write_and_read(&m, rand::random()).await;
         Ok(())
     }
@@ -153,7 +153,7 @@ mod tests {
         let m = RedisMemory::<_, [u8; WORD_LENGTH]>::connect(&get_redis_url())
             .await
             .unwrap();
-        m.clear_indexes().await.unwrap();
+        m.clear_redis_db().await.unwrap();
         test_wrong_guard(&m, rand::random()).await;
         Ok(())
     }
@@ -164,7 +164,7 @@ mod tests {
         let m = RedisMemory::<_, [u8; WORD_LENGTH]>::connect(&get_redis_url())
             .await
             .unwrap();
-        m.clear_indexes().await.unwrap();
+        m.clear_redis_db().await.unwrap();
         test_guarded_write_concurrent(&m, rand::random()).await;
         Ok(())
     }
