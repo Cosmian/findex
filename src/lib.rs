@@ -20,6 +20,8 @@ pub use encoding::{dummy_decode, dummy_encode};
 pub use encoding::{Op, WORD_LENGTH};
 pub use error::Error;
 pub use findex::Findex;
+#[cfg(feature = "redis-mem")]
+pub use memory::error as MemoryError;
 #[cfg(feature = "bench")]
 pub use memory::in_memory::InMemory;
 #[cfg(feature = "redis-mem")]

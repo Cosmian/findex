@@ -1,4 +1,4 @@
-pub(crate) mod error;
+pub mod error;
 
 #[cfg(any(test, feature = "bench"))]
 pub(crate) mod in_memory;
