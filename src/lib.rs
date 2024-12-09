@@ -4,8 +4,7 @@ mod encoding;
 mod encryption_layer;
 mod error;
 mod findex;
-#[cfg(any(test, feature = "bench", feature = "redis-mem"))]
-pub mod memory;
+mod memory;
 mod ovec;
 mod secret;
 mod symmetric_key;
@@ -21,8 +20,7 @@ pub use encoding::{dummy_decode, dummy_encode};
 pub use encoding::{Op, WORD_LENGTH};
 pub use error::Error;
 pub use findex::Findex;
-#[cfg(any(test, feature = "bench", feature = "redis-mem"))]
-pub use memory::memory::*;
+pub use memory::memory as mem;
 pub use secret::Secret;
 #[cfg(test)]
 pub use test::memory::{
