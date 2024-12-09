@@ -4,6 +4,7 @@ mod encoding;
 mod encryption_layer;
 mod error;
 mod findex;
+#[cfg(any(test, feature = "bench", feature = "redis-mem"))]
 pub mod memory;
 mod ovec;
 mod secret;
@@ -20,10 +21,8 @@ pub use encoding::{dummy_decode, dummy_encode};
 pub use encoding::{Op, WORD_LENGTH};
 pub use error::Error;
 pub use findex::Findex;
-#[cfg(feature = "redis-mem")]
-pub use memory as redis; // exports RedisMemory and its error type
-#[cfg(feature = "bench")]
-pub use memory::in_memory::InMemory;
+#[cfg(any(test, feature = "bench", feature = "redis-mem"))]
+pub use memory::memory::*;
 pub use secret::Secret;
 #[cfg(test)]
 pub use test::memory::{

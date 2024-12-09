@@ -1,14 +1,16 @@
 #[cfg(any(test, feature = "bench", feature = "redis-mem"))]
 pub mod error;
+#[cfg(feature = "redis-mem")]
+pub mod redis;
+
 #[cfg(any(test, feature = "bench"))]
-pub(crate) mod in_memory;
+pub mod in_memory;
 
-#[cfg(feature = "redis-mem")]
-pub(crate) mod redis;
-
-#[cfg(feature = "redis-mem")]
-
+#[cfg(any(test, feature = "bench", feature = "redis-mem"))]
 pub mod memory {
-    pub use crate::memory::error::MemoryError as error;
+    pub use crate::memory::error::MemoryError;
+    #[cfg(any(test, feature = "bench"))]
+    pub use crate::memory::in_memory::InMemory;
+    #[cfg(feature = "redis-mem")]
     pub use crate::memory::redis::RedisMemory;
 }
