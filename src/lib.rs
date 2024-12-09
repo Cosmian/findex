@@ -14,7 +14,7 @@ mod value;
 
 pub use address::Address;
 pub use adt::{IndexADT, MemoryADT};
-#[cfg(feature = "bench")]
+#[cfg(any(feature = "redis-mem", feature = "bench"))]
 pub use encoding::{dummy_decode, dummy_encode};
 #[cfg(feature = "bench")]
 pub use encoding::{Op, WORD_LENGTH};
