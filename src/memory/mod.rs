@@ -1,8 +1,7 @@
+#[cfg(any(test, feature = "bench", feature = "redis-mem"))]
+pub mod error;
 #[cfg(any(test, feature = "bench"))]
 pub(crate) mod in_memory;
-
-#[cfg(feature = "redis-mem")]
-pub mod error;
 
 #[cfg(feature = "redis-mem")]
 pub(crate) mod redis;

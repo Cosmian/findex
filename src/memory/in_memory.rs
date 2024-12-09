@@ -1,12 +1,22 @@
 use std::{
     collections::HashMap,
-    fmt::Debug,
+    fmt::{Debug, Display},
     hash::Hash,
     sync::{Arc, Mutex},
 };
 
-use super::error::MemoryError;
 use crate::MemoryADT;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct InMemoryError;
+
+impl Display for InMemoryError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Memory Error")
+    }
+}
+
+impl std::error::Error for InMemoryError {}
 
 #[derive(Clone, Debug)]
 pub struct InMemory<Address: Hash + Eq, Value> {
@@ -38,7 +48,7 @@ impl<Address: Send + Sync + Hash + Eq + Debug, Value: Send + Sync + Clone + Eq +
     for InMemory<Address, Value>
 {
     type Address = Address;
-    type Error = MemoryError;
+    type Error = InMemoryError;
     type Word = Value;
 
     async fn batch_read(&self, a: Vec<Address>) -> Result<Vec<Option<Value>>, Self::Error> {
