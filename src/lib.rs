@@ -4,7 +4,7 @@ mod encoding;
 mod encryption_layer;
 mod error;
 mod findex;
-mod memory;
+pub mod memory;
 mod ovec;
 mod secret;
 mod symmetric_key;
@@ -21,11 +21,9 @@ pub use encoding::{Op, WORD_LENGTH};
 pub use error::Error;
 pub use findex::Findex;
 #[cfg(feature = "redis-mem")]
-pub use memory::error as MemoryError;
+pub use memory as redis; // exports RedisMemory and its error type
 #[cfg(feature = "bench")]
 pub use memory::in_memory::InMemory;
-#[cfg(feature = "redis-mem")]
-pub use memory::redis::RedisMemory;
 pub use secret::Secret;
 #[cfg(test)]
 pub use test::memory::{

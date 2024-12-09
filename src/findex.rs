@@ -235,7 +235,7 @@ mod tests {
     use crate::{
         address::Address,
         encoding::{dummy_decode, dummy_encode},
-        memory::in_memory::InMemory,
+        memory::{in_memory::InMemory, redis::RedisMemory},
         secret::Secret,
         Findex, IndexADT, Value, ADDRESS_LENGTH,
     };
@@ -264,6 +264,40 @@ mod tests {
 
         block_on(findex.delete(bindings.clone().into_iter())).unwrap();
         let res = block_on(findex.search(bindings.keys().copied())).unwrap();
+        assert_eq!(
+            HashMap::from_iter([("cat", HashSet::new()), ("dog", HashSet::new())]),
+            res
+        );
+    }
+
+    #[tokio::test]
+    async fn redis_TEST_HATEM() {
+        let mut rng = ChaChaRng::from_entropy();
+        let seed = Secret::random(&mut rng);
+        const TEST_ADR_WORD_LENGTH: usize = 16;
+        let memory =
+            RedisMemory::<Address<TEST_ADR_WORD_LENGTH>, [u8; TEST_ADR_WORD_LENGTH]>::connect(
+                "redis://localhost:6379",
+            )
+            .await
+            .unwrap();
+        let findex = Findex::new(seed, memory, dummy_encode::<WORD_LENGTH, _>, dummy_decode);
+        let bindings = HashMap::<&str, HashSet<Value>>::from_iter([
+            (
+                "cat",
+                HashSet::from_iter([Value::from(1), Value::from(3), Value::from(5)]),
+            ),
+            (
+                "dog",
+                HashSet::from_iter([Value::from(0), Value::from(2), Value::from(4)]),
+            ),
+        ]);
+        findex.insert(bindings.clone().into_iter()).await.unwrap();
+        let res = findex.search(bindings.keys().cloned()).await.unwrap();
+        assert_eq!(bindings, res);
+
+        findex.delete(bindings.clone().into_iter()).await.unwrap();
+        let res = findex.search(bindings.keys().cloned()).await.unwrap();
         assert_eq!(
             HashMap::from_iter([("cat", HashSet::new()), ("dog", HashSet::new())]),
             res
