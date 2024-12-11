@@ -42,4 +42,4 @@ pub const ADDRESS_LENGTH: usize = 16;
 
 /// Using 32-byte cryptographic keys allows achieving post-quantum resistance
 /// with the AES primitive.
-pub const KEY_LENGTH: usize = 64;
+pub const KEY_LENGTH: usize = 32;
