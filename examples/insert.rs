@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 
-use findex::{dummy_decode, dummy_encode, Findex, InMemory, IndexADT, Secret, Value};
+use findex::{Findex, InMemory, IndexADT, Secret, Value, dummy_decode, dummy_encode};
 use futures::executor::block_on;
 use rand_chacha::ChaChaRng;
 use rand_core::{CryptoRngCore, SeedableRng};

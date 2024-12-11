@@ -1,8 +1,8 @@
 use std::{collections::HashSet, time::Duration};
 
-use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
+use criterion::{BenchmarkId, Criterion, criterion_group, criterion_main};
 use findex::{
-    dummy_decode, dummy_encode, Findex, InMemory, IndexADT, MemoryADT, Op, Secret, WORD_LENGTH,
+    Findex, InMemory, IndexADT, MemoryADT, Op, Secret, WORD_LENGTH, dummy_decode, dummy_encode,
 };
 use futures::{executor::block_on, future::join_all};
 use lazy_static::lazy_static;
