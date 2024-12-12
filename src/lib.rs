@@ -20,7 +20,7 @@ pub use value::Value;
 #[cfg(any(test, feature = "bench"))]
 mod in_memory_store;
 #[cfg(feature = "bench")]
-pub use encoding::{dummy_decode, dummy_encode, Op, WORD_LENGTH};
+pub use encoding::{Op, WORD_LENGTH, dummy_decode, dummy_encode};
 #[cfg(feature = "bench")]
 pub use in_memory_store::InMemory;
 
@@ -35,5 +35,6 @@ pub use in_memory_store::InMemory;
 /// sqrt(2^64 - 2^n).
 pub const ADDRESS_LENGTH: usize = 16;
 
-/// Using 32-byte cryptographic keys allows achieving post-quantum resistance with the AES primitive.
-pub const KEY_LENGTH: usize = 64;
+/// Using 32-byte cryptographic keys allows achieving post-quantum resistance with the AES
+/// primitive.
+pub const KEY_LENGTH: usize = 32;
