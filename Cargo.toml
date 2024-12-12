@@ -1,7 +1,23 @@
 [package]
-name = "findex"
-version = "0.1.0"
+name = "cosmian_findex"
+version = "7.0.0"
+authors = [
+    "Chloé Hébant <chloe.hebant@cosmian.com>",
+    "Bruno Grieder <bruno.grieder@cosmian.com>",
+    "Célia Corsin <celia.corsin@cosmian.com>",
+    "Emmanuel Coste <emmanuel.coste@cosmian.com>",
+    "Théophile Brézot <theophile.brezot@cosmian.com>",
+]
+categories = ["cosmian::crypto"]
 edition = "2021"
+keywords = ["SSE"]
+license = "BUSL-1.1"
+repository = "https://github.com/Cosmian/findex/"
+description = "Symmetric Searchable Encryption"
+
+[lib]
+name = "cosmian_findex"
+path = "src/lib.rs"
 
 [features]
 bench = []

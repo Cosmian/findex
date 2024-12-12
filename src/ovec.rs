@@ -1,7 +1,7 @@
 //! This module implements a simple vector, defined as a data-structure that preserves the
 //! following invariant:
 //!
-//! I_v: the value of the counter stored at the vector address is equal to the number of values
+//! `I_v`: the value of the counter stored at the vector address is equal to the number of values
 //! stored in this vector; these values are of homogeneous type and stored in contiguous memory words.
 //!
 //! This implementation is based on the assumption that an infinite array starting at the vector's
@@ -97,7 +97,7 @@ impl<
 {
     /// (Lazily) instantiates a new vector at this address in this memory: no value is written
     /// before the first push.
-    pub fn new(a: Address, m: Memory) -> Self {
+    pub const fn new(a: Address, m: Memory) -> Self {
         Self { a, h: None, m }
     }
 }
@@ -158,12 +158,12 @@ where
 
                 (cur, new)
             };
+
             if cur.as_ref() == self.h.as_ref() {
                 self.h = Some(new);
                 return Ok(());
-            } else {
-                self.h = cur;
             }
+            self.h = cur;
         }
     }
 
@@ -172,8 +172,7 @@ where
         // - the header address;
         // - the value addresses derived from the known header.
         let old_header = self.h.clone().unwrap_or_default();
-        let addresses = [self.a.clone()]
-            .into_iter()
+        let addresses = std::iter::once(self.a.clone())
             .chain((0..old_header.cnt).map(|i| self.a.clone() + i + 1))
             .collect();
 
@@ -229,7 +228,7 @@ mod tests {
         let mut rng = ChaChaRng::from_entropy();
         let seed = Secret::random(&mut rng);
         let memory = InMemory::<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>::default();
-        let obf = MemoryEncryptionLayer::new(seed, memory.clone());
+        let obf = MemoryEncryptionLayer::new(&seed, memory.clone());
         let address = Address::random(&mut rng);
         let v = IVec::<WORD_LENGTH, _>::new(address.clone(), obf);
         test_vector_sequential(&v).await;

@@ -1,7 +1,7 @@
 use std::{fmt::Debug, ops::Deref, sync::Arc};
 
 use crate::{
-    ADDRESS_LENGTH, KEY_LENGTH, MemoryADT, address::Address, error::Error, secret::Secret,
+    ADDRESS_LENGTH, KEY_LENGTH, MemoryADT, Secret, address::Address, error::Error,
     symmetric_key::SymmetricKey,
 };
 use aes::{
@@ -47,12 +47,12 @@ impl<
 > MemoryEncryptionLayer<WORD_LENGTH, Memory>
 {
     /// Instantiates a new memory encryption layer.
-    pub fn new(seed: Secret<KEY_LENGTH>, stm: Memory) -> Self {
-        let k_p = SymmetricKey::<KEY_LENGTH>::derive(&seed, &[0]).expect("secret is large enough");
+    pub fn new(seed: &Secret<KEY_LENGTH>, stm: Memory) -> Self {
+        let k_p = SymmetricKey::<KEY_LENGTH>::derive(seed, &[0]).expect("secret is large enough");
         let k_e1 =
-            SymmetricKey::<{ KEY_LENGTH }>::derive(&seed, &[1]).expect("secret is large enough");
+            SymmetricKey::<{ KEY_LENGTH }>::derive(seed, &[1]).expect("secret is large enough");
         let k_e2 =
-            SymmetricKey::<{ KEY_LENGTH }>::derive(&seed, &[2]).expect("secret is large enough");
+            SymmetricKey::<{ KEY_LENGTH }>::derive(seed, &[2]).expect("secret is large enough");
         let aes = Aes256::new(GenericArray::from_slice(&k_p));
         let aes_e1 = Aes256::new(GenericArray::from_slice(&k_e1));
         let aes_e2 = Aes256::new(GenericArray::from_slice(&k_e2));
@@ -156,7 +156,7 @@ mod tests {
         let k_p = SymmetricKey::<32>::derive(&seed, &[0]).expect("secret is large enough");
         let aes = Aes256::new(GenericArray::from_slice(&k_p));
         let memory = InMemory::<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>::default();
-        let obf = MemoryEncryptionLayer::new(seed, memory);
+        let obf = MemoryEncryptionLayer::new(&seed, memory);
         let a = Address::<ADDRESS_LENGTH>::random(&mut rng);
         let mut tok = obf.permute(a.clone());
         assert_ne!(a, tok);
@@ -169,7 +169,7 @@ mod tests {
         let mut rng = ChaChaRng::from_entropy();
         let seed = Secret::random(&mut rng);
         let memory = InMemory::<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>::default();
-        let obf = MemoryEncryptionLayer::new(seed, memory);
+        let obf = MemoryEncryptionLayer::new(&seed, memory);
         let tok = Address::<ADDRESS_LENGTH>::random(&mut rng);
         let ptx = [1; WORD_LENGTH];
         let ctx = obf.encrypt(ptx, *tok);
@@ -186,7 +186,7 @@ mod tests {
         let mut rng = ChaChaRng::from_entropy();
         let seed = Secret::random(&mut rng);
         let memory = InMemory::<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>::default();
-        let obf = MemoryEncryptionLayer::new(seed, memory);
+        let obf = MemoryEncryptionLayer::new(&seed, memory);
 
         let header_addr = Address::<ADDRESS_LENGTH>::random(&mut rng);
 

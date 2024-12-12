@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 
-use findex::{Findex, InMemory, IndexADT, Secret, Value, dummy_decode, dummy_encode};
+use cosmian_findex::{Findex, InMemory, IndexADT, Secret, Value, dummy_decode, dummy_encode};
 use futures::executor::block_on;
 use rand_chacha::ChaChaRng;
 use rand_core::{CryptoRngCore, SeedableRng};
@@ -22,7 +22,7 @@ fn main() {
     let index = build_benchmarking_index(&mut rng);
     let seed = Secret::random(&mut rng);
     let findex = Findex::new(
-        seed,
+        &seed,
         InMemory::default(),
         dummy_encode::<16, _>,
         dummy_decode,

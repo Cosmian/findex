@@ -19,7 +19,7 @@ pub trait IndexADT<Keyword: Send + Sync + Hash, Value: Send + Sync + Hash> {
     /// Search the index for the values bound to the given keywords.
     fn search(
         &self,
-        keywords: impl Iterator<Item = Keyword>,
+        keywords: impl Send + Iterator<Item = Keyword>,
     ) -> impl Future<Output = Result<HashMap<Keyword, HashSet<Value>>, Self::Error>>;
 
     /// Adds the given bindings to the index.
@@ -79,7 +79,7 @@ pub trait MemoryADT {
 }
 
 #[cfg(test)]
-pub(crate) mod tests {
+pub mod tests {
 
     pub use vector::*;
 
