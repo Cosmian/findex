@@ -251,11 +251,11 @@ mod tests {
             ),
         ]);
         block_on(findex.insert(bindings.clone().into_iter())).unwrap();
-        let res = block_on(findex.search(bindings.keys().cloned())).unwrap();
+        let res = block_on(findex.search(bindings.keys().copied())).unwrap();
         assert_eq!(bindings, res);
 
         block_on(findex.delete(bindings.clone().into_iter())).unwrap();
-        let res = block_on(findex.search(bindings.keys().cloned())).unwrap();
+        let res = block_on(findex.search(bindings.keys().copied())).unwrap();
         assert_eq!(
             HashMap::from_iter([("cat", HashSet::new()), ("dog", HashSet::new())]),
             res
