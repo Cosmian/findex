@@ -1,4 +1,4 @@
-//! We define here the main abstractions used in this crate, namely:
+//! We define here the main Abstract Data Types (ADTs) used in this crate, namely:
 //! - the index ADT;
 //! - the vector ADT;
 //! - the memory ADT.

@@ -72,7 +72,7 @@ where
     }
 
     pub fn clear(&self) {
-        self.cache.lock().unwrap().clear();
+        self.cache.lock().expect("poisoned lock").clear();
     }
 
     /// Caches this vector for this address.

@@ -1,4 +1,10 @@
-#![allow(clippy::type_complexity)]
+#![warn(
+    clippy::all,
+    clippy::restriction,
+    clippy::pedantic,
+    clippy::nursery,
+    clippy::cargo
+)]
 
 mod address;
 mod adt;
