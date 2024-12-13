@@ -1,3 +1,5 @@
+#![allow(clippy::type_complexity)]
+
 use std::{
     collections::{HashMap, HashSet},
     hash::Hash,
@@ -7,8 +9,8 @@ use std::{
 use tiny_keccak::{Hasher, Sha3};
 
 use crate::{
-    ADDRESS_LENGTH, Address, IndexADT, KEY_LENGTH, MemoryADT, adt::VectorADT, encoding::Op,
-    encryption_layer::MemoryEncryptionLayer, error::Error, ovec::IVec, secret::Secret,
+    ADDRESS_LENGTH, Address, IndexADT, KEY_LENGTH, MemoryADT, Secret, adt::VectorADT, encoding::Op,
+    encryption_layer::MemoryEncryptionLayer, error::Error, ovec::IVec,
 };
 
 #[derive(Clone, Debug)]
@@ -58,7 +60,7 @@ where
 {
     /// Instantiates Findex with the given seed, and memory.
     pub fn new(
-        seed: Secret<KEY_LENGTH>,
+        seed: &Secret<KEY_LENGTH>,
         mem: Memory,
         encode: fn(Op, HashSet<Value>) -> Result<Vec<[u8; WORD_LENGTH]>, String>,
         decode: fn(Vec<[u8; WORD_LENGTH]>) -> Result<HashSet<Value>, TryFromError>,
@@ -72,7 +74,7 @@ where
     }
 
     pub fn clear(&self) {
-        self.cache.lock().unwrap().clear();
+        self.cache.lock().expect("poisoned lock").clear();
     }
 
     /// Caches this vector for this address.
@@ -113,12 +115,12 @@ where
     async fn push<Keyword: Send + Sync + Hash + Eq + AsRef<[u8]>>(
         &self,
         op: Op,
-        bindings: impl Iterator<Item = (Keyword, HashSet<Value>)>,
+        bindings: impl Send + Iterator<Item = (Keyword, HashSet<Value>)>,
     ) -> Result<(), <Self as IndexADT<Keyword, Value>>::Error> {
         let bindings = bindings
             .map(|(kw, vals)| (self.encode)(op, vals).map(|words| (kw, words)))
             .collect::<Result<Vec<_>, String>>()
-            .map_err(|e| Error::<_, Memory::Error>::Conversion(e.to_string()))?;
+            .map_err(Error::<_, Memory::Error>::Conversion)?;
 
         let futures = bindings
             .into_iter()
@@ -181,7 +183,7 @@ where
 
     async fn search(
         &self,
-        keywords: impl Iterator<Item = Keyword>,
+        keywords: impl Send + Iterator<Item = Keyword>,
     ) -> Result<HashMap<Keyword, HashSet<Value>>, Self::Error> {
         let futures = keywords
             .map(|kw| self.read::<Keyword>(kw))
@@ -237,7 +239,7 @@ mod tests {
         let mut rng = ChaChaRng::from_entropy();
         let seed = Secret::random(&mut rng);
         let memory = InMemory::<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>::default();
-        let findex = Findex::new(seed, memory, dummy_encode::<WORD_LENGTH, _>, dummy_decode);
+        let findex = Findex::new(&seed, memory, dummy_encode::<WORD_LENGTH, _>, dummy_decode);
         let bindings = HashMap::<&str, HashSet<Value>>::from_iter([
             (
                 "cat",

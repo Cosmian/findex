@@ -1,9 +1,9 @@
 use std::{collections::HashSet, time::Duration};
 
-use criterion::{BenchmarkId, Criterion, criterion_group, criterion_main};
-use findex::{
+use cosmian_findex::{
     Findex, InMemory, IndexADT, MemoryADT, Op, Secret, WORD_LENGTH, dummy_decode, dummy_encode,
 };
+use criterion::{BenchmarkId, Criterion, criterion_group, criterion_main};
 use futures::{executor::block_on, future::join_all};
 use lazy_static::lazy_static;
 use rand_chacha::ChaChaRng;
@@ -56,12 +56,7 @@ fn bench_search_multiple_bindings(c: &mut Criterion) {
     let seed = Secret::random(&mut rng);
     let stm = InMemory::default();
     let index = build_benchmarking_bindings_index(&mut rng);
-    let findex = Findex::new(
-        seed.clone(),
-        stm,
-        dummy_encode::<WORD_LENGTH, _>,
-        dummy_decode,
-    );
+    let findex = Findex::new(&seed, stm, dummy_encode::<WORD_LENGTH, _>, dummy_decode);
     block_on(findex.insert(index.clone().into_iter())).unwrap();
 
     let mut group = c.benchmark_group("Multiple bindings search (1 keyword)");
@@ -88,7 +83,7 @@ fn bench_search_multiple_keywords(c: &mut Criterion) {
     let stm = InMemory::default();
     let index = build_benchmarking_keywords_index(&mut rng);
     let findex = Findex::new(
-        seed,
+        &seed,
         stm.clone(),
         dummy_encode::<WORD_LENGTH, _>,
         dummy_decode,
@@ -180,7 +175,7 @@ fn bench_insert_multiple_bindings(c: &mut Criterion) {
         for (kw, vals) in index.clone().into_iter() {
             let stm = InMemory::with_capacity(n_max + 1);
             let findex = Findex::new(
-                seed.clone(),
+                &seed,
                 stm.clone(),
                 dummy_encode::<WORD_LENGTH, _>,
                 dummy_decode,
@@ -246,7 +241,7 @@ fn bench_insert_multiple_keywords(c: &mut Criterion) {
             let n = 10f32.powf(*i).ceil() as usize;
             let stm = InMemory::with_capacity(2 * n);
             let findex = Findex::new(
-                seed.clone(),
+                &seed,
                 stm.clone(),
                 dummy_encode::<WORD_LENGTH, _>,
                 dummy_decode,
@@ -294,7 +289,7 @@ fn bench_contention(c: &mut Criterion) {
         for i in 1..=N_CLIENTS {
             let stm = InMemory::with_capacity(N_BINDINGS * i + 1);
             let findex = Findex::new(
-                seed.clone(),
+                &seed,
                 stm.clone(),
                 dummy_encode::<WORD_LENGTH, _>,
                 dummy_decode,
@@ -348,7 +343,7 @@ fn bench_contention(c: &mut Criterion) {
         for i in 1..=N_CLIENTS {
             let stm = InMemory::with_capacity(N_BINDINGS * i + 1);
             let findex = Findex::new(
-                seed.clone(),
+                &seed,
                 stm.clone(),
                 dummy_encode::<WORD_LENGTH, _>,
                 dummy_decode,
