@@ -170,6 +170,7 @@ where
 }
 
 impl<
+        // TODO(hatem): ajouter un paramètre
         const WORD_LENGTH: usize,
         Keyword: Send + Sync + Hash + PartialEq + Eq + AsRef<[u8]>,
         Value: Send + Sync + Hash + PartialEq + Eq,
