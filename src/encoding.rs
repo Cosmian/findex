@@ -1,6 +1,7 @@
-//! This module defines encoding operations that are used to serialize an operation.
-//! Currently, the only supported operations are the insertion and deletion, but there is no
-//! theoretical restriction on the kind of operation that can be used.
+//! This module defines encoding operations that are used to serialize an
+//! operation. Currently, the only supported operations are the insertion and
+//! deletion, but there is no theoretical restriction on the kind of operation
+//! that can be used.
 
 #![allow(dead_code)]
 
@@ -12,12 +13,13 @@ pub enum Op {
     Delete,
 }
 
-pub enum Mode {
+pub(crate) enum Mode {
     EqBlock(usize),
     Offset(usize),
 }
 
-/// Blocks are the smallest unit size in block mode, 16 bytes is optimized to store UUIDs.
+/// Blocks are the smallest unit size in block mode, 16 bytes is optimized to
+/// store UUIDs.
 const BLOCK_LENGTH: usize = 16;
 
 /// The chunk length is the size of the available space in a word.
@@ -30,7 +32,7 @@ pub fn dummy_encode<const WORD_LENGTH: usize, Value: AsRef<[u8]>>(
     vs: HashSet<Value>,
 ) -> Result<Vec<[u8; WORD_LENGTH]>, String> {
     if (u8::MAX as usize) < WORD_LENGTH {
-        return Err("WORD_LENGTH too big for this encoding".to_string());
+        return Err("WORD_LENGTH too big for this encoding".to_owned());
     }
 
     vs.into_iter()

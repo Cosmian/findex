@@ -109,9 +109,11 @@ where
         a
     }
 
-    /// Pushes the given bindings to the vectors associated to the bound keyword.
+    /// Pushes the given bindings to the vectors associated to the bound
+    /// keyword.
     ///
-    /// All vector push operations are performed in parallel (via async calls), not batched.
+    /// All vector push operations are performed in parallel (via async calls),
+    /// not batched.
     async fn push<Keyword: Send + Sync + Hash + Eq + AsRef<[u8]>>(
         &self,
         op: Op,
@@ -171,6 +173,7 @@ impl<
     TryFromError: std::error::Error,
     Memory: Send + Sync + Clone + MemoryADT<Address = Address<ADDRESS_LENGTH>, Word = [u8; WORD_LENGTH]>,
 > IndexADT<Keyword, Value> for Findex<WORD_LENGTH, Value, TryFromError, Memory>
+        // TODO(hatem): ajouter un paramètre
 where
     for<'z> Value: TryFrom<&'z [u8], Error = TryFromError> + AsRef<[u8]>,
     Vec<u8>: From<Value>,
@@ -228,7 +231,7 @@ mod tests {
         ADDRESS_LENGTH, Findex, IndexADT, Value,
         address::Address,
         encoding::{dummy_decode, dummy_encode},
-        in_memory_store::InMemory,
+        memory::in_memory::InMemory,
         secret::Secret,
     };
 
@@ -251,14 +254,48 @@ mod tests {
             ),
         ]);
         block_on(findex.insert(bindings.clone().into_iter())).unwrap();
-        let res = block_on(findex.search(bindings.keys().cloned())).unwrap();
+        let res = block_on(findex.search(bindings.keys().copied())).unwrap();
         assert_eq!(bindings, res);
 
         block_on(findex.delete(bindings.clone().into_iter())).unwrap();
-        let res = block_on(findex.search(bindings.keys().cloned())).unwrap();
+        let res = block_on(findex.search(bindings.keys().copied())).unwrap();
         assert_eq!(
             HashMap::from_iter([("cat", HashSet::new()), ("dog", HashSet::new())]),
             res
         );
     }
+
+    // #[tokio::test]
+    // async fn redis_TEST_HATEM() {
+    //     let mut rng = ChaChaRng::from_entropy();
+    //     let seed = Secret::random(&mut rng);
+    //     const TEST_ADR_WORD_LENGTH: usize = 16;
+    //     let memory =
+    //         RedisMemory::<Address<TEST_ADR_WORD_LENGTH>, [u8; TEST_ADR_WORD_LENGTH]>::connect(
+    //             "redis://localhost:6379",
+    //         )
+    //         .await
+    //         .unwrap();
+    //     let findex = Findex::new(seed, memory, dummy_encode::<WORD_LENGTH, _>, dummy_decode);
+    //     let bindings = HashMap::<&str, HashSet<Value>>::from_iter([
+    //         (
+    //             "cat",
+    //             HashSet::from_iter([Value::from(1), Value::from(3), Value::from(5)]),
+    //         ),
+    //         (
+    //             "dog",
+    //             HashSet::from_iter([Value::from(0), Value::from(2), Value::from(4)]),
+    //         ),
+    //     ]);
+    //     findex.insert(bindings.clone().into_iter()).await.unwrap();
+    //     let res = findex.search(bindings.keys().cloned()).await.unwrap();
+    //     assert_eq!(bindings, res);
+
+    //     findex.delete(bindings.clone().into_iter()).await.unwrap();
+    //     let res = findex.search(bindings.keys().cloned()).await.unwrap();
+    //     assert_eq!(
+    //         HashMap::from_iter([("cat", HashSet::new()), ("dog", HashSet::new())]),
+    //         res
+    //     );
+    // }
 }

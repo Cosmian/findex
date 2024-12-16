@@ -14,6 +14,18 @@ impl<const LENGTH: usize> Deref for Address<LENGTH> {
     }
 }
 
+impl<const LENGTH: usize> From<[u8; LENGTH]> for Address<LENGTH> {
+    fn from(bytes: [u8; LENGTH]) -> Self {
+        Self(bytes)
+    }
+}
+
+impl<const LENGTH: usize> From<Address<LENGTH>> for [u8; LENGTH] {
+    fn from(address: Address<LENGTH>) -> Self {
+        address.0
+    }
+}
+
 impl<const LENGTH: usize> DerefMut for Address<LENGTH> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.0
@@ -37,7 +49,8 @@ impl<const LENGTH: usize> Address<LENGTH> {
 impl<const LENGTH: usize> Add<u64> for Address<LENGTH> {
     type Output = Self;
 
-    /// Highly inefficient implementation of an add modulo 2^8^LENGTH in little endian.
+    /// Highly inefficient implementation of an add modulo 2^8^LENGTH in little
+    /// endian.
     fn add(mut self, mut adder: u64) -> Self::Output {
         let mut carry = 0;
         let mut pos = 0;
@@ -45,7 +58,7 @@ impl<const LENGTH: usize> Add<u64> for Address<LENGTH> {
             // add bytes
             let lhs = &mut self[pos % LENGTH];
             let rhs = adder % 256;
-            let res = *lhs as i32 + rhs as i32 + carry;
+            let res = i32::from(*lhs) + rhs as i32 + carry;
 
             // update states
             *lhs = (res % 256) as u8;
@@ -82,6 +95,7 @@ mod tests {
         assert_eq!(229 + 100 - 256, 73); // there will be a carry
         assert_eq!(Address([100, 10]) + 4325, Address([73, 27]));
 
-        assert_eq!(Address([0, 0]) + (1 << 16), Address([0, 0])); // 2^16 is the neutral element
+        // 2^16 is the neutral element
+        assert_eq!(Address([0, 0]) + (1 << 16), Address([0, 0]));
     }
 }

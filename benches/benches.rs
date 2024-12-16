@@ -17,12 +17,13 @@ fn make_scale(start: usize, stop: usize, n: usize) -> Vec<f32> {
     let step = ((stop - start) as f32) / n as f32;
     let mut points = Vec::with_capacity(n);
     for i in 0..=n {
-        points.push(start as f32 + i as f32 * step);
+        points.push((i as f32).mul_add(step, start as f32));
     }
     points
 }
 
-/// Builds an index that associates each `kw_i` to x values, both random 64-bit values.
+/// Builds an index that associates each `kw_i` to x values, both random 64-bit
+/// values.
 fn build_benchmarking_bindings_index(
     rng: &mut impl CryptoRngCore,
 ) -> Vec<([u8; 8], HashSet<[u8; 8]>)> {
@@ -38,7 +39,8 @@ fn build_benchmarking_bindings_index(
         .collect()
 }
 
-/// Builds an index that associates 10^3 `kw_i` to a single value, both random 64-bit values.
+/// Builds an index that associates 10^3 `kw_i` to a single value, both random
+/// 64-bit values.
 fn build_benchmarking_keywords_index(
     rng: &mut impl CryptoRngCore,
 ) -> Vec<([u8; 8], HashSet<[u8; 8]>)> {
@@ -60,7 +62,7 @@ fn bench_search_multiple_bindings(c: &mut Criterion) {
     block_on(findex.insert(index.clone().into_iter())).unwrap();
 
     let mut group = c.benchmark_group("Multiple bindings search (1 keyword)");
-    for (kw, vals) in index.clone().into_iter() {
+    for (kw, vals) in index {
         group.bench_function(BenchmarkId::from_parameter(vals.len()), |b| {
             b.iter_batched(
                 || {
@@ -95,8 +97,8 @@ fn bench_search_multiple_keywords(c: &mut Criterion) {
         for i in scale.iter() {
             let n = 10f32.powf(*i).ceil() as usize;
             group.bench_function(BenchmarkId::from_parameter(n), |b| {
-                // Attempts to bench all external costs (somehow, cloning the keywords impacts the
-                // benches).
+                // Attempts to bench all external costs (somehow, cloning the keywords impacts
+                // the benches).
                 b.iter_batched(
                     || {
                         stm.clone()
@@ -120,9 +122,9 @@ fn bench_search_multiple_keywords(c: &mut Criterion) {
                 b.iter_batched(
                     || {
                         findex.clear();
-                        // Using .cloned() instead of .clone() reduces the overhead (maybe because it
-                        // only clones what is needed)
-                        index.iter().map(|(kw, _)| kw).take(n).cloned()
+                        // Using .cloned() instead of .clone() reduces the overhead (maybe because
+                        // it only clones what is needed)
+                        index.iter().map(|(kw, _)| kw).take(n).copied()
                     },
                     |kws| {
                         block_on(findex.search(kws)).expect("search failed");
@@ -144,7 +146,7 @@ fn bench_insert_multiple_bindings(c: &mut Criterion) {
     // Reference: write one word per value inserted.
     {
         let mut group = c.benchmark_group("write n words to memory");
-        for (_, vals) in index.clone().into_iter() {
+        for (_, vals) in index.clone() {
             let stm = InMemory::with_capacity(n_max + 1);
             group
                 .bench_function(BenchmarkId::from_parameter(vals.len()), |b| {
@@ -172,7 +174,7 @@ fn bench_insert_multiple_bindings(c: &mut Criterion) {
     // Bench it
     {
         let mut group = c.benchmark_group("Multiple bindings insert (same keyword)");
-        for (kw, vals) in index.clone().into_iter() {
+        for (kw, vals) in index {
             let stm = InMemory::with_capacity(n_max + 1);
             let findex = Findex::new(
                 &seed,

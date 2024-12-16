@@ -3,9 +3,8 @@ use std::{
     pin::Pin,
 };
 
-use zeroize::{Zeroize, ZeroizeOnDrop};
-
 use rand_core::CryptoRngCore;
+use zeroize::{Zeroize, ZeroizeOnDrop};
 
 /// Holds a secret information of `LENGTH` bytes.
 ///
@@ -18,6 +17,7 @@ impl<const LENGTH: usize> Secret<LENGTH> {
     ///
     /// All bytes are initially set to 0.
     #[inline(always)]
+    #[must_use]
     pub fn new() -> Self {
         Self(Box::pin([0; LENGTH]))
     }

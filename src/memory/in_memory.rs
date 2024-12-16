@@ -8,15 +8,15 @@ use std::{
 use crate::MemoryADT;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct MemoryError;
+pub struct InMemoryError;
 
-impl Display for MemoryError {
+impl Display for InMemoryError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "Memory Error")
     }
 }
 
-impl std::error::Error for MemoryError {}
+impl std::error::Error for InMemoryError {}
 
 #[derive(Clone, Debug)]
 pub struct InMemory<Address: Hash + Eq, Value> {
@@ -48,14 +48,12 @@ impl<Address: Send + Sync + Hash + Eq + Debug, Value: Send + Sync + Clone + Eq +
     for InMemory<Address, Value>
 {
     type Address = Address;
-
+    type Error = InMemoryError;
     type Word = Value;
 
-    type Error = MemoryError;
-
     async fn batch_read(&self, a: Vec<Address>) -> Result<Vec<Option<Value>>, Self::Error> {
-        let store = self.inner.lock().expect("poisoned lock");
-        Ok(a.iter().map(|k| store.get(k).cloned()).collect())
+        let m = self.inner.lock().expect("poisoned lock");
+        Ok(a.iter().map(|k| m.get(k).cloned()).collect())
     }
 
     async fn guarded_write(
@@ -63,12 +61,12 @@ impl<Address: Send + Sync + Hash + Eq + Debug, Value: Send + Sync + Clone + Eq +
         guard: (Self::Address, Option<Self::Word>),
         bindings: Vec<(Self::Address, Self::Word)>,
     ) -> Result<Option<Self::Word>, Self::Error> {
-        let store = &mut *self.inner.lock().expect("poisoned lock");
+        let m = &mut *self.inner.lock().expect("poisoned lock");
         let (a, old) = guard;
-        let cur = store.get(&a).cloned();
+        let cur = m.get(&a).cloned();
         if old == cur {
             for (k, v) in bindings {
-                store.insert(k, v);
+                m.insert(k, v);
             }
         }
         Ok(cur)
@@ -79,9 +77,8 @@ impl<Address: Send + Sync + Hash + Eq + Debug, Value: Send + Sync + Clone + Eq +
 impl<Address: Hash + Eq + Debug + Clone, Value: Clone + Eq + Debug> IntoIterator
     for InMemory<Address, Value>
 {
-    type Item = (Address, Value);
-
     type IntoIter = <HashMap<Address, Value> as IntoIterator>::IntoIter;
+    type Item = (Address, Value);
 
     fn into_iter(self) -> Self::IntoIter {
         self.inner
@@ -94,35 +91,26 @@ impl<Address: Hash + Eq + Debug + Clone, Value: Clone + Eq + Debug> IntoIterator
 
 #[cfg(test)]
 mod tests {
+    use crate::{
+        memory::in_memory, test_guarded_write_concurrent, test_single_write_and_read,
+        test_wrong_guard,
+    };
 
-    use futures::executor::block_on;
+    #[tokio::test]
+    async fn test_sequential_read_write() {
+        let memory = in_memory::InMemory::<[u8; 16], [u8; 16]>::default();
+        test_single_write_and_read(&memory, rand::random()).await;
+    }
 
-    use crate::MemoryADT;
+    #[tokio::test]
+    async fn test_sequential_wrong_guard() {
+        let memory = in_memory::InMemory::<[u8; 16], [u8; 16]>::default();
+        test_wrong_guard(&memory, rand::random()).await;
+    }
 
-    use super::InMemory;
-
-    /// Ensures a transaction can express a vector push operation:
-    /// - the counter is correctly incremented and all values are written;
-    /// - using the wrong value in the guard fails the operation and returns the current value.
-    #[test]
-    fn test_vector_push() {
-        let memory = InMemory::<u8, u8>::default();
-
-        assert_eq!(
-            block_on(memory.guarded_write((0, None), vec![(0, 2), (1, 1), (2, 1)])).unwrap(),
-            None
-        );
-        assert_eq!(
-            block_on(memory.guarded_write((0, None), vec![(0, 4), (3, 2), (4, 2)])).unwrap(),
-            Some(2)
-        );
-        assert_eq!(
-            block_on(memory.guarded_write((0, Some(2)), vec![(0, 4), (3, 3), (4, 3)])).unwrap(),
-            Some(2)
-        );
-        assert_eq!(
-            vec![Some(1), Some(1), Some(3), Some(3)],
-            block_on(memory.batch_read(vec![1, 2, 3, 4])).unwrap(),
-        )
+    #[tokio::test]
+    async fn test_concurrent_read_write() {
+        let memory = in_memory::InMemory::<[u8; 16], [u8; 16]>::default();
+        test_guarded_write_concurrent(&memory, rand::random()).await;
     }
 }

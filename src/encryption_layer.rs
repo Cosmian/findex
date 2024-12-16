@@ -10,6 +10,11 @@ use aes::{
 };
 use xts_mode::Xts128;
 
+use crate::{
+    address::Address, error::Error, secret::Secret, symmetric_key::SymmetricKey, MemoryADT,
+    ADDRESS_LENGTH, KEY_LENGTH,
+};
+
 #[derive(Clone)]
 struct ClonableXts(Arc<Xts128<Aes256>>);
 
@@ -27,8 +32,9 @@ impl Deref for ClonableXts {
     }
 }
 
-/// The encryption layers is built on top of an encrypted memory implementing the `MemoryADT` and
-/// exposes a plaintext virtual memory interface implementing the `MemoryADT`.
+/// The encryption layers is built on top of an encrypted memory implementing
+/// the `MemoryADT` and exposes a plaintext virtual memory interface
+/// implementing the `MemoryADT`.
 ///
 /// This type is thread-safe.
 #[derive(Debug, Clone)]
@@ -88,10 +94,8 @@ impl<
 > MemoryADT for MemoryEncryptionLayer<WORD_LENGTH, Memory>
 {
     type Address = Address<ADDRESS_LENGTH>;
-
-    type Word = [u8; WORD_LENGTH];
-
     type Error = Error<Self::Address, Memory::Error>;
+    type Word = [u8; WORD_LENGTH];
 
     async fn batch_read(
         &self,
@@ -180,7 +184,8 @@ mod tests {
 
     /// Ensures a transaction can express a vector push operation:
     /// - the counter is correctly incremented and all values are written;
-    /// - using the wrong value in the guard fails the operation and returns the current value.
+    /// - using the wrong value in the guard fails the operation and returns the
+    ///   current value.
     #[test]
     fn test_vector_push() {
         let mut rng = ChaChaRng::from_entropy();
@@ -243,6 +248,6 @@ mod tests {
                 val_addr_4
             ]))
             .unwrap()
-        )
+        );
     }
 }

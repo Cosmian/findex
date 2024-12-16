@@ -1,11 +1,12 @@
-//! This module implements a simple vector, defined as a data-structure that preserves the
-//! following invariant:
+//! This module implements a simple vector, defined as a data-structure that
+//! preserves the following invariant:
 //!
 //! `I_v`: the value of the counter stored at the vector address is equal to the number of values
 //! stored in this vector; these values are of homogeneous type and stored in contiguous memory words.
 //!
-//! This implementation is based on the assumption that an infinite array starting at the vector's
-//! address has been allocated, and thus stores values after the header:
+//! This implementation is based on the assumption that an infinite array
+//! starting at the vector's address has been allocated, and thus stores values
+//! after the header:
 //!
 //! ```txt
 //! +------------+-----+-----+-----+
@@ -30,7 +31,7 @@ impl<const WORD_LENGTH: usize> TryFrom<&Header> for [u8; WORD_LENGTH] {
 
     fn try_from(header: &Header) -> Result<Self, Self::Error> {
         if WORD_LENGTH < 8 {
-            return Err("insufficient word length: should be at least 16 bytes".to_string());
+            return Err("insufficient word length: should be at least 16 bytes".to_owned());
         }
         let mut res = [0; WORD_LENGTH];
         res[..8].copy_from_slice(&header.cnt.to_be_bytes());
@@ -66,7 +67,10 @@ impl TryFrom<&[u8]> for Header {
 
 /// Implementation of a vector in an infinite array.
 #[derive(Debug)]
-pub struct IVec<const WORD_LENGTH: usize, Memory: Clone + MemoryADT<Word = [u8; WORD_LENGTH]>> {
+pub(crate) struct IVec<
+    const WORD_LENGTH: usize,
+    Memory: Clone + MemoryADT<Word = [u8; WORD_LENGTH]>,
+> {
     // backing array address
     a: Memory::Address,
     // cached header value
@@ -110,17 +114,16 @@ impl<
 where
     Memory::Error: Send + Sync,
 {
+    type Error = Error<Memory::Address, Memory::Error>;
     type Value = Memory::Word;
 
-    type Error = Error<Memory::Address, Memory::Error>;
-
     async fn push(&mut self, vs: Vec<Self::Value>) -> Result<(), Self::Error> {
-        // Findex modifications are only lock-free, hence it does not guarantee a given client will
-        // ever terminate.
+        // Findex modifications are only lock-free, hence it does not guarantee a given
+        // client will ever terminate.
         //
-        // TODO: this loop will arguably terminate if the index is not highly contended, but we
-        // need a stronger guarantee. Maybe a return with an error after reaching a certain
-        // number of retries.
+        // TODO: this loop will arguably terminate if the index is not highly contended,
+        // but we need a stronger guarantee. Maybe a return with an error after
+        // reaching a certain number of retries.
         loop {
             let (cur, new) = {
                 // Generates a new header with incremented counter.
@@ -216,7 +219,7 @@ mod tests {
         address::Address,
         adt::tests::{test_vector_concurrent, test_vector_sequential},
         encryption_layer::MemoryEncryptionLayer,
-        in_memory_store::InMemory,
+        memory::in_memory::InMemory,
         ovec::IVec,
         secret::Secret,
     };
