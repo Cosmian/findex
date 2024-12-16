@@ -1,8 +1,12 @@
 use std::{fmt::Debug, ops::Deref, sync::Arc};
 
+use crate::{
+    ADDRESS_LENGTH, KEY_LENGTH, MemoryADT, Secret, address::Address, error::Error,
+    symmetric_key::SymmetricKey,
+};
 use aes::{
-    cipher::{generic_array::GenericArray, BlockEncrypt, KeyInit},
     Aes256,
+    cipher::{BlockEncrypt, KeyInit, generic_array::GenericArray},
 };
 use xts_mode::Xts128;
 
@@ -44,17 +48,22 @@ pub struct MemoryEncryptionLayer<
 }
 
 impl<
-        const WORD_LENGTH: usize,
-        Memory: Send + Sync + MemoryADT<Address = Address<ADDRESS_LENGTH>, Word = [u8; WORD_LENGTH]>,
-    > MemoryEncryptionLayer<WORD_LENGTH, Memory>
+    const WORD_LENGTH: usize,
+    Memory: Send + Sync + MemoryADT<Address = Address<ADDRESS_LENGTH>, Word = [u8; WORD_LENGTH]>,
+> MemoryEncryptionLayer<WORD_LENGTH, Memory>
 {
     /// Instantiates a new memory encryption layer.
-    pub fn new(seed: Secret<KEY_LENGTH>, stm: Memory) -> Self {
-        let k_p = SymmetricKey::<32>::derive(&seed, &[0]).expect("secret is large enough");
-        let k_e = SymmetricKey::<KEY_LENGTH>::derive(&seed, &[0]).expect("secret is large enough");
+    pub fn new(seed: &Secret<KEY_LENGTH>, stm: Memory) -> Self {
+        let k_p = SymmetricKey::<KEY_LENGTH>::derive(seed, &[0]).expect("secret is large enough");
+        let k_e1 =
+            SymmetricKey::<{ KEY_LENGTH }>::derive(seed, &[1]).expect("secret is large enough");
+        let k_e2 =
+            SymmetricKey::<{ KEY_LENGTH }>::derive(seed, &[2]).expect("secret is large enough");
         let aes = Aes256::new(GenericArray::from_slice(&k_p));
-        let aes_e1 = Aes256::new(GenericArray::from_slice(&k_e[..32]));
-        let aes_e2 = Aes256::new(GenericArray::from_slice(&k_e[32..]));
+        let aes_e1 = Aes256::new(GenericArray::from_slice(&k_e1));
+        let aes_e2 = Aes256::new(GenericArray::from_slice(&k_e2));
+        // The 128 in the XTS name refer to the block size. AES-256 is used here, which confers
+        // 128 bits of PQ security.
         let xts = ClonableXts(Arc::new(Xts128::new(aes_e1, aes_e2)));
         Self { aes, xts, mem: stm }
     }
@@ -80,9 +89,9 @@ impl<
 }
 
 impl<
-        const WORD_LENGTH: usize,
-        Memory: Send + Sync + MemoryADT<Address = Address<ADDRESS_LENGTH>, Word = [u8; WORD_LENGTH]>,
-    > MemoryADT for MemoryEncryptionLayer<WORD_LENGTH, Memory>
+    const WORD_LENGTH: usize,
+    Memory: Send + Sync + MemoryADT<Address = Address<ADDRESS_LENGTH>, Word = [u8; WORD_LENGTH]>,
+> MemoryADT for MemoryEncryptionLayer<WORD_LENGTH, Memory>
 {
     type Address = Address<ADDRESS_LENGTH>;
     type Error = Error<Self::Address, Memory::Error>;
@@ -126,20 +135,20 @@ impl<
 #[cfg(test)]
 mod tests {
     use aes::{
-        cipher::{generic_array::GenericArray, BlockDecrypt, KeyInit},
         Aes256,
+        cipher::{BlockDecrypt, KeyInit, generic_array::GenericArray},
     };
     use futures::executor::block_on;
     use rand_chacha::ChaChaRng;
     use rand_core::SeedableRng;
 
     use crate::{
+        MemoryADT,
         address::Address,
-        encryption_layer::{MemoryEncryptionLayer, ADDRESS_LENGTH},
-        memory::in_memory::InMemory,
+        encryption_layer::{ADDRESS_LENGTH, MemoryEncryptionLayer},
+        in_memory_store::InMemory,
         secret::Secret,
         symmetric_key::SymmetricKey,
-        MemoryADT,
     };
 
     const WORD_LENGTH: usize = 128;
@@ -151,7 +160,7 @@ mod tests {
         let k_p = SymmetricKey::<32>::derive(&seed, &[0]).expect("secret is large enough");
         let aes = Aes256::new(GenericArray::from_slice(&k_p));
         let memory = InMemory::<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>::default();
-        let obf = MemoryEncryptionLayer::new(seed, memory);
+        let obf = MemoryEncryptionLayer::new(&seed, memory);
         let a = Address::<ADDRESS_LENGTH>::random(&mut rng);
         let mut tok = obf.permute(a.clone());
         assert_ne!(a, tok);
@@ -164,7 +173,7 @@ mod tests {
         let mut rng = ChaChaRng::from_entropy();
         let seed = Secret::random(&mut rng);
         let memory = InMemory::<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>::default();
-        let obf = MemoryEncryptionLayer::new(seed, memory);
+        let obf = MemoryEncryptionLayer::new(&seed, memory);
         let tok = Address::<ADDRESS_LENGTH>::random(&mut rng);
         let ptx = [1; WORD_LENGTH];
         let ctx = obf.encrypt(ptx, *tok);
@@ -182,7 +191,7 @@ mod tests {
         let mut rng = ChaChaRng::from_entropy();
         let seed = Secret::random(&mut rng);
         let memory = InMemory::<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>::default();
-        let obf = MemoryEncryptionLayer::new(seed, memory);
+        let obf = MemoryEncryptionLayer::new(&seed, memory);
 
         let header_addr = Address::<ADDRESS_LENGTH>::random(&mut rng);
 
@@ -192,40 +201,33 @@ mod tests {
         let val_addr_4 = Address::<ADDRESS_LENGTH>::random(&mut rng);
 
         assert_eq!(
-            block_on(obf.guarded_write(
-                (header_addr.clone(), None),
-                vec![
-                    (header_addr.clone(), [2; WORD_LENGTH]),
-                    (val_addr_1.clone(), [1; WORD_LENGTH]),
-                    (val_addr_2.clone(), [1; WORD_LENGTH])
-                ]
-            ))
+            block_on(obf.guarded_write((header_addr.clone(), None), vec![
+                (header_addr.clone(), [2; WORD_LENGTH]),
+                (val_addr_1.clone(), [1; WORD_LENGTH]),
+                (val_addr_2.clone(), [1; WORD_LENGTH])
+            ]))
             .unwrap(),
             None
         );
 
         assert_eq!(
-            block_on(obf.guarded_write(
-                (header_addr.clone(), None),
-                vec![
-                    (header_addr.clone(), [2; WORD_LENGTH]),
-                    (val_addr_1.clone(), [3; WORD_LENGTH]),
-                    (val_addr_2.clone(), [3; WORD_LENGTH])
-                ]
-            ))
+            block_on(obf.guarded_write((header_addr.clone(), None), vec![
+                (header_addr.clone(), [2; WORD_LENGTH]),
+                (val_addr_1.clone(), [3; WORD_LENGTH]),
+                (val_addr_2.clone(), [3; WORD_LENGTH])
+            ]))
             .unwrap(),
             Some([2; WORD_LENGTH])
         );
 
         assert_eq!(
-            block_on(obf.guarded_write(
-                (header_addr.clone(), Some([2; WORD_LENGTH])),
-                vec![
+            block_on(
+                obf.guarded_write((header_addr.clone(), Some([2; WORD_LENGTH])), vec![
                     (header_addr.clone(), [4; WORD_LENGTH]),
                     (val_addr_3.clone(), [2; WORD_LENGTH]),
                     (val_addr_4.clone(), [2; WORD_LENGTH])
-                ]
-            ))
+                ])
+            )
             .unwrap(),
             Some([2; WORD_LENGTH])
         );

@@ -3,7 +3,7 @@ use std::ops::{Deref, DerefMut};
 use tiny_keccak::{Hasher, Sha3};
 use zeroize::{Zeroize, ZeroizeOnDrop, Zeroizing};
 
-use crate::secret::Secret;
+use crate::Secret;
 
 /// A type that holds symmetric key of a fixed  size.
 ///
@@ -54,8 +54,7 @@ impl<const KEY_LENGTH: usize> SymmetricKey<KEY_LENGTH> {
     ) -> Result<Self, String> {
         if SECRET_LENGTH < KEY_LENGTH {
             return Err(format!(
-                "insufficient entropy to derive {KEY_LENGTH}-byte key from a {SECRET_LENGTH}-byte \
-                 secret",
+                "insufficient entropy to derive {KEY_LENGTH}-byte key from a {SECRET_LENGTH}-byte secret",
             ));
         }
         let mut key = Self::default();

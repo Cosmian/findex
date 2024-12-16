@@ -1,3 +1,5 @@
+#![warn(clippy::all, clippy::nursery, clippy::cargo)]
+
 mod address;
 mod adt;
 mod encoding;
@@ -28,8 +30,15 @@ pub use test::memory::{
 };
 pub use value::Value;
 
-/// 16-byte addresses ensure a high collision resistance that poses virtually no
-/// limitation on the index.
+#[cfg(any(test, feature = "bench"))]
+mod memory;
+#[cfg(feature = "bench")]
+pub use encoding::{dummy_decode, dummy_encode, Op, WORD_LENGTH};
+#[cfg(feature = "bench")]
+pub use in_memory_store::InMemory;
+
+/// 16-byte addresses ensure a high collision resistance that poses virtually no limitation on the
+/// index.
 ///
 /// 8-byte addresses can also be used for smaller indexes if storage is the
 /// limiting factor, in which case the number of addresses in used at which
@@ -40,6 +49,6 @@ pub use value::Value;
 /// associated values to sqrt(2^64 - 2^n).
 pub const ADDRESS_LENGTH: usize = 16;
 
-/// Using 32-byte cryptographic keys allows achieving post-quantum resistance
-/// with the AES primitive.
+/// Using 32-byte cryptographic keys allows achieving post-quantum resistance with the AES
+/// primitive.
 pub const KEY_LENGTH: usize = 32;
