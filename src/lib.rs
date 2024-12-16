@@ -30,12 +30,10 @@ pub use test::memory::{
 };
 pub use value::Value;
 
-#[cfg(any(test, feature = "bench"))]
-mod memory;
+// #[cfg(any(test, feature = "bench"))]
+// mod memory;
 #[cfg(feature = "bench")]
-pub use encoding::{dummy_decode, dummy_encode, Op, WORD_LENGTH};
-#[cfg(feature = "bench")]
-pub use in_memory_store::InMemory;
+pub use mem::InMemory;
 
 /// 16-byte addresses ensure a high collision resistance that poses virtually no limitation on the
 /// index.
