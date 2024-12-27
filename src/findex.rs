@@ -9,8 +9,8 @@ use std::{
 use tiny_keccak::{Hasher, Sha3};
 
 use crate::{
-    ADDRESS_LENGTH, Address, IndexADT, KEY_LENGTH, MemoryADT, Secret, adt::VectorADT, encoding::Op,
-    encryption_layer::MemoryEncryptionLayer, error::Error, ovec::IVec,
+    adt::VectorADT, encoding::Op, encryption_layer::MemoryEncryptionLayer, error::Error,
+    ovec::IVec, Address, IndexADT, MemoryADT, Secret, ADDRESS_LENGTH, KEY_LENGTH,
 };
 
 #[derive(Clone, Debug)]
@@ -48,11 +48,14 @@ pub struct Findex<
 }
 
 impl<
-    const WORD_LENGTH: usize,
-    Value: Send + Sync + Hash + Eq,
-    TryFromError: std::error::Error,
-    Memory: Send + Sync + Clone + MemoryADT<Address = Address<ADDRESS_LENGTH>, Word = [u8; WORD_LENGTH]>,
-> Findex<WORD_LENGTH, Value, TryFromError, Memory>
+        const WORD_LENGTH: usize,
+        Value: Send + Sync + Hash + Eq,
+        TryFromError: std::error::Error,
+        Memory: Send
+            + Sync
+            + Clone
+            + MemoryADT<Address = Address<ADDRESS_LENGTH>, Word = [u8; WORD_LENGTH]>,
+    > Findex<WORD_LENGTH, Value, TryFromError, Memory>
 where
     for<'z> Value: TryFrom<&'z [u8], Error = TryFromError> + AsRef<[u8]>,
     Vec<u8>: From<Value>,
@@ -167,13 +170,16 @@ where
 }
 
 impl<
-    const WORD_LENGTH: usize,
-    Keyword: Send + Sync + Hash + PartialEq + Eq + AsRef<[u8]>,
-    Value: Send + Sync + Hash + PartialEq + Eq,
-    TryFromError: std::error::Error,
-    Memory: Send + Sync + Clone + MemoryADT<Address = Address<ADDRESS_LENGTH>, Word = [u8; WORD_LENGTH]>,
-> IndexADT<Keyword, Value> for Findex<WORD_LENGTH, Value, TryFromError, Memory>
-        // TODO(hatem): ajouter un paramètre
+        const WORD_LENGTH: usize,
+        Keyword: Send + Sync + Hash + PartialEq + Eq + AsRef<[u8]>,
+        Value: Send + Sync + Hash + PartialEq + Eq,
+        TryFromError: std::error::Error,
+        Memory: Send
+            + Sync
+            + Clone
+            + MemoryADT<Address = Address<ADDRESS_LENGTH>, Word = [u8; WORD_LENGTH]>,
+    > IndexADT<Keyword, Value> for Findex<WORD_LENGTH, Value, TryFromError, Memory>
+// TODO(hatem): ajouter un paramètre
 where
     for<'z> Value: TryFrom<&'z [u8], Error = TryFromError> + AsRef<[u8]>,
     Vec<u8>: From<Value>,
@@ -228,11 +234,11 @@ mod tests {
     use rand_core::SeedableRng;
 
     use crate::{
-        ADDRESS_LENGTH, Findex, IndexADT, Value,
         address::Address,
         encoding::{dummy_decode, dummy_encode},
         memory::in_memory::InMemory,
         secret::Secret,
+        Findex, IndexADT, Value, ADDRESS_LENGTH,
     };
 
     const WORD_LENGTH: usize = 16;
