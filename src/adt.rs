@@ -37,6 +37,7 @@ pub trait IndexADT<Keyword: Send + Sync + Hash, Value: Send + Sync + Hash> {
     ) -> impl Send + Future<Output = Result<(), Self::Error>>;
 }
 
+#[allow(clippy::redundant_pub_crate)] // false positive. Used in ovec.rs and findex.rs.
 pub(crate) trait VectorADT: Send + Sync {
     /// Vectors are homogeneous.
     type Value: Send + Sync;
@@ -84,6 +85,7 @@ pub trait MemoryADT {
 #[cfg(test)]
 pub mod tests {
 
+    #[allow(clippy::redundant_pub_crate)] // false positive. Used in ovec.rs.
     pub(crate) use vector::*;
 
     mod vector {
@@ -98,6 +100,7 @@ pub mod tests {
 
         /// Adding information from different copies of the same vector should
         /// be visible by all copies.
+        #[allow(clippy::redundant_pub_crate)] // false positive. Used in ovec.rs.
         pub(crate) async fn test_vector_sequential<const LENGTH: usize>(
             v: &(impl Clone + VectorADT<Value = [u8; LENGTH]>),
         ) {
@@ -116,6 +119,7 @@ pub mod tests {
 
         /// Concurrently adding data to instances of the same vector should not
         /// introduce data loss.
+        #[allow(clippy::redundant_pub_crate)] // false positive. Used in ovec.rs.
         pub(crate) async fn test_vector_concurrent<
             const LENGTH: usize,
             V: 'static + Clone + VectorADT<Value = [u8; LENGTH]>,

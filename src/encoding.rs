@@ -13,7 +13,7 @@ pub enum Op {
     Delete,
 }
 
-pub(crate) enum Mode {
+enum Mode {
     EqBlock(usize),
     Offset(usize),
 }

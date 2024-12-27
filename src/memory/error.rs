@@ -3,12 +3,12 @@ use core::fmt::Display;
 #[cfg(feature = "redis-mem")]
 use redis::RedisError;
 
-#[cfg(any(test, feature = "bench"))]
+#[cfg(test)]
 use super::in_memory::InMemoryError;
 
 #[derive(Debug)]
 pub enum MemoryError {
-    #[cfg(any(test, feature = "bench"))]
+    #[cfg(test)]
     InMemory(InMemoryError),
     #[cfg(feature = "redis-mem")]
     Redis(RedisError),
@@ -17,11 +17,11 @@ pub enum MemoryError {
 impl Display for MemoryError {
     fn fmt(&self, _f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            #[cfg(any(test, feature = "bench"))]
+            #[cfg(test)]
             Self::InMemory(err) => write!(_f, "in_memory: {err}"),
             #[cfg(feature = "redis-mem")]
             Self::Redis(err) => write!(_f, "redis: {err}"),
-            #[cfg(not(any(test, feature = "bench", feature = "redis-mem")))]
+            #[cfg(all(not(test), not(feature = "redis-mem")))]
             _ => panic!("no other variant"),
         }
     }

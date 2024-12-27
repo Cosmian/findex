@@ -8,10 +8,10 @@ use crate::MemoryADT;
 
 pub async fn test_single_write_and_read<T>(memory: &T, seed: [u8; 32])
 where
-    T: MemoryADT,
-    T::Address: std::fmt::Debug + PartialEq + From<[u8; 16]>,
-    T::Word: std::fmt::Debug + PartialEq + From<[u8; 16]>,
-    T::Error: std::error::Error,
+    T: MemoryADT + Send + Sync,
+    T::Address: std::fmt::Debug + PartialEq + From<[u8; 16]> + Send,
+    T::Word: std::fmt::Debug + PartialEq + From<[u8; 16]> + Send,
+    T::Error: std::error::Error + Send,
 {
     let mut rng = StdRng::from_seed(seed);
 
@@ -60,10 +60,10 @@ where
 
 pub async fn test_wrong_guard<T>(memory: &T, seed: [u8; 32])
 where
-    T: MemoryADT,
-    T::Address: std::fmt::Debug + PartialEq + From<[u8; 16]>,
-    T::Word: std::fmt::Debug + PartialEq + From<[u8; 16]>,
-    T::Error: std::error::Error,
+    T: MemoryADT + Send + Sync,
+    T::Address: std::fmt::Debug + PartialEq + From<[u8; 16]> + Send,
+    T::Word: std::fmt::Debug + PartialEq + From<[u8; 16]> + Send,
+    T::Error: std::error::Error + Send,
 {
     let mut rng = StdRng::from_seed(seed);
     let random_address = rng.gen::<u128>().to_be_bytes();
@@ -120,7 +120,7 @@ where
 
 pub async fn test_guarded_write_concurrent<T>(memory: &T, seed: [u8; 32])
 where
-    T: MemoryADT + Send + 'static + Clone,
+    T: MemoryADT + Send + Sync + 'static + Clone,
     T::Address: std::fmt::Debug + PartialEq + From<[u8; 16]> + Send,
     T::Word: std::fmt::Debug + PartialEq + From<[u8; 16]> + Into<[u8; 16]> + Send + Clone + Default,
     T::Error: std::error::Error,

@@ -28,10 +28,10 @@ return value
 
 #[derive(Clone)]
 pub struct RedisMemory<Address, Word> {
-    pub manager: ConnectionManager, // is Send + Sync : https://docs.rs/redis/latest/redis/aio/struct.ConnectionManager.html#impl-Send-for-ConnectionManager
-    script_hash: String,            // trivially Send + Sync
-    a: PhantomData<Address>, // is send + Sync because the underlying address we will use in findex is Send + Sync ([u8; ADDRESS_LENGTH])
-    w: PhantomData<Word>,    // same as above
+    pub manager: ConnectionManager,
+    script_hash: String,
+    a: PhantomData<Address>,
+    w: PhantomData<Word>,
 }
 
 impl<Address, Word> fmt::Debug for RedisMemory<Address, Word> {
@@ -42,7 +42,7 @@ impl<Address, Word> fmt::Debug for RedisMemory<Address, Word> {
     }
 }
 
-impl<Address, Word> RedisMemory<Address, Word> {
+impl<Address: Sync, Word: Sync> RedisMemory<Address, Word> {
     /// Connects to a Redis server with a `ConnectionManager`.
     pub async fn connect_with_manager(manager: ConnectionManager) -> Result<Self, MemoryError> {
         Ok(Self {
@@ -126,12 +126,11 @@ mod tests {
     };
     use serial_test::serial;
 
-    pub(crate) fn get_redis_url() -> String {
-        if let Ok(var_env) = std::env::var("REDIS_HOST") {
-            format!("redis://{var_env}:6379")
-        } else {
-            "redis://localhost:6379".to_owned()
-        }
+    fn get_redis_url() -> String {
+        std::env::var("REDIS_HOST").map_or_else(
+            |_| "redis://localhost:6379".to_owned(),
+            |var_env| format!("redis://{var_env}:6379"),
+        )
     }
 
     const WORD_LENGTH: usize = 16;

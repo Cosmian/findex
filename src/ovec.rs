@@ -66,6 +66,7 @@ impl TryFrom<&[u8]> for Header {
 }
 
 /// Implementation of a vector in an infinite array.
+#[allow(clippy::redundant_pub_crate)] // false positive. Used in findex file.
 #[derive(Debug)]
 pub(crate) struct IVec<
     const WORD_LENGTH: usize,

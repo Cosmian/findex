@@ -22,7 +22,6 @@ pub use encoding::{dummy_decode, dummy_encode};
 pub use encoding::{Op, WORD_LENGTH};
 pub use error::Error;
 pub use findex::Findex;
-pub use memory::memory as mem;
 pub use secret::Secret;
 #[cfg(test)]
 pub use test::memory::{
@@ -30,11 +29,11 @@ pub use test::memory::{
 };
 pub use value::Value;
 
-// #[cfg(any(test, feature = "bench"))]
-// mod memory;
 #[cfg(feature = "bench")]
-pub use mem::InMemory;
+pub use crate::memory::in_memory::InMemory;
 
+#[cfg(feature = "redis-mem")]
+pub use crate::memory::{error::MemoryError, redis::RedisMemory};
 /// 16-byte addresses ensure a high collision resistance that poses virtually no limitation on the
 /// index.
 ///
