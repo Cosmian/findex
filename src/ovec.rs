@@ -112,7 +112,7 @@ where
 {
     type Value = Memory::Word;
 
-    type Error = Error<Memory::Address, Memory::Error>;
+    type Error = Error<Memory::Address>;
 
     async fn push(&mut self, vs: Vec<Self::Value>) -> Result<(), Self::Error> {
         // Findex modifications are only lock-free, hence it does not guarantee a given client will
@@ -151,7 +151,8 @@ where
                         ),
                         bindings,
                     )
-                    .await?
+                    .await
+                    .map_err(|e| Error::Memory(e.to_string()))?
                     .map(|v| Header::try_from(v.as_slice()))
                     .transpose()
                     .map_err(Error::Conversion)?;
@@ -176,7 +177,11 @@ where
             .chain((0..old_header.cnt).map(|i| self.a.clone() + i + 1))
             .collect();
 
-        let first_batch = self.m.batch_read(addresses).await?;
+        let first_batch = self
+            .m
+            .batch_read(addresses)
+            .await
+            .map_err(|e| Error::Memory(e.to_string()))?;
 
         let second_batch = {
             let cur_header = first_batch[0]
@@ -190,7 +195,10 @@ where
                 let missing_addresses = (old_header.cnt..cur_header.cnt)
                     .map(|i| self.a.clone() + i + 1)
                     .collect::<Vec<_>>();
-                self.m.batch_read(missing_addresses).await?
+                self.m
+                    .batch_read(missing_addresses)
+                    .await
+                    .map_err(|e| Error::Memory(e.to_string()))?
             } else {
                 vec![] // only call the memory a second time if needed
             }
@@ -215,8 +223,7 @@ mod tests {
         ADDRESS_LENGTH,
         address::Address,
         adt::tests::{test_vector_concurrent, test_vector_sequential},
-        encryption_layer::MemoryEncryptionLayer,
-        in_memory_store::InMemory,
+        memory::{InMemory, MemoryEncryptionLayer},
         ovec::IVec,
         secret::Secret,
     };

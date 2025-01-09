@@ -39,6 +39,7 @@ impl<Address: Hash + Eq + Debug, Value: Clone + Eq + Debug> InMemory<Address, Va
         }
     }
 
+    #[cfg(feature = "bench")]
     pub fn clear(&self) {
         self.inner.lock().expect("poisoned lock").clear();
     }

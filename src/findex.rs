@@ -2,6 +2,7 @@
 
 use std::{
     collections::{HashMap, HashSet},
+    fmt::Debug,
     hash::Hash,
     sync::{Arc, Mutex},
 };
@@ -10,20 +11,16 @@ use tiny_keccak::{Hasher, Sha3};
 
 use crate::{
     ADDRESS_LENGTH, Address, IndexADT, KEY_LENGTH, MemoryADT, Secret, adt::VectorADT, encoding::Op,
-    encryption_layer::MemoryEncryptionLayer, error::Error, ovec::IVec,
+    error::Error, memory::MemoryEncryptionLayer, ovec::IVec,
 };
 
 #[derive(Clone, Debug)]
 pub struct Findex<
     const WORD_LENGTH: usize,
     Value,
-    TryFromError: std::error::Error,
+    EncodingError: Debug,
     Memory: Send + Sync + Clone + MemoryADT<Address = Address<ADDRESS_LENGTH>, Word = [u8; WORD_LENGTH]>,
-> where
-    // values are serializable (but do not depend on `serde`)
-    for<'z> Value: TryFrom<&'z [u8], Error = TryFromError> + AsRef<[u8]>,
-    Memory::Error: Send + Sync,
-{
+> {
     el: MemoryEncryptionLayer<WORD_LENGTH, Memory>,
     cache: Arc<
         Mutex<
@@ -37,33 +34,31 @@ pub struct Findex<
         fn(
             Op,
             HashSet<Value>,
-        )
-            -> Result<Vec<<MemoryEncryptionLayer<WORD_LENGTH, Memory> as MemoryADT>::Word>, String>,
+        ) -> Result<
+            Vec<<MemoryEncryptionLayer<WORD_LENGTH, Memory> as MemoryADT>::Word>,
+            EncodingError,
+        >,
     >,
     decode: Arc<
         fn(
             Vec<<MemoryEncryptionLayer<WORD_LENGTH, Memory> as MemoryADT>::Word>,
-        ) -> Result<HashSet<Value>, TryFromError>,
+        ) -> Result<HashSet<Value>, EncodingError>,
     >,
 }
 
 impl<
     const WORD_LENGTH: usize,
     Value: Send + Sync + Hash + Eq,
-    TryFromError: std::error::Error,
+    EncodingError: Send + Sync + Debug,
     Memory: Send + Sync + Clone + MemoryADT<Address = Address<ADDRESS_LENGTH>, Word = [u8; WORD_LENGTH]>,
-> Findex<WORD_LENGTH, Value, TryFromError, Memory>
-where
-    for<'z> Value: TryFrom<&'z [u8], Error = TryFromError> + AsRef<[u8]>,
-    Vec<u8>: From<Value>,
-    Memory::Error: Send + Sync,
+> Findex<WORD_LENGTH, Value, EncodingError, Memory>
 {
     /// Instantiates Findex with the given seed, and memory.
     pub fn new(
         seed: &Secret<KEY_LENGTH>,
         mem: Memory,
-        encode: fn(Op, HashSet<Value>) -> Result<Vec<[u8; WORD_LENGTH]>, String>,
-        decode: fn(Vec<[u8; WORD_LENGTH]>) -> Result<HashSet<Value>, TryFromError>,
+        encode: fn(Op, HashSet<Value>) -> Result<Vec<[u8; WORD_LENGTH]>, EncodingError>,
+        decode: fn(Vec<[u8; WORD_LENGTH]>) -> Result<HashSet<Value>, EncodingError>,
     ) -> Self {
         Self {
             el: MemoryEncryptionLayer::new(seed, mem),
@@ -119,8 +114,8 @@ where
     ) -> Result<(), <Self as IndexADT<Keyword, Value>>::Error> {
         let bindings = bindings
             .map(|(kw, vals)| (self.encode)(op, vals).map(|words| (kw, words)))
-            .collect::<Result<Vec<_>, String>>()
-            .map_err(Error::<_, Memory::Error>::Conversion)?;
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|e| Error::Conversion(format!("{e:?}")))?;
 
         let futures = bindings
             .into_iter()
@@ -166,20 +161,13 @@ where
 
 impl<
     const WORD_LENGTH: usize,
-    Keyword: Send + Sync + Hash + PartialEq + Eq + AsRef<[u8]>,
-    Value: Send + Sync + Hash + PartialEq + Eq,
-    TryFromError: std::error::Error,
+    Keyword: Send + Sync + Hash + Eq + AsRef<[u8]>,
+    Value: Send + Sync + Hash + Eq,
+    EncodingError: Send + Sync + Debug,
     Memory: Send + Sync + Clone + MemoryADT<Address = Address<ADDRESS_LENGTH>, Word = [u8; WORD_LENGTH]>,
-> IndexADT<Keyword, Value> for Findex<WORD_LENGTH, Value, TryFromError, Memory>
-where
-    for<'z> Value: TryFrom<&'z [u8], Error = TryFromError> + AsRef<[u8]>,
-    Vec<u8>: From<Value>,
-    Memory::Error: Send + Sync,
+> IndexADT<Keyword, Value> for Findex<WORD_LENGTH, Value, EncodingError, Memory>
 {
-    type Error = Error<
-        Address<ADDRESS_LENGTH>,
-        <MemoryEncryptionLayer<WORD_LENGTH, Memory> as MemoryADT>::Error,
-    >;
+    type Error = Error<Address<ADDRESS_LENGTH>>;
 
     async fn search(
         &self,
@@ -193,9 +181,7 @@ where
             let (kw, vals) = fut.await?;
             bindings.insert(
                 kw,
-                (self.decode)(vals).map_err(|e| {
-                    Error::<Address<ADDRESS_LENGTH>, Memory::Error>::Conversion(e.to_string())
-                })?,
+                (self.decode)(vals).map_err(|e| Error::Conversion(format!("{e:?}")))?,
             );
         }
         Ok(bindings)
@@ -228,7 +214,7 @@ mod tests {
         ADDRESS_LENGTH, Findex, IndexADT, Value,
         address::Address,
         encoding::{dummy_decode, dummy_encode},
-        in_memory_store::InMemory,
+        memory::InMemory,
         secret::Secret,
     };
 

@@ -3,9 +3,9 @@
 mod address;
 mod adt;
 mod encoding;
-mod encryption_layer;
 mod error;
 mod findex;
+mod memory;
 mod ovec;
 mod secret;
 mod symmetric_key;
@@ -13,16 +13,15 @@ mod value;
 
 pub use address::Address;
 pub use adt::{IndexADT, MemoryADT};
+pub use error::Error;
 pub use findex::Findex;
 pub use secret::Secret;
 pub use value::Value;
 
-#[cfg(any(test, feature = "bench"))]
-mod in_memory_store;
 #[cfg(feature = "bench")]
 pub use encoding::{Op, WORD_LENGTH, dummy_decode, dummy_encode};
 #[cfg(feature = "bench")]
-pub use in_memory_store::InMemory;
+pub use memory::InMemory;
 
 /// 16-byte addresses ensure a high collision resistance that poses virtually no limitation on the
 /// index.
