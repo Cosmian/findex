@@ -66,11 +66,9 @@ impl TryFrom<&[u8]> for Header {
 
 /// Implementation of a vector in an infinite array.
 #[derive(Debug)]
-pub struct IVec<const WORD_LENGTH: usize, Memory: Clone + MemoryADT<Word = [u8; WORD_LENGTH]>> {
+pub struct IVec<const WORD_LENGTH: usize, Memory: MemoryADT<Word = [u8; WORD_LENGTH]>> {
     // backing array address
     a: Memory::Address,
-    // cached header value
-    h: Option<Header>,
     m: Memory,
 }
 
@@ -83,7 +81,6 @@ impl<
     fn clone(&self) -> Self {
         Self {
             a: self.a.clone(),
-            h: self.h.clone(),
             m: self.m.clone(),
         }
     }
@@ -98,7 +95,7 @@ impl<
     /// (Lazily) instantiates a new vector at this address in this memory: no value is written
     /// before the first push.
     pub const fn new(a: Address, m: Memory) -> Self {
-        Self { a, h: None, m }
+        Self { a, m }
     }
 }
 
@@ -121,50 +118,46 @@ where
         // TODO: this loop will arguably terminate if the index is not highly contended, but we
         // need a stronger guarantee. Maybe a return with an error after reaching a certain
         // number of retries.
+        let mut old = Option::<Header>::None;
         loop {
-            let (cur, new) = {
-                // Generates a new header with incremented counter.
-                let mut new = self.h.clone().unwrap_or_default();
-                new.cnt += vs.len() as u64;
+            // Generates a new header with incremented counter.
+            let mut new = old.clone().unwrap_or_default();
+            new.cnt += vs.len() as u64;
 
-                // Binds the correct addresses to the values.
-                let mut bindings = (new.cnt - vs.len() as u64..new.cnt)
-                    .zip(vs.clone())
-                    .map(|(i, v)| (self.a.clone() + 1 + i, v)) // a is the header address
-                    .collect::<Vec<_>>();
-                bindings.push((
-                    self.a.clone(),
-                    (&new).try_into().map_err(|e| Error::Conversion(e))?,
-                ));
+            // Binds the correct addresses to the values.
+            let mut bindings = (new.cnt - vs.len() as u64..new.cnt)
+                .zip(vs.clone())
+                .map(|(i, v)| (self.a.clone() + 1 + i, v)) // a is the header address
+                .collect::<Vec<_>>();
+            bindings.push((
+                self.a.clone(),
+                (&new).try_into().map_err(|e| Error::Conversion(e))?,
+            ));
 
-                // Attempts committing the new bindings using the old header as guard.
-                let cur = self
-                    .m
-                    .guarded_write(
-                        (
-                            self.a.clone(),
-                            self.h
-                                .as_ref()
-                                .map(<[u8; WORD_LENGTH]>::try_from)
-                                .transpose()
-                                .map_err(|e| Error::Conversion(e))?,
-                        ),
-                        bindings,
-                    )
-                    .await
-                    .map_err(|e| Error::Memory(e.to_string()))?
-                    .map(|v| Header::try_from(v.as_slice()))
-                    .transpose()
-                    .map_err(Error::Conversion)?;
+            // Attempts committing the new bindings using the old header as guard.
+            let cur = self
+                .m
+                .guarded_write(
+                    (
+                        self.a.clone(),
+                        old.as_ref()
+                            .map(<[u8; WORD_LENGTH]>::try_from)
+                            .transpose()
+                            .map_err(|e| Error::Conversion(e))?,
+                    ),
+                    bindings,
+                )
+                .await
+                .map_err(|e| Error::Memory(e.to_string()))?
+                .map(|v| Header::try_from(v.as_slice()))
+                .transpose()
+                .map_err(Error::Conversion)?;
 
-                (cur, new)
-            };
-
-            if cur.as_ref() == self.h.as_ref() {
-                self.h = Some(new);
+            if cur.as_ref() == old.as_ref() {
                 return Ok(());
+            } else {
+                old = cur;
             }
-            self.h = cur;
         }
     }
 
@@ -172,7 +165,7 @@ where
         // Read from a first batch of addresses:
         // - the header address;
         // - the value addresses derived from the known header.
-        let old_header = self.h.clone().unwrap_or_default();
+        let old_header = Header::default();
         let addresses = std::iter::once(self.a.clone())
             .chain((0..old_header.cnt).map(|i| self.a.clone() + i + 1))
             .collect();
@@ -220,10 +213,10 @@ mod tests {
     use rand_core::SeedableRng;
 
     use crate::{
-        ADDRESS_LENGTH,
+        ADDRESS_LENGTH, InMemory,
         address::Address,
         adt::tests::{test_vector_concurrent, test_vector_sequential},
-        memory::{InMemory, MemoryEncryptionLayer},
+        memory::MemoryEncryptionLayer,
         ovec::IVec,
         secret::Secret,
     };

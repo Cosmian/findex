@@ -20,18 +20,11 @@ pub use value::Value;
 
 #[cfg(feature = "bench")]
 pub use encoding::{Op, WORD_LENGTH, dummy_decode, dummy_encode};
-#[cfg(feature = "bench")]
+#[cfg(any(test, feature = "bench"))]
 pub use memory::InMemory;
 
 /// 16-byte addresses ensure a high collision resistance that poses virtually no limitation on the
 /// index.
-///
-/// 8-byte addresses can also be used for smaller indexes if storage is the limiting factor, in
-/// which case the number of addresses in used at which collisions are to be expected is
-/// approximately 2^32 (see the birthday paradox for more details). Keyword collision can be
-/// mitigated by marking n bit of the addresses, allowing to statistically store up to 2^((64-n)/2)
-/// keywords, and reducing the number of words that can be used to store associated values to
-/// sqrt(2^64 - 2^n).
 pub const ADDRESS_LENGTH: usize = 16;
 
 /// Using 32-byte cryptographic keys allows achieving post-quantum resistance with the AES

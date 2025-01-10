@@ -27,7 +27,23 @@ fn main() {
         dummy_encode::<16, _>,
         dummy_decode,
     );
+
     let kw = index[1].0;
-    block_on(findex.insert(index.into_iter())).expect("insert failed");
-    block_on(findex.search(vec![kw; 10000].into_iter())).expect("search failed");
+    let vs = index[1].1.iter().cloned().collect::<Vec<_>>();
+
+    index
+        .into_iter()
+        .for_each(|(kw, vs)| block_on(findex.insert(kw, vs)).expect("insert failed"));
+
+    let res = vec![kw; 1_000]
+        .iter()
+        .map(|kw| {
+            block_on(findex.search(kw))
+                .expect("search failed")
+                .into_iter()
+                .collect::<Vec<_>>()
+        })
+        .collect::<Vec<_>>();
+
+    assert_eq!(res, vec![vs; 1_000])
 }

@@ -57,18 +57,20 @@ fn bench_search_multiple_bindings(c: &mut Criterion) {
     let stm = InMemory::default();
     let index = build_benchmarking_bindings_index(&mut rng);
     let findex = Findex::new(&seed, stm, dummy_encode::<WORD_LENGTH, _>, dummy_decode);
-    block_on(findex.insert(index.clone().into_iter())).unwrap();
+    index
+        .iter()
+        .cloned()
+        .for_each(|(kw, vs)| block_on(findex.insert(kw, vs)).unwrap());
 
     let mut group = c.benchmark_group("Multiple bindings search (1 keyword)");
     for (kw, vals) in index.clone().into_iter() {
         group.bench_function(BenchmarkId::from_parameter(vals.len()), |b| {
             b.iter_batched(
-                || {
-                    findex.clear();
-                    [kw].into_iter()
-                },
+                || [kw].into_iter(),
                 |kws| {
-                    block_on(findex.search(kws)).expect("search failed");
+                    kws.for_each(|kw| {
+                        block_on(findex.search(&kw)).expect("search failed");
+                    });
                 },
                 criterion::BatchSize::SmallInput,
             );
@@ -88,7 +90,12 @@ fn bench_search_multiple_keywords(c: &mut Criterion) {
         dummy_encode::<WORD_LENGTH, _>,
         dummy_decode,
     );
-    block_on(findex.insert(index.clone().into_iter())).unwrap();
+
+    index
+        .iter()
+        .cloned()
+        .for_each(|(kw, vs)| block_on(findex.insert(kw, vs)).unwrap());
+
     // Reference timings
     {
         let mut group = c.benchmark_group("retrieving words from memory");
@@ -119,13 +126,14 @@ fn bench_search_multiple_keywords(c: &mut Criterion) {
             group.bench_function(BenchmarkId::from_parameter(n), |b| {
                 b.iter_batched(
                     || {
-                        findex.clear();
                         // Using .cloned() instead of .clone() reduces the overhead (maybe because it
                         // only clones what is needed)
                         index.iter().map(|(kw, _)| kw).take(n).cloned()
                     },
                     |kws| {
-                        block_on(findex.search(kws)).expect("search failed");
+                        kws.for_each(|kw| {
+                            block_on(findex.search(&kw)).expect("search failed");
+                        });
                     },
                     criterion::BatchSize::SmallInput,
                 );
@@ -150,7 +158,6 @@ fn bench_insert_multiple_bindings(c: &mut Criterion) {
                 .bench_function(BenchmarkId::from_parameter(vals.len()), |b| {
                     b.iter_batched(
                         || {
-                            stm.clear();
                             let vals = vals.clone();
                             let words = dummy_encode::<WORD_LENGTH, _>(Op::Insert, vals).unwrap();
                             words
@@ -185,11 +192,12 @@ fn bench_insert_multiple_bindings(c: &mut Criterion) {
                     b.iter_batched(
                         || {
                             stm.clear();
-                            findex.clear();
                             [(kw, vals.clone())].into_iter()
                         },
                         |bindings| {
-                            block_on(findex.insert(bindings)).expect("search failed");
+                            bindings.for_each(|(kw, vs)| {
+                                block_on(findex.insert(kw, vs)).expect("search failed")
+                            });
                         },
                         criterion::BatchSize::SmallInput,
                     );
@@ -251,19 +259,22 @@ fn bench_insert_multiple_keywords(c: &mut Criterion) {
                     b.iter_batched(
                         || {
                             stm.clear();
-                            findex.clear();
                             (0..n)
                                 .map(|_| {
                                     (
                                         rng.next_u64().to_be_bytes(),
-                                        HashSet::from_iter([rng.next_u64().to_be_bytes()]),
+                                        HashSet::<[u8; 8]>::from_iter([rng
+                                            .next_u64()
+                                            .to_be_bytes()]),
                                     )
                                 })
                                 .collect::<Vec<_>>()
                                 .into_iter()
                         },
                         |bindings| {
-                            block_on(findex.insert(bindings)).expect("search failed");
+                            bindings.for_each(|(kw, vs)| {
+                                block_on(findex.insert(kw, vs)).expect("insert failed");
+                            });
                         },
                         criterion::BatchSize::SmallInput,
                     );
@@ -307,7 +318,9 @@ fn bench_contention(c: &mut Criterion) {
                 .map(|kw| {
                     (
                         kw, // All clients use a different keyword.
-                        HashSet::from_iter((0..N_BINDINGS).map(|_| rng.next_u64().to_be_bytes())),
+                        HashSet::<[u8; 8]>::from_iter(
+                            (0..N_BINDINGS).map(|_| rng.next_u64().to_be_bytes()),
+                        ),
                     )
                 })
                 .collect::<Vec<_>>();
@@ -317,15 +330,12 @@ fn bench_contention(c: &mut Criterion) {
                     b.iter_batched(
                         || {
                             stm.clear();
-                            findex.clear();
                             instances.clone().into_iter().zip(bindings.clone())
                         },
                         |iterator| {
                             runtime.block_on(async {
-                                join_all(iterator.map(|(findex, binding)| {
-                                    tokio::spawn(async move {
-                                        findex.insert([binding].into_iter()).await
-                                    })
+                                join_all(iterator.map(|(findex, (kw, vs))| {
+                                    tokio::spawn(async move { findex.insert(kw, vs).await })
                                 }))
                                 .await
                             })
@@ -359,7 +369,9 @@ fn bench_contention(c: &mut Criterion) {
                 .map(|_| {
                     (
                         kws[0], // All clients use the same keyword
-                        HashSet::from_iter((0..N_BINDINGS).map(|_| rng.next_u64().to_be_bytes())),
+                        HashSet::<[u8; 8]>::from_iter(
+                            (0..N_BINDINGS).map(|_| rng.next_u64().to_be_bytes()),
+                        ),
                     )
                 })
                 .collect::<Vec<_>>();
@@ -369,15 +381,12 @@ fn bench_contention(c: &mut Criterion) {
                     b.iter_batched(
                         || {
                             stm.clear();
-                            findex.clear();
                             instances.clone().into_iter().zip(bindings.clone())
                         },
                         |iterator| {
                             runtime.block_on(async {
-                                join_all(iterator.map(|(findex, binding)| {
-                                    tokio::spawn(async move {
-                                        findex.insert([binding].into_iter()).await
-                                    })
+                                join_all(iterator.map(|(findex, (kw, vs))| {
+                                    tokio::spawn(async move { findex.insert(kw, vs).await })
                                 }))
                                 .await
                             })

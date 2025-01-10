@@ -5,11 +5,7 @@
 //!
 //! Each of them strive for simplicity and consistency with the classical CS notions.
 
-use std::{
-    collections::{HashMap, HashSet},
-    future::Future,
-    hash::Hash,
-};
+use std::{collections::HashSet, future::Future, hash::Hash};
 
 /// An index stores *bindings*, that associate a keyword with a value. All values bound to the same
 /// keyword are said to be *indexed under* this keyword.
@@ -19,19 +15,21 @@ pub trait IndexADT<Keyword: Send + Sync + Hash, Value: Send + Sync + Hash> {
     /// Search the index for the values bound to the given keywords.
     fn search(
         &self,
-        keywords: impl Send + Iterator<Item = Keyword>,
-    ) -> impl Future<Output = Result<HashMap<Keyword, HashSet<Value>>, Self::Error>>;
+        keyword: &Keyword,
+    ) -> impl Future<Output = Result<HashSet<Value>, Self::Error>>;
 
     /// Adds the given bindings to the index.
     fn insert(
         &self,
-        bindings: impl Sync + Send + Iterator<Item = (Keyword, HashSet<Value>)>,
+        kw: Keyword,
+        bindings: impl Sync + Send + IntoIterator<Item = Value>,
     ) -> impl Send + Sync + Future<Output = Result<(), Self::Error>>;
 
     /// Removes the given bindings from the index.
     fn delete(
         &self,
-        bindings: impl Sync + Send + Iterator<Item = (Keyword, HashSet<Value>)>,
+        kw: Keyword,
+        bindings: impl Sync + Send + IntoIterator<Item = Value>,
     ) -> impl Send + Sync + Future<Output = Result<(), Self::Error>>;
 }
 
