@@ -58,7 +58,7 @@ pub fn dummy_encode<const WORD_LENGTH: usize, Value: AsRef<[u8]>>(
 
 pub fn dummy_decode<const WORD_LENGTH: usize, TryFromError: std::error::Error, Value>(
     ws: Vec<[u8; WORD_LENGTH]>,
-) -> Result<HashSet<Value>, TryFromError>
+) -> Result<HashSet<Value>, String>
 where
     for<'z> Value: Hash + PartialEq + Eq + TryFrom<&'z [u8], Error = TryFromError>,
 {
@@ -66,7 +66,7 @@ where
     for w in ws {
         if !w.is_empty() {
             let n = <usize>::from(w[1]);
-            let v = Value::try_from(&w[2..n + 2])?;
+            let v = Value::try_from(&w[2..n + 2]).map_err(|e| e.to_string())?;
             if w[0] == 1 {
                 res.insert(v);
             } else {

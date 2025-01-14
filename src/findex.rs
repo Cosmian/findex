@@ -1,234 +1,136 @@
 #![allow(clippy::type_complexity)]
 
 use std::{
-    collections::{HashMap, HashSet},
-    hash::Hash,
-    sync::{Arc, Mutex},
+    collections::HashSet,
+    fmt::Debug,
+    hash::{DefaultHasher, Hash, Hasher},
+    sync::Arc,
 };
-
-use tiny_keccak::{Hasher, Sha3};
 
 use crate::{
     ADDRESS_LENGTH, Address, IndexADT, KEY_LENGTH, MemoryADT, Secret, adt::VectorADT, encoding::Op,
-    encryption_layer::MemoryEncryptionLayer, error::Error, ovec::IVec,
+    error::Error, memory::MemoryEncryptionLayer, ovec::IVec,
 };
 
 #[derive(Clone, Debug)]
 pub struct Findex<
     const WORD_LENGTH: usize,
     Value,
-    TryFromError: std::error::Error,
+    EncodingError: Debug,
     Memory: Send + Sync + Clone + MemoryADT<Address = Address<ADDRESS_LENGTH>, Word = [u8; WORD_LENGTH]>,
-> where
-    // values are serializable (but do not depend on `serde`)
-    for<'z> Value: TryFrom<&'z [u8], Error = TryFromError> + AsRef<[u8]>,
-    Memory::Error: Send + Sync,
-{
+> {
     el: MemoryEncryptionLayer<WORD_LENGTH, Memory>,
-    cache: Arc<
-        Mutex<
-            HashMap<
-                Address<ADDRESS_LENGTH>,
-                IVec<WORD_LENGTH, MemoryEncryptionLayer<WORD_LENGTH, Memory>>,
-            >,
-        >,
-    >,
     encode: Arc<
         fn(
             Op,
             HashSet<Value>,
-        )
-            -> Result<Vec<<MemoryEncryptionLayer<WORD_LENGTH, Memory> as MemoryADT>::Word>, String>,
+        ) -> Result<
+            Vec<<MemoryEncryptionLayer<WORD_LENGTH, Memory> as MemoryADT>::Word>,
+            EncodingError,
+        >,
     >,
     decode: Arc<
         fn(
             Vec<<MemoryEncryptionLayer<WORD_LENGTH, Memory> as MemoryADT>::Word>,
-        ) -> Result<HashSet<Value>, TryFromError>,
+        ) -> Result<HashSet<Value>, EncodingError>,
     >,
 }
 
 impl<
     const WORD_LENGTH: usize,
     Value: Send + Sync + Hash + Eq,
-    TryFromError: std::error::Error,
+    EncodingError: Send + Sync + Debug,
     Memory: Send + Sync + Clone + MemoryADT<Address = Address<ADDRESS_LENGTH>, Word = [u8; WORD_LENGTH]>,
-> Findex<WORD_LENGTH, Value, TryFromError, Memory>
-where
-    for<'z> Value: TryFrom<&'z [u8], Error = TryFromError> + AsRef<[u8]>,
-    Vec<u8>: From<Value>,
-    Memory::Error: Send + Sync,
+> Findex<WORD_LENGTH, Value, EncodingError, Memory>
 {
     /// Instantiates Findex with the given seed, and memory.
     pub fn new(
         seed: &Secret<KEY_LENGTH>,
         mem: Memory,
-        encode: fn(Op, HashSet<Value>) -> Result<Vec<[u8; WORD_LENGTH]>, String>,
-        decode: fn(Vec<[u8; WORD_LENGTH]>) -> Result<HashSet<Value>, TryFromError>,
+        encode: fn(Op, HashSet<Value>) -> Result<Vec<[u8; WORD_LENGTH]>, EncodingError>,
+        decode: fn(Vec<[u8; WORD_LENGTH]>) -> Result<HashSet<Value>, EncodingError>,
     ) -> Self {
         Self {
             el: MemoryEncryptionLayer::new(seed, mem),
-            cache: Arc::new(Mutex::new(HashMap::new())),
             encode: Arc::new(encode),
             decode: Arc::new(decode),
         }
     }
 
-    pub fn clear(&self) {
-        self.cache.lock().expect("poisoned lock").clear();
-    }
+    fn kw2l<Keyword: Hash>(kw: &Keyword) -> Address<ADDRESS_LENGTH> {
+        let h = |n: u8| {
+            let mut hasher = DefaultHasher::default();
+            kw.hash(&mut hasher);
+            n.hash(&mut hasher);
+            hasher.finish()
+        };
 
-    /// Caches this vector for this address.
-    fn bind(
-        &self,
-        address: Address<ADDRESS_LENGTH>,
-        vector: IVec<WORD_LENGTH, MemoryEncryptionLayer<WORD_LENGTH, Memory>>,
-    ) {
-        self.cache
-            .lock()
-            .expect("poisoned mutex")
-            .insert(address, vector);
-    }
-
-    /// Retrieves the vector cached for this address, if any.
-    fn find(
-        &self,
-        address: &Address<ADDRESS_LENGTH>,
-    ) -> Option<IVec<WORD_LENGTH, MemoryEncryptionLayer<WORD_LENGTH, Memory>>> {
-        self.cache
-            .lock()
-            .expect("poisoned mutex")
-            .get(address)
-            .cloned()
-    }
-
-    fn hash_address(bytes: &[u8]) -> Address<ADDRESS_LENGTH> {
         let mut a = Address::<ADDRESS_LENGTH>::default();
-        let mut hash = Sha3::v256();
-        hash.update(bytes);
-        hash.finalize(&mut *a);
+        a[..8].copy_from_slice(&h(1).to_be_bytes());
+        a[8..].copy_from_slice(&h(2).to_be_bytes());
         a
     }
 
     /// Pushes the given bindings to the vectors associated to the bound keyword.
     ///
     /// All vector push operations are performed in parallel (via async calls), not batched.
-    async fn push<Keyword: Send + Sync + Hash + Eq + AsRef<[u8]>>(
+    async fn push<Keyword: Send + Sync + Hash + Eq>(
         &self,
         op: Op,
-        bindings: impl Send + Iterator<Item = (Keyword, HashSet<Value>)>,
-    ) -> Result<(), <Self as IndexADT<Keyword, Value>>::Error> {
-        let bindings = bindings
-            .map(|(kw, vals)| (self.encode)(op, vals).map(|words| (kw, words)))
-            .collect::<Result<Vec<_>, String>>()
-            .map_err(Error::<_, Memory::Error>::Conversion)?;
-
-        let futures = bindings
-            .into_iter()
-            .map(|(kw, words)| self.vector_push(kw, words))
-            .collect::<Vec<_>>(); // collect for calls do be made
-
-        for fut in futures {
-            fut.await?;
-        }
-
-        Ok(())
-    }
-
-    // TODO: move this into `push` when async closures are stable.
-    async fn vector_push<Keyword: Send + Sync + Hash + Eq + AsRef<[u8]>>(
-        &self,
         kw: Keyword,
-        values: Vec<[u8; WORD_LENGTH]>,
+        vs: HashSet<Value>,
     ) -> Result<(), <Self as IndexADT<Keyword, Value>>::Error> {
-        let a = Self::hash_address(kw.as_ref());
-        let mut ivec = self
-            .find(&a)
-            .unwrap_or_else(|| IVec::new(a.clone(), self.el.clone()));
-        ivec.push(values).await?;
-        self.bind(a, ivec);
-        Ok(())
-    }
-
-    // TODO: move this into `search` when async closures are stable.
-    async fn read<Keyword: Send + Sync + Hash + Eq + AsRef<[u8]>>(
-        &self,
-        kw: Keyword,
-    ) -> Result<(Keyword, Vec<[u8; WORD_LENGTH]>), <Self as IndexADT<Keyword, Value>>::Error> {
-        let a = Self::hash_address(kw.as_ref());
-        let vector = self
-            .find(&a)
-            .unwrap_or_else(|| IVec::new(a.clone(), self.el.clone()));
-        let words = vector.read().await?;
-        self.bind(a, vector);
-        Ok((kw, words))
+        let words = (self.encode)(op, vs).map_err(|e| Error::Conversion(format!("{e:?}")))?;
+        let l = Self::kw2l(&kw);
+        IVec::new(l, self.el.clone()).push(words).await
     }
 }
 
 impl<
     const WORD_LENGTH: usize,
-    Keyword: Send + Sync + Hash + PartialEq + Eq + AsRef<[u8]>,
-    Value: Send + Sync + Hash + PartialEq + Eq,
-    TryFromError: std::error::Error,
+    Keyword: Send + Sync + Hash + Eq,
+    Value: Send + Sync + Hash + Eq,
+    EncodingError: Send + Sync + Debug,
     Memory: Send + Sync + Clone + MemoryADT<Address = Address<ADDRESS_LENGTH>, Word = [u8; WORD_LENGTH]>,
-> IndexADT<Keyword, Value> for Findex<WORD_LENGTH, Value, TryFromError, Memory>
-where
-    for<'z> Value: TryFrom<&'z [u8], Error = TryFromError> + AsRef<[u8]>,
-    Vec<u8>: From<Value>,
-    Memory::Error: Send + Sync,
+> IndexADT<Keyword, Value> for Findex<WORD_LENGTH, Value, EncodingError, Memory>
 {
-    type Error = Error<
-        Address<ADDRESS_LENGTH>,
-        <MemoryEncryptionLayer<WORD_LENGTH, Memory> as MemoryADT>::Error,
-    >;
+    type Error = Error<Address<ADDRESS_LENGTH>>;
 
-    async fn search(
-        &self,
-        keywords: impl Send + Iterator<Item = Keyword>,
-    ) -> Result<HashMap<Keyword, HashSet<Value>>, Self::Error> {
-        let futures = keywords
-            .map(|kw| self.read::<Keyword>(kw))
-            .collect::<Vec<_>>();
-        let mut bindings = HashMap::with_capacity(futures.len());
-        for fut in futures {
-            let (kw, vals) = fut.await?;
-            bindings.insert(
-                kw,
-                (self.decode)(vals).map_err(|e| {
-                    Error::<Address<ADDRESS_LENGTH>, Memory::Error>::Conversion(e.to_string())
-                })?,
-            );
-        }
-        Ok(bindings)
+    async fn search(&self, kw: &Keyword) -> Result<HashSet<Value>, Self::Error> {
+        let l = Self::kw2l(kw);
+        let words = IVec::new(l, self.el.clone()).read().await?;
+        (self.decode)(words).map_err(|e| Error::Conversion(format!("{e:?}")))
     }
 
     async fn insert(
         &self,
-        bindings: impl Sync + Send + Iterator<Item = (Keyword, HashSet<Value>)>,
+        kw: Keyword,
+        vs: impl Sync + Send + IntoIterator<Item = Value>,
     ) -> Result<(), Self::Error> {
-        self.push(Op::Insert, bindings).await
+        self.push(Op::Insert, kw, vs.into_iter().collect()).await
     }
 
     async fn delete(
         &self,
-        bindings: impl Sync + Send + Iterator<Item = (Keyword, HashSet<Value>)>,
+        kw: Keyword,
+        vs: impl Sync + Send + IntoIterator<Item = Value>,
     ) -> Result<(), Self::Error> {
-        self.push(Op::Delete, bindings).await
+        self.push(Op::Delete, kw, vs.into_iter().collect()).await
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use std::collections::{HashMap, HashSet};
+    use std::collections::HashSet;
 
     use futures::executor::block_on;
     use rand_chacha::ChaChaRng;
     use rand_core::SeedableRng;
 
     use crate::{
-        ADDRESS_LENGTH, Findex, IndexADT, Value,
+        ADDRESS_LENGTH, Findex, InMemory, IndexADT, Value,
         address::Address,
         encoding::{dummy_decode, dummy_encode},
-        in_memory_store::InMemory,
         secret::Secret,
     };
 
@@ -240,25 +142,26 @@ mod tests {
         let seed = Secret::random(&mut rng);
         let memory = InMemory::<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>::default();
         let findex = Findex::new(&seed, memory, dummy_encode::<WORD_LENGTH, _>, dummy_decode);
-        let bindings = HashMap::<&str, HashSet<Value>>::from_iter([
-            (
-                "cat",
-                HashSet::from_iter([Value::from(1), Value::from(3), Value::from(5)]),
-            ),
-            (
-                "dog",
-                HashSet::from_iter([Value::from(0), Value::from(2), Value::from(4)]),
-            ),
-        ]);
-        block_on(findex.insert(bindings.clone().into_iter())).unwrap();
-        let res = block_on(findex.search(bindings.keys().cloned())).unwrap();
-        assert_eq!(bindings, res);
-
-        block_on(findex.delete(bindings.clone().into_iter())).unwrap();
-        let res = block_on(findex.search(bindings.keys().cloned())).unwrap();
+        let cat_bindings = [Value::from(1), Value::from(3), Value::from(5)];
+        let dog_bindings = [Value::from(0), Value::from(2), Value::from(4)];
+        block_on(findex.insert("cat".to_string(), cat_bindings.clone())).unwrap();
+        block_on(findex.insert("dog".to_string(), dog_bindings.clone())).unwrap();
+        let cat_res = block_on(findex.search(&"cat".to_string())).unwrap();
+        let dog_res = block_on(findex.search(&"dog".to_string())).unwrap();
         assert_eq!(
-            HashMap::from_iter([("cat", HashSet::new()), ("dog", HashSet::new())]),
-            res
+            cat_bindings.iter().cloned().collect::<HashSet<_>>(),
+            cat_res
         );
+        assert_eq!(
+            dog_bindings.iter().cloned().collect::<HashSet<_>>(),
+            dog_res
+        );
+
+        block_on(findex.delete("dog", dog_bindings)).unwrap();
+        block_on(findex.delete("cat", cat_bindings)).unwrap();
+        let cat_res = block_on(findex.search(&"cat".to_string())).unwrap();
+        let dog_res = block_on(findex.search(&"dog".to_string())).unwrap();
+        assert_eq!(HashSet::new(), cat_res);
+        assert_eq!(HashSet::new(), dog_res);
     }
 }

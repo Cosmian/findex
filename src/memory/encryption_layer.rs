@@ -1,8 +1,7 @@
 use std::{fmt::Debug, ops::Deref, sync::Arc};
 
 use crate::{
-    ADDRESS_LENGTH, KEY_LENGTH, MemoryADT, Secret, address::Address, error::Error,
-    symmetric_key::SymmetricKey,
+    ADDRESS_LENGTH, KEY_LENGTH, MemoryADT, Secret, address::Address, symmetric_key::SymmetricKey,
 };
 use aes::{
     Aes256,
@@ -91,7 +90,7 @@ impl<
 
     type Word = [u8; WORD_LENGTH];
 
-    type Error = Error<Self::Address, Memory::Error>;
+    type Error = Memory::Error;
 
     async fn batch_read(
         &self,
@@ -139,10 +138,9 @@ mod tests {
     use rand_core::SeedableRng;
 
     use crate::{
-        MemoryADT,
+        ADDRESS_LENGTH, MemoryADT,
         address::Address,
-        encryption_layer::{ADDRESS_LENGTH, MemoryEncryptionLayer},
-        in_memory_store::InMemory,
+        memory::{MemoryEncryptionLayer, in_memory_store::InMemory},
         secret::Secret,
         symmetric_key::SymmetricKey,
     };
