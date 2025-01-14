@@ -18,8 +18,10 @@ pub use findex::Findex;
 pub use secret::Secret;
 pub use value::Value;
 
+pub use encoding::Op;
+
 #[cfg(feature = "bench")]
-pub use encoding::{Op, WORD_LENGTH, dummy_decode, dummy_encode};
+pub use encoding::{WORD_LENGTH, dummy_decode, dummy_encode};
 #[cfg(any(test, feature = "bench"))]
 pub use memory::InMemory;
 
