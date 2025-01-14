@@ -14,7 +14,7 @@ use std::collections::{HashMap, HashSet};
 /// associated *keyword* of type `[u8; 8]` in this example. Since Findex only
 /// requires from the values to be hashable, we could have taken any type that
 /// implements `Hash` instead of the `u64`.
-fn build_benchmarking_index(rng: &mut impl CryptoRngCore) -> HashMap<[u8; 8], HashSet<u64>> {
+fn gen_index(rng: &mut impl CryptoRngCore) -> HashMap<[u8; 8], HashSet<u64>> {
     (0..6)
         .map(|i| {
             let kw = rng.next_u64().to_be_bytes();
@@ -26,64 +26,64 @@ fn build_benchmarking_index(rng: &mut impl CryptoRngCore) -> HashMap<[u8; 8], Ha
         .collect()
 }
 
-fn main() {
-    // The encoder will use 1 bit to encode the operation (insert or delete),
-    // and 7 bits to encode the number of values (of type u64) in the word. This
-    // allows for words of 2^7 = 128 values, which are serialized into an array:
-    // `[u8; 8]`. The `WORD_LENGTH` is therefore 1 byte of metadata plus 128 * 8
-    // bytes of values.
-    const WORD_LENGTH: usize = 1 + 8 * 128;
+/// The encoder will use 1 bit to encode the operation (insert or delete), and 7
+/// bits to encode the number of values (of type u64) in the word. This allows
+/// for words of 2^7 = 128 values, which are serialized into an array of 8 bytes
+/// each. The `WORD_LENGTH` is therefore 1 byte of metadata plus 128 * 8 bytes
+/// of values.
+const WORD_LENGTH: usize = 1 + 8 * 128;
 
-    let encoder = |op: Op, values: HashSet<u64>| -> Result<Vec<[u8; WORD_LENGTH]>, String> {
-        let mut words = Vec::new(); // This could be initialized with the correct size.
-        let mut values = values.into_iter().peekable();
-        while values.peek().is_some() {
-            let chunk = (0..128)
-                .filter_map(|_| values.next())
-                .map(|v| v.to_be_bytes())
-                .collect::<Vec<_>>();
+fn encoder(op: Op, values: HashSet<u64>) -> Result<Vec<[u8; WORD_LENGTH]>, String> {
+    let mut words = Vec::new(); // This could be initialized with the correct size.
+    let mut values = values.into_iter().peekable();
+    while values.peek().is_some() {
+        let chunk = (0..128)
+            .filter_map(|_| values.next())
+            .map(|v| v.to_be_bytes())
+            .collect::<Vec<_>>();
 
-            let metadata = <u8>::try_from(chunk.len() - 1).unwrap()
-                + if let Op::Insert = op { 128 } else { 0 };
-            let mut word = [0; WORD_LENGTH];
-            word[0] = metadata;
-            chunk
-                .into_iter()
-                .enumerate()
-                .for_each(|(i, v)| word[1 + i * 8..1 + (i + 1) * 8].copy_from_slice(v.as_slice()));
-            words.push(word);
-        }
-        Ok(words)
-    };
+        let metadata =
+            <u8>::try_from(chunk.len() - 1).unwrap() + if let Op::Insert = op { 128 } else { 0 };
+        let mut word = [0; WORD_LENGTH];
+        word[0] = metadata;
+        chunk
+            .into_iter()
+            .enumerate()
+            .for_each(|(i, v)| word[1 + i * 8..1 + (i + 1) * 8].copy_from_slice(v.as_slice()));
+        words.push(word);
+    }
+    Ok(words)
+}
 
-    let decoder = |words: Vec<[u8; WORD_LENGTH]>| -> Result<HashSet<u64>, String> {
-        let mut values = HashSet::new();
-        words.into_iter().for_each(|w| {
-            let metadata = w[0];
+fn decoder(words: Vec<[u8; WORD_LENGTH]>) -> Result<HashSet<u64>, String> {
+    let mut values = HashSet::new();
+    words.into_iter().for_each(|w| {
+        let metadata = w[0];
 
-            // Extract the highest bit to recover the operation.
-            let op = if metadata < 128 {
-                Op::Delete
+        // Extract the highest bit to recover the operation.
+        let op = if metadata < 128 {
+            Op::Delete
+        } else {
+            Op::Insert
+        };
+
+        // Remove the highest bit to recover the number of values.
+        let n = metadata & 127;
+
+        for i in 0..=n as usize {
+            let v = u64::from_be_bytes(w[1 + i * 8..1 + (i + 1) * 8].try_into().unwrap());
+            if let Op::Insert = op {
+                values.insert(v);
             } else {
-                Op::Insert
-            };
-
-            // Remove the highest bit to recover the number of values.
-            let n = metadata & 127;
-
-            for i in 0..=n as usize {
-                let v = u64::from_be_bytes(w[1 + i * 8..1 + (i + 1) * 8].try_into().unwrap());
-                if let Op::Insert = op {
-                    values.insert(v);
-                } else {
-                    values.remove(&v);
-                }
+                values.remove(&v);
             }
-        });
+        }
+    });
 
-        Ok(values)
-    };
+    Ok(values)
+}
 
+fn main() {
     // For cryptographic applications, it is important to use a secure RNG. In
     // Rust, those RNG implement the `CryptoRng` trait.
     let mut rng = ChaChaRng::from_entropy();
@@ -94,7 +94,7 @@ fn main() {
     let key = Secret::random(&mut rng);
 
     // Generating the random index.
-    let index = build_benchmarking_index(&mut rng);
+    let index = gen_index(&mut rng);
 
     // For this example, we use the `InMemory` implementation of the `MemoryADT`
     // trait. It corresponds to an in-memory key-value store implemented on top
