@@ -401,7 +401,7 @@ fn bench_contention(c: &mut Criterion) {
 
 criterion_group!(
     name    = benches;
-    config  = Criterion::default().sample_size(5000);
+    config  = Criterion::default().sample_size(5000).measurement_time(Duration::from_secs(60));
     targets = bench_contention,
               bench_search_multiple_bindings, bench_search_multiple_keywords,
               bench_insert_multiple_bindings, bench_insert_multiple_keywords,

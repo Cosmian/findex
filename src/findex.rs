@@ -12,28 +12,24 @@ use crate::{
     error::Error, memory::MemoryEncryptionLayer, ovec::IVec,
 };
 
+/// The encoder is used to serialize an operation, along with the set of values
+/// it operates on, into a sequence of memory words.
+type Encoder<Value, Word, Error> = fn(Op, HashSet<Value>) -> Result<Vec<Word>, Error>;
+
+/// The decoder is used to deserialize a sequence of memory words into a set of
+/// values.
+type Decoder<Value, Word, Error> = fn(Vec<Word>) -> Result<HashSet<Value>, Error>;
+
 #[derive(Clone, Debug)]
 pub struct Findex<
     const WORD_LENGTH: usize,
-    Value,
-    EncodingError: Debug,
+    Value: Send + Sync + Hash + Eq,
+    EncodingError: Send + Sync + Debug,
     Memory: Send + Sync + Clone + MemoryADT<Address = Address<ADDRESS_LENGTH>, Word = [u8; WORD_LENGTH]>,
 > {
     el: MemoryEncryptionLayer<WORD_LENGTH, Memory>,
-    encode: Arc<
-        fn(
-            Op,
-            HashSet<Value>,
-        ) -> Result<
-            Vec<<MemoryEncryptionLayer<WORD_LENGTH, Memory> as MemoryADT>::Word>,
-            EncodingError,
-        >,
-    >,
-    decode: Arc<
-        fn(
-            Vec<<MemoryEncryptionLayer<WORD_LENGTH, Memory> as MemoryADT>::Word>,
-        ) -> Result<HashSet<Value>, EncodingError>,
-    >,
+    encode: Arc<Encoder<Value, Memory::Word, EncodingError>>,
+    decode: Arc<Decoder<Value, Memory::Word, EncodingError>>,
 }
 
 impl<
@@ -57,7 +53,7 @@ impl<
         }
     }
 
-    fn kw2l<Keyword: Hash>(kw: &Keyword) -> Address<ADDRESS_LENGTH> {
+    fn hash_keyword<Keyword: Hash>(kw: &Keyword) -> Address<ADDRESS_LENGTH> {
         let h = |n: u8| {
             let mut hasher = DefaultHasher::default();
             kw.hash(&mut hasher);
@@ -65,6 +61,7 @@ impl<
             hasher.finish()
         };
 
+        // Hash the keyword twice to get enough collision resistance.
         let mut a = Address::<ADDRESS_LENGTH>::default();
         a[..8].copy_from_slice(&h(1).to_be_bytes());
         a[8..].copy_from_slice(&h(2).to_be_bytes());
@@ -81,7 +78,7 @@ impl<
         vs: HashSet<Value>,
     ) -> Result<(), <Self as IndexADT<Keyword, Value>>::Error> {
         let words = (self.encode)(op, vs).map_err(|e| Error::Conversion(format!("{e:?}")))?;
-        let l = Self::kw2l(&kw);
+        let l = Self::hash_keyword(&kw);
         IVec::new(l, self.el.clone()).push(words).await
     }
 }
@@ -97,7 +94,7 @@ impl<
     type Error = Error<Address<ADDRESS_LENGTH>>;
 
     async fn search(&self, kw: &Keyword) -> Result<HashSet<Value>, Self::Error> {
-        let l = Self::kw2l(kw);
+        let l = Self::hash_keyword(kw);
         let words = IVec::new(l, self.el.clone()).read().await?;
         (self.decode)(words).map_err(|e| Error::Conversion(format!("{e:?}")))
     }
