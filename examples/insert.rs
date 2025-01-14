@@ -104,7 +104,12 @@ fn main() {
 
     // Instantiating Findex requires passing the key, the memory used and the
     // encoder and decoder. Quite simple, after all :)
-    let findex = Findex::new(&key, memory, encoder, decoder);
+    let findex = Findex::<
+        WORD_LENGTH,    // size of a word
+        u64,            // type of a value
+        String,         // type of an encoding error
+        InMemory<_, _>, // type of the memory
+    >::new(&key, memory, encoder, decoder);
 
     // Here we insert all bindings one by one, blocking on each call. A better
     // way would be to performed all such calls in parallel using tasks.
