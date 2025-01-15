@@ -16,10 +16,6 @@ mod value;
 
 pub use address::Address;
 pub use adt::{IndexADT, MemoryADT};
-pub use encoding::{
-    Decoder, Encoder,
-    generic_encoding::{generic_decode, generic_encode},
-};
 pub use error::Error;
 pub use findex::Findex;
 pub use findex::Op;
