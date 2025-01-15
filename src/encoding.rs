@@ -264,10 +264,12 @@ pub mod generic_encoding {
 
 #[cfg(any(test, feature = "test-utils"))]
 pub mod tests {
-    use crate::{Decoder, Encoder, Op};
+    use crate::Op;
 
     use rand::{RngCore, thread_rng};
     use std::{collections::HashSet, fmt::Debug, hash::Hash};
+
+    use super::{Decoder, Encoder};
 
     /// Uses fuzzing to attempt asserting that: encode ∘ decode = identity.
     ///

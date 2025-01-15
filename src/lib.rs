@@ -23,6 +23,7 @@ pub use encoding::{
 pub use error::Error;
 pub use findex::Findex;
 pub use findex::Op;
+pub use memory::MemoryEncryptionLayer;
 pub use secret::Secret;
 pub use value::Value;
 

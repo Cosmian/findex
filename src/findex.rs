@@ -8,8 +8,11 @@ use std::{
 };
 
 use crate::{
-    ADDRESS_LENGTH, Address, Decoder, Encoder, IndexADT, KEY_LENGTH, MemoryADT, Secret,
-    adt::VectorADT, error::Error, memory::MemoryEncryptionLayer, ovec::IVec,
+    ADDRESS_LENGTH, Address, IndexADT, MemoryADT,
+    adt::VectorADT,
+    encoding::{Decoder, Encoder},
+    error::Error,
+    ovec::IVec,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -25,7 +28,7 @@ pub struct Findex<
     EncodingError: Send + Sync + Debug,
     Memory: Send + Sync + Clone + MemoryADT<Address = Address<ADDRESS_LENGTH>, Word = [u8; WORD_LENGTH]>,
 > {
-    el: MemoryEncryptionLayer<WORD_LENGTH, Memory>,
+    el: Memory,
     encode: Arc<Encoder<Value, Memory::Word, EncodingError>>,
     decode: Arc<Decoder<Value, Memory::Word, EncodingError>>,
 }
@@ -39,13 +42,12 @@ impl<
 {
     /// Instantiates Findex with the given seed, and memory.
     pub fn new(
-        seed: &Secret<KEY_LENGTH>,
-        mem: Memory,
-        encode: fn(Op, HashSet<Value>) -> Result<Vec<[u8; WORD_LENGTH]>, EncodingError>,
-        decode: fn(Vec<[u8; WORD_LENGTH]>) -> Result<HashSet<Value>, EncodingError>,
+        memory: Memory,
+        encode: Encoder<Value, Memory::Word, EncodingError>,
+        decode: Decoder<Value, Memory::Word, EncodingError>,
     ) -> Self {
         Self {
-            el: MemoryEncryptionLayer::new(seed, mem),
+            el: memory,
             encode: Arc::new(encode),
             decode: Arc::new(decode),
         }
@@ -124,7 +126,7 @@ mod tests {
 
     use crate::{
         ADDRESS_LENGTH, Findex, InMemory, IndexADT, Value, address::Address, dummy_decode,
-        dummy_encode, secret::Secret,
+        dummy_encode, memory::MemoryEncryptionLayer, secret::Secret,
     };
 
     const WORD_LENGTH: usize = 16;
@@ -133,8 +135,11 @@ mod tests {
     fn test_insert_search_delete_search() {
         let mut rng = ChaChaRng::from_entropy();
         let seed = Secret::random(&mut rng);
-        let memory = InMemory::<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>::default();
-        let findex = Findex::new(&seed, memory, dummy_encode::<WORD_LENGTH, _>, dummy_decode);
+        let memory = MemoryEncryptionLayer::new(
+            &seed,
+            InMemory::<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>::default(),
+        );
+        let findex = Findex::new(memory, dummy_encode::<WORD_LENGTH, _>, dummy_decode);
         let cat_bindings = [Value::from(1), Value::from(3), Value::from(5)];
         let dog_bindings = [Value::from(0), Value::from(2), Value::from(4)];
         block_on(findex.insert("cat".to_string(), cat_bindings.clone())).unwrap();
