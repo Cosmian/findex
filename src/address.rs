@@ -6,6 +6,18 @@ use rand_core::CryptoRngCore;
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Address<const LENGTH: usize>([u8; LENGTH]);
 
+impl<const LENGTH: usize> From<[u8; LENGTH]> for Address<LENGTH> {
+    fn from(bytes: [u8; LENGTH]) -> Self {
+        Self(bytes)
+    }
+}
+
+impl<const LENGTH: usize> From<Address<LENGTH>> for [u8; LENGTH] {
+    fn from(address: Address<LENGTH>) -> Self {
+        address.0
+    }
+}
+
 impl<const LENGTH: usize> Deref for Address<LENGTH> {
     type Target = [u8; LENGTH];
 

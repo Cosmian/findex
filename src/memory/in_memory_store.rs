@@ -8,15 +8,15 @@ use std::{
 use crate::MemoryADT;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct MemoryError;
+pub struct InMemoryError;
 
-impl Display for MemoryError {
+impl Display for InMemoryError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "Memory Error")
     }
 }
 
-impl std::error::Error for MemoryError {}
+impl std::error::Error for InMemoryError {}
 
 #[derive(Clone, Debug)]
 pub struct InMemory<Address: Hash + Eq, Value> {
@@ -52,7 +52,7 @@ impl<Address: Send + Sync + Hash + Eq + Debug, Value: Send + Sync + Clone + Eq +
 
     type Word = Value;
 
-    type Error = MemoryError;
+    type Error = InMemoryError;
 
     async fn batch_read(&self, a: Vec<Address>) -> Result<Vec<Option<Value>>, Self::Error> {
         let store = self.inner.lock().expect("poisoned lock");
@@ -98,7 +98,12 @@ mod tests {
 
     use futures::executor::block_on;
 
-    use crate::MemoryADT;
+    use crate::{
+        MemoryADT,
+        test::memory::{
+            test_guarded_write_concurrent, test_single_write_and_read, test_wrong_guard,
+        },
+    };
 
     use super::InMemory;
 
@@ -125,5 +130,23 @@ mod tests {
             vec![Some(1), Some(1), Some(3), Some(3)],
             block_on(memory.batch_read(vec![1, 2, 3, 4])).unwrap(),
         )
+    }
+
+    #[tokio::test]
+    async fn test_sequential_read_write() {
+        let memory = InMemory::<[u8; 16], [u8; 16]>::default();
+        test_single_write_and_read(&memory, rand::random()).await;
+    }
+
+    #[tokio::test]
+    async fn test_sequential_wrong_guard() {
+        let memory = InMemory::<[u8; 16], [u8; 16]>::default();
+        test_wrong_guard(&memory, rand::random()).await;
+    }
+
+    #[tokio::test]
+    async fn test_concurrent_read_write() {
+        let memory = InMemory::<[u8; 16], [u8; 16]>::default();
+        test_guarded_write_concurrent(&memory, rand::random()).await;
     }
 }
