@@ -13,12 +13,12 @@ mod value;
 
 pub use address::Address;
 pub use adt::{IndexADT, MemoryADT};
+pub use encoding::Op;
 pub use error::Error;
 pub use findex::Findex;
+pub use memory::MemoryEncryptionLayer;
 pub use secret::Secret;
 pub use value::Value;
-
-pub use encoding::Op;
 
 #[cfg(feature = "bench")]
 pub use encoding::{WORD_LENGTH, dummy_decode, dummy_encode};

@@ -1,6 +1,6 @@
 //! This example show-cases the use of Findex to securely store a hash-map.
 
-use cosmian_findex::{Findex, InMemory, IndexADT, Op, Secret};
+use cosmian_findex::{Findex, InMemory, IndexADT, MemoryEncryptionLayer, Op, Secret};
 use futures::executor::block_on;
 use rand_chacha::ChaChaRng;
 use rand_core::{CryptoRngCore, SeedableRng};
@@ -100,16 +100,16 @@ fn main() {
     // trait. It corresponds to an in-memory key-value store implemented on top
     // of a hash-table. For real application a DB such as Redis would be
     // preferred.
-    let memory = InMemory::default();
+    let memory = MemoryEncryptionLayer::new(&key, InMemory::default());
 
     // Instantiating Findex requires passing the key, the memory used and the
     // encoder and decoder. Quite simple, after all :)
     let findex = Findex::<
-        WORD_LENGTH,    // size of a word
-        u64,            // type of a value
-        String,         // type of an encoding error
-        InMemory<_, _>, // type of the memory
-    >::new(&key, memory, encoder, decoder);
+        WORD_LENGTH, // size of a word
+        u64,         // type of a value
+        String,      // type of an encoding error
+        _,           // type of the memory
+    >::new(memory, encoder, decoder);
 
     // Here we insert all bindings one by one, blocking on each call. A better
     // way would be to performed all such calls in parallel using tasks.

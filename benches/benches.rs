@@ -1,7 +1,8 @@
 use std::{collections::HashSet, time::Duration};
 
 use cosmian_findex::{
-    Findex, InMemory, IndexADT, MemoryADT, Op, Secret, WORD_LENGTH, dummy_decode, dummy_encode,
+    Findex, InMemory, IndexADT, MemoryADT, MemoryEncryptionLayer, Op, Secret, WORD_LENGTH,
+    dummy_decode, dummy_encode,
 };
 use criterion::{BenchmarkId, Criterion, criterion_group, criterion_main};
 use futures::{executor::block_on, future::join_all};
@@ -54,9 +55,9 @@ fn build_benchmarking_keywords_index(
 fn bench_search_multiple_bindings(c: &mut Criterion) {
     let mut rng = ChaChaRng::from_entropy();
     let seed = Secret::random(&mut rng);
-    let stm = InMemory::default();
+    let ctx_memory = MemoryEncryptionLayer::new(&seed, InMemory::default());
     let index = build_benchmarking_bindings_index(&mut rng);
-    let findex = Findex::new(&seed, stm, dummy_encode::<WORD_LENGTH, _>, dummy_decode);
+    let findex = Findex::new(ctx_memory, dummy_encode::<WORD_LENGTH, _>, dummy_decode);
     index
         .iter()
         .cloned()
@@ -80,13 +81,14 @@ fn bench_search_multiple_bindings(c: &mut Criterion) {
 
 fn bench_search_multiple_keywords(c: &mut Criterion) {
     let mut rng = ChaChaRng::from_entropy();
-    let seed = Secret::random(&mut rng);
 
-    let stm = InMemory::default();
     let index = build_benchmarking_keywords_index(&mut rng);
+
+    let seed = Secret::random(&mut rng);
+    let ptx_memory = InMemory::default();
+    let ctx_memory = MemoryEncryptionLayer::new(&seed, ptx_memory.clone());
     let findex = Findex::new(
-        &seed,
-        stm.clone(),
+        ctx_memory.clone(),
         dummy_encode::<WORD_LENGTH, _>,
         dummy_decode,
     );
@@ -106,13 +108,16 @@ fn bench_search_multiple_keywords(c: &mut Criterion) {
                 // benches).
                 b.iter_batched(
                     || {
-                        stm.clone()
+                        ptx_memory
+                            .clone()
                             .into_iter()
                             .map(|(a, _)| a)
                             .take(n)
                             .collect::<Vec<_>>()
                     },
-                    |addresses| block_on(stm.batch_read(addresses)).expect("batch read failed"),
+                    |addresses| {
+                        block_on(ptx_memory.batch_read(addresses)).expect("batch read failed")
+                    },
                     criterion::BatchSize::SmallInput,
                 );
             });
@@ -144,7 +149,6 @@ fn bench_search_multiple_keywords(c: &mut Criterion) {
 
 fn bench_insert_multiple_bindings(c: &mut Criterion) {
     let mut rng = ChaChaRng::from_entropy();
-    let seed = Secret::random(&mut rng);
 
     let index = build_benchmarking_bindings_index(&mut rng);
     let n_max = 10usize.pow(3);
@@ -180,10 +184,11 @@ fn bench_insert_multiple_bindings(c: &mut Criterion) {
     {
         let mut group = c.benchmark_group("Multiple bindings insert (same keyword)");
         for (kw, vals) in index.clone().into_iter() {
-            let stm = InMemory::with_capacity(n_max + 1);
+            let seed = Secret::random(&mut rng);
+            let ptx_memory = InMemory::with_capacity(n_max + 1);
+            let ctx_memory = MemoryEncryptionLayer::new(&seed, ptx_memory.clone());
             let findex = Findex::new(
-                &seed,
-                stm.clone(),
+                ctx_memory.clone(),
                 dummy_encode::<WORD_LENGTH, _>,
                 dummy_decode,
             );
@@ -191,7 +196,7 @@ fn bench_insert_multiple_bindings(c: &mut Criterion) {
                 .bench_function(BenchmarkId::from_parameter(vals.len()), |b| {
                     b.iter_batched(
                         || {
-                            stm.clear();
+                            ptx_memory.clear();
                             [(kw, vals.clone())].into_iter()
                         },
                         |bindings| {
@@ -209,7 +214,6 @@ fn bench_insert_multiple_bindings(c: &mut Criterion) {
 
 fn bench_insert_multiple_keywords(c: &mut Criterion) {
     let mut rng = ChaChaRng::from_entropy();
-    let seed = Secret::random(&mut rng);
 
     // Reference: write one word per value inserted.
     {
@@ -247,18 +251,20 @@ fn bench_insert_multiple_keywords(c: &mut Criterion) {
         let mut group = c.benchmark_group("Multiple keywords insert (one binding each)");
         for i in scale.iter() {
             let n = 10f32.powf(*i).ceil() as usize;
-            let stm = InMemory::with_capacity(2 * n);
+            let seed = Secret::random(&mut rng);
+            let ptx_memory = InMemory::with_capacity(2 * n);
+            let ctx_memory = MemoryEncryptionLayer::new(&seed, ptx_memory.clone());
             let findex = Findex::new(
-                &seed,
-                stm.clone(),
+                ctx_memory.clone(),
                 dummy_encode::<WORD_LENGTH, _>,
                 dummy_decode,
             );
+
             group
                 .bench_function(BenchmarkId::from_parameter(n), |b| {
                     b.iter_batched(
                         || {
-                            stm.clear();
+                            ptx_memory.clear();
                             (0..n)
                                 .map(|_| {
                                     (
@@ -288,7 +294,6 @@ fn bench_contention(c: &mut Criterion) {
     const N_BINDINGS: usize = 100;
     const N_CLIENTS: usize = 8;
     let mut rng = ChaChaRng::from_entropy();
-    let seed = Secret::random(&mut rng);
     let kws = (0..N_CLIENTS)
         .map(|_| rng.next_u64().to_be_bytes())
         .collect::<Vec<_>>();
@@ -298,10 +303,11 @@ fn bench_contention(c: &mut Criterion) {
         let mut group =
             c.benchmark_group("Parallel clients ({N_BINDINGS} binding, different keywords)");
         for i in 1..=N_CLIENTS {
-            let stm = InMemory::with_capacity(N_BINDINGS * i + 1);
+            let seed = Secret::random(&mut rng);
+            let ptx_memory = InMemory::with_capacity(N_BINDINGS * i + 1);
+            let ctx_memory = MemoryEncryptionLayer::new(&seed, ptx_memory.clone());
             let findex = Findex::new(
-                &seed,
-                stm.clone(),
+                ctx_memory.clone(),
                 dummy_encode::<WORD_LENGTH, _>,
                 dummy_decode,
             );
@@ -329,7 +335,7 @@ fn bench_contention(c: &mut Criterion) {
                 .bench_function(BenchmarkId::from_parameter(i), |b| {
                     b.iter_batched(
                         || {
-                            stm.clear();
+                            ptx_memory.clear();
                             instances.clone().into_iter().zip(bindings.clone())
                         },
                         |iterator| {
@@ -351,10 +357,11 @@ fn bench_contention(c: &mut Criterion) {
     {
         let mut group = c.benchmark_group("Concurrent clients (single binding, same keyword)");
         for i in 1..=N_CLIENTS {
-            let stm = InMemory::with_capacity(N_BINDINGS * i + 1);
+            let seed = Secret::random(&mut rng);
+            let ptx_memory = InMemory::with_capacity(N_BINDINGS * i + 1);
+            let ctx_memory = MemoryEncryptionLayer::new(&seed, ptx_memory.clone());
             let findex = Findex::new(
-                &seed,
-                stm.clone(),
+                ctx_memory.clone(),
                 dummy_encode::<WORD_LENGTH, _>,
                 dummy_decode,
             );
@@ -380,7 +387,7 @@ fn bench_contention(c: &mut Criterion) {
                 .bench_function(BenchmarkId::from_parameter(i), |b| {
                     b.iter_batched(
                         || {
-                            stm.clear();
+                            ptx_memory.clear();
                             instances.clone().into_iter().zip(bindings.clone())
                         },
                         |iterator| {
