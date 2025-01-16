@@ -1,2 +1,2 @@
 #[cfg(test)]
-pub(crate) mod memory;
+pub mod memory;
