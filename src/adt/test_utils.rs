@@ -4,8 +4,35 @@ use rand::{Rng, SeedableRng, rngs::StdRng};
 
 use crate::MemoryADT;
 
-// TODO: should return a result type and proper errors
-
+/// Tests the basic write and read operations of a Memory ADT implementation.
+///
+/// This function verifies the memory operations by first checking empty addresses,
+/// then performing a guarded write, and finally validating the written value.
+///
+/// # Arguments
+///
+/// * `memory` - Reference to the Memory ADT implementation
+/// * `seed` - 32-byte seed for reproducible random generation
+///
+/// # Type Parameters
+///
+/// * `T` - The Memory ADT implementation being tested
+///
+/// # Requirements
+///
+/// The type `T` must implement:
+/// * `MemoryADT + Send + Sync`
+/// * `T::Address: Debug + PartialEq + From<[u8; 16]> + Send`
+/// * `T::Word: Debug + PartialEq + From<[u8; 16]> + Send`
+/// * `T::Error: std::error::Error + Send`
+///
+/// # Examples
+///
+/// ```no_run
+/// # let memory = // your memory implementation
+/// # let seed = [0u8; 32];
+/// # test_single_write_and_read(&memory, seed).await;
+/// ```
 pub async fn test_single_write_and_read<T>(memory: &T, seed: [u8; 32])
 where
     T: MemoryADT + Send + Sync,
@@ -15,7 +42,6 @@ where
 {
     let mut rng = StdRng::from_seed(seed);
 
-    // Test batch_read of random addresses, expected to be all empty at this point
     let empty_read_result = memory
         .batch_read(vec![
             T::Address::from(rng.gen::<u128>().to_be_bytes()),
@@ -31,11 +57,9 @@ where
          {empty_read_result:?}. Seed : {seed:?}"
     );
 
-    // Generate a random address and a random word that we save
     let random_address = rng.gen::<u128>().to_be_bytes();
     let random_word = rng.gen::<u128>().to_be_bytes();
 
-    // Write the word to the address
     let write_result = memory
         .guarded_write((T::Address::from(random_address), None), vec![(
             T::Address::from(random_address),
@@ -45,7 +69,6 @@ where
         .unwrap();
     assert_eq!(write_result, None);
 
-    // Retrieve the same value
     let read_result: Vec<Option<<T as MemoryADT>::Word>> = memory
         .batch_read(vec![T::Address::from(random_address)])
         .await
@@ -58,6 +81,34 @@ where
     );
 }
 
+/// Verifies that the memory implementation correctly handles guard violations
+/// by attempting to write with a None guard to an address that already contains a value.
+/// The test ensures the original value is preserved and the write operation fails appropriately.
+///
+/// # Arguments
+///
+/// * `memory` - Reference to the Memory ADT implementation
+/// * `seed` - 32-byte seed for reproducible random generation
+///
+/// # Type Parameters
+///
+/// * `T` - The Memory ADT implementation being tested
+///
+/// # Requirements
+///
+/// The type `T` must implement:
+/// * `MemoryADT + Send + Sync`
+/// * `T::Address: Debug + PartialEq + From<[u8; 16]> + Send`
+/// * `T::Word: Debug + PartialEq + From<[u8; 16]> + Send`
+/// * `T::Error: std::error::Error + Send`
+///
+/// # Examples
+///
+/// ```no_run
+/// # let memory = // your memory implementation
+/// # let seed = [0u8; 32];
+/// # test_wrong_guard(&memory, seed).await;
+/// ```
 pub async fn test_wrong_guard<T>(memory: &T, seed: [u8; 32])
 where
     T: MemoryADT + Send + Sync,
@@ -77,7 +128,6 @@ where
         .await
         .unwrap();
 
-    // Attempt conflicting write with wrong guard value
     let conflict_result = memory
         .guarded_write((T::Address::from(random_address), None), vec![(
             T::Address::from(random_address),
@@ -86,7 +136,6 @@ where
         .await
         .unwrap();
 
-    // Should return current value and not perform write
     assert_eq!(
         conflict_result,
         Some(T::Word::from(word_to_write)),
@@ -96,7 +145,6 @@ where
         seed
     );
 
-    // Verify value wasn't changed
     let read_result = memory
         .batch_read(vec![T::Address::from(random_address)])
         .await
@@ -112,6 +160,34 @@ where
     );
 }
 
+/// Tests concurrent guarded write operations on a Memory ADT implementation.
+/// It spawns N threads that each try to increment the counter, handling contention through retries,
+/// and validates that the final counter value equals the number of threads.
+///
+/// # Arguments
+///
+/// * `memory` - Reference to the Memory ADT implementation that can be cloned
+/// * `seed` - 32-byte seed for reproducible random generation
+///
+/// # Type Parameters
+///
+/// * `T` - The Memory ADT implementation being tested
+///
+/// # Requirements
+///
+/// The type `T` must implement:
+/// * `MemoryADT + Send + Sync + 'static + Clone`
+/// * `T::Address: Debug + PartialEq + From<[u8; 16]> + Send`
+/// * `T::Word: Debug + PartialEq + From<[u8; 16]> + Into<[u8; 16]> + Send + Clone + Default`
+/// * `T::Error: std::error::Error`
+///
+/// # Examples
+///
+/// ```no_run
+/// # let memory = // your memory implementation
+/// # let seed = [0u8; 32];
+/// # test_guarded_write_concurrent(&memory, seed).await;
+/// ```
 pub async fn test_guarded_write_concurrent<T>(memory: &T, seed: [u8; 32])
 where
     T: MemoryADT + Send + Sync + 'static + Clone,
@@ -120,7 +196,7 @@ where
     T::Error: std::error::Error,
 {
     {
-        const N: usize = 1000; // number of threads
+        const N: usize = 1000;
         let mut rng = StdRng::from_seed(seed);
         let a = rng.gen::<u128>().to_be_bytes();
 
@@ -130,7 +206,6 @@ where
                 std::thread::spawn(move || async move {
                     let mut old_cnt = None;
                     loop {
-                        // Try to increment
                         let cur_cnt = mem
                             .guarded_write((a.into(), old_cnt.clone()), vec![(
                                 a.into(),
@@ -142,9 +217,8 @@ where
                             .await
                             .unwrap();
                         if cur_cnt == old_cnt {
-                            return; // Successfully incremented, quit
+                            return;
                         } else {
-                            // Guard failed, retry with the new value
                             old_cnt = cur_cnt;
                         }
                     }
@@ -152,7 +226,6 @@ where
             })
             .collect();
 
-        // wait for all threads to finish
         for handle in handles {
             handle.join().unwrap().await;
         }

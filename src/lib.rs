@@ -9,8 +9,8 @@ mod memory;
 mod ovec;
 mod secret;
 mod symmetric_key;
-#[cfg(test)]
-mod test;
+#[cfg(any(test, feature = "test-utils"))]
+pub use adt::test_utils;
 mod value;
 
 pub use address::Address;
@@ -23,9 +23,6 @@ pub use value::Value;
 
 #[cfg(feature = "redis-mem")]
 pub use memory::redis_store::RedisMemory;
-
-#[cfg(any(feature = "redis-mem", feature = "bench"))]
-pub use memory::error::MemoryError;
 
 #[cfg(any(feature = "redis-mem", feature = "bench"))]
 pub use encoding::{WORD_LENGTH, dummy_decode, dummy_encode};

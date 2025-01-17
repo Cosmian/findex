@@ -8,15 +8,15 @@ use std::{
 use crate::MemoryADT;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct InMemoryError;
+pub struct MemoryError;
 
-impl Display for InMemoryError {
+impl Display for MemoryError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "Memory Error")
     }
 }
 
-impl std::error::Error for InMemoryError {}
+impl std::error::Error for MemoryError {}
 
 #[derive(Clone, Debug)]
 pub struct InMemory<Address: Hash + Eq, Value> {
@@ -52,7 +52,7 @@ impl<Address: Send + Sync + Hash + Eq + Debug, Value: Send + Sync + Clone + Eq +
 
     type Word = Value;
 
-    type Error = InMemoryError;
+    type Error = MemoryError;
 
     async fn batch_read(&self, a: Vec<Address>) -> Result<Vec<Option<Value>>, Self::Error> {
         let store = self.inner.lock().expect("poisoned lock");
@@ -92,7 +92,6 @@ impl<Address: Hash + Eq + Debug + Clone, Value: Clone + Eq + Debug> IntoIterator
             .into_iter()
     }
 }
-
 #[cfg(test)]
 mod tests {
 
@@ -100,7 +99,7 @@ mod tests {
 
     use crate::{
         MemoryADT,
-        test::memory::{
+        adt::test_utils::{
             test_guarded_write_concurrent, test_single_write_and_read, test_wrong_guard,
         },
     };
