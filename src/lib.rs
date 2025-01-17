@@ -25,9 +25,6 @@ pub use value::Value;
 pub use memory::redis_store::RedisMemory;
 
 #[cfg(any(feature = "redis-mem", feature = "bench"))]
-pub use memory::error::MemoryError;
-
-#[cfg(any(feature = "redis-mem", feature = "bench"))]
 pub use encoding::{WORD_LENGTH, dummy_decode, dummy_encode};
 #[cfg(any(test, feature = "bench"))]
 pub use memory::InMemory;

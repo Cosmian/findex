@@ -30,7 +30,7 @@ rand_chacha = "0.3.1"
 rand_core = "0.6.4"
 tiny-keccak = { version = "2.0.2", features = ["sha3"] }
 xts-mode = "0.5.1"
-zeroize = { version = "1.8", features = ["derive"] }
+zeroize = { version = "1.8.1", features = ["derive"] }
 redis = { version = "0.28.1", features = [
     "aio",
     "tokio-comp",
@@ -40,7 +40,6 @@ redis = { version = "0.28.1", features = [
 [dev-dependencies]
 criterion = "0.5.1"
 futures = "0.3.30"
-serial_test = "3.2.0"
 lazy_static = "1.5.0"
 tokio = { version = "1.38.0", features = [
     "rt",
