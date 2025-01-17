@@ -20,13 +20,14 @@ name = "cosmian_findex"
 path = "src/lib.rs"
 
 [features]
-bench = []
+bench = ["serde"]
 
 [dependencies]
 aes = "0.8.4"
 rand = "0.8.5"
 rand_chacha = "0.3.1"
 rand_core = "0.6.4"
+serde = {version = "1.0.217", optional = true}
 tiny-keccak = { version = "2.0.2", features = ["sha3"] }
 xts-mode = "0.5.1"
 zeroize = { version = "1.8.1", features = ["derive"] }

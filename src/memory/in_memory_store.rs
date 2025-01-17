@@ -5,6 +5,9 @@ use std::{
     sync::{Arc, Mutex},
 };
 
+#[cfg(feature = "bench")]
+use serde::{Deserialize, Serialize};
+
 use crate::MemoryADT;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -42,6 +45,38 @@ impl<Address: Hash + Eq + Debug, Value: Clone + Eq + Debug> InMemory<Address, Va
     #[cfg(any(test, feature = "bench"))]
     pub fn clear(&self) {
         self.inner.lock().expect("poisoned lock").clear();
+    }
+}
+
+#[cfg(feature = "bench")]
+impl<Address: Hash + Eq + Debug + Serialize, Value: Clone + Eq + Debug + Serialize> Serialize
+    for InMemory<Address, Value>
+{
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        self.inner
+            .lock()
+            .expect("poisoned lock")
+            .serialize(serializer)
+    }
+}
+
+#[cfg(feature = "bench")]
+impl<
+    'de,
+    Address: Hash + Eq + Debug + Deserialize<'de>,
+    Value: Clone + Eq + Debug + Deserialize<'de>,
+> Deserialize<'de> for InMemory<Address, Value>
+{
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        HashMap::deserialize(deserializer).map(|inner| Self {
+            inner: Arc::new(Mutex::new(inner)),
+        })
     }
 }
 
