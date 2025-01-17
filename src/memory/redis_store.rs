@@ -1,8 +1,7 @@
 use std::{fmt, marker::PhantomData};
 
-use redis::{AsyncCommands, aio::ConnectionManager};
+use redis::{AsyncCommands, RedisError, aio::ConnectionManager};
 
-use super::error::MemoryError;
 use crate::{ADDRESS_LENGTH, Address, MemoryADT};
 
 // Arguments passed to the LUA script, in order:
@@ -28,6 +27,25 @@ end
 return value
 ";
 
+#[derive(Debug, PartialEq)]
+pub struct MemoryError {
+    pub inner: RedisError,
+}
+
+impl fmt::Display for MemoryError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "Memory Error")
+    }
+}
+
+impl std::error::Error for MemoryError {}
+
+impl From<RedisError> for MemoryError {
+    fn from(e: RedisError) -> Self {
+        Self { inner: e }
+    }
+}
+
 #[derive(Clone)]
 pub struct RedisMemory<Address, Word> {
     pub manager: ConnectionManager,
@@ -46,13 +64,13 @@ impl<Address, Word> fmt::Debug for RedisMemory<Address, Word> {
 
 impl<Address: Sync, Word: Sync> RedisMemory<Address, Word> {
     /// Connects to a Redis server with a `ConnectionManager`.
-    pub async fn connect_with_manager(manager: ConnectionManager) -> Result<Self, MemoryError> {
+    pub async fn connect_with_manager(mut manager: ConnectionManager) -> Result<Self, MemoryError> {
         Ok(Self {
             manager: manager.clone(),
             script_hash: redis::cmd("SCRIPT")
                 .arg("LOAD")
                 .arg(GUARDED_WRITE_LUA_SCRIPT)
-                .query_async(&mut manager.clone())
+                .query_async(&mut manager)
                 .await?,
             a: PhantomData,
             w: PhantomData,
@@ -122,8 +140,6 @@ impl<const WORD_LENGTH: usize> MemoryADT
 #[cfg(test)]
 mod tests {
 
-    use serial_test::serial;
-
     use super::*;
     use crate::test::memory::{
         test_guarded_write_concurrent, test_single_write_and_read, test_wrong_guard,
@@ -139,7 +155,6 @@ mod tests {
     const WORD_LENGTH: usize = 16;
 
     #[tokio::test]
-    #[serial]
     async fn test_rw_seq() -> Result<(), MemoryError> {
         let m = RedisMemory::<_, [u8; WORD_LENGTH]>::connect(&get_redis_url())
             .await
@@ -150,7 +165,6 @@ mod tests {
     }
 
     #[tokio::test]
-    #[serial]
     async fn test_guard_seq() -> Result<(), MemoryError> {
         let m = RedisMemory::<_, [u8; WORD_LENGTH]>::connect(&get_redis_url())
             .await
@@ -161,7 +175,6 @@ mod tests {
     }
 
     #[tokio::test]
-    #[serial]
     async fn test_rw_ccr() -> Result<(), MemoryError> {
         let m = RedisMemory::<_, [u8; WORD_LENGTH]>::connect(&get_redis_url())
             .await
