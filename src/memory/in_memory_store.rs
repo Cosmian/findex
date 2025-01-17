@@ -48,38 +48,6 @@ impl<Address: Hash + Eq + Debug, Value: Clone + Eq + Debug> InMemory<Address, Va
     }
 }
 
-#[cfg(feature = "serialization")]
-impl<Address: Hash + Eq + Debug + Serialize, Value: Clone + Eq + Debug + Serialize> Serialize
-    for InMemory<Address, Value>
-{
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        self.inner
-            .lock()
-            .expect("poisoned lock")
-            .serialize(serializer)
-    }
-}
-
-#[cfg(feature = "serialization")]
-impl<
-    'de,
-    Address: Hash + Eq + Debug + Deserialize<'de>,
-    Value: Clone + Eq + Debug + Deserialize<'de>,
-> Deserialize<'de> for InMemory<Address, Value>
-{
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        HashMap::deserialize(deserializer).map(|inner| Self {
-            inner: Arc::new(Mutex::new(inner)),
-        })
-    }
-}
-
 impl<Address: Send + Sync + Hash + Eq + Debug, Value: Send + Sync + Clone + Eq + Debug> MemoryADT
     for InMemory<Address, Value>
 {
@@ -128,6 +96,38 @@ impl<Address: Hash + Eq + Debug + Clone, Value: Clone + Eq + Debug> IntoIterator
     }
 }
 
+#[cfg(feature = "serialization")]
+impl<Address: Hash + Eq + Debug + Serialize, Value: Clone + Eq + Debug + Serialize> Serialize
+    for InMemory<Address, Value>
+{
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        self.inner
+            .lock()
+            .expect("poisoned lock")
+            .serialize(serializer)
+    }
+}
+
+#[cfg(feature = "serialization")]
+impl<
+    'de,
+    Address: Hash + Eq + Debug + Deserialize<'de>,
+    Value: Clone + Eq + Debug + Deserialize<'de>,
+> Deserialize<'de> for InMemory<Address, Value>
+{
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        HashMap::deserialize(deserializer).map(|inner| Self {
+            inner: Arc::new(Mutex::new(inner)),
+        })
+    }
+}
+
 #[cfg(test)]
 mod tests {
 
@@ -160,5 +160,25 @@ mod tests {
             vec![Some(1), Some(1), Some(3), Some(3)],
             block_on(memory.batch_read(vec![1, 2, 3, 4])).unwrap(),
         )
+    }
+
+    #[cfg(feature = "serialization")]
+    #[test]
+    fn test_in_memory_serialization() {
+        let mem = InMemory::<Address<ADDRESS_LENGTH>, Word>::default();
+        block_on(mem.guarded_write((Address::default(), None), vec![
+            (Address::default() + 1, Word::default()),
+            (Address::default() + 2, Word::default()),
+        ]))
+        .unwrap();
+
+        let bytes = bincode::serialize(&mem).unwrap();
+        let res: InMemory<Address<16>, Word> =
+            bincode::deserialize::<InMemory<Address<ADDRESS_LENGTH>, Word>>(&bytes).unwrap();
+
+        mem.into_iter().zip(res).for_each(|((k1, v1), (k2, v2))| {
+            assert_eq!(k1, k2);
+            assert_eq!(v1, v2)
+        })
     }
 }

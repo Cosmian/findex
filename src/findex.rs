@@ -8,9 +8,15 @@ use std::{
 };
 
 use crate::{
-    ADDRESS_LENGTH, Address, IndexADT, MemoryADT, adt::VectorADT, encoding::Op, error::Error,
-    ovec::IVec,
+    ADDRESS_LENGTH, Address, IndexADT, KEY_LENGTH, MemoryADT, Secret, adt::VectorADT, error::Error,
+    memory::MemoryEncryptionLayer, ovec::IVec,
 };
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Op {
+    Insert,
+    Delete,
+}
 
 /// The encoder is used to serialize an operation, along with the set of values
 /// it operates on, into a sequence of memory words.

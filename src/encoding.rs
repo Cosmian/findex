@@ -1,21 +1,11 @@
-//! This module defines encoding operations that are used to serialize an operation.
-//! Currently, the only supported operations are the insertion and deletion, but there is no
-//! theoretical restriction on the kind of operation that can be used.
-
-#![allow(dead_code)]
+//! This module defines encoding operations that are used to serialize an
+//! operation.  Currently, the only supported operations are the insertion and
+//! deletion, but there is no theoretical restriction on the kind of operation
+//! that can be used.
 
 use std::{collections::HashSet, hash::Hash};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Op {
-    Insert,
-    Delete,
-}
-
-pub enum Mode {
-    EqBlock(usize),
-    Offset(usize),
-}
+use crate::{ByteArray, findex::Op};
 
 /// Blocks are the smallest unit size in block mode, 16 bytes is optimized to store UUIDs.
 const BLOCK_LENGTH: usize = 16;
@@ -25,10 +15,9 @@ const CHUNK_LENGTH: usize = 8 * BLOCK_LENGTH;
 
 pub const WORD_LENGTH: usize = 1 + CHUNK_LENGTH;
 
-pub fn dummy_encode<const WORD_LENGTH: usize, Value: AsRef<[u8]>>(
-    op: Op,
-    vs: HashSet<Value>,
-) -> Result<Vec<[u8; WORD_LENGTH]>, String> {
+pub type Word = ByteArray<WORD_LENGTH>;
+
+pub fn dummy_encode<Value: AsRef<[u8]>>(op: Op, vs: HashSet<Value>) -> Result<Vec<Word>, String> {
     if (u8::MAX as usize) < WORD_LENGTH {
         return Err("WORD_LENGTH too big for this encoding".to_string());
     }
@@ -51,13 +40,13 @@ pub fn dummy_encode<const WORD_LENGTH: usize, Value: AsRef<[u8]>>(
             }
             res[1] = n;
             res[2..bytes.len() + 2].copy_from_slice(bytes);
-            Ok(res)
+            Ok(res.into())
         })
         .collect()
 }
 
-pub fn dummy_decode<const WORD_LENGTH: usize, TryFromError: std::error::Error, Value>(
-    ws: Vec<[u8; WORD_LENGTH]>,
+pub fn dummy_decode<TryFromError: std::error::Error, Value>(
+    ws: Vec<Word>,
 ) -> Result<HashSet<Value>, String>
 where
     for<'z> Value: Hash + PartialEq + Eq + TryFrom<&'z [u8], Error = TryFromError>,
