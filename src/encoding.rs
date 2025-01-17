@@ -32,7 +32,7 @@ pub fn dummy_encode<Value: AsRef<[u8]>>(op: Op, vs: HashSet<Value>) -> Result<Ve
                 ));
             }
             let n = bytes.len() as u8;
-            let mut res = [0; WORD_LENGTH];
+            let mut res = Word::default();
             if op == Op::Insert {
                 res[0] = 1;
             } else {
@@ -40,7 +40,7 @@ pub fn dummy_encode<Value: AsRef<[u8]>>(op: Op, vs: HashSet<Value>) -> Result<Ve
             }
             res[1] = n;
             res[2..bytes.len() + 2].copy_from_slice(bytes);
-            Ok(res.into())
+            Ok(res)
         })
         .collect()
 }

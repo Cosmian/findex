@@ -1,8 +1,8 @@
 use std::{collections::HashSet, time::Duration};
 
 use cosmian_findex::{
-    Findex, InMemory, IndexADT, MemoryADT, MemoryEncryptionLayer, Op, Secret, WORD_LENGTH,
-    dummy_decode, dummy_encode,
+    ADDRESS_LENGTH, Findex, InMemory, IndexADT, MemoryADT, MemoryEncryptionLayer, Op, Secret,
+    WORD_LENGTH, dummy_decode, dummy_encode,
 };
 use criterion::{BenchmarkId, Criterion, criterion_group, criterion_main};
 use futures::{executor::block_on, future::join_all};
@@ -57,7 +57,7 @@ fn bench_search_multiple_bindings(c: &mut Criterion) {
     let seed = Secret::random(&mut rng);
     let ctx_memory = MemoryEncryptionLayer::new(&seed, InMemory::default());
     let index = build_benchmarking_bindings_index(&mut rng);
-    let findex = Findex::new(ctx_memory, dummy_encode::<WORD_LENGTH, _>, dummy_decode);
+    let findex = Findex::new(ctx_memory, dummy_encode, dummy_decode);
     index
         .iter()
         .cloned()
@@ -87,11 +87,7 @@ fn bench_search_multiple_keywords(c: &mut Criterion) {
     let seed = Secret::random(&mut rng);
     let ptx_memory = InMemory::default();
     let ctx_memory = MemoryEncryptionLayer::new(&seed, ptx_memory.clone());
-    let findex = Findex::new(
-        ctx_memory.clone(),
-        dummy_encode::<WORD_LENGTH, _>,
-        dummy_decode,
-    );
+    let findex = Findex::new(ctx_memory.clone(), dummy_encode, dummy_decode);
 
     index
         .iter()
@@ -163,15 +159,15 @@ fn bench_insert_multiple_bindings(c: &mut Criterion) {
                     b.iter_batched(
                         || {
                             let vals = vals.clone();
-                            let words = dummy_encode::<WORD_LENGTH, _>(Op::Insert, vals).unwrap();
+                            let words = dummy_encode(Op::Insert, vals).unwrap();
                             words
                                 .into_iter()
                                 .enumerate()
-                                .map(|(i, w)| ([i; 16], w))
+                                .map(|(i, w)| ([i; ADDRESS_LENGTH], w))
                                 .collect::<Vec<_>>()
                         },
                         |bindings| {
-                            block_on(stm.guarded_write(([0; 16], None), bindings))
+                            block_on(stm.guarded_write(([0; ADDRESS_LENGTH], None), bindings))
                                 .expect("search failed");
                         },
                         criterion::BatchSize::SmallInput,
@@ -187,11 +183,7 @@ fn bench_insert_multiple_bindings(c: &mut Criterion) {
             let seed = Secret::random(&mut rng);
             let ptx_memory = InMemory::with_capacity(n_max + 1);
             let ctx_memory = MemoryEncryptionLayer::new(&seed, ptx_memory.clone());
-            let findex = Findex::new(
-                ctx_memory.clone(),
-                dummy_encode::<WORD_LENGTH, _>,
-                dummy_decode,
-            );
+            let findex = Findex::new(ctx_memory.clone(), dummy_encode, dummy_decode);
             group
                 .bench_function(BenchmarkId::from_parameter(vals.len()), |b| {
                     b.iter_batched(
@@ -228,7 +220,7 @@ fn bench_insert_multiple_keywords(c: &mut Criterion) {
                             stm.clear();
                             (0..2 * n)
                                 .map(|_| {
-                                    let mut a = [0; 16];
+                                    let mut a = [0; ADDRESS_LENGTH];
                                     let mut w = [0; WORD_LENGTH];
                                     rng.fill_bytes(&mut a);
                                     rng.fill_bytes(&mut w);
@@ -237,7 +229,7 @@ fn bench_insert_multiple_keywords(c: &mut Criterion) {
                                 .collect::<Vec<_>>()
                         },
                         |bindings| {
-                            block_on(stm.guarded_write(([0; 16], None), bindings))
+                            block_on(stm.guarded_write(([0; ADDRESS_LENGTH], None), bindings))
                                 .expect("search failed");
                         },
                         criterion::BatchSize::SmallInput,
@@ -254,11 +246,7 @@ fn bench_insert_multiple_keywords(c: &mut Criterion) {
             let seed = Secret::random(&mut rng);
             let ptx_memory = InMemory::with_capacity(2 * n);
             let ctx_memory = MemoryEncryptionLayer::new(&seed, ptx_memory.clone());
-            let findex = Findex::new(
-                ctx_memory.clone(),
-                dummy_encode::<WORD_LENGTH, _>,
-                dummy_decode,
-            );
+            let findex = Findex::new(ctx_memory.clone(), dummy_encode, dummy_decode);
 
             group
                 .bench_function(BenchmarkId::from_parameter(n), |b| {
@@ -306,11 +294,7 @@ fn bench_contention(c: &mut Criterion) {
             let seed = Secret::random(&mut rng);
             let ptx_memory = InMemory::with_capacity(N_BINDINGS * i + 1);
             let ctx_memory = MemoryEncryptionLayer::new(&seed, ptx_memory.clone());
-            let findex = Findex::new(
-                ctx_memory.clone(),
-                dummy_encode::<WORD_LENGTH, _>,
-                dummy_decode,
-            );
+            let findex = Findex::new(ctx_memory.clone(), dummy_encode, dummy_decode);
             let runtime = tokio::runtime::Builder::new_multi_thread()
                 .worker_threads(i)
                 .enable_all()
@@ -360,11 +344,7 @@ fn bench_contention(c: &mut Criterion) {
             let seed = Secret::random(&mut rng);
             let ptx_memory = InMemory::with_capacity(N_BINDINGS * i + 1);
             let ctx_memory = MemoryEncryptionLayer::new(&seed, ptx_memory.clone());
-            let findex = Findex::new(
-                ctx_memory.clone(),
-                dummy_encode::<WORD_LENGTH, _>,
-                dummy_decode,
-            );
+            let findex = Findex::new(ctx_memory.clone(), dummy_encode, dummy_decode);
             let runtime = tokio::runtime::Builder::new_multi_thread()
                 .worker_threads(i)
                 .enable_all()

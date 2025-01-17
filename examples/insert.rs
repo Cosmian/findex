@@ -1,6 +1,6 @@
 //! This example show-cases the use of Findex to securely store a hash-map.
 
-use cosmian_findex::{Findex, InMemory, IndexADT, MemoryEncryptionLayer, Op, Secret};
+use cosmian_findex::{ByteArray, Findex, InMemory, IndexADT, MemoryEncryptionLayer, Op, Secret};
 use futures::executor::block_on;
 use rand_chacha::ChaChaRng;
 use rand_core::{CryptoRngCore, SeedableRng};
@@ -32,8 +32,9 @@ fn gen_index(rng: &mut impl CryptoRngCore) -> HashMap<[u8; 8], HashSet<u64>> {
 /// each. The `WORD_LENGTH` is therefore 1 byte of metadata plus 128 * 8 bytes
 /// of values.
 const WORD_LENGTH: usize = 1 + 8 * 128;
+type Word = ByteArray<WORD_LENGTH>;
 
-fn encoder(op: Op, values: HashSet<u64>) -> Result<Vec<[u8; WORD_LENGTH]>, String> {
+fn encoder(op: Op, values: HashSet<u64>) -> Result<Vec<Word>, String> {
     let mut words = Vec::new(); // This could be initialized with the correct size.
     let mut values = values.into_iter().peekable();
     while values.peek().is_some() {
@@ -44,7 +45,8 @@ fn encoder(op: Op, values: HashSet<u64>) -> Result<Vec<[u8; WORD_LENGTH]>, Strin
 
         let metadata =
             <u8>::try_from(chunk.len() - 1).unwrap() + if let Op::Insert = op { 128 } else { 0 };
-        let mut word = [0; WORD_LENGTH];
+
+        let mut word = Word::default();
         word[0] = metadata;
         chunk
             .into_iter()
@@ -55,7 +57,7 @@ fn encoder(op: Op, values: HashSet<u64>) -> Result<Vec<[u8; WORD_LENGTH]>, Strin
     Ok(words)
 }
 
-fn decoder(words: Vec<[u8; WORD_LENGTH]>) -> Result<HashSet<u64>, String> {
+fn decoder(words: Vec<Word>) -> Result<HashSet<u64>, String> {
     let mut values = HashSet::new();
     words.into_iter().for_each(|w| {
         let metadata = w[0];

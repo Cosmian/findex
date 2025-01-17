@@ -84,17 +84,17 @@ pub mod tests {
     mod vector {
         //! This module defines tests any implementation of the VectorADT interface must pass.
 
-        use crate::adt::VectorADT;
+        use crate::{ByteArray, adt::VectorADT};
         use futures::{executor::block_on, future::join_all};
 
         /// Adding information from different copies of the same vector should be visible by all
         /// copies.
         pub async fn test_vector_sequential<const LENGTH: usize>(
-            v: &(impl Clone + VectorADT<Value = [u8; LENGTH]>),
+            v: &(impl Clone + VectorADT<Value = ByteArray<LENGTH>>),
         ) {
             let mut v1 = v.clone();
             let mut v2 = v.clone();
-            let values = (0..10).map(|n| [n; LENGTH]).collect::<Vec<_>>();
+            let values = (0..10).map(|n| [n; LENGTH].into()).collect::<Vec<_>>();
             v1.push(values[..5].to_vec()).await.unwrap();
             v2.push(values[..5].to_vec()).await.unwrap();
             v1.push(values[5..].to_vec()).await.unwrap();
@@ -108,13 +108,15 @@ pub mod tests {
         /// Concurrently adding data to instances of the same vector should not introduce data loss.
         pub async fn test_vector_concurrent<
             const LENGTH: usize,
-            V: 'static + Clone + VectorADT<Value = [u8; LENGTH]>,
+            V: 'static + Clone + VectorADT<Value = ByteArray<LENGTH>>,
         >(
             v: &V,
         ) {
             let n = 100;
             let m = 2;
-            let values = (0..n * m).map(|i| [i as u8; LENGTH]).collect::<Vec<_>>();
+            let values = (0..n * m)
+                .map(|i| [i as u8; LENGTH].into())
+                .collect::<Vec<_>>();
             let handles = values
                 .chunks_exact(m)
                 .map(|vals| {

@@ -6,6 +6,10 @@ use serde::{Deserialize, Serialize};
 
 use crate::byte_array::ByteArray;
 
+/// 16-byte addresses ensure a high collision resistance that poses virtually no
+/// limitation on the index.
+pub const ADDRESS_LENGTH: usize = 16;
+
 // NOTE: a more efficient implementation of the address could be a big-int.
 #[derive(Debug, Default, Clone, PartialEq, Eq, Hash)]
 pub struct Address<const LENGTH: usize>(ByteArray<LENGTH>);

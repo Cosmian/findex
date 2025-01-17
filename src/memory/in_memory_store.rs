@@ -165,6 +165,8 @@ mod tests {
     #[cfg(feature = "serialization")]
     #[test]
     fn test_in_memory_serialization() {
+        use crate::{ADDRESS_LENGTH, Address, encoding::Word};
+
         let mem = InMemory::<Address<ADDRESS_LENGTH>, Word>::default();
         block_on(mem.guarded_write((Address::default(), None), vec![
             (Address::default() + 1, Word::default()),
@@ -173,7 +175,7 @@ mod tests {
         .unwrap();
 
         let bytes = bincode::serialize(&mem).unwrap();
-        let res: InMemory<Address<16>, Word> =
+        let res: InMemory<Address<ADDRESS_LENGTH>, Word> =
             bincode::deserialize::<InMemory<Address<ADDRESS_LENGTH>, Word>>(&bytes).unwrap();
 
         mem.into_iter().zip(res).for_each(|((k1, v1), (k2, v2))| {

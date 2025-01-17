@@ -4,7 +4,7 @@ use rand_core::CryptoRngCore;
 #[cfg(feature = "serialization")]
 use serde::{Deserialize, Serialize, de::Visitor, ser::SerializeTuple};
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct ByteArray<const LENGTH: usize>([u8; LENGTH]);
 
 impl<const LENGTH: usize> Default for ByteArray<LENGTH> {
@@ -101,7 +101,6 @@ impl<'de, const LENGTH: usize> Deserialize<'de> for ByteArray<LENGTH> {
 
 #[cfg(test)]
 mod tests {
-
     #[cfg(feature = "serialization")]
     #[test]
     fn test_word_serialization() {

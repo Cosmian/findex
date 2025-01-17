@@ -16,7 +16,7 @@
 
 use std::{fmt::Debug, hash::Hash, ops::Add};
 
-use crate::{MemoryADT, adt::VectorADT, error::Error};
+use crate::{ByteArray, MemoryADT, adt::VectorADT, error::Error};
 
 /// Headers contain a counter of the number of values stored in the vector.
 // TODO: header could store metadata (e.g. sparsity budget)
@@ -25,7 +25,7 @@ struct Header {
     pub(crate) cnt: u64,
 }
 
-impl<const WORD_LENGTH: usize> TryFrom<&Header> for [u8; WORD_LENGTH] {
+impl<const WORD_LENGTH: usize> TryFrom<&Header> for ByteArray<WORD_LENGTH> {
     type Error = String;
 
     fn try_from(header: &Header) -> Result<Self, Self::Error> {
@@ -34,11 +34,11 @@ impl<const WORD_LENGTH: usize> TryFrom<&Header> for [u8; WORD_LENGTH] {
         }
         let mut res = [0; WORD_LENGTH];
         res[..8].copy_from_slice(&header.cnt.to_be_bytes());
-        Ok(res)
+        Ok(res.into())
     }
 }
 
-impl<const WORD_LENGTH: usize> TryFrom<Header> for [u8; WORD_LENGTH] {
+impl<const WORD_LENGTH: usize> TryFrom<Header> for ByteArray<WORD_LENGTH> {
     type Error = String;
 
     fn try_from(value: Header) -> Result<Self, Self::Error> {
@@ -66,7 +66,7 @@ impl TryFrom<&[u8]> for Header {
 
 /// Implementation of a vector in an infinite array.
 #[derive(Debug)]
-pub struct IVec<const WORD_LENGTH: usize, Memory: MemoryADT<Word = [u8; WORD_LENGTH]>> {
+pub struct IVec<const WORD_LENGTH: usize, Memory: MemoryADT<Word = ByteArray<WORD_LENGTH>>> {
     // backing array address
     a: Memory::Address,
     m: Memory,
@@ -75,7 +75,7 @@ pub struct IVec<const WORD_LENGTH: usize, Memory: MemoryADT<Word = [u8; WORD_LEN
 impl<
     const WORD_LENGTH: usize,
     Address: Clone,
-    Memory: Clone + MemoryADT<Address = Address, Word = [u8; WORD_LENGTH]>,
+    Memory: Clone + MemoryADT<Address = Address, Word = ByteArray<WORD_LENGTH>>,
 > Clone for IVec<WORD_LENGTH, Memory>
 {
     fn clone(&self) -> Self {
@@ -89,7 +89,7 @@ impl<
 impl<
     const WORD_LENGTH: usize,
     Address: Hash + Eq + Debug + Clone + Add<u64, Output = Address>,
-    Memory: Clone + MemoryADT<Address = Address, Word = [u8; WORD_LENGTH]>,
+    Memory: Clone + MemoryADT<Address = Address, Word = ByteArray<WORD_LENGTH>>,
 > IVec<WORD_LENGTH, Memory>
 {
     /// (Lazily) instantiates a new vector at this address in this memory: no value is written
@@ -102,7 +102,7 @@ impl<
 impl<
     const WORD_LENGTH: usize,
     Address: Send + Sync + Hash + Eq + Debug + Clone + Add<u64, Output = Address>,
-    Memory: Send + Sync + Clone + MemoryADT<Address = Address, Word = [u8; WORD_LENGTH]>,
+    Memory: Send + Sync + Clone + MemoryADT<Address = Address, Word = ByteArray<WORD_LENGTH>>,
 > VectorADT for IVec<WORD_LENGTH, Memory>
 where
     Memory::Error: Send + Sync,
@@ -141,7 +141,7 @@ where
                     (
                         self.a.clone(),
                         old.as_ref()
-                            .map(<[u8; WORD_LENGTH]>::try_from)
+                            .map(TryInto::try_into)
                             .transpose()
                             .map_err(|e| Error::Conversion(e))?,
                     ),
@@ -178,6 +178,7 @@ where
 
         let second_batch = {
             let cur_header = first_batch[0]
+                .as_ref()
                 .map(|v| Header::try_from(v.as_slice()))
                 .transpose()
                 .map_err(Error::Conversion)?
@@ -213,7 +214,7 @@ mod tests {
     use rand_core::SeedableRng;
 
     use crate::{
-        ADDRESS_LENGTH, InMemory,
+        ADDRESS_LENGTH, ByteArray, InMemory,
         address::Address,
         adt::tests::{test_vector_concurrent, test_vector_sequential},
         memory::MemoryEncryptionLayer,
@@ -227,7 +228,7 @@ mod tests {
     async fn test_ovec() {
         let mut rng = ChaChaRng::from_entropy();
         let seed = Secret::random(&mut rng);
-        let memory = InMemory::<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>::default();
+        let memory = InMemory::<Address<ADDRESS_LENGTH>, ByteArray<WORD_LENGTH>>::default();
         let obf = MemoryEncryptionLayer::new(&seed, memory.clone());
         let address = Address::random(&mut rng);
         let v = IVec::<WORD_LENGTH, _>::new(address.clone(), obf);

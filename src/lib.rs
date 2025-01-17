@@ -13,7 +13,7 @@ mod secret;
 mod symmetric_key;
 mod value;
 
-pub use address::Address;
+pub use address::{ADDRESS_LENGTH, Address};
 pub use adt::{IndexADT, MemoryADT};
 pub use byte_array::ByteArray;
 pub use error::Error;
@@ -23,13 +23,10 @@ pub use secret::Secret;
 pub use value::Value;
 
 #[cfg(feature = "bench")]
-pub use encoding::{WORD_LENGTH, Word, dummy_decode, dummy_encode};
+pub use encoding::{WORD_LENGTH, dummy_decode, dummy_encode};
+
 #[cfg(any(test, feature = "bench"))]
 pub use memory::InMemory;
-
-/// 16-byte addresses ensure a high collision resistance that poses virtually no
-/// limitation on the index.
-pub const ADDRESS_LENGTH: usize = 16;
 
 /// Using 32-byte cryptographic keys allows achieving post-quantum resistance
 /// with the AES primitive.
