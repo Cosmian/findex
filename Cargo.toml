@@ -20,7 +20,8 @@ name = "cosmian_findex"
 path = "src/lib.rs"
 
 [features]
-bench = ["serde"]
+bench = []
+serialization = ["serde"]
 
 [dependencies]
 aes = "0.8.4"

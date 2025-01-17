@@ -2,6 +2,9 @@ use std::ops::{Add, Deref, DerefMut};
 
 use rand_core::CryptoRngCore;
 
+#[cfg(feature = "serialization")]
+use serde::{Deserialize, Serialize};
+
 // NOTE: a more efficient implementation of the address could be a big-int.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Address<const LENGTH: usize>([u8; LENGTH]);
@@ -58,6 +61,29 @@ impl<const LENGTH: usize> Add<u64> for Address<LENGTH> {
             }
         }
         self
+    }
+}
+
+#[cfg(feature = "serialization")]
+impl<const ADDRESS_LENGTH: usize> Serialize for Address<ADDRESS_LENGTH> {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        self.0.serialize(serializer)
+    }
+}
+
+#[cfg(feature = "serialization")]
+impl<'de, const ADDRESS_LENGTH: usize> Deserialize<'de> for Address<ADDRESS_LENGTH>
+where
+    [u8; ADDRESS_LENGTH]: Deserialize<'de>,
+{
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        <[u8; ADDRESS_LENGTH]>::deserialize(deserializer).map(Self)
     }
 }
 

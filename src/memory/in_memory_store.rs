@@ -5,7 +5,7 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-#[cfg(feature = "bench")]
+#[cfg(feature = "serialization")]
 use serde::{Deserialize, Serialize};
 
 use crate::MemoryADT;
@@ -48,7 +48,7 @@ impl<Address: Hash + Eq + Debug, Value: Clone + Eq + Debug> InMemory<Address, Va
     }
 }
 
-#[cfg(feature = "bench")]
+#[cfg(feature = "serialization")]
 impl<Address: Hash + Eq + Debug + Serialize, Value: Clone + Eq + Debug + Serialize> Serialize
     for InMemory<Address, Value>
 {
@@ -63,7 +63,7 @@ impl<Address: Hash + Eq + Debug + Serialize, Value: Clone + Eq + Debug + Seriali
     }
 }
 
-#[cfg(feature = "bench")]
+#[cfg(feature = "serialization")]
 impl<
     'de,
     Address: Hash + Eq + Debug + Deserialize<'de>,
