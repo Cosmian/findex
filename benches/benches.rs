@@ -1,8 +1,8 @@
 use std::{collections::HashSet, time::Duration};
 
 use cosmian_findex::{
-    ADDRESS_LENGTH, Findex, InMemory, IndexADT, MemoryADT, MemoryEncryptionLayer, Op, Secret,
-    WORD_LENGTH, dummy_decode, dummy_encode,
+    ADDRESS_LENGTH, Address, Findex, InMemory, IndexADT, MemoryADT, MemoryEncryptionLayer, Op,
+    Secret, WORD_LENGTH, dummy_decode, dummy_encode,
 };
 use criterion::{BenchmarkId, Criterion, criterion_group, criterion_main};
 use futures::{executor::block_on, future::join_all};
@@ -163,12 +163,14 @@ fn bench_insert_multiple_bindings(c: &mut Criterion) {
                             words
                                 .into_iter()
                                 .enumerate()
-                                .map(|(i, w)| ([i; ADDRESS_LENGTH], w))
+                                .map(|(i, w)| (Address::from([i as u8; ADDRESS_LENGTH]), w))
                                 .collect::<Vec<_>>()
                         },
                         |bindings| {
-                            block_on(stm.guarded_write(([0; ADDRESS_LENGTH], None), bindings))
-                                .expect("search failed");
+                            block_on(
+                                stm.guarded_write(([0; ADDRESS_LENGTH].into(), None), bindings),
+                            )
+                            .expect("search failed");
                         },
                         criterion::BatchSize::SmallInput,
                     );
@@ -224,13 +226,15 @@ fn bench_insert_multiple_keywords(c: &mut Criterion) {
                                     let mut w = [0; WORD_LENGTH];
                                     rng.fill_bytes(&mut a);
                                     rng.fill_bytes(&mut w);
-                                    (a, w)
+                                    (a.into(), w.into())
                                 })
                                 .collect::<Vec<_>>()
                         },
                         |bindings| {
-                            block_on(stm.guarded_write(([0; ADDRESS_LENGTH], None), bindings))
-                                .expect("search failed");
+                            block_on(
+                                stm.guarded_write(([0; ADDRESS_LENGTH].into(), None), bindings),
+                            )
+                            .expect("search failed");
                         },
                         criterion::BatchSize::SmallInput,
                     );

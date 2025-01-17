@@ -7,6 +7,8 @@
 
 use std::{collections::HashSet, future::Future, hash::Hash};
 
+use crate::{Address, ByteArray};
+
 /// An index stores *bindings*, that associate a keyword with a value. All values bound to the same
 /// keyword are said to be *indexed under* this keyword.
 pub trait IndexADT<Keyword: Send + Sync + Hash, Value: Send + Sync + Hash> {
@@ -51,29 +53,23 @@ pub trait VectorADT: Send + Sync {
 }
 
 /// A Software Transactional Memory: all operations exposed are atomic.
-pub trait MemoryADT {
-    /// Address space.
-    type Address;
-
-    /// Word space.
-    type Word;
-
+pub trait MemoryADT<const WORD_LENGTH: usize> {
     /// Memory error.
     type Error: Send + Sync + std::error::Error;
 
     /// Reads the words from the given addresses.
     fn batch_read(
         &self,
-        a: Vec<Self::Address>,
-    ) -> impl Send + Sync + Future<Output = Result<Vec<Option<Self::Word>>, Self::Error>>;
+        a: Vec<Address>,
+    ) -> impl Send + Sync + Future<Output = Result<Vec<Option<ByteArray<WORD_LENGTH>>>, Self::Error>>;
 
     /// Write the given words at the given addresses if the word currently stored at the guard
     /// address is the given one, and returns this guard word.
     fn guarded_write(
         &self,
-        guard: (Self::Address, Option<Self::Word>),
-        tasks: Vec<(Self::Address, Self::Word)>,
-    ) -> impl Send + Sync + Future<Output = Result<Option<Self::Word>, Self::Error>>;
+        guard: (Address, Option<ByteArray<WORD_LENGTH>>),
+        tasks: Vec<(Address, ByteArray<WORD_LENGTH>)>,
+    ) -> impl Send + Sync + Future<Output = Result<Option<ByteArray<WORD_LENGTH>>, Self::Error>>;
 }
 
 #[cfg(test)]

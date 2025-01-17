@@ -14,9 +14,9 @@
 //!      a         a+1   ...  a+n+1
 //! ```
 
-use std::{fmt::Debug, hash::Hash, ops::Add};
+use std::fmt::Debug;
 
-use crate::{ByteArray, MemoryADT, adt::VectorADT, error::Error};
+use crate::{Address, ByteArray, MemoryADT, Word, adt::VectorADT, error::Error};
 
 /// Headers contain a counter of the number of values stored in the vector.
 // TODO: header could store metadata (e.g. sparsity budget)
@@ -66,17 +66,14 @@ impl TryFrom<&[u8]> for Header {
 
 /// Implementation of a vector in an infinite array.
 #[derive(Debug)]
-pub struct IVec<const WORD_LENGTH: usize, Memory: MemoryADT<Word = ByteArray<WORD_LENGTH>>> {
+pub struct IVec<const WORD_LENGTH: usize, Memory: MemoryADT<WORD_LENGTH>> {
     // backing array address
-    a: Memory::Address,
+    a: Address,
     m: Memory,
 }
 
-impl<
-    const WORD_LENGTH: usize,
-    Address: Clone,
-    Memory: Clone + MemoryADT<Address = Address, Word = ByteArray<WORD_LENGTH>>,
-> Clone for IVec<WORD_LENGTH, Memory>
+impl<const WORD_LENGTH: usize, Memory: Clone + MemoryADT<WORD_LENGTH>> Clone
+    for IVec<WORD_LENGTH, Memory>
 {
     fn clone(&self) -> Self {
         Self {
@@ -86,12 +83,7 @@ impl<
     }
 }
 
-impl<
-    const WORD_LENGTH: usize,
-    Address: Hash + Eq + Debug + Clone + Add<u64, Output = Address>,
-    Memory: Clone + MemoryADT<Address = Address, Word = ByteArray<WORD_LENGTH>>,
-> IVec<WORD_LENGTH, Memory>
-{
+impl<const WORD_LENGTH: usize, Memory: Clone + MemoryADT<WORD_LENGTH>> IVec<WORD_LENGTH, Memory> {
     /// (Lazily) instantiates a new vector at this address in this memory: no value is written
     /// before the first push.
     pub const fn new(a: Address, m: Memory) -> Self {
@@ -99,17 +91,14 @@ impl<
     }
 }
 
-impl<
-    const WORD_LENGTH: usize,
-    Address: Send + Sync + Hash + Eq + Debug + Clone + Add<u64, Output = Address>,
-    Memory: Send + Sync + Clone + MemoryADT<Address = Address, Word = ByteArray<WORD_LENGTH>>,
-> VectorADT for IVec<WORD_LENGTH, Memory>
+impl<const WORD_LENGTH: usize, Memory: Send + Sync + Clone + MemoryADT<WORD_LENGTH>> VectorADT
+    for IVec<WORD_LENGTH, Memory>
 where
     Memory::Error: Send + Sync,
 {
-    type Value = Memory::Word;
+    type Value = Word<WORD_LENGTH>;
 
-    type Error = Error<Memory::Address>;
+    type Error = Error<Address>;
 
     async fn push(&mut self, vs: Vec<Self::Value>) -> Result<(), Self::Error> {
         // Findex modifications are only lock-free, hence it does not guarantee a given client will
@@ -131,7 +120,7 @@ where
                 .collect::<Vec<_>>();
             bindings.push((
                 self.a.clone(),
-                (&new).try_into().map_err(|e| Error::Conversion(e))?,
+                (&new).try_into().map_err(Error::Conversion)?,
             ));
 
             // Attempts committing the new bindings using the old header as guard.
@@ -143,7 +132,7 @@ where
                         old.as_ref()
                             .map(TryInto::try_into)
                             .transpose()
-                            .map_err(|e| Error::Conversion(e))?,
+                            .map_err(Error::Conversion)?,
                     ),
                     bindings,
                 )
@@ -214,7 +203,7 @@ mod tests {
     use rand_core::SeedableRng;
 
     use crate::{
-        ADDRESS_LENGTH, ByteArray, InMemory,
+        InMemory,
         address::Address,
         adt::tests::{test_vector_concurrent, test_vector_sequential},
         memory::MemoryEncryptionLayer,
@@ -228,7 +217,7 @@ mod tests {
     async fn test_ovec() {
         let mut rng = ChaChaRng::from_entropy();
         let seed = Secret::random(&mut rng);
-        let memory = InMemory::<Address<ADDRESS_LENGTH>, ByteArray<WORD_LENGTH>>::default();
+        let memory = InMemory::<WORD_LENGTH>::default();
         let obf = MemoryEncryptionLayer::new(&seed, memory.clone());
         let address = Address::random(&mut rng);
         let v = IVec::<WORD_LENGTH, _>::new(address.clone(), obf);

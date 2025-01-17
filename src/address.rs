@@ -11,7 +11,7 @@ use crate::byte_array::ByteArray;
 pub const ADDRESS_LENGTH: usize = 16;
 
 // NOTE: a more efficient implementation of the address could be a big-int.
-#[derive(Debug, Default, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Default, Clone, PartialEq, Eq, Hash, PartialOrd)]
 pub struct Address<const LENGTH: usize>(ByteArray<LENGTH>);
 
 impl<const LENGTH: usize> Deref for Address<LENGTH> {

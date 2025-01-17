@@ -95,7 +95,7 @@ impl<'de, const LENGTH: usize> Deserialize<'de> for ByteArray<LENGTH> {
             }
         }
 
-        deserializer.deserialize_tuple(LENGTH, ByteArrayVisitor::default())
+        deserializer.deserialize_tuple(LENGTH, ByteArrayVisitor)
     }
 }
 

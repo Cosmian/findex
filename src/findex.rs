@@ -7,9 +7,7 @@ use std::{
     sync::Arc,
 };
 
-use crate::{
-    ADDRESS_LENGTH, Address, ByteArray, Error, IndexADT, MemoryADT, adt::VectorADT, ovec::IVec,
-};
+use crate::{Address, Error, IndexADT, MemoryADT, Word, adt::VectorADT, ovec::IVec};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Op {
@@ -30,40 +28,34 @@ pub struct Findex<
     const WORD_LENGTH: usize,
     Value: Send + Sync + Hash + Eq,
     EncodingError: Send + Sync + Debug,
-    Memory: Send
-        + Sync
-        + Clone
-        + MemoryADT<Address = Address<ADDRESS_LENGTH>, Word = ByteArray<WORD_LENGTH>>,
+    Memory: Send + Sync + Clone + MemoryADT<WORD_LENGTH>,
 > {
-    el: Memory,
-    encode: Arc<Encoder<Value, Memory::Word, EncodingError>>,
-    decode: Arc<Decoder<Value, Memory::Word, EncodingError>>,
+    memory: Memory,
+    encode: Arc<Encoder<Value, Word<WORD_LENGTH>, EncodingError>>,
+    decode: Arc<Decoder<Value, Word<WORD_LENGTH>, EncodingError>>,
 }
 
 impl<
     const WORD_LENGTH: usize,
     Value: Send + Sync + Hash + Eq,
     EncodingError: Send + Sync + Debug,
-    Memory: Send
-        + Sync
-        + Clone
-        + MemoryADT<Address = Address<ADDRESS_LENGTH>, Word = ByteArray<WORD_LENGTH>>,
+    Memory: Send + Sync + Clone + MemoryADT<WORD_LENGTH>,
 > Findex<WORD_LENGTH, Value, EncodingError, Memory>
 {
     /// Instantiates Findex with the given seed, and memory.
     pub fn new(
         memory: Memory,
-        encode: Encoder<Value, Memory::Word, EncodingError>,
-        decode: Decoder<Value, Memory::Word, EncodingError>,
+        encode: Encoder<Value, Word<WORD_LENGTH>, EncodingError>,
+        decode: Decoder<Value, Word<WORD_LENGTH>, EncodingError>,
     ) -> Self {
         Self {
-            el: memory,
+            memory,
             encode: Arc::new(encode),
             decode: Arc::new(decode),
         }
     }
 
-    fn hash_keyword<Keyword: Hash>(kw: &Keyword) -> Address<ADDRESS_LENGTH> {
+    fn hash_keyword<Keyword: Hash>(kw: &Keyword) -> Address {
         let h = |n: u8| {
             let mut hasher = DefaultHasher::default();
             kw.hash(&mut hasher);
@@ -72,7 +64,7 @@ impl<
         };
 
         // Hash the keyword twice to get enough collision resistance.
-        let mut a = Address::<ADDRESS_LENGTH>::default();
+        let mut a = Address::default();
         a[..8].copy_from_slice(&h(1).to_be_bytes());
         a[8..].copy_from_slice(&h(2).to_be_bytes());
         a
@@ -89,7 +81,7 @@ impl<
     ) -> Result<(), <Self as IndexADT<Keyword, Value>>::Error> {
         let words = (self.encode)(op, vs).map_err(|e| Error::Conversion(format!("{e:?}")))?;
         let l = Self::hash_keyword(&kw);
-        IVec::new(l, self.el.clone()).push(words).await
+        IVec::new(l, self.memory.clone()).push(words).await
     }
 }
 
@@ -98,17 +90,14 @@ impl<
     Keyword: Send + Sync + Hash + Eq,
     Value: Send + Sync + Hash + Eq,
     EncodingError: Send + Sync + Debug,
-    Memory: Send
-        + Sync
-        + Clone
-        + MemoryADT<Address = Address<ADDRESS_LENGTH>, Word = ByteArray<WORD_LENGTH>>,
+    Memory: Send + Sync + Clone + MemoryADT<WORD_LENGTH>,
 > IndexADT<Keyword, Value> for Findex<WORD_LENGTH, Value, EncodingError, Memory>
 {
-    type Error = Error<Address<ADDRESS_LENGTH>>;
+    type Error = Error<Address>;
 
     async fn search(&self, kw: &Keyword) -> Result<HashSet<Value>, Self::Error> {
         let l = Self::hash_keyword(kw);
-        let words = IVec::new(l, self.el.clone()).read().await?;
+        let words = IVec::new(l, self.memory.clone()).read().await?;
         (self.decode)(words).map_err(|e| Error::Conversion(format!("{e:?}")))
     }
 
@@ -138,8 +127,8 @@ mod tests {
     use rand_core::SeedableRng;
 
     use crate::{
-        ADDRESS_LENGTH, Address, Findex, InMemory, IndexADT, Value,
-        encoding::{Word, dummy_decode, dummy_encode},
+        Findex, InMemory, IndexADT, Value,
+        encoding::{WORD_LENGTH, dummy_decode, dummy_encode},
         memory::MemoryEncryptionLayer,
         secret::Secret,
     };
@@ -148,8 +137,7 @@ mod tests {
     fn test_insert_search_delete_search() {
         let mut rng = ChaChaRng::from_entropy();
         let seed = Secret::random(&mut rng);
-        let memory =
-            MemoryEncryptionLayer::new(&seed, InMemory::<Address<ADDRESS_LENGTH>, Word>::default());
+        let memory = MemoryEncryptionLayer::new(&seed, InMemory::<WORD_LENGTH>::default());
         let findex = Findex::new(memory, dummy_encode, dummy_decode);
         let cat_bindings = [Value::from(1), Value::from(3), Value::from(5)];
         let dog_bindings = [Value::from(0), Value::from(2), Value::from(4)];
