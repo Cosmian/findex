@@ -1,6 +1,6 @@
 use std::{fmt, marker::PhantomData};
 
-use redis::{AsyncCommands, RedisError, aio::ConnectionManager};
+use redis::{RedisError, aio::ConnectionManager};
 
 use crate::{ADDRESS_LENGTH, Address, MemoryADT};
 
@@ -102,9 +102,9 @@ impl<const WORD_LENGTH: usize> MemoryADT
         &self,
         addresses: Vec<Self::Address>,
     ) -> Result<Vec<Option<Self::Word>>, Self::Error> {
-        self.manager
-            .clone()
-            .mget(addresses)
+        let mut cmd = redis::cmd("MGET");
+        let cmd = addresses.iter().fold(&mut cmd, |c, a| c.arg(&**a));
+        cmd.query_async(&mut self.manager.clone())
             .await
             .map_err(Self::Error::from)
     }

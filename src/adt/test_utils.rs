@@ -25,14 +25,6 @@ use crate::MemoryADT;
 /// * `T::Address: Debug + PartialEq + From<[u8; 16]> + Send`
 /// * `T::Word: Debug + PartialEq + From<[u8; 16]> + Send`
 /// * `T::Error: std::error::Error + Send`
-///
-/// # Examples
-///
-/// ```no_run
-/// # let memory = // your memory implementation
-/// # let seed = [0u8; 32];
-/// # test_single_write_and_read(&memory, seed).await;
-/// ```
 pub async fn test_single_write_and_read<T>(memory: &T, seed: [u8; 32])
 where
     T: MemoryADT + Send + Sync,
@@ -101,14 +93,6 @@ where
 /// * `T::Address: Debug + PartialEq + From<[u8; 16]> + Send`
 /// * `T::Word: Debug + PartialEq + From<[u8; 16]> + Send`
 /// * `T::Error: std::error::Error + Send`
-///
-/// # Examples
-///
-/// ```no_run
-/// # let memory = // your memory implementation
-/// # let seed = [0u8; 32];
-/// # test_wrong_guard(&memory, seed).await;
-/// ```
 pub async fn test_wrong_guard<T>(memory: &T, seed: [u8; 32])
 where
     T: MemoryADT + Send + Sync,
@@ -179,15 +163,7 @@ where
 /// * `MemoryADT + Send + Sync + 'static + Clone`
 /// * `T::Address: Debug + PartialEq + From<[u8; 16]> + Send`
 /// * `T::Word: Debug + PartialEq + From<[u8; 16]> + Into<[u8; 16]> + Send + Clone + Default`
-/// * `T::Error: std::error::Error`
-///
-/// # Examples
-///
-/// ```no_run
-/// # let memory = // your memory implementation
-/// # let seed = [0u8; 32];
-/// # test_guarded_write_concurrent(&memory, seed).await;
-/// ```
+/// * `T::Error: std::error::
 pub async fn test_guarded_write_concurrent<T>(memory: &T, seed: [u8; 32])
 where
     T: MemoryADT + Send + Sync + 'static + Clone,
