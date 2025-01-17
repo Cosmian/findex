@@ -104,7 +104,7 @@ impl<const WORD_LENGTH: usize> MemoryADT
     ) -> Result<Vec<Option<Self::Word>>, Self::Error> {
         self.manager
             .clone()
-            .mget(addresses.iter().map(|a| &**a).collect::<Vec<_>>())
+            .mget(addresses)
             .await
             .map_err(Self::Error::from)
     }
@@ -133,7 +133,7 @@ impl<const WORD_LENGTH: usize> MemoryADT
 
         cmd.query_async(&mut self.manager.clone())
             .await
-            .map_err(std::convert::Into::into)
+            .map_err(Self::Error::from)
     }
 }
 
@@ -141,7 +141,7 @@ impl<const WORD_LENGTH: usize> MemoryADT
 mod tests {
 
     use super::*;
-    use crate::test::memory::{
+    use crate::adt::test_utils::{
         test_guarded_write_concurrent, test_single_write_and_read, test_wrong_guard,
     };
 

@@ -9,8 +9,8 @@ mod memory;
 mod ovec;
 mod secret;
 mod symmetric_key;
-#[cfg(test)]
-mod test;
+#[cfg(any(test, feature = "test-utils"))]
+pub use adt::test_utils;
 mod value;
 
 pub use address::Address;

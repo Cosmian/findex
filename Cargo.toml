@@ -21,6 +21,7 @@ path = "src/lib.rs"
 
 [features]
 bench = []
+test-utils = []
 redis-mem = ["redis"]
 
 [dependencies]

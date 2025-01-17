@@ -99,7 +99,7 @@ mod tests {
 
     use crate::{
         MemoryADT,
-        test::memory::{
+        adt::test_utils::{
             test_guarded_write_concurrent, test_single_write_and_read, test_wrong_guard,
         },
     };
