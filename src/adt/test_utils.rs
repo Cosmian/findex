@@ -73,9 +73,10 @@ where
     );
 }
 
-/// Verifies that the memory implementation correctly handles guard violations
-/// by attempting to write with a None guard to an address that already contains a value.
-/// The test ensures the original value is preserved and the write operation fails appropriately.
+/// Tests guard violation handling in memory implementations.
+///
+/// Attempts to write with a None guard to an address containing a value.
+/// Verifies that the original value is preserved and the write fails.
 ///
 /// # Arguments
 ///
@@ -145,8 +146,10 @@ where
 }
 
 /// Tests concurrent guarded write operations on a Memory ADT implementation.
-/// It spawns N threads that each try to increment the counter, handling contention through retries,
-/// and validates that the final counter value equals the number of threads.
+///
+/// Spawns multiple threads to perform concurrent counter increments.
+/// Uses retries to handle write contention between threads.
+/// Verifies the final counter matches the total number of threads.
 ///
 /// # Arguments
 ///

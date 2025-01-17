@@ -1,7 +1,7 @@
-mod adt;
+mod interfaces;
 #[cfg(any(test, feature = "test-utils"))]
 pub mod test_utils;
 
 #[cfg(test)]
-pub use adt::tests;
-pub use adt::{IndexADT, MemoryADT, VectorADT};
+pub use interfaces::tests;
+pub use interfaces::{IndexADT, MemoryADT, VectorADT};
