@@ -1,8 +1,6 @@
 use std::ops::{Add, Deref, DerefMut};
 
 use rand_core::CryptoRngCore;
-#[cfg(feature = "redis-mem")]
-use redis::ToRedisArgs;
 
 // NOTE: a more efficient implementation of the address could be a big-int.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -17,16 +15,6 @@ impl<const LENGTH: usize> From<[u8; LENGTH]> for Address<LENGTH> {
 impl<const LENGTH: usize> From<Address<LENGTH>> for [u8; LENGTH] {
     fn from(address: Address<LENGTH>) -> Self {
         address.0
-    }
-}
-
-#[cfg(feature = "redis-mem")]
-impl<const LENGTH: usize> ToRedisArgs for Address<LENGTH> {
-    fn write_redis_args<W>(&self, out: &mut W)
-    where
-        W: ?Sized + redis::RedisWrite,
-    {
-        out.write_arg(&**self)
     }
 }
 

@@ -22,7 +22,7 @@ pub use secret::Secret;
 pub use value::Value;
 
 #[cfg(feature = "redis-mem")]
-pub use memory::redis_store::RedisMemory;
+pub use memory::redis_store::{MemoryError, RedisMemory};
 
 #[cfg(any(feature = "redis-mem", feature = "bench"))]
 pub use encoding::{WORD_LENGTH, dummy_decode, dummy_encode};
