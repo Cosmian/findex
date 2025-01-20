@@ -159,7 +159,6 @@ mod tests {
         let m = RedisMemory::<_, [u8; WORD_LENGTH]>::connect(&get_redis_url())
             .await
             .unwrap();
-        m.clear_redis_db().await.unwrap();
         test_single_write_and_read(&m, rand::random()).await;
         Ok(())
     }
@@ -169,7 +168,6 @@ mod tests {
         let m = RedisMemory::<_, [u8; WORD_LENGTH]>::connect(&get_redis_url())
             .await
             .unwrap();
-        m.clear_redis_db().await.unwrap();
         test_wrong_guard(&m, rand::random()).await;
         Ok(())
     }
@@ -179,7 +177,6 @@ mod tests {
         let m = RedisMemory::<_, [u8; WORD_LENGTH]>::connect(&get_redis_url())
             .await
             .unwrap();
-        m.clear_redis_db().await.unwrap();
         test_guarded_write_concurrent(&m, rand::random()).await;
         Ok(())
     }
