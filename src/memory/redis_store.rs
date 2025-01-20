@@ -83,12 +83,6 @@ impl<Address: Sync, Word: Sync> RedisMemory<Address, Word> {
         let manager = client.get_connection_manager().await?;
         Self::connect_with_manager(manager).await
     }
-
-    pub async fn clear_redis_db(&self) -> Result<(), redis::RedisError> {
-        redis::cmd("FLUSHDB")
-            .query_async(&mut self.manager.clone())
-            .await
-    }
 }
 
 impl<const WORD_LENGTH: usize> MemoryADT
