@@ -6,6 +6,16 @@ on: pull_request
 jobs:
   hack:
     runs-on: ubuntu-latest
+    services:
+      redis:
+        image: redis
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
     steps:
       - name: Check storage
         run: df -h
@@ -17,4 +27,4 @@ jobs:
       - name: Install cargo-hack
         run: cargo install --locked cargo-hack || true
       - name: Test all feature combinations
-        run: cargo hack test --feature-powerset --all-targets
+        run: cargo hack test --feature-powerset --all-targets --clean-per-run
