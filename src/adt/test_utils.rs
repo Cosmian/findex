@@ -28,8 +28,8 @@ use crate::MemoryADT;
 pub async fn test_single_write_and_read<T>(memory: &T, seed: [u8; 32])
 where
     T: MemoryADT + Send + Sync,
-    T::Address: std::fmt::Debug + PartialEq + From<[u8; 16]> + Send,
-    T::Word: std::fmt::Debug + PartialEq + From<[u8; 16]> + Send,
+    T::Address: std::fmt::Debug + Clone + PartialEq + From<[u8; 16]> + Send,
+    T::Word: std::fmt::Debug + Clone + PartialEq + From<[u8; 16]> + Send,
     T::Error: std::error::Error + Send,
 {
     let mut rng = StdRng::from_seed(seed);
@@ -49,23 +49,21 @@ where
          {empty_read_result:?}. Seed : {seed:?}"
     );
 
-    let random_address = rng.gen::<u128>().to_be_bytes();
-    let random_word = rng.gen::<u128>().to_be_bytes();
+    let random_address = T::Address::from(rng.gen::<u128>().to_be_bytes());
+    let random_word = T::Word::from(rng.gen::<u128>().to_be_bytes());
 
     let write_result = memory
-        .guarded_write((T::Address::from(random_address), None), vec![(
-            T::Address::from(random_address),
-            T::Word::from(random_word),
+        .guarded_write((random_address.clone(), None), vec![(
+            random_address.clone(),
+            random_word.clone(),
         )])
         .await
         .unwrap();
     assert_eq!(write_result, None);
 
-    let read_result: Vec<Option<<T as MemoryADT>::Word>> = memory
-        .batch_read(vec![T::Address::from(random_address)])
-        .await
-        .unwrap();
-    let expected_result = vec![Some(T::Word::from(random_word))];
+    let read_result: Vec<Option<<T as MemoryADT>::Word>> =
+        memory.batch_read(vec![random_address]).await.unwrap();
+    let expected_result = vec![Some(random_word)];
     assert_eq!(
         read_result, expected_result,
         "test_single_write_and_read failed.\nExpected result : {expected_result:?}, got : \
@@ -73,9 +71,10 @@ where
     );
 }
 
-/// Verifies that the memory implementation correctly handles guard violations
-/// by attempting to write with a None guard to an address that already contains a value.
-/// The test ensures the original value is preserved and the write operation fails appropriately.
+/// Tests guard violation handling in memory implementations.
+///
+/// Attempts to write with a None guard to an address containing a value.
+/// Verifies that the original value is preserved and the write fails.
 ///
 /// # Arguments
 ///
@@ -96,25 +95,25 @@ where
 pub async fn test_wrong_guard<T>(memory: &T, seed: [u8; 32])
 where
     T: MemoryADT + Send + Sync,
-    T::Address: std::fmt::Debug + PartialEq + From<[u8; 16]> + Send,
-    T::Word: std::fmt::Debug + PartialEq + From<[u8; 16]> + Send,
+    T::Address: std::fmt::Debug + Clone + PartialEq + From<[u8; 16]> + Send,
+    T::Word: std::fmt::Debug + Clone + PartialEq + From<[u8; 16]> + Send,
     T::Error: std::error::Error + Send,
 {
     let mut rng = StdRng::from_seed(seed);
-    let random_address = rng.gen::<u128>().to_be_bytes();
-    let word_to_write = rng.gen::<u128>().to_be_bytes();
+    let random_address = T::Address::from(rng.gen::<u128>().to_be_bytes());
+    let word_to_write = T::Word::from(rng.gen::<u128>().to_be_bytes());
 
     memory
-        .guarded_write((T::Address::from(random_address), None), vec![(
-            T::Address::from(random_address),
-            T::Word::from(word_to_write),
+        .guarded_write((random_address.clone(), None), vec![(
+            random_address.clone(),
+            word_to_write.clone(),
         )])
         .await
         .unwrap();
 
     let conflict_result = memory
-        .guarded_write((T::Address::from(random_address), None), vec![(
-            T::Address::from(random_address),
+        .guarded_write((random_address.clone(), None), vec![(
+            random_address.clone(),
             T::Word::from(rng.gen::<u128>().to_be_bytes()),
         )])
         .await
@@ -122,31 +121,30 @@ where
 
     assert_eq!(
         conflict_result,
-        Some(T::Word::from(word_to_write)),
+        Some(word_to_write.clone()),
         "test_wrong_guard failed.\nExpected value {:?} after write. Got : {:?}.\nDebug seed : {:?}",
         conflict_result,
-        Some(T::Word::from(word_to_write)),
+        Some(word_to_write),
         seed
     );
 
-    let read_result = memory
-        .batch_read(vec![T::Address::from(random_address)])
-        .await
-        .unwrap();
+    let read_result = memory.batch_read(vec![random_address]).await.unwrap();
     assert_eq!(
-        vec![Some(T::Word::from(word_to_write)),],
+        vec![Some(word_to_write.clone()),],
         read_result,
         "test_wrong_guard failed. Value was overwritten, violating the guard. Expected : {:?}, \
          got : {:?}. Debug seed : {:?}",
-        vec![Some(T::Word::from(word_to_write)),],
+        vec![Some(word_to_write),],
         read_result,
         seed
     );
 }
 
 /// Tests concurrent guarded write operations on a Memory ADT implementation.
-/// It spawns N threads that each try to increment the counter, handling contention through retries,
-/// and validates that the final counter value equals the number of threads.
+///
+/// Spawns multiple threads to perform concurrent counter increments.
+/// Uses retries to handle write contention between threads.
+/// Verifies the final counter matches the total number of threads.
 ///
 /// # Arguments
 ///
