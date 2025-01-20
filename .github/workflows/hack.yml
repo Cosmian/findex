@@ -17,4 +17,4 @@ jobs:
       - name: Install cargo-hack
         run: cargo install --locked cargo-hack || true
       - name: Test all feature combinations
-        run: cargo-hack test --feature-powerset --all-targets
+        run: cargo hack test --feature-powerset --all-targets
