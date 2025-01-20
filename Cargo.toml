@@ -35,7 +35,6 @@ xts-mode = "0.5.1"
 zeroize = { version = "1.8.1", features = ["derive"] }
 redis = { version = "0.28.1", features = [
     "aio",
-    "tokio-comp",
     "connection-manager",
 ], optional = true }
 
@@ -49,6 +48,7 @@ tokio = { version = "1.38.0", features = [
     "rt-multi-thread",
     "time",
 ] }
+redis = { version = "0.28.1", features = ["tokio-comp"] }
 
 [[bench]]
 name = "benches"
