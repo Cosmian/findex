@@ -21,7 +21,6 @@ name = "cosmian_findex"
 path = "src/lib.rs"
 
 [features]
-bench = []
 redis-mem = ["redis"]
 test-utils = []
 
@@ -53,8 +52,8 @@ tokio = { version = "1.38.0", features = [
 [[bench]]
 name = "benches"
 harness = false
-required-features = ["bench"]
+required-features = ["test-utils"]
 
 [[example]]
 name = "insert"
-required-features = ["bench"]
+required-features = ["test-utils"]

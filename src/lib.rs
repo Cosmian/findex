@@ -24,9 +24,10 @@ pub use value::Value;
 #[cfg(feature = "redis-mem")]
 pub use memory::redis_store::{MemoryError, RedisMemory};
 
-#[cfg(any(feature = "redis-mem", feature = "bench"))]
+#[cfg(feature = "test-utils")]
 pub use encoding::{WORD_LENGTH, dummy_decode, dummy_encode};
-#[cfg(any(test, feature = "bench"))]
+
+#[cfg(any(test, feature = "test-utils"))]
 pub use memory::InMemory;
 
 /// 16-byte addresses ensure a high collision resistance that poses virtually no limitation on the
