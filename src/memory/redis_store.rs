@@ -17,7 +17,7 @@ local length = ARGV[3]
 local value = redis.call('GET',ARGV[1])
 
 -- compare the value of the guard to the currently stored value
-if((value==false) or (not(value == false) and (guard_value == value))) then
+if ((value == false) or (guard_value == value)) then
     -- guard passed, loop over bindings and insert them
     for i = 4,(length*2)+3,2
     do
@@ -48,7 +48,7 @@ impl From<RedisError> for MemoryError {
 
 #[derive(Clone)]
 pub struct RedisMemory<Address, Word> {
-    pub manager: ConnectionManager,
+    manager: ConnectionManager,
     script_hash: String,
     a: PhantomData<Address>, // to ensure type checking despite that Address is intentionally unused in fields
     w: PhantomData<Word>,    // same as Address
@@ -65,13 +65,15 @@ impl<Address, Word> fmt::Debug for RedisMemory<Address, Word> {
 impl<Address: Sync, Word: Sync> RedisMemory<Address, Word> {
     /// Connects to a Redis server with a `ConnectionManager`.
     pub async fn connect_with_manager(mut manager: ConnectionManager) -> Result<Self, MemoryError> {
+        let script_hash = redis::cmd("SCRIPT")
+            .arg("LOAD")
+            .arg(GUARDED_WRITE_LUA_SCRIPT)
+            .query_async(&mut manager)
+            .await?;
+
         Ok(Self {
-            manager: manager.clone(),
-            script_hash: redis::cmd("SCRIPT")
-                .arg("LOAD")
-                .arg(GUARDED_WRITE_LUA_SCRIPT)
-                .query_async(&mut manager)
-                .await?,
+            manager,
+            script_hash,
             a: PhantomData,
             w: PhantomData,
         })
@@ -89,8 +91,8 @@ impl<const WORD_LENGTH: usize> MemoryADT
     for RedisMemory<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>
 {
     type Address = Address<ADDRESS_LENGTH>;
-    type Error = MemoryError;
     type Word = [u8; WORD_LENGTH];
+    type Error = MemoryError;
 
     async fn batch_read(
         &self,
@@ -98,6 +100,7 @@ impl<const WORD_LENGTH: usize> MemoryADT
     ) -> Result<Vec<Option<Self::Word>>, Self::Error> {
         let mut cmd = redis::cmd("MGET");
         let cmd = addresses.iter().fold(&mut cmd, |c, a| c.arg(&**a));
+        // Cloning the connection manager is cheap since it is an `Arc`.
         cmd.query_async(&mut self.manager.clone())
             .await
             .map_err(Self::Error::from)
@@ -113,18 +116,19 @@ impl<const WORD_LENGTH: usize> MemoryADT
         let cmd = cmd
             .arg(self.script_hash.as_str())
             .arg(0)
-            .arg(&*guard_address);
-
-        let cmd = if let Some(byte_array) = guard_value {
-            cmd.arg(&byte_array)
-        } else {
-            cmd.arg("false")
-        };
+            .arg(&*guard_address)
+            .arg(
+                guard_value
+                    .as_ref()
+                    .map(|bytes| bytes.as_slice())
+                    .unwrap_or(b"false".as_slice()),
+            );
 
         let cmd = bindings
             .iter()
             .fold(cmd.arg(bindings.len()), |cmd, (a, w)| cmd.arg(&**a).arg(w));
 
+        // Cloning the connection manager is cheap since it is an `Arc`.
         cmd.query_async(&mut self.manager.clone())
             .await
             .map_err(Self::Error::from)
@@ -146,31 +150,23 @@ mod tests {
         )
     }
 
-    const WORD_LENGTH: usize = 16;
-
     #[tokio::test]
     async fn test_rw_seq() -> Result<(), MemoryError> {
-        let m = RedisMemory::<_, [u8; WORD_LENGTH]>::connect(&get_redis_url())
-            .await
-            .unwrap();
+        let m = RedisMemory::connect(&get_redis_url()).await.unwrap();
         test_single_write_and_read(&m, rand::random()).await;
         Ok(())
     }
 
     #[tokio::test]
     async fn test_guard_seq() -> Result<(), MemoryError> {
-        let m = RedisMemory::<_, [u8; WORD_LENGTH]>::connect(&get_redis_url())
-            .await
-            .unwrap();
+        let m = RedisMemory::connect(&get_redis_url()).await.unwrap();
         test_wrong_guard(&m, rand::random()).await;
         Ok(())
     }
 
     #[tokio::test]
     async fn test_rw_ccr() -> Result<(), MemoryError> {
-        let m = RedisMemory::<_, [u8; WORD_LENGTH]>::connect(&get_redis_url())
-            .await
-            .unwrap();
+        let m = RedisMemory::connect(&get_redis_url()).await.unwrap();
         test_guarded_write_concurrent(&m, rand::random()).await;
         Ok(())
     }
