@@ -50,8 +50,7 @@ impl From<RedisError> for MemoryError {
 pub struct RedisMemory<Address, Word> {
     manager: ConnectionManager,
     script_hash: String,
-    a: PhantomData<Address>, // to ensure type checking despite that Address is intentionally unused in fields
-    w: PhantomData<Word>,    // same as Address
+    _marker: PhantomData<(Address, Word)>, // to ensure type checking despite that Address & Word are intentionally unused in fields
 }
 
 impl<Address, Word> fmt::Debug for RedisMemory<Address, Word> {
@@ -74,8 +73,7 @@ impl<Address: Sync, Word: Sync> RedisMemory<Address, Word> {
         Ok(Self {
             manager,
             script_hash,
-            a: PhantomData,
-            w: PhantomData,
+            _marker: PhantomData,
         })
     }
 
