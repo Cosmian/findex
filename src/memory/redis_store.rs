@@ -50,8 +50,8 @@ impl From<RedisError> for MemoryError {
 pub struct RedisMemory<Address, Word> {
     pub manager: ConnectionManager,
     script_hash: String,
-    a: PhantomData<Address>,
-    w: PhantomData<Word>,
+    a: PhantomData<Address>, // to ensure type checking despite that Address is intentionally unused in fields
+    w: PhantomData<Word>,    // same as Address
 }
 
 impl<Address, Word> fmt::Debug for RedisMemory<Address, Word> {
@@ -82,12 +82,6 @@ impl<Address: Sync, Word: Sync> RedisMemory<Address, Word> {
         let client = redis::Client::open(url)?;
         let manager = client.get_connection_manager().await?;
         Self::connect_with_manager(manager).await
-    }
-
-    pub async fn clear_redis_db(&self) -> Result<(), redis::RedisError> {
-        redis::cmd("FLUSHDB")
-            .query_async(&mut self.manager.clone())
-            .await
     }
 }
 
@@ -159,7 +153,6 @@ mod tests {
         let m = RedisMemory::<_, [u8; WORD_LENGTH]>::connect(&get_redis_url())
             .await
             .unwrap();
-        m.clear_redis_db().await.unwrap();
         test_single_write_and_read(&m, rand::random()).await;
         Ok(())
     }
@@ -169,7 +162,6 @@ mod tests {
         let m = RedisMemory::<_, [u8; WORD_LENGTH]>::connect(&get_redis_url())
             .await
             .unwrap();
-        m.clear_redis_db().await.unwrap();
         test_wrong_guard(&m, rand::random()).await;
         Ok(())
     }
@@ -179,7 +171,6 @@ mod tests {
         let m = RedisMemory::<_, [u8; WORD_LENGTH]>::connect(&get_redis_url())
             .await
             .unwrap();
-        m.clear_redis_db().await.unwrap();
         test_guarded_write_concurrent(&m, rand::random()).await;
         Ok(())
     }
