@@ -2,10 +2,11 @@
 name = "cosmian_findex"
 version = "7.0.0"
 authors = [
-    "Chloé Hébant <chloe.hebant@cosmian.com>",
     "Bruno Grieder <bruno.grieder@cosmian.com>",
     "Célia Corsin <celia.corsin@cosmian.com>",
+    "Chloé Hébant <chloe.hebant@cosmian.com>",
     "Emmanuel Coste <emmanuel.coste@cosmian.com>",
+    "Hatem Mnaouer <hatem.mnaouer@cosmian.com>",
     "Théophile Brézot <theophile.brezot@cosmian.com>",
 ]
 categories = ["cosmian::crypto"]
@@ -20,13 +21,19 @@ name = "cosmian_findex"
 path = "src/lib.rs"
 
 [features]
-bench = []
+redis-mem = ["redis"]
+test-utils = []
 
 [dependencies]
 aes = "0.8.4"
 rand = "0.8.5"
 rand_chacha = "0.3.1"
 rand_core = "0.6.4"
+redis = { version = "0.28.1", features = [
+    "aio",
+    "connection-manager",
+    "tokio-comp",
+], optional = true }
 tiny-keccak = { version = "2.0.2", features = ["sha3"] }
 xts-mode = "0.5.1"
 zeroize = { version = "1.8.1", features = ["derive"] }
@@ -35,13 +42,18 @@ zeroize = { version = "1.8.1", features = ["derive"] }
 criterion = "0.5.1"
 futures = "0.3.30"
 lazy_static = "1.5.0"
-tokio = {version = "1.38.0", features = ["rt", "macros", "rt-multi-thread", "time"]}
+tokio = { version = "1.38.0", features = [
+    "macros",
+    "rt",
+    "rt-multi-thread",
+    "time",
+] }
 
 [[bench]]
 name = "benches"
 harness = false
-required-features = ["bench"]
+required-features = ["test-utils"]
 
 [[example]]
 name = "insert"
-required-features = ["bench"]
+required-features = ["test-utils"]

@@ -32,14 +32,12 @@ impl<Address: Hash + Eq + Debug, Value: Clone + Eq + Debug> Default for InMemory
 }
 
 impl<Address: Hash + Eq + Debug, Value: Clone + Eq + Debug> InMemory<Address, Value> {
-    #[cfg(feature = "bench")]
     pub fn with_capacity(c: usize) -> Self {
         Self {
             inner: Arc::new(Mutex::new(HashMap::with_capacity(c))),
         }
     }
 
-    #[cfg(any(test, feature = "bench"))]
     pub fn clear(&self) {
         self.inner.lock().expect("poisoned lock").clear();
     }
@@ -76,7 +74,6 @@ impl<Address: Send + Sync + Hash + Eq + Debug, Value: Send + Sync + Clone + Eq +
     }
 }
 
-#[cfg(feature = "bench")]
 impl<Address: Hash + Eq + Debug + Clone, Value: Clone + Eq + Debug> IntoIterator
     for InMemory<Address, Value>
 {
@@ -98,7 +95,12 @@ mod tests {
 
     use futures::executor::block_on;
 
-    use crate::MemoryADT;
+    use crate::{
+        MemoryADT,
+        adt::test_utils::{
+            test_guarded_write_concurrent, test_single_write_and_read, test_wrong_guard,
+        },
+    };
 
     use super::InMemory;
 
@@ -125,5 +127,23 @@ mod tests {
             vec![Some(1), Some(1), Some(3), Some(3)],
             block_on(memory.batch_read(vec![1, 2, 3, 4])).unwrap(),
         )
+    }
+
+    #[tokio::test]
+    async fn test_sequential_read_write() {
+        let memory = InMemory::<[u8; 16], [u8; 16]>::default();
+        test_single_write_and_read(&memory, rand::random()).await;
+    }
+
+    #[tokio::test]
+    async fn test_sequential_wrong_guard() {
+        let memory = InMemory::<[u8; 16], [u8; 16]>::default();
+        test_wrong_guard(&memory, rand::random()).await;
+    }
+
+    #[tokio::test]
+    async fn test_concurrent_read_write() {
+        let memory = InMemory::<[u8; 16], [u8; 16]>::default();
+        test_guarded_write_concurrent(&memory, rand::random()).await;
     }
 }

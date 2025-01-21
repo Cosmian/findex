@@ -9,20 +9,25 @@ mod memory;
 mod ovec;
 mod secret;
 mod symmetric_key;
+#[cfg(any(test, feature = "test-utils"))]
+pub use adt::test_utils;
 mod value;
 
 pub use address::Address;
 pub use adt::{IndexADT, MemoryADT};
+pub use encoding::Op;
 pub use error::Error;
 pub use findex::Findex;
 pub use secret::Secret;
 pub use value::Value;
 
-pub use encoding::Op;
+#[cfg(feature = "redis-mem")]
+pub use memory::redis_store::{MemoryError, RedisMemory};
 
-#[cfg(feature = "bench")]
+#[cfg(feature = "test-utils")]
 pub use encoding::{WORD_LENGTH, dummy_decode, dummy_encode};
-#[cfg(any(test, feature = "bench"))]
+
+#[cfg(any(test, feature = "test-utils"))]
 pub use memory::InMemory;
 
 /// 16-byte addresses ensure a high collision resistance that poses virtually no limitation on the
