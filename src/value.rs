@@ -54,17 +54,15 @@ impl TryFrom<Value> for String {
 
 impl From<usize> for Value {
     fn from(value: usize) -> Self {
-        Self(value.to_be_bytes().to_vec())
-    }
-}
+        let bytes = value.to_be_bytes();
+        // Find the first non-zero byte (or use the entire array if they're all zero)
+        let first_nonzero = bytes.iter().position(|&b| b != 0).unwrap_or(bytes.len());
 
-impl From<i32> for Value {
-    fn from(num: i32) -> Self {
-        let mut bytes = num.to_be_bytes().to_vec();
-        // Remove leading zeros
-        while bytes.len() > 1 && bytes[0] == 0 {
-            bytes.remove(0);
+        // If the number is zero, store just one byte [0], otherwise strip leading zeros
+        if first_nonzero == bytes.len() {
+            Self(vec![0])
+        } else {
+            Self(bytes[first_nonzero..].to_vec())
         }
-        Value(bytes)
     }
 }

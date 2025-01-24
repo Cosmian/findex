@@ -127,7 +127,7 @@ mod tests {
     use crate::{
         ADDRESS_LENGTH, Findex, InMemory, IndexADT, Value,
         address::Address,
-        encoding::{dummy_decode, dummy_encode},
+        encoding::{dummy_decode, dummy_encode, good_decode, good_encode},
         secret::Secret,
     };
 
@@ -153,6 +153,42 @@ mod tests {
             dog_bindings.iter().cloned().collect::<HashSet<_>>(),
             dog_res
         );
+
+        block_on(findex.delete("dog", dog_bindings)).unwrap();
+        block_on(findex.delete("cat", cat_bindings)).unwrap();
+        let cat_res = block_on(findex.search(&"cat".to_string())).unwrap();
+        let dog_res = block_on(findex.search(&"dog".to_string())).unwrap();
+        assert_eq!(HashSet::new(), cat_res);
+        assert_eq!(HashSet::new(), dog_res);
+    }
+
+    #[test]
+    fn test_good_codec() {
+        let mut rng = ChaChaRng::from_entropy();
+        let seed = Secret::random(&mut rng);
+        let memory = InMemory::<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>::default();
+        let findex = Findex::new(
+            &seed,
+            memory,
+            good_encode::<WORD_LENGTH, Value>,
+            good_decode::<WORD_LENGTH, _, Value>,
+        );
+        let cat_bindings = [Value::from(1), Value::from(3), Value::from(5)];
+        let dog_bindings = [Value::from(0), Value::from(2), Value::from(4)];
+        block_on(findex.insert("cat".to_string(), cat_bindings.clone())).unwrap();
+        block_on(findex.insert("dog".to_string(), dog_bindings.clone())).unwrap();
+        let cat_res = block_on(findex.search(&"cat".to_string())).unwrap();
+        let dog_res = block_on(findex.search(&"dog".to_string())).unwrap();
+        assert_eq!(
+            cat_bindings.iter().cloned().collect::<HashSet<_>>(),
+            cat_res
+        );
+        assert_eq!(
+            dog_bindings.iter().cloned().collect::<HashSet<_>>(),
+            dog_res
+        );
+
+        println!("BUG ZONE ? NOW WE NEED TO DELETE SOME STUFF");
 
         block_on(findex.delete("dog", dog_bindings)).unwrap();
         block_on(findex.delete("cat", cat_bindings)).unwrap();

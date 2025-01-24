@@ -88,8 +88,11 @@ pub fn good_encode<const WORD_LENGTH: usize, Value: Debug + AsRef<[u8]>>(
     values_set: HashSet<Value>,
 ) -> Result<Vec<[u8; WORD_LENGTH]>, String> {
     let f = if op == Op::Insert { 1 } else { 0 };
+    if op == Op::Delete {
+        println!("Deleting {:?}", values_set);
+    }
     let mut i: usize = 0; // result word pointer
-    let mut j: usize = 0; // value input pointer
+    let mut j: usize; // value input pointer
     let mut res = [0; WORD_LENGTH];
 
     // output
@@ -98,8 +101,8 @@ pub fn good_encode<const WORD_LENGTH: usize, Value: Debug + AsRef<[u8]>>(
     for v in values_set {
         let raw_bytes = v.as_ref();
         let value_bytes = strip_leading_zeros(raw_bytes);
-        println!("Value: {:?}", v);
-        println!("Value bytes: {:?}", value_bytes);
+        // println!("Value: {:?}", v);
+        // println!("Value bytes: {:?}", value_bytes);
 
         let n = value_bytes.len() as usize;
         if n > (1 << 15) {
@@ -109,6 +112,7 @@ pub fn good_encode<const WORD_LENGTH: usize, Value: Debug + AsRef<[u8]>>(
             ));
         }
         let coded_metadata: [u8; 2] = ((n << 1) as u16 + f).to_be_bytes(); // explicit big endian encoding
+        // println!("Metadata: {:?}", coded_metadata);
 
         // Step 1 : metadata
 
@@ -185,6 +189,9 @@ where
     let input = flatten(encoded);
 
     let n = input.len();
+    if n == 0 {
+        return Ok(HashSet::new());
+    }
     if n < 3 {
         return Err("Encoded data is too short ? ...".to_string());
     }
@@ -197,8 +204,8 @@ where
         if input[i] == 0 && (i == n - 1 || (i <= n - 2 && input[i + 1] == 0)) {
             break;
         }
-        println!("Input {:?}", input);
-        println!("i: {}", i);
+        // println!("Input {:?}", input);
+        // println!("i: {}", i);
         // -- Step 1: metadata (2 bytes)
         // Handle the edge case of having fewer than 2 bytes left
         if i + 2 >= n {
@@ -206,8 +213,10 @@ where
         }
 
         let metadata: [u8; 2] = input[i..i + 2].try_into().unwrap(); // safe unwrap
+        // println!("Metadata: {:?}", metadata);
         let m = u16::from_be_bytes(metadata);
         let f = (m % 2) as u16; // if odd => 1 => Insert, if even => 0 => Delete
+        // println!("f: {}", f);
 
         // Check we have a perfect square
         let actual_size = ((m - f) >> 1) as usize; // shift right by 1 to divide by 2
@@ -217,43 +226,136 @@ where
         let mut data = Vec::with_capacity(actual_size);
         data.extend_from_slice(&input[i..i + actual_size]);
         i += actual_size;
-        println!("Data: {:?}", data);
+        // println!("Data: {:?}", data);
 
         // -- Step 3: decode the operation and update the set
         let v = Value::try_from(data.as_slice())
             .map_err(|e| format!("Decoding error: {}", e.to_string()))?;
         if f == 1 {
             // insert
-            println!("Inserting {:?}", v);
-            result.insert(v);
+            // println!("Inserting {:?}", v);
+            if v == Value::try_from(&[]).unwrap() {
+                // println!("Empty value, skipping");
+                result.insert(Value::try_from(&[0]).unwrap());
+                // continue;
+            } else {
+                result.insert(v);
+            }
         } else {
             // remove
-            println!("Removing {:?}", v);
+            // println!("Removing {:?}", v);
             result.remove(&v);
         }
     }
 
-    Ok(result)
+    Ok(if result.is_empty() {
+        let mut res = HashSet::new();
+        res.insert(Value::try_from(&[0]).unwrap());
+        res
+    } else {
+        result
+    })
 }
 
+// #[cfg(test)]
+// mod tests {
+//     use crate::Value;
+//     use crate::encoding::{Op, good_decode, good_encode};
+//     use std::collections::HashSet;
+
+//     #[test]
+//     fn test_enc_dec_roundtrip() {
+//         let mut values: HashSet<Value> = HashSet::new();
+//         values.insert(Value::from("A"));
+//         values.insert(Value::from("B"));
+//         values.insert(Value::from("C"));
+//         values.insert(Value::from("D"));
+
+//         let encoded =
+//             good_encode::<256, Value>(Op::Insert, values.clone()).expect("Encoding failed");
+
+//         println!("Encoded: {:?}", encoded);
+//         let decoded = good_decode::<256, _, Value>(encoded).expect("Decoding failed");
+//         println!("Decoded: {:?}", decoded);
+
+//         assert_eq!(values, decoded, "Decoded set didn't match the original");
+//     }
+// }
+
+// ...existing code...
 #[cfg(test)]
 mod tests {
     use crate::Value;
-    use crate::encoding::{Op, good_decode, good_encode};
+
+    use super::*;
     use std::collections::HashSet;
 
+    // Use a mock strip_leading_zeros if not defined
+    fn strip_leading_zeros(bytes: &[u8]) -> &[u8] {
+        let first_non_zero = bytes.iter().position(|&b| b != 0).unwrap_or(bytes.len());
+        &bytes[first_non_zero..]
+    }
+
     #[test]
-    fn test_enc_dec_roundtrip() {
-        let mut values: HashSet<Value> = HashSet::new();
-        values.insert(Value::from(1255 as i32));
+    fn test_encode_decode_simple_insert() {
+        let mut values = HashSet::new();
+        values.insert(Value::from(vec![1, 2, 3]));
+        let encoded = good_encode::<WORD_LENGTH, Value>(Op::Insert, values.clone())
+            .expect("Encoding failed.");
+        let decoded = good_decode::<WORD_LENGTH, _, Value>(encoded).expect("Decoding failed.");
+        assert_eq!(decoded, values);
+    }
 
-        let encoded =
-            good_encode::<256, Value>(Op::Insert, values.clone()).expect("Encoding failed");
+    #[test]
+    fn test_encode_decode_empty_set() {
+        let values: HashSet<Value> = HashSet::new();
+        let encoded = good_encode::<WORD_LENGTH, Value>(Op::Insert, values.clone())
+            .expect("Encoding failed.");
+        let decoded = good_decode::<WORD_LENGTH, _, Value>(encoded).expect("Decoding failed.");
+        assert_eq!(decoded.len(), 0);
+    }
 
-        println!("Encoded: {:?}", encoded);
-        let decoded = good_decode::<256, _, Value>(encoded).expect("Decoding failed");
-        println!("Decoded: {:?}", decoded);
+    #[test]
+    fn test_encode_decode_large_values() {
+        let large_value = vec![0xAB; 400]; // 400 bytes
+        let mut values = HashSet::new();
+        values.insert(Value::from(large_value));
+        let encoded = good_encode::<WORD_LENGTH, Value>(Op::Insert, values.clone())
+            .expect("Encoding large data failed.");
+        let decoded =
+            good_decode::<WORD_LENGTH, _, Value>(encoded).expect("Decoding large data failed.");
+        assert_eq!(decoded, values);
+    }
 
-        assert_eq!(values, decoded, "Decoded set didn't match the original");
+    #[test]
+    fn test_encode_decode_multiple_values() {
+        let mut values = HashSet::new();
+        values.insert(Value::from(vec![1, 0, 0, 2]));
+        values.insert(Value::from(vec![3, 4, 5, 6, 7]));
+        values.insert(Value::from(vec![0, 0, 0, 10]));
+        let encoded = good_encode::<WORD_LENGTH, Value>(Op::Insert, values.clone())
+            .expect("Encoding multiple values failed.");
+
+        let mut res_stripped = HashSet::new();
+        for v in values.iter() {
+            res_stripped.insert(Value::from(strip_leading_zeros(v.as_ref())));
+        }
+        let decoded = good_decode::<WORD_LENGTH, _, Value>(encoded)
+            .expect("Decoding multiple values failed.");
+        assert_eq!(decoded, res_stripped);
+    }
+
+    #[test]
+    fn test_encode_decode_overflow_one_byte_left() {
+        // Tests edge case where i == WORD_LENGTH - 1
+        let mut values = HashSet::new();
+        // Build a value that forces metadata to split at the last byte
+        let v = vec![1; 130];
+        values.insert(Value::from(v));
+        let encoded = good_encode::<WORD_LENGTH, Value>(Op::Insert, values.clone())
+            .expect("Encoding failed on overflow test.");
+        let decoded = good_decode::<WORD_LENGTH, _, Value>(encoded)
+            .expect("Decoding failed on overflow test.");
+        assert_eq!(decoded, values);
     }
 }
