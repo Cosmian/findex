@@ -57,3 +57,14 @@ impl From<usize> for Value {
         Self(value.to_be_bytes().to_vec())
     }
 }
+
+impl From<i32> for Value {
+    fn from(num: i32) -> Self {
+        let mut bytes = num.to_be_bytes().to_vec();
+        // Remove leading zeros
+        while bytes.len() > 1 && bytes[0] == 0 {
+            bytes.remove(0);
+        }
+        Value(bytes)
+    }
+}

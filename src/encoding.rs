@@ -75,10 +75,15 @@ where
     }
     Ok(res)
 }
+// stolen
+fn strip_leading_zeros(data: &[u8]) -> &[u8] {
+    let first_nonzero = data.iter().position(|&b| b != 0).unwrap_or(data.len());
+    &data[first_nonzero..]
+}
 
-pub const WORD_LENGTH: usize = 256;
-
-pub fn good_encode<const WORD_LENGTH: usize, Value: AsRef<[u8]>>(
+pub const WORD_LENGTH: usize = 129;
+use std::fmt::Debug;
+pub fn good_encode<const WORD_LENGTH: usize, Value: Debug + AsRef<[u8]>>(
     op: Op,
     values_set: HashSet<Value>,
 ) -> Result<Vec<[u8; WORD_LENGTH]>, String> {
@@ -91,7 +96,11 @@ pub fn good_encode<const WORD_LENGTH: usize, Value: AsRef<[u8]>>(
     let mut output_words: Vec<[u8; WORD_LENGTH]> = Vec::new();
 
     for v in values_set {
-        let value_bytes = v.as_ref();
+        let raw_bytes = v.as_ref();
+        let value_bytes = strip_leading_zeros(raw_bytes);
+        println!("Value: {:?}", v);
+        println!("Value bytes: {:?}", value_bytes);
+
         let n = value_bytes.len() as usize;
         if n > (1 << 15) {
             return Err(format!(
@@ -99,7 +108,7 @@ pub fn good_encode<const WORD_LENGTH: usize, Value: AsRef<[u8]>>(
                 value_bytes.len()
             ));
         }
-        let coded_metadata: [u8; 2] = (n as u16 * n as u16 + f).to_be_bytes(); // explicit big endian encoding
+        let coded_metadata: [u8; 2] = ((n << 1) as u16 + f).to_be_bytes(); // explicit big endian encoding
 
         // Step 1 : metadata
 
@@ -161,16 +170,18 @@ use std::convert::TryFrom;
 /// Merges a Vec<[u8; WORD_LENGTH]> into one Vec<u8>.
 /// (stolen)
 pub fn flatten<const WORD_LENGTH: usize>(encoded: Vec<[u8; WORD_LENGTH]>) -> Vec<u8> {
-    encoded.into_iter().flat_map(|arr| arr.into_iter()).collect()
+    encoded
+        .into_iter()
+        .flat_map(|arr| arr.into_iter())
+        .collect()
 }
 
 pub fn good_decode<const WORD_LENGTH: usize, TryFromError: std::error::Error, Value>(
     encoded: Vec<[u8; WORD_LENGTH]>,
 ) -> Result<HashSet<Value>, String>
 where
-    for<'z> Value: Hash + Eq + TryFrom<&'z [u8], Error = TryFromError>,
-{   
-
+    for<'z> Value: Hash + Eq + TryFrom<&'z [u8], Error = TryFromError> + Debug,
+{
     let input = flatten(encoded);
 
     let n = input.len();
@@ -179,48 +190,45 @@ where
     }
     let mut result = HashSet::new();
 
-    let i = 0;
+    let mut i = 0;
 
     while i < n {
+        // end of data conditions, either we have a single 0 or two 0s meaning no more metadata
+        if input[i] == 0 && (i == n - 1 || (i <= n - 2 && input[i + 1] == 0)) {
+            break;
+        }
+        println!("Input {:?}", input);
+        println!("i: {}", i);
         // -- Step 1: metadata (2 bytes)
         // Handle the edge case of having fewer than 2 bytes left
         if i + 2 >= n {
             return Err("Unexpected end of data while reading metadata".to_string());
         }
 
-        let metadata = 
-
-        let m = u16::from_be_bytes([meta_byte_0, meta_byte_1]);
-        let f = (m % 2) as u8; // if odd => 1 => Insert, if even => 0 => Delete
-        let squared_len = m - (f as u16);
+        let metadata: [u8; 2] = input[i..i + 2].try_into().unwrap(); // safe unwrap
+        let m = u16::from_be_bytes(metadata);
+        let f = (m % 2) as u16; // if odd => 1 => Insert, if even => 0 => Delete
 
         // Check we have a perfect square
-        let n = (squared_len as f64).sqrt() as usize;
-        if n * n != squared_len as usize {
-            return Err(format!(
-                "Invalid metadata: {} is not a perfect square plus f",
-                m
-            ));
-        }
+        let actual_size = ((m - f) >> 1) as usize; // shift right by 1 to divide by 2
+        i += 2;
 
         // -- Step 2: read the data
-        let mut data = Vec::with_capacity(n);
-        for _ in 0..n {
-            let next_byte = match bytes_iter.next() {
-                Some(b) => b,
-                None => return Err("Unexpected end of data while reading value bytes".to_string()),
-            };
-            data.push(next_byte);
-        }
+        let mut data = Vec::with_capacity(actual_size);
+        data.extend_from_slice(&input[i..i + actual_size]);
+        i += actual_size;
+        println!("Data: {:?}", data);
 
         // -- Step 3: decode the operation and update the set
         let v = Value::try_from(data.as_slice())
             .map_err(|e| format!("Decoding error: {}", e.to_string()))?;
         if f == 1 {
             // insert
+            println!("Inserting {:?}", v);
             result.insert(v);
         } else {
             // remove
+            println!("Removing {:?}", v);
             result.remove(&v);
         }
     }
@@ -237,12 +245,14 @@ mod tests {
     #[test]
     fn test_enc_dec_roundtrip() {
         let mut values: HashSet<Value> = HashSet::new();
-        values.insert(Value::from(1));
-        values.insert(Value::from(2));
+        values.insert(Value::from(16 as i32));
 
         let encoded =
             good_encode::<256, Value>(Op::Insert, values.clone()).expect("Encoding failed");
+
+        println!("Encoded: {:?}", encoded);
         let decoded = good_decode::<256, _, Value>(encoded).expect("Decoding failed");
+        println!("Decoded: {:?}", decoded);
 
         assert_eq!(values, decoded, "Decoded set didn't match the original");
     }
