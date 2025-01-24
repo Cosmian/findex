@@ -213,34 +213,44 @@ where
         }
 
         let metadata: [u8; 2] = input[i..i + 2].try_into().unwrap(); // safe unwrap
+        let f = (metadata[1] % 2) as u16; // if odd => 1 => Insert, if even => 0 => Delete
         // println!("Metadata: {:?}", metadata);
         let m = u16::from_be_bytes(metadata);
-        let f = (m % 2) as u16; // if odd => 1 => Insert, if even => 0 => Delete
         // println!("f: {}", f);
 
         // Check we have a perfect square
-        let actual_size = ((m - f) >> 1) as usize; // shift right by 1 to divide by 2
+        let mut actual_size = ((m - f) >> 1) as usize; // shift right by 1 to divide by 2
+        if actual_size == 0 {
+            actual_size = 1;
+        }
         i += 2;
 
         // -- Step 2: read the data
-        let mut data = Vec::with_capacity(actual_size);
-        data.extend_from_slice(&input[i..i + actual_size]);
+        if i + actual_size > n {
+            println!("Actual size: {}", actual_size);
+            println!("i: {}", i);
+            println!("m: {}", m);
+            println!("f: {}", f);
+            return Err("Unexpected end of data while reading value".to_string());
+        }
+        let data = Vec::from(&input[i..i + actual_size]);
         i += actual_size;
         // println!("Data: {:?}", data);
 
         // -- Step 3: decode the operation and update the set
         let v = Value::try_from(data.as_slice())
             .map_err(|e| format!("Decoding error: {}", e.to_string()))?;
+        if v == Value::try_from(&[]).unwrap() {
+            println!("data: {:?}", data);
+            println!("metadata: {:?}", metadata);
+            println!("f: {}", f);
+            println!("input: {:?}", input);
+        }
         if f == 1 {
             // insert
             // println!("Inserting {:?}", v);
-            if v == Value::try_from(&[]).unwrap() {
-                // println!("Empty value, skipping");
-                result.insert(Value::try_from(&[0]).unwrap());
-                // continue;
-            } else {
-                result.insert(v);
-            }
+            result.insert(v);
+            // }
         } else {
             // remove
             // println!("Removing {:?}", v);
@@ -248,43 +258,20 @@ where
         }
     }
 
-    Ok(if result.is_empty() {
-        let mut res = HashSet::new();
-        res.insert(Value::try_from(&[0]).unwrap());
-        res
-    } else {
-        result
-    })
+    Ok(result)
+
+    // Ok(if result.is_empty() {
+    //     let mut res = HashSet::new();
+    //     res.insert(Value::try_from(&[0]).unwrap());
+    //     res
+    // } else {
+    //     result
+    // })
 }
 
-// #[cfg(test)]
-// mod tests {
-//     use crate::Value;
-//     use crate::encoding::{Op, good_decode, good_encode};
-//     use std::collections::HashSet;
-
-//     #[test]
-//     fn test_enc_dec_roundtrip() {
-//         let mut values: HashSet<Value> = HashSet::new();
-//         values.insert(Value::from("A"));
-//         values.insert(Value::from("B"));
-//         values.insert(Value::from("C"));
-//         values.insert(Value::from("D"));
-
-//         let encoded =
-//             good_encode::<256, Value>(Op::Insert, values.clone()).expect("Encoding failed");
-
-//         println!("Encoded: {:?}", encoded);
-//         let decoded = good_decode::<256, _, Value>(encoded).expect("Decoding failed");
-//         println!("Decoded: {:?}", decoded);
-
-//         assert_eq!(values, decoded, "Decoded set didn't match the original");
-//     }
-// }
-
-// ...existing code...
 #[cfg(test)]
 mod tests {
+    // note ! part of the tests were autogen
     use crate::Value;
 
     use super::*;
@@ -357,5 +344,39 @@ mod tests {
         let decoded = good_decode::<WORD_LENGTH, _, Value>(encoded)
             .expect("Decoding failed on overflow test.");
         assert_eq!(decoded, values);
+    }
+
+    #[test]
+    fn testing_deletion() {
+        // Tests edge case where i == WORD_LENGTH - 1
+        let mut values = HashSet::new();
+        // Build a value that forces metadata to split at the last byte
+        let v = vec![4];
+        values.insert(Value::from(v));
+
+        let encoded: Vec<[u8; 129]> = good_encode::<WORD_LENGTH, Value>(Op::Insert, values.clone())
+            .expect("Encoding failed on overflow test.");
+
+        let encoded2: Vec<[u8; 129]> =
+            good_encode::<WORD_LENGTH, Value>(Op::Delete, values.clone())
+                .expect("Encoding failed on  test.");
+
+        println!("Encoded: {:?}", encoded);
+        println!("Encoded2: {:?}", encoded2);
+
+        // let combined_encoded: Vec<[u8; 129]> = [encoded.clone(), encoded2].concat();
+        let initial_data = vec![0, 3, 4, 0, 2, 4];
+        let mut combined_encoded: Vec<[u8; 129]> = Vec::new();
+
+        // Create first array with initial data, padded with zeros
+        let mut first_array = [0; 129];
+        first_array[..initial_data.len()].copy_from_slice(&initial_data);
+        combined_encoded.push(first_array);
+        // combined_encoded.insert(Value::from();
+        println!("Combined: {:?}", combined_encoded);
+
+        let decoded = good_decode::<WORD_LENGTH, _, Value>(combined_encoded)
+            .expect("Decoding failed on  test.");
+        assert_eq!(decoded, HashSet::new());
     }
 }
