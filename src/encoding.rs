@@ -245,7 +245,7 @@ mod tests {
     #[test]
     fn test_enc_dec_roundtrip() {
         let mut values: HashSet<Value> = HashSet::new();
-        values.insert(Value::from(16 as i32));
+        values.insert(Value::from(1255 as i32));
 
         let encoded =
             good_encode::<256, Value>(Op::Insert, values.clone()).expect("Encoding failed");
