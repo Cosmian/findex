@@ -127,11 +127,9 @@ mod tests {
     use crate::{
         ADDRESS_LENGTH, Findex, InMemory, IndexADT, Value,
         address::Address,
-        encoding::{dummy_decode, dummy_encode, good_decode, good_encode},
+        encoding::{WORD_LENGTH, dummy_decode, dummy_encode, good_decode, good_encode},
         secret::Secret,
     };
-
-    const WORD_LENGTH: usize = 16;
 
     #[test]
     fn test_insert_search_delete_search() {
@@ -187,8 +185,6 @@ mod tests {
             dog_bindings.iter().cloned().collect::<HashSet<_>>(),
             dog_res
         );
-
-        println!("BUG ZONE ? NOW WE NEED TO DELETE SOME STUFF");
 
         block_on(findex.delete("dog", dog_bindings)).unwrap();
         block_on(findex.delete("cat", cat_bindings)).unwrap();

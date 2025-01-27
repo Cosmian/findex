@@ -15,7 +15,7 @@ mod value;
 
 pub use address::Address;
 pub use adt::{IndexADT, MemoryADT};
-pub use encoding::Op;
+pub use encoding::{Op, good_decode, good_encode};
 pub use error::Error;
 pub use findex::Findex;
 pub use secret::Secret;

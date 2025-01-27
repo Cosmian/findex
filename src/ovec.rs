@@ -30,6 +30,7 @@ impl<const WORD_LENGTH: usize> TryFrom<&Header> for [u8; WORD_LENGTH] {
 
     fn try_from(header: &Header) -> Result<Self, Self::Error> {
         if WORD_LENGTH < 8 {
+            // TODO
             return Err("insufficient word length: should be at least 16 bytes".to_string());
         }
         let mut res = [0; WORD_LENGTH];

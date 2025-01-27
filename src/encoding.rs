@@ -76,48 +76,63 @@ where
     Ok(res)
 }
 
-fn strip_leading_zeros(data: &[u8]) -> &[u8] {
-    let first_nonzero = data.iter().position(|&b| b != 0).unwrap_or(data.len());
-    &data[first_nonzero..]
-}
+use std::fmt::Debug;
 
 pub const WORD_LENGTH: usize = 129;
-pub fn good_encode<const WORD_LENGTH: usize, Value: AsRef<[u8]>>(
+pub fn good_encode<const WORD_LENGTH: usize, Value: Clone + Debug + AsRef<[u8]>>(
     op: Op,
     values_set: HashSet<Value>,
 ) -> Result<Vec<[u8; WORD_LENGTH]>, String> {
+    println!("op: {:?}", op);
+    println!("values_set: {:?}", values_set.clone());
+
     let f = if op == Op::Insert { 1 } else { 0 };
-    let mut i: usize = 0; // result word pointer
-    let mut j: usize; // value input pointer
-    let mut res = [0; WORD_LENGTH];
+
+    let mut i: usize = 0; // result word pointer - TODO change this name
+    let mut j: usize; // value input pointer - TODO change
+
+    let mut current_word = [0; WORD_LENGTH];
 
     let mut output_words: Vec<[u8; WORD_LENGTH]> = Vec::new();
 
     for v in values_set {
-        let raw_bytes = v.as_ref();
-        let value_bytes = strip_leading_zeros(raw_bytes);
-
-        let n = value_bytes.len() as usize;
-        if n > (1 << 15) {
+        let value_bytes = v.as_ref();
+        let value_bytes_length = value_bytes.len();
+        if value_bytes_length > ((1 << 16) - 1) {
             return Err(format!(
                 "Could not convert Value to Words. Maximum Value size is 65535 bytes, got {}",
                 value_bytes.len()
             ));
         }
-        let coded_metadata: [u8; 2] = ((n << 1) as u16 + f).to_be_bytes(); // explicit big endian encoding
 
-        // Step 1 : metadata
+        let coded_metadata: [u8; 2] = ((value_bytes_length << 1) as u16 + f).to_be_bytes(); // explicit big endian encoding
+
+        // Step 1 : inserting the metadata, which is constituted from the operator and the byte size of the data
         // !!! careful, edge case if i == WORD_LENGTH - 1
+
         if i == WORD_LENGTH - 1 {
             // divide the metadata in two parts
-            res[WORD_LENGTH - 1] = coded_metadata[0];
-            output_words.push(res.clone());
-            res = [0; WORD_LENGTH];
-            res[0] = coded_metadata[1];
+            current_word[WORD_LENGTH - 1] = coded_metadata[0];
+            output_words.push(current_word);
+
+            current_word = [0; WORD_LENGTH];
+            current_word[0] = coded_metadata[1];
+
             i = 1;
+        } else if i == WORD_LENGTH {
+            // another edge case, if there is no more bytes left
+            output_words.push(current_word);
+
+            i = 0;
+            current_word = [0; WORD_LENGTH];
+
+            current_word[i] = coded_metadata[0];
+            current_word[i + 1] = coded_metadata[1];
+            i += 2;
         } else {
-            res[i] = coded_metadata[0];
-            res[i + 1] = coded_metadata[1];
+            // .copy_from_slice(&coded_metadata); :: TODO
+            current_word[i] = coded_metadata[0];
+            current_word[i + 1] = coded_metadata[1];
             i += 2;
         }
 
@@ -125,45 +140,57 @@ pub fn good_encode<const WORD_LENGTH: usize, Value: AsRef<[u8]>>(
 
         // case where there is still space left
         // !!!! verifiy the bound is correct
-        if i + n <= WORD_LENGTH {
-            res[i..i + n].copy_from_slice(value_bytes);
-            i += n;
+
+        if i + value_bytes_length <= WORD_LENGTH {
+            // TODO  : comment this
+            current_word[i..i + value_bytes_length].copy_from_slice(value_bytes);
+            i += value_bytes_length;
         } else {
             // there is an overflow
             let remaining_space = WORD_LENGTH - i;
-            res[i..WORD_LENGTH].copy_from_slice(&value_bytes[..remaining_space]);
-            output_words.push(res.clone());
-            res = [0; WORD_LENGTH];
+            current_word[i..WORD_LENGTH].copy_from_slice(&value_bytes[..remaining_space]);
 
+            output_words.push(current_word);
+            current_word = [0; WORD_LENGTH];
+            // i = ?
+            // 00000000|00000000000000000000|0000000000000000000|00000000000
             j = remaining_space;
-            while j + WORD_LENGTH <= n {
-                res[..WORD_LENGTH].copy_from_slice(&value_bytes[j..j + WORD_LENGTH]);
-                output_words.push(res.clone());
-                res = [0; WORD_LENGTH];
+            while j + WORD_LENGTH <= value_bytes_length {
+                // changer ça par la taille de la slice - qui reste - est plus grad qune la taille de un mot
+                /// recal
+                current_word[..WORD_LENGTH].copy_from_slice(&value_bytes[j..j + WORD_LENGTH]); // recal 
+
+                output_words.push(current_word);
+                current_word = [0; WORD_LENGTH];
+
                 j += WORD_LENGTH;
             }
             // edge case of when the last word is exactly the size of the remaining bytes
-            if j == n {
-                output_words.push(res.clone());
-                res = [0; WORD_LENGTH];
+            if j == value_bytes_length {
+                output_words.push(current_word);
+                current_word = [0; WORD_LENGTH];
                 i = 0;
             } else {
-                res[..n - j].copy_from_slice(&value_bytes[j..n]);
-                i = n - j;
+                current_word[..value_bytes_length - j]
+                    .copy_from_slice(&value_bytes[j..value_bytes_length]);
+                i = value_bytes_length - j;
             }
         };
     }
     if i > 0 {
-        output_words.push(res.clone());
+        output_words.push(current_word);
     }
 
+    println!("output_words: {:?}", output_words);
+
     Ok(output_words)
+    /*
+    cas particulier : interdit de code une valeu de taille 0
+     */
 }
 
 use std::convert::TryFrom;
 
-/// Merges a Vec<[u8; WORD_LENGTH]> into one Vec<u8>.
-/// (stolen)
 pub fn flatten<const WORD_LENGTH: usize>(encoded: Vec<[u8; WORD_LENGTH]>) -> Vec<u8> {
     encoded
         .into_iter()
@@ -172,16 +199,20 @@ pub fn flatten<const WORD_LENGTH: usize>(encoded: Vec<[u8; WORD_LENGTH]>) -> Vec
 }
 
 pub fn good_decode<const WORD_LENGTH: usize, TryFromError: std::error::Error, Value>(
-    encoded: Vec<[u8; WORD_LENGTH]>,
+    words: Vec<[u8; WORD_LENGTH]>,
 ) -> Result<HashSet<Value>, String>
 where
-    for<'z> Value: Hash + Eq + TryFrom<&'z [u8], Error = TryFromError>,
+    for<'z> Value: Clone + Hash + Eq + TryFrom<&'z [u8], Error = TryFromError> + Debug,
 {
-    let input = flatten(encoded);
+    let input = flatten(words.clone());
+    println!("DECODE_OPERATION | words: {:?}", words);
 
     let n = input.len();
+    if n != WORD_LENGTH * words.len() {
+        panic!("That is wrong");
+    }
     if n == 0 {
-        return Ok(HashSet::new());
+        return Ok(HashSet::new()); // a voir 
     }
     if n < 3 {
         return Err("Encoded data is too short ? ...".to_string());
@@ -191,47 +222,43 @@ where
     let mut i = 0;
 
     while i < n {
+        // println!("DECODE_OPERATION | i: {:?}", i);
         // end of data conditions, either we have a single 0 or two 0s meaning no more metadata
         if input[i] == 0 && (i == n - 1 || (i <= n - 2 && input[i + 1] == 0)) {
-            break;
+            println!("DECODE_OPERATION | BREAKING: {:?}", &input[i..]);
+            i += 1;
+            // TODO : soit il reste moins de 2 octets OU il reste 2 octets et ils sont tous les deux à 0
+            // input.as_slice[..n]
+            continue;
         }
         // -- Step 1: metadata (2 bytes)
-        // Handle the edge case of having fewer than 2 bytes left
-        if i + 2 >= n {
-            return Err("Unexpected end of data while reading metadata".to_string());
-        }
 
         let metadata: [u8; 2] = input[i..i + 2].try_into().unwrap(); // safe unwrap
         let f = (metadata[1] % 2) as u16; // if odd => 1 => Insert, if even => 0 => Delete
-        let m = u16::from_be_bytes(metadata);
-
-        // Check we have a perfect square
-        let mut actual_size = ((m - f) >> 1) as usize; // shift right by 1 to divide by 2
-        if actual_size == 0 {
-            actual_size = 1;
-        }
+        let len = (u16::from_be_bytes(metadata) >> 1) as usize; // shift right by 1 to divide by 2
         i += 2;
 
         // -- Step 2: read the data
-        if i + actual_size > n {
+        if i + len > n {
             return Err("Unexpected end of data while reading value".to_string());
         }
-        let data = Vec::from(&input[i..i + actual_size]);
-        i += actual_size;
 
-        // -- Step 3: decode the operation and update the set
-        let v = Value::try_from(data.as_slice())
+        let v = Value::try_from(&input[i..i + len])
             .map_err(|e| format!("Decoding error: {}", e.to_string()))?;
-        if v == Value::try_from(&[]).unwrap() {}
+        i += len;
+        println!("DECODE_OPERATION | result(middle): {:?}", result);
+        // -- Step 3: decode the operation and update the set
+        // if v == Value::try_from(&[]).unwrap() {}
         if f == 1 {
-            // insert
+            println!("DECODE_OPERATION | inserting  {:?}", v.clone());
             result.insert(v);
-            // }
         } else {
-            // remove
             result.remove(&v);
+            println!("DECODE_OPERATION | (delete): {:?}", v);
         }
     }
+
+    println!("DECODE_OPERATION | result: {:?}", result);
 
     Ok(result)
 }
@@ -281,16 +308,13 @@ mod tests {
         values.insert(Value::from(vec![1, 0, 0, 2]));
         values.insert(Value::from(vec![3, 4, 5, 6, 7]));
         values.insert(Value::from(vec![0, 0, 0, 10]));
+
         let encoded = good_encode::<WORD_LENGTH, Value>(Op::Insert, values.clone())
             .expect("Encoding multiple values failed.");
 
-        let mut res_stripped = HashSet::new();
-        for v in values.iter() {
-            res_stripped.insert(Value::from(strip_leading_zeros(v.as_ref())));
-        }
         let decoded = good_decode::<WORD_LENGTH, _, Value>(encoded)
             .expect("Decoding multiple values failed.");
-        assert_eq!(decoded, res_stripped);
+        assert_eq!(decoded, values);
     }
 
     #[test]
@@ -300,10 +324,12 @@ mod tests {
         // Build a value that forces metadata to split at the last byte
         let v = vec![1; 130];
         values.insert(Value::from(v));
+
         let encoded = good_encode::<WORD_LENGTH, Value>(Op::Insert, values.clone())
             .expect("Encoding failed on overflow test.");
         let decoded = good_decode::<WORD_LENGTH, _, Value>(encoded)
             .expect("Decoding failed on overflow test.");
+
         assert_eq!(decoded, values);
     }
 
@@ -315,29 +341,24 @@ mod tests {
         let v = vec![4];
         values.insert(Value::from(v));
 
-        let encoded: Vec<[u8; 129]> = good_encode::<WORD_LENGTH, Value>(Op::Insert, values.clone())
+        let mut encoded = good_encode::<WORD_LENGTH, Value>(Op::Insert, values.clone())
             .expect("Encoding failed on overflow test.");
 
-        let encoded2: Vec<[u8; 129]> =
-            good_encode::<WORD_LENGTH, Value>(Op::Delete, values.clone())
-                .expect("Encoding failed on  test.");
+        let mut encoded2 = good_encode::<WORD_LENGTH, Value>(Op::Delete, values.clone())
+            .expect("Encoding failed on  test.");
 
-        println!("Encoded: {:?}", encoded);
-        println!("Encoded2: {:?}", encoded2);
+        // println!("Encoded: {:?}", encoded);
+        // println!("Encoded2: {:?}", encoded2);
 
+        encoded.append(&mut encoded2);
         // let combined_encoded: Vec<[u8; 129]> = [encoded.clone(), encoded2].concat();
-        let initial_data = vec![0, 3, 4, 0, 2, 4];
-        let mut combined_encoded: Vec<[u8; 129]> = Vec::new();
 
-        // Create first array with initial data, padded with zeros
-        let mut first_array = [0; 129];
-        first_array[..initial_data.len()].copy_from_slice(&initial_data);
-        combined_encoded.push(first_array);
         // combined_encoded.insert(Value::from();
-        println!("Combined: {:?}", combined_encoded);
+        // println!("Combined: {:?}", combined_encoded);
 
-        let decoded = good_decode::<WORD_LENGTH, _, Value>(combined_encoded)
-            .expect("Decoding failed on  test.");
+        let decoded =
+            good_decode::<WORD_LENGTH, _, Value>(encoded).expect("Decoding failed on  test.");
+
         assert_eq!(decoded, HashSet::new());
     }
 }
