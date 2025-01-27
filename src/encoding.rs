@@ -1,21 +1,11 @@
-//! This module defines encoding operations that are used to serialize an operation.
-//! Currently, the only supported operations are the insertion and deletion, but there is no
-//! theoretical restriction on the kind of operation that can be used.
-
-#![allow(dead_code)]
+//! This module defines encoding operations that are used to serialize an
+//! operation. Currently, the only supported operations are the insertion and
+//! deletion, but there is no theoretical restriction on the kind of operation
+//! that can be used.
 
 use std::{collections::HashSet, hash::Hash};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Op {
-    Insert,
-    Delete,
-}
-
-pub enum Mode {
-    EqBlock(usize),
-    Offset(usize),
-}
+use crate::Op;
 
 /// Blocks are the smallest unit size in block mode, 16 bytes is optimized to store UUIDs.
 const BLOCK_LENGTH: usize = 16;
@@ -75,4 +65,106 @@ where
         }
     }
     Ok(res)
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::{Decoder, Encoder};
+
+    use super::*;
+    use rand::{RngCore, thread_rng};
+    use std::fmt::Debug;
+
+    /// Uses fuzzing to attempt asserting that: encode ∘ decode = identity.
+    ///
+    /// Draw a random number of value of operation in [2,12], and for each
+    /// operation draws:
+    ///
+    /// - a random operation in {Insert, Delete}
+    ///
+    /// - a random number of values in [10,100]
+    ///
+    /// - random values with a random number of random bytes in
+    ///   [0,MAX_VALUE_LENGTH].
+    ///
+    /// Encode all theses operations one by one, concatenates the encoded words
+    /// in chronological order, and attempt decoding the result of this
+    /// operation, comparing this result against the expected set of values
+    /// built from the raw decoded operations.
+    fn test_encoding<
+        // An upper-bound on the value length is needed for the dummy encoding.
+        const MAX_VALUE_LENGTH: usize,
+        // Values need to implement conversion from bytes to allow for a uniform
+        // random generation. This bound could be changed to `Serializable` or
+        // `TryFrom`.
+        Value: Hash + From<Vec<u8>> + Clone + PartialEq + Eq + Debug,
+        Word,
+        EncodingError: Debug,
+    >(
+        encode: Encoder<Value, Word, EncodingError>,
+        decode: Decoder<Value, Word, EncodingError>,
+    ) {
+        let mut rng = thread_rng();
+
+        // Draws a random number of operations in [2,12].
+        let n_ops = rng.next_u32() % 10 + 2;
+
+        let ops = (0..n_ops)
+            .map(|_| {
+                // Draws a random number of values in [10,100].
+                let n_vs = rng.next_u32() % 90 + 10;
+
+                (
+                    // draws a random operation
+                    if rng.next_u32() % 2 == 1 {
+                        Op::Insert
+                    } else {
+                        Op::Delete
+                    },
+                    // draws random values
+                    (0..n_vs)
+                        .map(|_| {
+                            let len = rng.next_u32() as usize % MAX_VALUE_LENGTH;
+                            let mut bytes = vec![0; len];
+                            rng.fill_bytes(&mut bytes);
+                            Value::from(bytes)
+                        })
+                        .collect::<HashSet<_>>(),
+                )
+            })
+            .collect::<Vec<_>>();
+
+        let ws = ops
+            .iter()
+            .cloned()
+            .flat_map(|(op, vs)| encode(op, vs).unwrap())
+            .collect::<Vec<Word>>();
+
+        let res = decode(ws).unwrap();
+
+        // Now, build the expected result.
+        let expected_res = ops.into_iter().fold(HashSet::new(), |h, (op, vs)| {
+            if Op::Insert == op {
+                vs.into_iter().fold(h, |mut h, v| {
+                    h.insert(v);
+                    h
+                })
+            } else {
+                vs.into_iter().fold(h, |mut h, v| {
+                    h.remove(&v);
+                    h
+                })
+            }
+        });
+
+        assert_eq!(res, expected_res);
+    }
+
+    #[test]
+    fn test_dummy_encoding() {
+        test_encoding::<{ WORD_LENGTH - 2 }, _, _, _>(
+            dummy_encode::<WORD_LENGTH, Vec<u8>>,
+            dummy_decode,
+        );
+    }
 }
