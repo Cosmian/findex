@@ -75,34 +75,27 @@ where
     }
     Ok(res)
 }
-// stolen
+
 fn strip_leading_zeros(data: &[u8]) -> &[u8] {
     let first_nonzero = data.iter().position(|&b| b != 0).unwrap_or(data.len());
     &data[first_nonzero..]
 }
 
 pub const WORD_LENGTH: usize = 129;
-use std::fmt::Debug;
-pub fn good_encode<const WORD_LENGTH: usize, Value: Debug + AsRef<[u8]>>(
+pub fn good_encode<const WORD_LENGTH: usize, Value: AsRef<[u8]>>(
     op: Op,
     values_set: HashSet<Value>,
 ) -> Result<Vec<[u8; WORD_LENGTH]>, String> {
     let f = if op == Op::Insert { 1 } else { 0 };
-    if op == Op::Delete {
-        println!("Deleting {:?}", values_set);
-    }
     let mut i: usize = 0; // result word pointer
     let mut j: usize; // value input pointer
     let mut res = [0; WORD_LENGTH];
 
-    // output
     let mut output_words: Vec<[u8; WORD_LENGTH]> = Vec::new();
 
     for v in values_set {
         let raw_bytes = v.as_ref();
         let value_bytes = strip_leading_zeros(raw_bytes);
-        // println!("Value: {:?}", v);
-        // println!("Value bytes: {:?}", value_bytes);
 
         let n = value_bytes.len() as usize;
         if n > (1 << 15) {
@@ -112,10 +105,8 @@ pub fn good_encode<const WORD_LENGTH: usize, Value: Debug + AsRef<[u8]>>(
             ));
         }
         let coded_metadata: [u8; 2] = ((n << 1) as u16 + f).to_be_bytes(); // explicit big endian encoding
-        // println!("Metadata: {:?}", coded_metadata);
 
         // Step 1 : metadata
-
         // !!! careful, edge case if i == WORD_LENGTH - 1
         if i == WORD_LENGTH - 1 {
             // divide the metadata in two parts
@@ -184,7 +175,7 @@ pub fn good_decode<const WORD_LENGTH: usize, TryFromError: std::error::Error, Va
     encoded: Vec<[u8; WORD_LENGTH]>,
 ) -> Result<HashSet<Value>, String>
 where
-    for<'z> Value: Hash + Eq + TryFrom<&'z [u8], Error = TryFromError> + Debug,
+    for<'z> Value: Hash + Eq + TryFrom<&'z [u8], Error = TryFromError>,
 {
     let input = flatten(encoded);
 
@@ -204,8 +195,6 @@ where
         if input[i] == 0 && (i == n - 1 || (i <= n - 2 && input[i + 1] == 0)) {
             break;
         }
-        // println!("Input {:?}", input);
-        // println!("i: {}", i);
         // -- Step 1: metadata (2 bytes)
         // Handle the edge case of having fewer than 2 bytes left
         if i + 2 >= n {
@@ -214,9 +203,7 @@ where
 
         let metadata: [u8; 2] = input[i..i + 2].try_into().unwrap(); // safe unwrap
         let f = (metadata[1] % 2) as u16; // if odd => 1 => Insert, if even => 0 => Delete
-        // println!("Metadata: {:?}", metadata);
         let m = u16::from_be_bytes(metadata);
-        // println!("f: {}", f);
 
         // Check we have a perfect square
         let mut actual_size = ((m - f) >> 1) as usize; // shift right by 1 to divide by 2
@@ -227,61 +214,35 @@ where
 
         // -- Step 2: read the data
         if i + actual_size > n {
-            println!("Actual size: {}", actual_size);
-            println!("i: {}", i);
-            println!("m: {}", m);
-            println!("f: {}", f);
             return Err("Unexpected end of data while reading value".to_string());
         }
         let data = Vec::from(&input[i..i + actual_size]);
         i += actual_size;
-        // println!("Data: {:?}", data);
 
         // -- Step 3: decode the operation and update the set
         let v = Value::try_from(data.as_slice())
             .map_err(|e| format!("Decoding error: {}", e.to_string()))?;
-        if v == Value::try_from(&[]).unwrap() {
-            println!("data: {:?}", data);
-            println!("metadata: {:?}", metadata);
-            println!("f: {}", f);
-            println!("input: {:?}", input);
-        }
+        if v == Value::try_from(&[]).unwrap() {}
         if f == 1 {
             // insert
-            // println!("Inserting {:?}", v);
             result.insert(v);
             // }
         } else {
             // remove
-            // println!("Removing {:?}", v);
             result.remove(&v);
         }
     }
 
     Ok(result)
-
-    // Ok(if result.is_empty() {
-    //     let mut res = HashSet::new();
-    //     res.insert(Value::try_from(&[0]).unwrap());
-    //     res
-    // } else {
-    //     result
-    // })
 }
 
 #[cfg(test)]
 mod tests {
-    // note ! part of the tests were autogen
-    use crate::Value;
+    // note : some tests were autogen and some were written by hand
 
     use super::*;
+    use crate::Value;
     use std::collections::HashSet;
-
-    // Use a mock strip_leading_zeros if not defined
-    fn strip_leading_zeros(bytes: &[u8]) -> &[u8] {
-        let first_non_zero = bytes.iter().position(|&b| b != 0).unwrap_or(bytes.len());
-        &bytes[first_non_zero..]
-    }
 
     #[test]
     fn test_encode_decode_simple_insert() {
