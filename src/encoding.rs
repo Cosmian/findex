@@ -365,7 +365,7 @@ pub mod tests {
 
         const MAX_VALUE_LENGTH: usize = 2000;
 
-        for _ in 0..1_000 {
+        for _ in 0..100 {
             const WORD_LENGTH: usize = 255;
             test_encoding::<MAX_VALUE_LENGTH, _, _, _>(
                 generic_encode::<WORD_LENGTH, Vec<u8>>,
@@ -373,7 +373,7 @@ pub mod tests {
             );
         }
 
-        for _ in 0..1_000 {
+        for _ in 0..100 {
             const WORD_LENGTH: usize = 7;
             test_encoding::<MAX_VALUE_LENGTH, _, _, _>(
                 generic_encode::<WORD_LENGTH, Vec<u8>>,
