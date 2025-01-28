@@ -87,6 +87,32 @@ pub mod generic_encoding {
 
     use super::*;
 
+    // Since metadata are encoded on 16 bits and 2 bits are reserved for the
+    // flag and the operation, there are 14 remaining bytes for the length.
+    const MAX_VALUE_LENGTH: usize = (1 << 14) - 1;
+
+    fn encode_metadata(op: Op, n: usize) -> Result<u16, String> {
+        if n > MAX_VALUE_LENGTH {
+            return Err(format!(
+                "values bigger than {} bytes cannot be encoded ({n} given)",
+                MAX_VALUE_LENGTH
+            ));
+        }
+
+        let flag = 1;
+        let len = n as u16; // safe conversion
+        let op = if Op::Insert == op { 1 } else { 0 };
+
+        let m = (flag << 15) | (len << 1) | op;
+        Ok(m)
+    }
+
+    const fn decode_metadata(m: u16) -> (Op, usize) {
+        let op = if 1 == m % 2 { Op::Insert } else { Op::Delete };
+        let n = ((m ^ (1 << 15)) >> 1) as usize; // safe conversion
+        (op, n)
+    }
+
     pub fn generic_encode<const WORD_LENGTH: usize, Value: AsRef<[u8]>>(
         op: Op,
         vs: HashSet<Value>,
@@ -94,26 +120,6 @@ pub mod generic_encoding {
         let mut ws = Vec::<[u8; WORD_LENGTH]>::new();
         let mut w = [0; WORD_LENGTH];
         let mut pos = 0;
-
-        // Returns the metadata to be written alongside the given value.
-        let get_metadata = |v: &Value| {
-            const MAX_VALUE_LENGTH: usize = (1 << 15) - 1;
-
-            if v.as_ref().len() > MAX_VALUE_LENGTH {
-                return Err(format!(
-                    "values bigger than {} bytes cannot be encoded",
-                    MAX_VALUE_LENGTH
-                ));
-            }
-
-            let flag = 1;
-            let len = v.as_ref().len() as u16;
-            let op = if Op::Insert == op { 1 } else { 0 };
-
-            let m = (flag << 15) | (len << 1) | op;
-
-            Ok(m.to_be_bytes())
-        };
 
         // Gets the length of the available space.
         let available = |pos| WORD_LENGTH - pos;
@@ -142,7 +148,7 @@ pub mod generic_encoding {
         };
 
         for v in vs {
-            let metadata = get_metadata(&v)?;
+            let metadata = encode_metadata(op, v.as_ref().len())?.to_be_bytes();
             (w, pos) = write_bytes(w, pos, &metadata)?;
             (w, pos) = write_bytes(w, pos, v.as_ref())?;
         }
@@ -196,8 +202,7 @@ pub mod generic_encoding {
             if (b1[0] >> 7) == 1 {
                 if let (Some(b2), new_pos) = read_bytes(1, new_pos) {
                     let m = <u16>::from_be_bytes([b1[0], b2[0]]);
-                    let op = if 1 == m % 2 { Op::Insert } else { Op::Delete };
-                    let n = ((m ^ (1 << 15)) >> 1) as usize; // safe conversion
+                    let (op, n) = decode_metadata(m);
 
                     if let (Some(bytes), new_pos) = read_bytes(n, new_pos) {
                         pos = new_pos;
@@ -219,6 +224,32 @@ pub mod generic_encoding {
         }
 
         Ok(vs)
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use rand::{RngCore, thread_rng};
+
+        use super::*;
+
+        #[test]
+        fn test_metadata_encoding() {
+            let mut rng = thread_rng();
+            for _ in 0..1000 {
+                let op = if rng.next_u32() % 2 == 1 {
+                    Op::Insert
+                } else {
+                    Op::Delete
+                };
+
+                let len = (rng.next_u32() as usize) % MAX_VALUE_LENGTH;
+                let m = encode_metadata(op, len).unwrap();
+                let (res_op, res_len) = decode_metadata(m);
+
+                assert_eq!(op, res_op);
+                assert_eq!(len, res_len);
+            }
+        }
     }
 }
 
