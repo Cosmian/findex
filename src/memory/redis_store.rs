@@ -34,7 +34,7 @@ pub struct MemoryError {
 
 impl fmt::Display for MemoryError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "Memory Error")
+        write!(f, "Redis store memory error: {}", self.inner)
     }
 }
 
