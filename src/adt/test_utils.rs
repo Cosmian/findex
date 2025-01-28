@@ -9,7 +9,7 @@
 //! Both addresses and words are 16-byte long.
 
 use crate::MemoryADT;
-use rand::{Rng, RngCore, SeedableRng, rngs::StdRng};
+use rand::{rngs::StdRng, Rng, RngCore, SeedableRng};
 use std::fmt::Debug;
 
 fn gen_bytes(rng: &mut impl RngCore) -> [u8; 16] {
@@ -85,10 +85,13 @@ where
         .unwrap();
 
     let conflict_result = memory
-        .guarded_write((a.clone(), None), vec![(
-            a.clone(),
-            Memory::Word::from(rng.gen::<u128>().to_be_bytes()),
-        )])
+        .guarded_write(
+            (a.clone(), None),
+            vec![(
+                a.clone(),
+                Memory::Word::from(rng.gen::<u128>().to_be_bytes()),
+            )],
+        )
         .await
         .unwrap();
 
@@ -143,10 +146,10 @@ where
 
                     let new_cnt = cnt + 1;
                     let cur_cnt = m
-                        .guarded_write((a.into(), guard), vec![(
-                            a.into(),
-                            Memory::Word::from(new_cnt.to_be_bytes()),
-                        )])
+                        .guarded_write(
+                            (a.into(), guard),
+                            vec![(a.into(), Memory::Word::from(new_cnt.to_be_bytes()))],
+                        )
                         .await
                         .unwrap()
                         .map(|w| <u128>::from_be_bytes(w.into()))

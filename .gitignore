@@ -1,5 +1,6 @@
 pkg/
 target/
+.cargo_check/
 **/Cargo.lock
 perf*
 flamegraph.svg

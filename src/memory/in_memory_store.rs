@@ -96,10 +96,10 @@ mod tests {
     use futures::executor::block_on;
 
     use crate::{
-        MemoryADT,
         adt::test_utils::{
             test_guarded_write_concurrent, test_single_write_and_read, test_wrong_guard,
         },
+        MemoryADT,
     };
 
     use super::InMemory;

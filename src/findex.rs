@@ -8,8 +8,8 @@ use std::{
 };
 
 use crate::{
-    ADDRESS_LENGTH, Address, IndexADT, KEY_LENGTH, MemoryADT, Secret, adt::VectorADT, encoding::Op,
-    error::Error, memory::MemoryEncryptionLayer, ovec::IVec,
+    adt::VectorADT, encoding::Op, error::Error, memory::MemoryEncryptionLayer, ovec::IVec, Address,
+    IndexADT, MemoryADT, Secret, ADDRESS_LENGTH, KEY_LENGTH,
 };
 
 /// The encoder is used to serialize an operation, along with the set of values
@@ -33,11 +33,14 @@ pub struct Findex<
 }
 
 impl<
-    const WORD_LENGTH: usize,
-    Value: Send + Sync + Hash + Eq,
-    EncodingError: Send + Sync + Debug,
-    Memory: Send + Sync + Clone + MemoryADT<Address = Address<ADDRESS_LENGTH>, Word = [u8; WORD_LENGTH]>,
-> Findex<WORD_LENGTH, Value, EncodingError, Memory>
+        const WORD_LENGTH: usize,
+        Value: Send + Sync + Hash + Eq,
+        EncodingError: Send + Sync + Debug,
+        Memory: Send
+            + Sync
+            + Clone
+            + MemoryADT<Address = Address<ADDRESS_LENGTH>, Word = [u8; WORD_LENGTH]>,
+    > Findex<WORD_LENGTH, Value, EncodingError, Memory>
 {
     /// Instantiates Findex with the given seed, and memory.
     pub fn new(
@@ -84,12 +87,15 @@ impl<
 }
 
 impl<
-    const WORD_LENGTH: usize,
-    Keyword: Send + Sync + Hash + Eq,
-    Value: Send + Sync + Hash + Eq,
-    EncodingError: Send + Sync + Debug,
-    Memory: Send + Sync + Clone + MemoryADT<Address = Address<ADDRESS_LENGTH>, Word = [u8; WORD_LENGTH]>,
-> IndexADT<Keyword, Value> for Findex<WORD_LENGTH, Value, EncodingError, Memory>
+        const WORD_LENGTH: usize,
+        Keyword: Send + Sync + Hash + Eq,
+        Value: Send + Sync + Hash + Eq,
+        EncodingError: Send + Sync + Debug,
+        Memory: Send
+            + Sync
+            + Clone
+            + MemoryADT<Address = Address<ADDRESS_LENGTH>, Word = [u8; WORD_LENGTH]>,
+    > IndexADT<Keyword, Value> for Findex<WORD_LENGTH, Value, EncodingError, Memory>
 {
     type Error = Error<Address<ADDRESS_LENGTH>>;
 
@@ -125,10 +131,10 @@ mod tests {
     use rand_core::SeedableRng;
 
     use crate::{
-        ADDRESS_LENGTH, Findex, InMemory, IndexADT, Value,
         address::Address,
-        encoding::{WORD_LENGTH, dummy_decode, dummy_encode, good_decode, good_encode},
+        encoding::{dummy_decode, dummy_encode, good_decode, good_encode, WORD_LENGTH},
         secret::Secret,
+        Findex, InMemory, IndexADT, Value, ADDRESS_LENGTH,
     };
 
     #[test]

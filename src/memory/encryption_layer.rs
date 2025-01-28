@@ -1,11 +1,11 @@
 use std::{fmt::Debug, ops::Deref, sync::Arc};
 
 use crate::{
-    ADDRESS_LENGTH, KEY_LENGTH, MemoryADT, Secret, address::Address, symmetric_key::SymmetricKey,
+    address::Address, symmetric_key::SymmetricKey, MemoryADT, Secret, ADDRESS_LENGTH, KEY_LENGTH,
 };
 use aes::{
+    cipher::{generic_array::GenericArray, BlockEncrypt, KeyInit},
     Aes256,
-    cipher::{BlockEncrypt, KeyInit, generic_array::GenericArray},
 };
 use xts_mode::Xts128;
 
@@ -41,9 +41,9 @@ pub struct MemoryEncryptionLayer<
 }
 
 impl<
-    const WORD_LENGTH: usize,
-    Memory: Send + Sync + MemoryADT<Address = Address<ADDRESS_LENGTH>, Word = [u8; WORD_LENGTH]>,
-> MemoryEncryptionLayer<WORD_LENGTH, Memory>
+        const WORD_LENGTH: usize,
+        Memory: Send + Sync + MemoryADT<Address = Address<ADDRESS_LENGTH>, Word = [u8; WORD_LENGTH]>,
+    > MemoryEncryptionLayer<WORD_LENGTH, Memory>
 {
     /// Instantiates a new memory encryption layer.
     pub fn new(seed: &Secret<KEY_LENGTH>, stm: Memory) -> Self {
@@ -82,9 +82,9 @@ impl<
 }
 
 impl<
-    const WORD_LENGTH: usize,
-    Memory: Send + Sync + MemoryADT<Address = Address<ADDRESS_LENGTH>, Word = [u8; WORD_LENGTH]>,
-> MemoryADT for MemoryEncryptionLayer<WORD_LENGTH, Memory>
+        const WORD_LENGTH: usize,
+        Memory: Send + Sync + MemoryADT<Address = Address<ADDRESS_LENGTH>, Word = [u8; WORD_LENGTH]>,
+    > MemoryADT for MemoryEncryptionLayer<WORD_LENGTH, Memory>
 {
     type Address = Address<ADDRESS_LENGTH>;
 
@@ -130,19 +130,19 @@ impl<
 #[cfg(test)]
 mod tests {
     use aes::{
+        cipher::{generic_array::GenericArray, BlockDecrypt, KeyInit},
         Aes256,
-        cipher::{BlockDecrypt, KeyInit, generic_array::GenericArray},
     };
     use futures::executor::block_on;
     use rand_chacha::ChaChaRng;
     use rand_core::SeedableRng;
 
     use crate::{
-        ADDRESS_LENGTH, MemoryADT,
         address::Address,
-        memory::{MemoryEncryptionLayer, in_memory_store::InMemory},
+        memory::{in_memory_store::InMemory, MemoryEncryptionLayer},
         secret::Secret,
         symmetric_key::SymmetricKey,
+        MemoryADT, ADDRESS_LENGTH,
     };
 
     const WORD_LENGTH: usize = 128;
@@ -194,33 +194,40 @@ mod tests {
         let val_addr_4 = Address::<ADDRESS_LENGTH>::random(&mut rng);
 
         assert_eq!(
-            block_on(obf.guarded_write((header_addr.clone(), None), vec![
-                (header_addr.clone(), [2; WORD_LENGTH]),
-                (val_addr_1.clone(), [1; WORD_LENGTH]),
-                (val_addr_2.clone(), [1; WORD_LENGTH])
-            ]))
+            block_on(obf.guarded_write(
+                (header_addr.clone(), None),
+                vec![
+                    (header_addr.clone(), [2; WORD_LENGTH]),
+                    (val_addr_1.clone(), [1; WORD_LENGTH]),
+                    (val_addr_2.clone(), [1; WORD_LENGTH])
+                ]
+            ))
             .unwrap(),
             None
         );
 
         assert_eq!(
-            block_on(obf.guarded_write((header_addr.clone(), None), vec![
-                (header_addr.clone(), [2; WORD_LENGTH]),
-                (val_addr_1.clone(), [3; WORD_LENGTH]),
-                (val_addr_2.clone(), [3; WORD_LENGTH])
-            ]))
+            block_on(obf.guarded_write(
+                (header_addr.clone(), None),
+                vec![
+                    (header_addr.clone(), [2; WORD_LENGTH]),
+                    (val_addr_1.clone(), [3; WORD_LENGTH]),
+                    (val_addr_2.clone(), [3; WORD_LENGTH])
+                ]
+            ))
             .unwrap(),
             Some([2; WORD_LENGTH])
         );
 
         assert_eq!(
-            block_on(
-                obf.guarded_write((header_addr.clone(), Some([2; WORD_LENGTH])), vec![
+            block_on(obf.guarded_write(
+                (header_addr.clone(), Some([2; WORD_LENGTH])),
+                vec![
                     (header_addr.clone(), [4; WORD_LENGTH]),
                     (val_addr_3.clone(), [2; WORD_LENGTH]),
                     (val_addr_4.clone(), [2; WORD_LENGTH])
-                ])
-            )
+                ]
+            ))
             .unwrap(),
             Some([2; WORD_LENGTH])
         );

@@ -16,15 +16,6 @@ repos:
         stages: [commit-msg]
         args: [] # optional: list of Conventional Commits types to allow e.g. [feat, fix, ci, chore, test]
 
-  - repo: https://github.com/pre-commit/mirrors-prettier
-    rev: v3.0.0-alpha.6
-    hooks:
-      - id: prettier
-        stages: [commit]
-        exclude_types:
-          - yaml
-          - markdown
-
   - repo: https://github.com/igorshubovych/markdownlint-cli
     rev: v0.33.0
     hooks:
@@ -118,20 +109,23 @@ repos:
         args: [--skip-string-normalization]
 
   - repo: https://github.com/Cosmian/git-hooks.git
-    rev: v1.0.16
+    rev: v1.0.35
     hooks:
       - id: stable-cargo-format
-      - id: cargo-upgrade
-      - id: cargo-update
+      # - id: cargo-upgrade
+      # - id: cargo-update
       - id: cargo-machete
-      - id: cargo-outdated
-      - id: cargo-udeps
+      - id: redis-container-up
       - id: cargo-tests-all
       - id: cargo-test-doc
-      - id: clippy-autofix-all
-      - id: clippy-autofix-pedantic
-      - id: clippy-autofix-others
+      - id: redis-container-down
+
+      # - id: clippy-autofix-unreachable-pub
+      - id: clippy-autofix-all-targets-all-features
+      - id: clippy-autofix-all-targets
       - id: clippy-all-targets-all-features
+      - id: clippy-all-targets
+
       - id: stable-cargo-format
       - id: cargo-dry-publish
         args: [--allow-dirty]

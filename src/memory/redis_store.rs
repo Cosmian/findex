@@ -1,8 +1,8 @@
 use std::{fmt, marker::PhantomData};
 
-use redis::{RedisError, aio::ConnectionManager};
+use redis::{aio::ConnectionManager, RedisError};
 
-use crate::{ADDRESS_LENGTH, Address, MemoryADT};
+use crate::{Address, MemoryADT, ADDRESS_LENGTH};
 
 // Arguments passed to the LUA script, in order:
 // 1. Guard address.

@@ -15,7 +15,7 @@ mod value;
 
 pub use address::Address;
 pub use adt::{IndexADT, MemoryADT};
-pub use encoding::{Op, good_decode, good_encode};
+pub use encoding::{good_decode, good_encode, Op};
 pub use error::Error;
 pub use findex::Findex;
 pub use secret::Secret;
@@ -25,7 +25,7 @@ pub use value::Value;
 pub use memory::redis_store::{MemoryError, RedisMemory};
 
 #[cfg(feature = "test-utils")]
-pub use encoding::{WORD_LENGTH, dummy_decode, dummy_encode};
+pub use encoding::{dummy_decode, dummy_encode, WORD_LENGTH};
 
 #[cfg(any(test, feature = "test-utils"))]
 pub use memory::InMemory;

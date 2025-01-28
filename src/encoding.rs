@@ -4,6 +4,8 @@
 
 #![allow(dead_code)]
 
+use std::convert::TryFrom;
+use std::fmt::Debug;
 use std::{collections::HashSet, hash::Hash};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -22,6 +24,9 @@ const BLOCK_LENGTH: usize = 16;
 
 /// The chunk length is the size of the available space in a word.
 const CHUNK_LENGTH: usize = 8 * BLOCK_LENGTH;
+
+/// The length of a word in bytes.
+pub const WORD_LENGTH: usize = 129;
 
 pub fn dummy_encode<const WORD_LENGTH: usize, Value: AsRef<[u8]>>(
     op: Op,
@@ -76,15 +81,33 @@ where
     Ok(res)
 }
 
-use std::fmt::Debug;
-
-pub const WORD_LENGTH: usize = 129;
+/// This function is designed to encode a set of values into fixed-size byte arrays (words) with the following key characteristics:
+///
+/// The function packs multiple values into fixed-size byte arrays (WORD_LENGTH bytes each)
+/// Each value is encoded with:
+/// - A 2-byte metadata header containing:
+///   -  The value's length (15 bits)
+///   - An operation flag (1 bit) indicating if it's an Insert operation
+/// - The actual value's bytes
+///
+/// # Parameters
+/// - `WORD_LENGTH`: A constant generic parameter defining the size of output byte arrays
+/// - `op`: An operation type (Insert or non-Insert)
+/// - `values_set`: A HashSet containing values that implement Clone, Debug, and can be converted to byte slices
+///
+/// # Returns
+///
+/// Returns a Result containing a vector of fixed-size byte arrays ([u8; WORD_LENGTH])
+///
+/// # Errors
+///  Returns an error if any value exceeds 65535 bytes
+/// This encoding scheme appears to be designed for efficient storage or transmission of data, where multiple values need to be packed into fixed-size chunks while preserving information about their lengths and associated operations.
 pub fn good_encode<const WORD_LENGTH: usize, Value: Clone + Debug + AsRef<[u8]>>(
     op: Op,
     values_set: HashSet<Value>,
 ) -> Result<Vec<[u8; WORD_LENGTH]>, String> {
     println!("op: {:?}", op);
-    println!("values_set: {:?}", values_set.clone());
+    println!("values_set: {:?}", values_set);
 
     let f = if op == Op::Insert { 1 } else { 0 };
 
@@ -157,8 +180,8 @@ pub fn good_encode<const WORD_LENGTH: usize, Value: Clone + Debug + AsRef<[u8]>>
             j = remaining_space;
             while j + WORD_LENGTH <= value_bytes_length {
                 // changer ça par la taille de la slice - qui reste - est plus grad qune la taille de un mot
-                /// recal
-                current_word[..WORD_LENGTH].copy_from_slice(&value_bytes[j..j + WORD_LENGTH]); // recal 
+                // recal
+                current_word[..WORD_LENGTH].copy_from_slice(&value_bytes[j..j + WORD_LENGTH]); // recal
 
                 output_words.push(current_word);
                 current_word = [0; WORD_LENGTH];
@@ -185,11 +208,9 @@ pub fn good_encode<const WORD_LENGTH: usize, Value: Clone + Debug + AsRef<[u8]>>
 
     Ok(output_words)
     /*
-    cas particulier : interdit de code une valeu de taille 0
+    cas particulier : interdit de code une value de taille 0
      */
 }
-
-use std::convert::TryFrom;
 
 pub fn flatten<const WORD_LENGTH: usize>(encoded: Vec<[u8; WORD_LENGTH]>) -> Vec<u8> {
     encoded
@@ -212,7 +233,7 @@ where
         panic!("That is wrong");
     }
     if n == 0 {
-        return Ok(HashSet::new()); // a voir 
+        return Ok(HashSet::new()); // a voir
     }
     if n < 3 {
         return Err("Encoded data is too short ? ...".to_string());
@@ -243,8 +264,8 @@ where
             return Err("Unexpected end of data while reading value".to_string());
         }
 
-        let v = Value::try_from(&input[i..i + len])
-            .map_err(|e| format!("Decoding error: {}", e.to_string()))?;
+        let v =
+            Value::try_from(&input[i..i + len]).map_err(|e| format!("Decoding error: {}", e))?;
         i += len;
         println!("DECODE_OPERATION | result(middle): {:?}", result);
         // -- Step 3: decode the operation and update the set
@@ -265,10 +286,9 @@ where
 
 #[cfg(test)]
 mod tests {
-    // note : some tests were autogen and some were written by hand
-
     use super::*;
     use crate::Value;
+    use rand::Rng;
     use std::collections::HashSet;
 
     #[test]
@@ -284,8 +304,8 @@ mod tests {
     #[test]
     fn test_encode_decode_empty_set() {
         let values: HashSet<Value> = HashSet::new();
-        let encoded = good_encode::<WORD_LENGTH, Value>(Op::Insert, values.clone())
-            .expect("Encoding failed.");
+        let encoded =
+            good_encode::<WORD_LENGTH, Value>(Op::Insert, values).expect("Encoding failed.");
         let decoded = good_decode::<WORD_LENGTH, _, Value>(encoded).expect("Decoding failed.");
         assert_eq!(decoded.len(), 0);
     }
@@ -357,8 +377,29 @@ mod tests {
         // println!("Combined: {:?}", combined_encoded);
 
         let decoded =
-            good_decode::<WORD_LENGTH, _, Value>(encoded).expect("Decoding failed on  test.");
+            good_decode::<WORD_LENGTH, _, Value>(encoded).expect("Decoding failed on test.");
 
         assert_eq!(decoded, HashSet::new());
+    }
+
+    #[test]
+    fn test_encode_decode_random_values() {
+        let mut rng = rand::thread_rng();
+
+        let set_size = rng.gen_range(100..=200);
+        let mut values = HashSet::with_capacity(set_size);
+
+        for _ in 0..set_size {
+            let value_size = rng.gen_range(1..=200);
+            let random_bytes: Vec<u8> = (0..value_size).map(|_| rng.gen()).collect();
+            values.insert(Value::from(random_bytes));
+        }
+
+        let encoded = good_encode::<WORD_LENGTH, Value>(Op::Insert, values.clone())
+            .expect("Encoding random values failed");
+        let decoded =
+            good_decode::<WORD_LENGTH, _, Value>(encoded).expect("Decoding random values failed");
+
+        assert_eq!(decoded, values);
     }
 }
