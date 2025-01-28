@@ -87,8 +87,6 @@ pub mod generic_encoding {
 
     use super::*;
 
-    const MAX_VALUE_LENGTH: usize = (1 << 16) - 1;
-
     pub fn generic_encode<const WORD_LENGTH: usize, Value: AsRef<[u8]>>(
         op: Op,
         vs: HashSet<Value>,
@@ -99,15 +97,26 @@ pub mod generic_encoding {
 
         // Returns the metadata to be written alongside the given value.
         let get_metadata = |v: &Value| {
+            const MAX_VALUE_LENGTH: usize = (1 << 15) - 1;
+
             if v.as_ref().len() > MAX_VALUE_LENGTH {
                 return Err(format!(
                     "values bigger than {} bytes cannot be encoded",
                     MAX_VALUE_LENGTH
                 ));
             }
-            let m = ((v.as_ref().len() as u16) << 1) + if Op::Insert == op { 1 } else { 0 };
+
+            let flag = 1;
+            let len = v.as_ref().len() as u16;
+            let op = if Op::Insert == op { 1 } else { 0 };
+
+            let m = (flag << 15) | (len << 1) | op;
+
             Ok(m.to_be_bytes())
         };
+
+        // Gets the length of the available space.
+        let available = |pos| WORD_LENGTH - pos;
 
         // Writes the given bytes to the current word `w` starting at the current
         // position `pos`, overflowing into new words if the number of bytes to be
@@ -117,8 +126,7 @@ pub mod generic_encoding {
             if bytes.is_empty() {
                 return Err("cannot encode values of length 0".to_string());
             }
-            let available = |pos| WORD_LENGTH - pos;
-            // Gets the length of the available space.
+
             loop {
                 if bytes.len() < available(pos) {
                     w[pos..pos + bytes.len()].copy_from_slice(bytes);
@@ -166,7 +174,7 @@ pub mod generic_encoding {
             let mut bytes = Vec::<u8>::with_capacity(n);
             loop {
                 if let Some(cur_w) = w {
-                    if n < available(pos) {
+                    if n <= available(pos) {
                         cur_w[pos..pos + n].iter().for_each(|b| bytes.push(*b));
                         pos += n;
                         return (Some(bytes), pos);
@@ -184,30 +192,29 @@ pub mod generic_encoding {
             }
         };
 
-        while let (Some(m), new_pos) = read_bytes(2, pos) {
-            let m = <u16>::from_be_bytes([m[0], m[1]]);
-            let op = if 1 == m % 2 { Op::Insert } else { Op::Delete };
-            let n = (m >> 1) as usize; // safe conversion
+        while let (Some(b1), new_pos) = read_bytes(1, pos) {
+            if (b1[0] >> 7) == 1 {
+                if let (Some(b2), new_pos) = read_bytes(1, new_pos) {
+                    let m = <u16>::from_be_bytes([b1[0], b2[0]]);
+                    let op = if 1 == m % 2 { Op::Insert } else { Op::Delete };
+                    let n = ((m ^ (1 << 15)) >> 1) as usize; // safe conversion
 
-            if n != 0 {
-                if let (Some(bytes), new_pos) = read_bytes(n, new_pos) {
-                    pos = new_pos;
-                    let v = Value::try_from(&bytes).map_err(|e| e.to_string())?;
-                    if Op::Insert == op {
-                        vs.insert(v);
+                    if let (Some(bytes), new_pos) = read_bytes(n, new_pos) {
+                        pos = new_pos;
+                        let v = Value::try_from(&bytes).map_err(|e| e.to_string())?;
+                        if Op::Insert == op {
+                            vs.insert(v);
+                        } else {
+                            vs.remove(&v);
+                        }
                     } else {
-                        vs.remove(&v);
+                        return Err(format!("cannot read {} bytes from the remaining words", n));
                     }
                 } else {
-                    return Err(format!("cannot read {} bytes from the remaining words", n));
+                    return Err("cannot read second metadata byte".to_string());
                 }
             } else {
-                // In case no value bytes were read, only advance by one!
-                if 0 == new_pos {
-                    pos = new_pos;
-                } else {
-                    pos = new_pos - 1;
-                }
+                pos += available(pos);
             }
         }
 
@@ -310,10 +317,12 @@ pub mod tests {
     #[test]
     fn test_dummy_encoding() {
         use super::dummy_encoding::*;
-        test_encoding::<{ WORD_LENGTH - 2 }, _, _, _>(
-            dummy_encode::<WORD_LENGTH, Vec<u8>>,
-            dummy_decode,
-        );
+        for _ in 0..1_000 {
+            test_encoding::<{ WORD_LENGTH - 2 }, _, _, _>(
+                dummy_encode::<WORD_LENGTH, Vec<u8>>,
+                dummy_decode,
+            );
+        }
     }
 
     #[test]
@@ -322,9 +331,12 @@ pub mod tests {
 
         const WORD_LENGTH: usize = 255;
         const MAX_VALUE_LENGTH: usize = 2000;
-        test_encoding::<MAX_VALUE_LENGTH, _, _, _>(
-            generic_encode::<WORD_LENGTH, Vec<u8>>,
-            generic_decode,
-        );
+
+        for _ in 0..1_000 {
+            test_encoding::<MAX_VALUE_LENGTH, _, _, _>(
+                generic_encode::<WORD_LENGTH, Vec<u8>>,
+                generic_decode,
+            );
+        }
     }
 }
