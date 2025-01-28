@@ -91,6 +91,11 @@ pub mod generic_encoding {
     // flag and the operation, there are 14 remaining bytes for the length.
     const MAX_VALUE_LENGTH: usize = (1 << 14) - 1;
 
+    // Gets the length of the available space.
+    const fn available<const WORD_LENGTH: usize>(pos: usize) -> usize {
+        WORD_LENGTH - pos
+    }
+
     fn encode_metadata(op: Op, n: usize) -> Result<u16, String> {
         if n > MAX_VALUE_LENGTH {
             return Err(format!(
@@ -117,40 +122,36 @@ pub mod generic_encoding {
         op: Op,
         vs: HashSet<Value>,
     ) -> Result<Vec<[u8; WORD_LENGTH]>, String> {
+        // The word accumulator must be exposed since two closures cannot have a
+        // shared mutable reference. A closure finalize returning the word
+        // accumulator cannot therefore be written simply.
         let mut ws = Vec::<[u8; WORD_LENGTH]>::new();
-        let mut w = [0; WORD_LENGTH];
-        let mut pos = 0;
-
-        // Gets the length of the available space.
-        let available = |pos| WORD_LENGTH - pos;
 
         // Writes the given bytes to the current word `w` starting at the current
         // position `pos`, overflowing into new words if the number of bytes to be
         // written is larger than the remaining space in the current word. Pushes
         // all completed word into `ws`.
         let mut write_bytes = |mut w: [u8; WORD_LENGTH], mut pos: usize, mut bytes: &[u8]| {
-            if bytes.is_empty() {
-                return Err("cannot encode values of length 0".to_string());
-            }
-
             loop {
-                if bytes.len() < available(pos) {
+                if bytes.len() < available::<WORD_LENGTH>(pos) {
                     w[pos..pos + bytes.len()].copy_from_slice(bytes);
-                    return Ok((w, pos + bytes.len()));
+                    return (w, pos + bytes.len());
                 } else {
-                    w[pos..].copy_from_slice(&bytes[..available(pos)]);
+                    w[pos..].copy_from_slice(&bytes[..available::<WORD_LENGTH>(pos)]);
                     ws.push(w);
-                    bytes = &bytes[available(pos)..];
+                    bytes = &bytes[available::<WORD_LENGTH>(pos)..];
                     w = [0; WORD_LENGTH];
                     pos = 0;
                 }
             }
         };
 
+        let mut w = [0; WORD_LENGTH];
+        let mut pos = 0;
         for v in vs {
             let metadata = encode_metadata(op, v.as_ref().len())?.to_be_bytes();
-            (w, pos) = write_bytes(w, pos, &metadata)?;
-            (w, pos) = write_bytes(w, pos, v.as_ref())?;
+            (w, pos) = write_bytes(w, pos, &metadata);
+            (w, pos) = write_bytes(w, pos, v.as_ref());
         }
 
         // Do not forget to push the current word if any byte were written to it.
@@ -167,45 +168,44 @@ pub mod generic_encoding {
     where
         for<'z> Value: Hash + PartialEq + Eq + TryFrom<&'z [u8], Error = TryFromError>,
     {
-        let mut ws = ws.into_iter();
-        let mut vs = HashSet::<Value>::new();
-        let mut w = ws.next();
-        let mut pos = 0;
-
-        // Gets the length of the available space.
-        let available = |pos| WORD_LENGTH - pos;
-
         // Attempts reading the next `n` bytes from the position `pos`.
-        let mut read_bytes = |mut n: usize, mut pos: usize| -> (Option<Vec<u8>>, usize) {
-            let mut bytes = Vec::<u8>::with_capacity(n);
-            loop {
-                if let Some(cur_w) = w {
-                    if n <= available(pos) {
-                        cur_w[pos..pos + n].iter().for_each(|b| bytes.push(*b));
-                        pos += n;
-                        return (Some(bytes), pos);
+        let mut read_bytes = {
+            let mut ws = ws.into_iter();
+            let mut w = ws.next();
+            move |mut n: usize, pos: &mut usize| -> Option<Vec<u8>> {
+                let mut bytes = Vec::<u8>::with_capacity(n);
+                loop {
+                    if let Some(cur_w) = w {
+                        if n <= available::<WORD_LENGTH>(*pos) {
+                            cur_w[*pos..*pos + n].iter().for_each(|b| bytes.push(*b));
+                            *pos += n;
+                            return Some(bytes);
+                        } else {
+                            cur_w[*pos..].iter().for_each(|b| bytes.push(*b));
+                            n -= available::<WORD_LENGTH>(*pos);
+                            w = ws.next();
+                            *pos = 0;
+                        }
                     } else {
-                        cur_w[pos..].iter().for_each(|b| bytes.push(*b));
-                        n -= available(pos);
-                        w = ws.next();
-                        pos = 0;
+                        // If there is no more words and not enough bytes could be read,
+                        // let the caller manage.
+                        return None;
                     }
-                } else {
-                    // If there is no more words and not enough bytes could be read,
-                    // let the caller manage.
-                    return (None, pos);
                 }
             }
         };
 
-        while let (Some(b1), new_pos) = read_bytes(1, pos) {
-            if (b1[0] >> 7) == 1 {
-                if let (Some(b2), new_pos) = read_bytes(1, new_pos) {
-                    let m = <u16>::from_be_bytes([b1[0], b2[0]]);
+        // The position must be exposed since padding detection cannot be
+        // performed in `read_bytes`.
+        let mut pos = 0;
+        let mut vs = HashSet::<Value>::new();
+        while let Some(m0) = read_bytes(1, &mut pos) {
+            if (m0[0] >> 7) == 1 {
+                if let Some(m1) = read_bytes(1, &mut pos) {
+                    let m = <u16>::from_be_bytes([m0[0], m1[0]]);
                     let (op, n) = decode_metadata(m);
 
-                    if let (Some(bytes), new_pos) = read_bytes(n, new_pos) {
-                        pos = new_pos;
+                    if let Some(bytes) = read_bytes(n, &mut pos) {
                         let v = Value::try_from(&bytes).map_err(|e| e.to_string())?;
                         if Op::Insert == op {
                             vs.insert(v);
@@ -219,7 +219,10 @@ pub mod generic_encoding {
                     return Err("cannot read second metadata byte".to_string());
                 }
             } else {
-                pos += available(pos);
+                // Reading an empty byte when the first byte of some metadata
+                // was expected means the rest of the word is padding: advance
+                // the position to the end of the word.
+                pos += available::<WORD_LENGTH>(pos);
             }
         }
 
@@ -360,10 +363,18 @@ pub mod tests {
     fn test_better_encoding() {
         use super::generic_encoding::*;
 
-        const WORD_LENGTH: usize = 255;
         const MAX_VALUE_LENGTH: usize = 2000;
 
         for _ in 0..1_000 {
+            const WORD_LENGTH: usize = 255;
+            test_encoding::<MAX_VALUE_LENGTH, _, _, _>(
+                generic_encode::<WORD_LENGTH, Vec<u8>>,
+                generic_decode,
+            );
+        }
+
+        for _ in 0..1_000 {
+            const WORD_LENGTH: usize = 7;
             test_encoding::<MAX_VALUE_LENGTH, _, _, _>(
                 generic_encode::<WORD_LENGTH, Vec<u8>>,
                 generic_decode,
