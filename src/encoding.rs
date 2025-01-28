@@ -177,11 +177,11 @@ pub mod generic_encoding {
                 loop {
                     if let Some(cur_w) = w {
                         if n <= available::<WORD_LENGTH>(*pos) {
-                            cur_w[*pos..*pos + n].iter().for_each(|b| bytes.push(*b));
+                            bytes.extend_from_slice(&cur_w[*pos..*pos + n]);
                             *pos += n;
                             return Some(bytes);
                         } else {
-                            cur_w[*pos..].iter().for_each(|b| bytes.push(*b));
+                            bytes.extend_from_slice(&cur_w[*pos..]);
                             n -= available::<WORD_LENGTH>(*pos);
                             w = ws.next();
                             *pos = 0;
@@ -199,13 +199,16 @@ pub mod generic_encoding {
         // performed in `read_bytes`.
         let mut pos = 0;
         let mut vs = HashSet::<Value>::new();
+
         while let Some(m0) = read_bytes(1, &mut pos) {
+            // Expecting to read the first byte of some metadata: check for the
+            // metadata flag.
             if (m0[0] >> 7) == 1 {
                 if let Some(m1) = read_bytes(1, &mut pos) {
                     let m = <u16>::from_be_bytes([m0[0], m1[0]]);
-                    let (op, n) = decode_metadata(m);
+                    let (op, length) = decode_metadata(m);
 
-                    if let Some(bytes) = read_bytes(n, &mut pos) {
+                    if let Some(bytes) = read_bytes(length, &mut pos) {
                         let v = Value::try_from(&bytes).map_err(|e| e.to_string())?;
                         if Op::Insert == op {
                             vs.insert(v);
@@ -213,7 +216,10 @@ pub mod generic_encoding {
                             vs.remove(&v);
                         }
                     } else {
-                        return Err(format!("cannot read {} bytes from the remaining words", n));
+                        return Err(format!(
+                            "cannot read {} bytes from the remaining words",
+                            length
+                        ));
                     }
                 } else {
                     return Err("cannot read second metadata byte".to_string());
@@ -294,12 +300,12 @@ pub mod tests {
     ) {
         let mut rng = thread_rng();
 
-        // Draws a random number of operations in [0,10].
+        // Draws a random number of operations in [0,100].
         let n_ops = rng.next_u32() % 10;
 
         let ops = (0..n_ops)
             .map(|_| {
-                // Draws a random number of values in [0,10].
+                // Draws a random number of values in [0,100].
                 let n_vs = rng.next_u32() % 10;
 
                 (
