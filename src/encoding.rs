@@ -3,11 +3,22 @@
 //! deletion, but there is no theoretical restriction on the kind of operation
 //! that can be used.
 
+use crate::Op;
+use std::collections::HashSet;
+
+/// The encoder is used to serialize an operation, along with the set of values
+/// it operates on, into a sequence of memory words.
+pub type Encoder<Value, Word, Error> = fn(Op, HashSet<Value>) -> Result<Vec<Word>, Error>;
+
+/// The decoder is used to deserialize a sequence of memory words into a set of
+/// values.
+pub type Decoder<Value, Word, Error> = fn(Vec<Word>) -> Result<HashSet<Value>, Error>;
+
 #[cfg(any(test, feature = "test-utils"))]
 pub mod dummy_encoding {
-    use std::{collections::HashSet, hash::Hash};
+    use std::hash::Hash;
 
-    use crate::Op;
+    use super::*;
 
     /// Blocks are the smallest unit size in block mode, 16 bytes is optimized to
     /// store UUIDs.
@@ -72,12 +83,13 @@ pub mod dummy_encoding {
 }
 
 pub mod generic_encoding {
-    use crate::Op;
-    use std::{collections::HashSet, fmt::Debug, hash::Hash};
+    use std::hash::Hash;
+
+    use super::*;
 
     const MAX_VALUE_LENGTH: usize = (1 << 16) - 1;
 
-    pub fn generic_encode<const WORD_LENGTH: usize, Value: Debug + AsRef<[u8]>>(
+    pub fn generic_encode<const WORD_LENGTH: usize, Value: AsRef<[u8]>>(
         op: Op,
         vs: HashSet<Value>,
     ) -> Result<Vec<[u8; WORD_LENGTH]>, String> {
