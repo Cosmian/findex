@@ -8,17 +8,15 @@ use std::{
 };
 
 use crate::{
-    ADDRESS_LENGTH, Address, IndexADT, KEY_LENGTH, MemoryADT, Secret, adt::VectorADT, encoding::Op,
-    error::Error, memory::MemoryEncryptionLayer, ovec::IVec,
+    ADDRESS_LENGTH, Address, Decoder, Encoder, IndexADT, KEY_LENGTH, MemoryADT, Secret,
+    adt::VectorADT, error::Error, memory::MemoryEncryptionLayer, ovec::IVec,
 };
 
-/// The encoder is used to serialize an operation, along with the set of values
-/// it operates on, into a sequence of memory words.
-type Encoder<Value, Word, Error> = fn(Op, HashSet<Value>) -> Result<Vec<Word>, Error>;
-
-/// The decoder is used to deserialize a sequence of memory words into a set of
-/// values.
-type Decoder<Value, Word, Error> = fn(Vec<Word>) -> Result<HashSet<Value>, Error>;
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Op {
+    Insert,
+    Delete,
+}
 
 #[derive(Clone, Debug)]
 pub struct Findex<
@@ -125,10 +123,8 @@ mod tests {
     use rand_core::SeedableRng;
 
     use crate::{
-        ADDRESS_LENGTH, Findex, InMemory, IndexADT, Value,
-        address::Address,
-        encoding::{dummy_decode, dummy_encode},
-        secret::Secret,
+        ADDRESS_LENGTH, Findex, InMemory, IndexADT, Value, address::Address, dummy_decode,
+        dummy_encode, secret::Secret,
     };
 
     const WORD_LENGTH: usize = 16;
