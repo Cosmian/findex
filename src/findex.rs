@@ -123,10 +123,8 @@ mod tests {
     use rand_core::SeedableRng;
 
     use crate::{
-        ADDRESS_LENGTH, Findex, InMemory, IndexADT, Value,
-        address::Address,
-        encoding::{dummy_decode, dummy_encode},
-        secret::Secret,
+        ADDRESS_LENGTH, Findex, InMemory, IndexADT, Value, address::Address, dummy_decode,
+        dummy_encode, secret::Secret,
     };
 
     const WORD_LENGTH: usize = 16;

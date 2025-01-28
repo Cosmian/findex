@@ -2,7 +2,6 @@
 
 mod address;
 mod adt;
-#[cfg(any(test, feature = "test-utils"))]
 mod encoding;
 mod error;
 mod findex;
@@ -18,6 +17,7 @@ mod value;
 
 pub use address::Address;
 pub use adt::{IndexADT, MemoryADT};
+pub use encoding::generic_encoding::{generic_decode, generic_encode};
 pub use error::Error;
 pub use findex::Findex;
 pub use findex::Op;
@@ -27,8 +27,11 @@ pub use value::Value;
 #[cfg(feature = "redis-mem")]
 pub use memory::redis_store::{MemoryError, RedisMemory};
 
-#[cfg(feature = "test-utils")]
-pub use encoding::{WORD_LENGTH, dummy_decode, dummy_encode};
+#[cfg(any(test, feature = "test-utils"))]
+pub use encoding::{
+    dummy_encoding::{WORD_LENGTH, dummy_decode, dummy_encode},
+    tests::test_encoding,
+};
 
 #[cfg(any(test, feature = "test-utils"))]
 pub use memory::InMemory;

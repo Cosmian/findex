@@ -3,77 +3,212 @@
 //! deletion, but there is no theoretical restriction on the kind of operation
 //! that can be used.
 
-use std::{collections::HashSet, hash::Hash};
+#[cfg(any(test, feature = "test-utils"))]
+pub mod dummy_encoding {
+    use std::{collections::HashSet, hash::Hash};
 
-use crate::Op;
+    use crate::Op;
 
-/// Blocks are the smallest unit size in block mode, 16 bytes is optimized to store UUIDs.
-const BLOCK_LENGTH: usize = 16;
+    /// Blocks are the smallest unit size in block mode, 16 bytes is optimized to
+    /// store UUIDs.
+    const BLOCK_LENGTH: usize = 16;
 
-/// The chunk length is the size of the available space in a word.
-const CHUNK_LENGTH: usize = 8 * BLOCK_LENGTH;
+    /// The chunk length is the size of the available space in a word.
+    const CHUNK_LENGTH: usize = 8 * BLOCK_LENGTH;
 
-pub const WORD_LENGTH: usize = 1 + CHUNK_LENGTH;
+    pub const WORD_LENGTH: usize = 1 + CHUNK_LENGTH;
 
-pub fn dummy_encode<const WORD_LENGTH: usize, Value: AsRef<[u8]>>(
-    op: Op,
-    vs: HashSet<Value>,
-) -> Result<Vec<[u8; WORD_LENGTH]>, String> {
-    if (u8::MAX as usize) < WORD_LENGTH {
-        return Err("WORD_LENGTH too big for this encoding".to_string());
+    pub fn dummy_encode<const WORD_LENGTH: usize, Value: AsRef<[u8]>>(
+        op: Op,
+        vs: HashSet<Value>,
+    ) -> Result<Vec<[u8; WORD_LENGTH]>, String> {
+        if (u8::MAX as usize) < WORD_LENGTH {
+            return Err("WORD_LENGTH too big for this encoding".to_string());
+        }
+
+        vs.into_iter()
+            .map(|v| {
+                let bytes = v.as_ref();
+                if WORD_LENGTH - 2 < bytes.len() {
+                    return Err(format!(
+                        "insufficient bytes in a word to fit a value of length {}",
+                        bytes.len(),
+                    ));
+                }
+                let n = bytes.len() as u8;
+                let mut res = [0; WORD_LENGTH];
+                if op == Op::Insert {
+                    res[0] = 1;
+                } else {
+                    res[0] = 0;
+                }
+                res[1] = n;
+                res[2..bytes.len() + 2].copy_from_slice(bytes);
+                Ok(res)
+            })
+            .collect()
     }
 
-    vs.into_iter()
-        .map(|v| {
-            let bytes = v.as_ref();
-            if WORD_LENGTH - 2 < bytes.len() {
-                return Err(format!(
-                    "insufficient bytes in a word to fit a value of length {}",
-                    bytes.len(),
-                ));
-            }
-            let n = bytes.len() as u8;
-            let mut res = [0; WORD_LENGTH];
-            if op == Op::Insert {
-                res[0] = 1;
-            } else {
-                res[0] = 0;
-            }
-            res[1] = n;
-            res[2..bytes.len() + 2].copy_from_slice(bytes);
-            Ok(res)
-        })
-        .collect()
-}
-
-pub fn dummy_decode<const WORD_LENGTH: usize, TryFromError: std::error::Error, Value>(
-    ws: Vec<[u8; WORD_LENGTH]>,
-) -> Result<HashSet<Value>, String>
-where
-    for<'z> Value: Hash + PartialEq + Eq + TryFrom<&'z [u8], Error = TryFromError>,
-{
-    let mut res = HashSet::with_capacity(ws.len());
-    for w in ws {
-        if !w.is_empty() {
-            let n = <usize>::from(w[1]);
-            let v = Value::try_from(&w[2..n + 2]).map_err(|e| e.to_string())?;
-            if w[0] == 1 {
-                res.insert(v);
-            } else {
-                res.remove(&v);
+    pub fn dummy_decode<const WORD_LENGTH: usize, TryFromError: std::error::Error, Value>(
+        ws: Vec<[u8; WORD_LENGTH]>,
+    ) -> Result<HashSet<Value>, String>
+    where
+        for<'z> Value: Hash + PartialEq + Eq + TryFrom<&'z [u8], Error = TryFromError>,
+    {
+        let mut res = HashSet::with_capacity(ws.len());
+        for w in ws {
+            if !w.is_empty() {
+                let n = <usize>::from(w[1]);
+                let v = Value::try_from(&w[2..n + 2]).map_err(|e| e.to_string())?;
+                if w[0] == 1 {
+                    res.insert(v);
+                } else {
+                    res.remove(&v);
+                }
             }
         }
+        Ok(res)
     }
-    Ok(res)
 }
 
-#[cfg(test)]
-mod tests {
-    use crate::{Decoder, Encoder};
+pub mod generic_encoding {
+    use crate::Op;
+    use std::{collections::HashSet, fmt::Debug, hash::Hash};
 
-    use super::*;
+    const MAX_VALUE_LENGTH: usize = (1 << 16) - 1;
+
+    pub fn generic_encode<const WORD_LENGTH: usize, Value: Debug + AsRef<[u8]>>(
+        op: Op,
+        vs: HashSet<Value>,
+    ) -> Result<Vec<[u8; WORD_LENGTH]>, String> {
+        let mut ws = Vec::<[u8; WORD_LENGTH]>::new();
+        let mut w = [0; WORD_LENGTH];
+        let mut pos = 0;
+
+        // Returns the metadata to be written alongside the given value.
+        let get_metadata = |v: &Value| {
+            if v.as_ref().len() > MAX_VALUE_LENGTH {
+                return Err(format!(
+                    "values bigger than {} bytes cannot be encoded",
+                    MAX_VALUE_LENGTH
+                ));
+            }
+            let m = ((v.as_ref().len() as u16) << 1) + if Op::Insert == op { 1 } else { 0 };
+            Ok(m.to_be_bytes())
+        };
+
+        // Writes the given bytes to the current word `w` starting at the current
+        // position `pos`, overflowing into new words if the number of bytes to be
+        // written is larger than the remaining space in the current word. Pushes
+        // all completed word into `ws`.
+        let mut write_bytes = |mut w: [u8; WORD_LENGTH], mut pos: usize, mut bytes: &[u8]| {
+            if bytes.is_empty() {
+                return Err("cannot encode values of length 0".to_string());
+            }
+            let available = |pos| WORD_LENGTH - pos;
+            // Gets the length of the available space.
+            loop {
+                if bytes.len() < available(pos) {
+                    w[pos..pos + bytes.len()].copy_from_slice(bytes);
+                    return Ok((w, pos + bytes.len()));
+                } else {
+                    w[pos..].copy_from_slice(&bytes[..available(pos)]);
+                    ws.push(w);
+                    bytes = &bytes[available(pos)..];
+                    w = [0; WORD_LENGTH];
+                    pos = 0;
+                }
+            }
+        };
+
+        for v in vs {
+            let metadata = get_metadata(&v)?;
+            (w, pos) = write_bytes(w, pos, &metadata)?;
+            (w, pos) = write_bytes(w, pos, v.as_ref())?;
+        }
+
+        // Do not forget to push the current word if any byte were written to it.
+        if 0 != pos {
+            ws.push(w);
+        }
+
+        Ok(ws)
+    }
+
+    pub fn generic_decode<const WORD_LENGTH: usize, TryFromError: std::error::Error, Value>(
+        ws: Vec<[u8; WORD_LENGTH]>,
+    ) -> Result<HashSet<Value>, String>
+    where
+        for<'z> Value: Hash + PartialEq + Eq + TryFrom<&'z [u8], Error = TryFromError>,
+    {
+        let mut ws = ws.into_iter();
+        let mut vs = HashSet::<Value>::new();
+        let mut w = ws.next();
+        let mut pos = 0;
+
+        // Gets the length of the available space.
+        let available = |pos| WORD_LENGTH - pos;
+
+        // Attempts reading the next `n` bytes from the position `pos`.
+        let mut read_bytes = |mut n: usize, mut pos: usize| -> (Option<Vec<u8>>, usize) {
+            let mut bytes = Vec::<u8>::with_capacity(n);
+            loop {
+                if let Some(cur_w) = w {
+                    if n < available(pos) {
+                        cur_w[pos..pos + n].iter().for_each(|b| bytes.push(*b));
+                        pos += n;
+                        return (Some(bytes), pos);
+                    } else {
+                        cur_w[pos..].iter().for_each(|b| bytes.push(*b));
+                        n -= available(pos);
+                        w = ws.next();
+                        pos = 0;
+                    }
+                } else {
+                    // If there is no more words and not enough bytes could be read,
+                    // let the caller manage.
+                    return (None, pos);
+                }
+            }
+        };
+
+        while let (Some(m), new_pos) = read_bytes(2, pos) {
+            let m = <u16>::from_be_bytes([m[0], m[1]]);
+            let op = if 1 == m % 2 { Op::Insert } else { Op::Delete };
+            let n = (m >> 1) as usize; // safe conversion
+
+            if n != 0 {
+                if let (Some(bytes), new_pos) = read_bytes(n, new_pos) {
+                    pos = new_pos;
+                    let v = Value::try_from(&bytes).map_err(|e| e.to_string())?;
+                    if Op::Insert == op {
+                        vs.insert(v);
+                    } else {
+                        vs.remove(&v);
+                    }
+                } else {
+                    return Err(format!("cannot read {} bytes from the remaining words", n));
+                }
+            } else {
+                // In case no value bytes were read, only advance by one!
+                if 0 == new_pos {
+                    pos = new_pos;
+                } else {
+                    pos = new_pos - 1;
+                }
+            }
+        }
+
+        Ok(vs)
+    }
+}
+
+#[cfg(any(test, feature = "test-utils"))]
+pub mod tests {
+    use crate::{Decoder, Encoder, Op};
+
     use rand::{RngCore, thread_rng};
-    use std::fmt::Debug;
+    use std::{collections::HashSet, fmt::Debug, hash::Hash};
 
     /// Uses fuzzing to attempt asserting that: encode ∘ decode = identity.
     ///
@@ -91,7 +226,7 @@ mod tests {
     /// in chronological order, and attempt decoding the result of this
     /// operation, comparing this result against the expected set of values
     /// built from the raw decoded operations.
-    fn test_encoding<
+    pub fn test_encoding<
         // An upper-bound on the value length is needed for the dummy encoding.
         const MAX_VALUE_LENGTH: usize,
         // Values need to implement conversion from bytes to allow for a uniform
@@ -106,13 +241,13 @@ mod tests {
     ) {
         let mut rng = thread_rng();
 
-        // Draws a random number of operations in [2,12].
-        let n_ops = rng.next_u32() % 10 + 2;
+        // Draws a random number of operations in [0,10].
+        let n_ops = rng.next_u32() % 10;
 
         let ops = (0..n_ops)
             .map(|_| {
-                // Draws a random number of values in [10,100].
-                let n_vs = rng.next_u32() % 90 + 10;
+                // Draws a random number of values in [0,10].
+                let n_vs = rng.next_u32() % 10;
 
                 (
                     // draws a random operation
@@ -124,7 +259,7 @@ mod tests {
                     // draws random values
                     (0..n_vs)
                         .map(|_| {
-                            let len = rng.next_u32() as usize % MAX_VALUE_LENGTH;
+                            let len = rng.next_u32() as usize % MAX_VALUE_LENGTH + 1;
                             let mut bytes = vec![0; len];
                             rng.fill_bytes(&mut bytes);
                             Value::from(bytes)
@@ -162,9 +297,22 @@ mod tests {
 
     #[test]
     fn test_dummy_encoding() {
+        use super::dummy_encoding::*;
         test_encoding::<{ WORD_LENGTH - 2 }, _, _, _>(
             dummy_encode::<WORD_LENGTH, Vec<u8>>,
             dummy_decode,
+        );
+    }
+
+    #[test]
+    fn test_better_encoding() {
+        use super::generic_encoding::*;
+
+        const WORD_LENGTH: usize = 255;
+        const MAX_VALUE_LENGTH: usize = 2000;
+        test_encoding::<MAX_VALUE_LENGTH, _, _, _>(
+            generic_encode::<WORD_LENGTH, Vec<u8>>,
+            generic_decode,
         );
     }
 }
