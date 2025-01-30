@@ -2,7 +2,7 @@ use std::{fmt, marker::PhantomData};
 
 use redis::{RedisError, aio::ConnectionManager};
 
-use crate::{ADDRESS_LENGTH, Address, MemoryADT};
+use crate::{Address, MemoryADT};
 
 // Arguments passed to the LUA script, in order:
 // 1. Guard address.
@@ -85,7 +85,7 @@ impl<Address: Sync, Word: Sync> RedisMemory<Address, Word> {
     }
 }
 
-impl<const WORD_LENGTH: usize> MemoryADT
+impl<const ADDRESS_LENGTH: usize, const WORD_LENGTH: usize> MemoryADT
     for RedisMemory<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>
 {
     type Address = Address<ADDRESS_LENGTH>;
