@@ -1,67 +1,59 @@
 [package]
 name = "cosmian_findex"
-version = "6.0.0"
+version = "7.0.0"
 authors = [
-  "Chloé Hébant <chloe.hebant@cosmian.com>",
-  "Bruno Grieder <bruno.grieder@cosmian.com>",
-  "Célia Corsin <celia.corsin@cosmian.com>",
-  "Emmanuel Coste <emmanuel.coste@cosmian.com>",
-  "Théophile Brézot <theophile.brezot@cosmian.com>",
+    "Bruno Grieder <bruno.grieder@cosmian.com>",
+    "Célia Corsin <celia.corsin@cosmian.com>",
+    "Chloé Hébant <chloe.hebant@cosmian.com>",
+    "Emmanuel Coste <emmanuel.coste@cosmian.com>",
+    "Hatem Mnaouer <hatem.mnaouer@cosmian.com>",
+    "Théophile Brézot <theophile.brezot@cosmian.com>",
 ]
 categories = ["cosmian::crypto"]
 edition = "2021"
 keywords = ["SSE"]
-license-file = "LICENSE.md"
+license = "BUSL-1.1"
 repository = "https://github.com/Cosmian/findex/"
 description = "Symmetric Searchable Encryption"
 
 [lib]
-crate-type = ["cdylib", "lib", "staticlib"]
 name = "cosmian_findex"
 path = "src/lib.rs"
 
 [features]
-in_memory = ["cosmian_crypto_core/ser"]
+redis-mem = ["redis"]
+test-utils = []
 
 [dependencies]
-# Once available in stable Rust (presumably 1.74), use std async fn in trait
-# <https://rust-lang.github.io/rfcs/3185-static-async-fn-in-trait.html>
-async-trait = "0.1.74"
-base64 = "0.21.5"
-cosmian_crypto_core = { version = "9.3.0", default-features = false, features = [
-  "aes",
-  "sha3",
-] }
-# Once available in stable Rust, use `!` std primitive
-# <https://doc.rust-lang.org/std/primitive.never.html>
-never = "0.1.0"
-tiny-keccak = { version = "2.0.2", features = ["kmac", "sha3"] }
-tracing = "0.1"
-zeroize = "1.7.0"
+aes = "0.8.4"
+rand = "0.8.5"
+rand_chacha = "0.3.1"
+rand_core = "0.6.4"
+redis = { version = "0.28.1", features = [
+    "aio",
+    "connection-manager",
+    "tokio-comp",
+], optional = true }
+tiny-keccak = { version = "2.0.2", features = ["sha3"] }
+xts-mode = "0.5.1"
+zeroize = { version = "1.8.1", features = ["derive"] }
 
 [dev-dependencies]
-actix-rt = "2.9.0"
 criterion = "0.5.1"
-futures = "0.3.29"
-rand = "0.8.5"
+futures = "0.3.30"
+lazy_static = "1.5.0"
+tokio = { version = "1.38.0", features = [
+    "macros",
+    "rt",
+    "rt-multi-thread",
+    "time",
+] }
 
 [[bench]]
-harness = false
 name = "benches"
-required-features = ["in_memory"]
-
-[[test]]
-name = "test_in_memory"
-required-features = ["in_memory"]
-
-[[test]]
-name = "non_regression"
-required-features = ["in_memory"]
+harness = false
+required-features = ["test-utils"]
 
 [[example]]
-name = "search"
-required-features = ["in_memory"]
-
-[[example]]
-name = "upsert"
-required-features = ["in_memory"]
+name = "insert"
+required-features = ["test-utils"]

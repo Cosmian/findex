@@ -1,0 +1,76 @@
+\documentclass{article}
+\usepackage{pgfplotstable}
+
+\begin{document}
+
+\begin{figure}
+  \centering
+  \begin{tikzpicture}
+    \begin{axis}[
+      legend pos=north west,
+      xlabel={\#bindings},
+      ylabel={time ($\mu$s)},
+      xmin=1, xmax=10000,
+      grid=both
+      ]
+      \addplot[color=blue, mark=x] table {./data/search.dat};
+      \addplot[color=red] table [y={create col/linear regression}] {./data/search.dat};
+      \addlegendentry{search-time(\#bindings)}
+      \addlegendentry{
+	$ y =
+	\pgfmathprintnumber{\pgfplotstableregressiona}
+	\cdot b
+	\pgfmathprintnumber[print sign]{\pgfplotstableregressionb}$
+      }
+    \end{axis}
+  \end{tikzpicture}
+  \begin{tikzpicture}
+    \begin{axis}[
+      legend pos=north west,
+      xlabel={\#bindings},
+      ylabel={time ($\mu$s)},
+      xmin=1, xmax=10000,
+      grid=both
+      ]
+      \addplot[color=blue, mark=x] table {./data/insert.dat};
+      \addplot[color=red] table [y={create col/linear regression}] {./data/insert.dat};
+      \addlegendentry{insertion-time(\#bindings)}
+      \addlegendentry{
+	$ y =
+	\pgfmathprintnumber{\pgfplotstableregressiona}
+	\cdot b
+	\pgfmathprintnumber[print sign]{\pgfplotstableregressionb}$
+      }
+    \end{axis}
+  \end{tikzpicture}
+  \caption[multi-binding search]{(Left) Client-side computation time (in $\mu$s) for a single-keyword search, given the number of bound one-word values. (Right) Client-side computation time (in $\mu$s) for a single-keyword insert, given the number of bound one-word values.}
+  \label{fig:multi-binding-search}
+  \label{fig:multi-binding-insert}
+\end{figure}
+
+\begin{figure}
+  \centering
+  \begin{tikzpicture}
+    \begin{axis}[
+      legend pos=north west,
+      xlabel={\#clients},
+      ylabel={time ($\mu$s)},
+      grid=both
+      ]
+      \addplot[color=blue, mark=x] table {./data/concurrent.dat};
+      \addlegendentry{insertion-time(\#clients)}
+      \addplot[color=red] table [y={create col/linear regression}] {./data/concurrent.dat};
+      \addlegendentry{
+        $ y =
+        \pgfmathprintnumber{\pgfplotstableregressiona}
+        \cdot c
+        \pgfmathprintnumber[print sign]{\pgfplotstableregressionb}$
+      }
+    \end{axis}
+  \end{tikzpicture}
+  \caption[concurrent insert]{Concurrency overhead (in $\mu$s) for adding 100 bindings on the same keyword, given the number of concurrent clients.}
+  \label{fig:concurrent-insert}
+\end{figure}
+
+
+\end{document}
