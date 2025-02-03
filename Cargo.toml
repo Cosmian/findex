@@ -9,7 +9,7 @@ authors = [
     "Hatem Mnaouer <hatem.mnaouer@cosmian.com>",
     "Théophile Brézot <theophile.brezot@cosmian.com>",
 ]
-categories = ["cosmian::crypto"]
+categories = ["cryptography"]
 edition = "2021"
 keywords = ["SSE"]
 license = "BUSL-1.1"
