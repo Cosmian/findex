@@ -4,7 +4,10 @@ All notable changes to this project will be documented in this file.
 
 ## [7.0.0] - 2025-02-03
 
+### 🚀 Features
+
 Refactoring to follow the eponymous paper published on e-print:
+
 - drop the need for the additional label
 - use AES-XTS for encryption instead of AES-GCM;
 - use a memory abstraction to allow for different back-end implementation
