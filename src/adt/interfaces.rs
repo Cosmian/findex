@@ -64,7 +64,7 @@ pub trait MemoryADT {
     /// Reads the words from the given addresses.
     fn batch_read(
         &self,
-        a: Vec<Self::Address>,
+        addresses: Vec<Self::Address>,
     ) -> impl Send + Future<Output = Result<Vec<Option<Self::Word>>, Self::Error>>;
 
     /// Write the given words at the given addresses if the word currently stored at the guard

@@ -225,7 +225,7 @@ mod tests {
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 8)]
     async fn test_ovec() {
-        let mut rng = ChaChaRng::from_entropy();
+        let mut rng = ChaChaRng::from_os_rng();
         let seed = Secret::random(&mut rng);
         let memory = InMemory::<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>::default();
         let obf = MemoryEncryptionLayer::new(&seed, memory.clone());

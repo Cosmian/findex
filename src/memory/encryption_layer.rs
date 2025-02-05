@@ -1,7 +1,7 @@
 use std::{fmt::Debug, ops::Deref, sync::Arc};
 
 use crate::{
-    ADDRESS_LENGTH, KEY_LENGTH, MemoryADT, Secret, address::Address, symmetric_key::SymmetricKey,
+    ADDRESS_LENGTH, MemoryADT, SEED_LENGTH, Secret, address::Address, symmetric_key::SymmetricKey,
 };
 use aes::{
     Aes256,
@@ -46,12 +46,12 @@ impl<
 > MemoryEncryptionLayer<WORD_LENGTH, Memory>
 {
     /// Instantiates a new memory encryption layer.
-    pub fn new(seed: &Secret<KEY_LENGTH>, stm: Memory) -> Self {
-        let k_p = SymmetricKey::<KEY_LENGTH>::derive(seed, &[0]).expect("secret is large enough");
+    pub fn new(seed: &Secret<SEED_LENGTH>, stm: Memory) -> Self {
+        let k_p = SymmetricKey::<SEED_LENGTH>::derive(seed, &[0]).expect("secret is large enough");
         let k_e1 =
-            SymmetricKey::<{ KEY_LENGTH }>::derive(seed, &[1]).expect("secret is large enough");
+            SymmetricKey::<{ SEED_LENGTH }>::derive(seed, &[1]).expect("secret is large enough");
         let k_e2 =
-            SymmetricKey::<{ KEY_LENGTH }>::derive(seed, &[2]).expect("secret is large enough");
+            SymmetricKey::<{ SEED_LENGTH }>::derive(seed, &[2]).expect("secret is large enough");
         let aes = Aes256::new(GenericArray::from_slice(&k_p));
         let aes_e1 = Aes256::new(GenericArray::from_slice(&k_e1));
         let aes_e2 = Aes256::new(GenericArray::from_slice(&k_e2));
@@ -149,7 +149,7 @@ mod tests {
 
     #[test]
     fn test_address_permutation() {
-        let mut rng = ChaChaRng::from_entropy();
+        let mut rng = ChaChaRng::from_os_rng();
         let seed = Secret::random(&mut rng);
         let k_p = SymmetricKey::<32>::derive(&seed, &[0]).expect("secret is large enough");
         let aes = Aes256::new(GenericArray::from_slice(&k_p));
@@ -164,7 +164,7 @@ mod tests {
 
     #[test]
     fn test_encrypt_decrypt() {
-        let mut rng = ChaChaRng::from_entropy();
+        let mut rng = ChaChaRng::from_os_rng();
         let seed = Secret::random(&mut rng);
         let memory = InMemory::<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>::default();
         let obf = MemoryEncryptionLayer::new(&seed, memory);
@@ -181,7 +181,7 @@ mod tests {
     /// - using the wrong value in the guard fails the operation and returns the current value.
     #[test]
     fn test_vector_push() {
-        let mut rng = ChaChaRng::from_entropy();
+        let mut rng = ChaChaRng::from_os_rng();
         let seed = Secret::random(&mut rng);
         let memory = InMemory::<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>::default();
         let obf = MemoryEncryptionLayer::new(&seed, memory);

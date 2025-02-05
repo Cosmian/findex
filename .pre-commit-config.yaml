@@ -118,20 +118,21 @@ repos:
         args: [--skip-string-normalization]
 
   - repo: https://github.com/Cosmian/git-hooks.git
-    rev: v1.0.16
+    rev: v1.0.36
     hooks:
       - id: stable-cargo-format
-      - id: cargo-upgrade
-      - id: cargo-update
+      # - id: dprint-toml-fix
+      # - id: cargo-upgrade
+      # - id: cargo-update
       - id: cargo-machete
-      - id: cargo-outdated
-      - id: cargo-udeps
+      - id: redis-container-up
       - id: cargo-tests-all
       - id: cargo-test-doc
-      - id: clippy-autofix-all
-      - id: clippy-autofix-pedantic
-      - id: clippy-autofix-others
+      - id: clippy-autofix-all-targets-all-features
+      - id: clippy-autofix-all-targets
       - id: clippy-all-targets-all-features
+      - id: clippy-all-targets
       - id: stable-cargo-format
       - id: cargo-dry-publish
         args: [--allow-dirty]
+      - id: redis-container-down

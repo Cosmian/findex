@@ -133,7 +133,7 @@ mod tests {
 
     #[test]
     fn test_insert_search_delete_search() {
-        let mut rng = ChaChaRng::from_entropy();
+        let mut rng = ChaChaRng::from_os_rng();
         let seed = Secret::random(&mut rng);
         let memory = MemoryEncryptionLayer::new(
             &seed,

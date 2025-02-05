@@ -87,7 +87,7 @@ where
     let conflict_result = memory
         .guarded_write((a.clone(), None), vec![(
             a.clone(),
-            Memory::Word::from(rng.gen::<u128>().to_be_bytes()),
+            Memory::Word::from(rng.random::<u128>().to_be_bytes()),
         )])
         .await
         .unwrap();

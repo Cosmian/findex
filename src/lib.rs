@@ -1,4 +1,11 @@
 #![warn(clippy::all, clippy::nursery, clippy::cargo)]
+// Why allowing #![allow(clippy::multiple_crate_versions)]
+// Error details: multiple versions for dependency `zerocopy`:
+// - 0.7.35: ppv-lite86
+// - 0.8.16: rand
+// As soon ppv-lite86 will have upgraded `zerocopy` to 0.8.16, the lint will be fixed.
+// For now, let's tolerate this warning.
+#![allow(clippy::multiple_crate_versions)]
 
 mod address;
 mod adt;
@@ -9,13 +16,16 @@ mod memory;
 mod ovec;
 mod secret;
 mod symmetric_key;
-
-#[cfg(any(test, feature = "test-utils"))]
-pub use adt::test_utils;
 mod value;
 
 pub use address::Address;
+#[cfg(any(test, feature = "test-utils"))]
+pub use adt::test_utils;
 pub use adt::{IndexADT, MemoryADT};
+pub use encoding::{
+    Decoder, Encoder,
+    generic_encoding::{generic_decode, generic_encode},
+};
 pub use error::Error;
 pub use findex::Findex;
 pub use findex::Op;
@@ -41,4 +51,4 @@ pub const ADDRESS_LENGTH: usize = 16;
 
 /// Using 32-byte cryptographic keys allows achieving post-quantum resistance
 /// with the AES primitive.
-pub const KEY_LENGTH: usize = 32;
+pub const SEED_LENGTH: usize = 32;

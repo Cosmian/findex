@@ -8,7 +8,7 @@ use criterion::{BenchmarkId, Criterion, criterion_group, criterion_main};
 use futures::{executor::block_on, future::join_all};
 use lazy_static::lazy_static;
 use rand_chacha::ChaChaRng;
-use rand_core::{CryptoRngCore, RngCore, SeedableRng};
+use rand_core::{CryptoRng, RngCore, SeedableRng};
 
 lazy_static! {
     static ref scale: Vec<f32> = make_scale(0, 4, 20);
@@ -23,10 +23,9 @@ fn make_scale(start: usize, stop: usize, n: usize) -> Vec<f32> {
     points
 }
 
-/// Builds an index that associates each `kw_i` to x values, both random 64-bit values.
-fn build_benchmarking_bindings_index(
-    rng: &mut impl CryptoRngCore,
-) -> Vec<([u8; 8], HashSet<[u8; 8]>)> {
+/// Builds an index that associates each `kw_i` to x values, both random 64-bit
+/// values.
+fn build_benchmarking_bindings_index(rng: &mut impl CryptoRng) -> Vec<([u8; 8], HashSet<[u8; 8]>)> {
     scale
         .iter()
         .map(|i| {
@@ -39,10 +38,9 @@ fn build_benchmarking_bindings_index(
         .collect()
 }
 
-/// Builds an index that associates 10^3 `kw_i` to a single value, both random 64-bit values.
-fn build_benchmarking_keywords_index(
-    rng: &mut impl CryptoRngCore,
-) -> Vec<([u8; 8], HashSet<[u8; 8]>)> {
+/// Builds an index that associates 10^3 `kw_i` to a single value, both random
+/// 64-bit values.
+fn build_benchmarking_keywords_index(rng: &mut impl CryptoRng) -> Vec<([u8; 8], HashSet<[u8; 8]>)> {
     (0..10usize.pow(3))
         .map(|_| {
             let kw = rng.next_u64().to_be_bytes();
@@ -53,7 +51,7 @@ fn build_benchmarking_keywords_index(
 }
 
 fn bench_search_multiple_bindings(c: &mut Criterion) {
-    let mut rng = ChaChaRng::from_entropy();
+    let mut rng = ChaChaRng::from_os_rng();
     let seed = Secret::random(&mut rng);
     let ctx_memory = MemoryEncryptionLayer::new(&seed, InMemory::default());
     let index = build_benchmarking_bindings_index(&mut rng);
@@ -80,7 +78,7 @@ fn bench_search_multiple_bindings(c: &mut Criterion) {
 }
 
 fn bench_search_multiple_keywords(c: &mut Criterion) {
-    let mut rng = ChaChaRng::from_entropy();
+    let mut rng = ChaChaRng::from_os_rng();
 
     let index = build_benchmarking_keywords_index(&mut rng);
 
@@ -104,8 +102,8 @@ fn bench_search_multiple_keywords(c: &mut Criterion) {
         for i in scale.iter() {
             let n = 10f32.powf(*i).ceil() as usize;
             group.bench_function(BenchmarkId::from_parameter(n), |b| {
-                // Attempts to bench all external costs (somehow, cloning the keywords impacts the
-                // benches).
+                // Attempts to bench all external costs (somehow, cloning the keywords impacts
+                // the benches).
                 b.iter_batched(
                     || {
                         ptx_memory
@@ -131,8 +129,8 @@ fn bench_search_multiple_keywords(c: &mut Criterion) {
             group.bench_function(BenchmarkId::from_parameter(n), |b| {
                 b.iter_batched(
                     || {
-                        // Using .cloned() instead of .clone() reduces the overhead (maybe because it
-                        // only clones what is needed)
+                        // Using .cloned() instead of .clone() reduces the overhead (maybe because
+                        // it only clones what is needed)
                         index.iter().map(|(kw, _)| kw).take(n).cloned()
                     },
                     |kws| {
@@ -148,7 +146,7 @@ fn bench_search_multiple_keywords(c: &mut Criterion) {
 }
 
 fn bench_insert_multiple_bindings(c: &mut Criterion) {
-    let mut rng = ChaChaRng::from_entropy();
+    let mut rng = ChaChaRng::from_os_rng();
 
     let index = build_benchmarking_bindings_index(&mut rng);
     let n_max = 10usize.pow(3);
@@ -213,7 +211,7 @@ fn bench_insert_multiple_bindings(c: &mut Criterion) {
 }
 
 fn bench_insert_multiple_keywords(c: &mut Criterion) {
-    let mut rng = ChaChaRng::from_entropy();
+    let mut rng = ChaChaRng::from_os_rng();
 
     // Reference: write one word per value inserted.
     {
@@ -293,7 +291,7 @@ fn bench_insert_multiple_keywords(c: &mut Criterion) {
 fn bench_contention(c: &mut Criterion) {
     const N_BINDINGS: usize = 100;
     const N_CLIENTS: usize = 8;
-    let mut rng = ChaChaRng::from_entropy();
+    let mut rng = ChaChaRng::from_os_rng();
     let kws = (0..N_CLIENTS)
         .map(|_| rng.next_u64().to_be_bytes())
         .collect::<Vec<_>>();

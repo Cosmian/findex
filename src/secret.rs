@@ -5,7 +5,7 @@ use std::{
 
 use zeroize::{Zeroize, ZeroizeOnDrop};
 
-use rand_core::CryptoRngCore;
+use rand_core::CryptoRng;
 
 /// Holds a secret information of `LENGTH` bytes.
 ///
@@ -23,7 +23,7 @@ impl<const LENGTH: usize> Secret<LENGTH> {
     }
 
     /// Creates a new random secret using the given RNG.
-    pub fn random(rng: &mut impl CryptoRngCore) -> Self {
+    pub fn random(rng: &mut impl CryptoRng) -> Self {
         let mut secret = Self::new();
         rng.fill_bytes(&mut secret);
         secret
