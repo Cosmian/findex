@@ -7,7 +7,7 @@
 
 # See https://pre-commit.com for more information
 # See https://pre-commit.com/hooks.html for more hooks
-exclude: datasets|tests_data|documentation/Findex.pdf|tests/first_names.txt
+exclude: benches/data|benches/make_figures.tex
 repos:
   - repo: https://github.com/compilerla/conventional-pre-commit
     rev: v2.1.1

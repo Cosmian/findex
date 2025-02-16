@@ -108,12 +108,12 @@ impl<
     async fn guarded_write(
         &self,
         guard: (Self::Address, Option<Self::Word>),
-        bindings: Vec<(Self::Address, Self::Word)>,
+        tasks: Vec<(Self::Address, Self::Word)>,
     ) -> Result<Option<Self::Word>, Self::Error> {
-        let (a, v) = guard;
-        let tok = self.permute(a);
+        let (address, v) = guard;
+        let tok = self.permute(address);
         let old = v.map(|v| self.encrypt(v, *tok));
-        let bindings = bindings
+        let bindings = tasks
             .into_iter()
             .map(|(a, v)| {
                 let tok = self.permute(a);
@@ -134,6 +134,7 @@ mod tests {
         cipher::{BlockDecrypt, KeyInit, generic_array::GenericArray},
     };
     use futures::executor::block_on;
+    use rand::CryptoRng;
     use rand_chacha::ChaChaRng;
     use rand_core::SeedableRng;
 
@@ -143,9 +144,19 @@ mod tests {
         memory::{MemoryEncryptionLayer, in_memory_store::InMemory},
         secret::Secret,
         symmetric_key::SymmetricKey,
+        test_utils::{test_guarded_write_concurrent, test_single_write_and_read, test_wrong_guard},
     };
 
     const WORD_LENGTH: usize = 128;
+
+    fn create_memory<const WORD_LENGTH: usize>(
+        rng: &mut impl CryptoRng,
+    ) -> MemoryEncryptionLayer<WORD_LENGTH, InMemory<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>>
+    {
+        let seed = Secret::random(rng);
+        let memory = InMemory::<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>::default();
+        MemoryEncryptionLayer::new(&seed, memory)
+    }
 
     #[test]
     fn test_address_permutation() {
@@ -165,9 +176,7 @@ mod tests {
     #[test]
     fn test_encrypt_decrypt() {
         let mut rng = ChaChaRng::from_os_rng();
-        let seed = Secret::random(&mut rng);
-        let memory = InMemory::<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>::default();
-        let obf = MemoryEncryptionLayer::new(&seed, memory);
+        let obf = create_memory(&mut rng);
         let tok = Address::<ADDRESS_LENGTH>::random(&mut rng);
         let ptx = [1; WORD_LENGTH];
         let ctx = obf.encrypt(ptx, *tok);
@@ -182,9 +191,7 @@ mod tests {
     #[test]
     fn test_vector_push() {
         let mut rng = ChaChaRng::from_os_rng();
-        let seed = Secret::random(&mut rng);
-        let memory = InMemory::<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>::default();
-        let obf = MemoryEncryptionLayer::new(&seed, memory);
+        let obf = create_memory(&mut rng);
 
         let header_addr = Address::<ADDRESS_LENGTH>::random(&mut rng);
 
@@ -242,5 +249,23 @@ mod tests {
             ]))
             .unwrap()
         )
+    }
+
+    #[tokio::test]
+    async fn test_sequential_read_write() {
+        let memory = create_memory(&mut ChaChaRng::from_os_rng());
+        test_single_write_and_read(&memory, rand::random()).await;
+    }
+
+    #[tokio::test]
+    async fn test_sequential_wrong_guard() {
+        let memory = InMemory::<[u8; 16], [u8; 16]>::default();
+        test_wrong_guard(&memory, rand::random()).await;
+    }
+
+    #[tokio::test]
+    async fn test_concurrent_read_write() {
+        let memory = InMemory::<[u8; 16], [u8; 16]>::default();
+        test_guarded_write_concurrent(&memory, rand::random()).await;
     }
 }

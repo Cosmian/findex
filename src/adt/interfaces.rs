@@ -21,14 +21,14 @@ pub trait IndexADT<Keyword: Send + Sync + Hash, Value: Send + Sync + Hash> {
     /// Adds the given bindings to the index.
     fn insert(
         &self,
-        kw: Keyword,
+        keyword: Keyword,
         bindings: impl Sync + Send + IntoIterator<Item = Value>,
     ) -> impl Send + Future<Output = Result<(), Self::Error>>;
 
     /// Removes the given bindings from the index.
     fn delete(
         &self,
-        kw: Keyword,
+        keyword: Keyword,
         bindings: impl Sync + Send + IntoIterator<Item = Value>,
     ) -> impl Send + Future<Output = Result<(), Self::Error>>;
 }

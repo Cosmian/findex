@@ -4,6 +4,11 @@ name: CI checks
 on: push
 
 jobs:
+  hack:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check semver
+        uses: obi1kenobi/cargo-semver-checks-action@v2
   cargo-lint:
     uses: Cosmian/reusable_workflows/.github/workflows/cargo-nursery.yml@develop
     with:

@@ -28,7 +28,7 @@ pub use secret::Secret;
 pub use value::Value;
 
 #[cfg(feature = "redis-mem")]
-pub use memory::redis_store::{MemoryError, RedisMemory};
+pub use memory::{MemoryError, RedisMemory};
 
 #[cfg(any(test, feature = "test-utils"))]
 pub use encoding::{

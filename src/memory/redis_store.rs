@@ -107,7 +107,7 @@ impl<const ADDRESS_LENGTH: usize, const WORD_LENGTH: usize> MemoryADT
     async fn guarded_write(
         &self,
         guard: (Self::Address, Option<Self::Word>),
-        bindings: Vec<(Self::Address, Self::Word)>,
+        tasks: Vec<(Self::Address, Self::Word)>,
     ) -> Result<Option<Self::Word>, Self::Error> {
         let (guard_address, guard_value) = guard;
         let mut cmd = redis::cmd("EVALSHA");
@@ -122,9 +122,9 @@ impl<const ADDRESS_LENGTH: usize, const WORD_LENGTH: usize> MemoryADT
                     .unwrap_or(b"false".as_slice()),
             );
 
-        let cmd = bindings
+        let cmd = tasks
             .iter()
-            .fold(cmd.arg(bindings.len()), |cmd, (a, w)| cmd.arg(&**a).arg(w));
+            .fold(cmd.arg(tasks.len()), |cmd, (a, w)| cmd.arg(&**a).arg(w));
 
         // Cloning the connection manager is cheap since it is an `Arc`.
         cmd.query_async(&mut self.manager.clone())

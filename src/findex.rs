@@ -74,11 +74,11 @@ impl<
     async fn push<Keyword: Send + Sync + Hash + Eq>(
         &self,
         op: Op,
-        kw: Keyword,
-        vs: HashSet<Value>,
+        keyword: Keyword,
+        values: HashSet<Value>,
     ) -> Result<(), <Self as IndexADT<Keyword, Value>>::Error> {
-        let words = (self.encode)(op, vs).map_err(|e| Error::Conversion(format!("{e:?}")))?;
-        let l = Self::hash_keyword(&kw);
+        let words = (self.encode)(op, values).map_err(|e| Error::Conversion(format!("{e:?}")))?;
+        let l = Self::hash_keyword(&keyword);
         IVec::new(l, self.el.clone()).push(words).await
     }
 }
@@ -93,26 +93,28 @@ impl<
 {
     type Error = Error<Address<ADDRESS_LENGTH>>;
 
-    async fn search(&self, kw: &Keyword) -> Result<HashSet<Value>, Self::Error> {
-        let l = Self::hash_keyword(kw);
+    async fn search(&self, keyword: &Keyword) -> Result<HashSet<Value>, Self::Error> {
+        let l = Self::hash_keyword(keyword);
         let words = IVec::new(l, self.el.clone()).read().await?;
         (self.decode)(words).map_err(|e| Error::Conversion(format!("{e:?}")))
     }
 
     async fn insert(
         &self,
-        kw: Keyword,
-        vs: impl Sync + Send + IntoIterator<Item = Value>,
+        keyword: Keyword,
+        bindings: impl Sync + Send + IntoIterator<Item = Value>,
     ) -> Result<(), Self::Error> {
-        self.push(Op::Insert, kw, vs.into_iter().collect()).await
+        self.push(Op::Insert, keyword, bindings.into_iter().collect())
+            .await
     }
 
     async fn delete(
         &self,
-        kw: Keyword,
-        vs: impl Sync + Send + IntoIterator<Item = Value>,
+        keyword: Keyword,
+        bindings: impl Sync + Send + IntoIterator<Item = Value>,
     ) -> Result<(), Self::Error> {
-        self.push(Op::Delete, kw, vs.into_iter().collect()).await
+        self.push(Op::Delete, keyword, bindings.into_iter().collect())
+            .await
     }
 }
 
