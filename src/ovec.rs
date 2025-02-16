@@ -177,7 +177,9 @@ where
             .map_err(|e| Error::Memory(e.to_string()))?;
 
         let second_batch = {
-            let cur_header = first_batch[0]
+            let cur_header = first_batch
+                .first()
+                .ok_or_else(|| Error::MissingValue(self.a.clone(), 0))?
                 .map(|v| Header::try_from(v.as_slice()))
                 .transpose()
                 .map_err(Error::Conversion)?
