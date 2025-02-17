@@ -137,8 +137,11 @@ impl<const ADDRESS_LENGTH: usize, const WORD_LENGTH: usize> MemoryADT
 mod tests {
 
     use super::*;
-    use crate::adt::test_utils::{
-        test_guarded_write_concurrent, test_single_write_and_read, test_wrong_guard,
+    use crate::{
+        WORD_LENGTH,
+        adt::test_utils::{
+            test_guarded_write_concurrent, test_single_write_and_read, test_wrong_guard,
+        },
     };
 
     fn get_redis_url() -> String {
@@ -151,21 +154,21 @@ mod tests {
     #[tokio::test]
     async fn test_rw_seq() -> Result<(), MemoryError> {
         let m = RedisMemory::connect(&get_redis_url()).await.unwrap();
-        test_single_write_and_read(&m, rand::random()).await;
+        test_single_write_and_read::<WORD_LENGTH, _>(&m, rand::random()).await;
         Ok(())
     }
 
     #[tokio::test]
     async fn test_guard_seq() -> Result<(), MemoryError> {
         let m = RedisMemory::connect(&get_redis_url()).await.unwrap();
-        test_wrong_guard(&m, rand::random()).await;
+        test_wrong_guard::<WORD_LENGTH, _>(&m, rand::random()).await;
         Ok(())
     }
 
     #[tokio::test]
     async fn test_rw_ccr() -> Result<(), MemoryError> {
         let m = RedisMemory::connect(&get_redis_url()).await.unwrap();
-        test_guarded_write_concurrent(&m, rand::random()).await;
+        test_guarded_write_concurrent::<WORD_LENGTH, _>(&m, rand::random()).await;
         Ok(())
     }
 }

@@ -253,19 +253,28 @@ mod tests {
 
     #[tokio::test]
     async fn test_sequential_read_write() {
-        let memory = create_memory(&mut ChaChaRng::from_os_rng());
-        test_single_write_and_read(&memory, rand::random()).await;
+        test_single_write_and_read::<WORD_LENGTH, _>(
+            &create_memory(&mut ChaChaRng::from_os_rng()),
+            rand::random(),
+        )
+        .await;
     }
 
     #[tokio::test]
     async fn test_sequential_wrong_guard() {
-        let memory = InMemory::<[u8; 16], [u8; 16]>::default();
-        test_wrong_guard(&memory, rand::random()).await;
+        test_wrong_guard::<WORD_LENGTH, _>(
+            &create_memory(&mut ChaChaRng::from_os_rng()),
+            rand::random(),
+        )
+        .await;
     }
 
     #[tokio::test]
     async fn test_concurrent_read_write() {
-        let memory = InMemory::<[u8; 16], [u8; 16]>::default();
-        test_guarded_write_concurrent(&memory, rand::random()).await;
+        test_guarded_write_concurrent::<WORD_LENGTH, _>(
+            &create_memory(&mut ChaChaRng::from_os_rng()),
+            rand::random(),
+        )
+        .await;
     }
 }

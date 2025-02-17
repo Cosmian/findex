@@ -8,12 +8,12 @@
 //!
 //! Both addresses and words are 16-byte long.
 
-use crate::MemoryADT;
-use rand::{Rng, RngCore, SeedableRng, rngs::StdRng};
+use crate::{ADDRESS_LENGTH, KEY_LENGTH, MemoryADT};
+use rand::{RngCore, SeedableRng, rngs::StdRng};
 use std::fmt::Debug;
 
-fn gen_bytes(rng: &mut impl RngCore) -> [u8; 16] {
-    let mut bytes = [0; 16];
+fn gen_bytes<const BYTES_LENGTH: usize>(rng: &mut impl RngCore) -> [u8; BYTES_LENGTH] {
+    let mut bytes = [0; BYTES_LENGTH];
     rng.fill_bytes(&mut bytes);
     bytes
 }
@@ -22,11 +22,13 @@ fn gen_bytes(rng: &mut impl RngCore) -> [u8; 16] {
 ///
 /// This function first attempts reading empty addresses, then performing a
 /// guarded write, and finally validating the written value.
-pub async fn test_single_write_and_read<Memory>(memory: &Memory, seed: [u8; 32])
-where
+pub async fn test_single_write_and_read<const WORD_LENGTH: usize, Memory>(
+    memory: &Memory,
+    seed: [u8; KEY_LENGTH],
+) where
     Memory: Send + Sync + MemoryADT,
-    Memory::Address: Send + Clone + From<[u8; 16]>,
-    Memory::Word: Send + Debug + Clone + PartialEq + From<[u8; 16]>,
+    Memory::Address: Send + Clone + From<[u8; ADDRESS_LENGTH]>,
+    Memory::Word: Send + Debug + Clone + PartialEq + From<[u8; WORD_LENGTH]>,
     Memory::Error: std::error::Error,
 {
     let mut rng = StdRng::from_seed(seed);
@@ -67,11 +69,13 @@ where
 ///
 /// Attempts to write with a None guard to an address containing a value.
 /// Verifies that the original value is preserved and the write fails.
-pub async fn test_wrong_guard<Memory>(memory: &Memory, seed: [u8; 32])
-where
+pub async fn test_wrong_guard<const WORD_LENGTH: usize, Memory>(
+    memory: &Memory,
+    seed: [u8; KEY_LENGTH],
+) where
     Memory: Send + Sync + MemoryADT,
-    Memory::Address: Send + Clone + From<[u8; 16]>,
-    Memory::Word: Send + Debug + Clone + PartialEq + From<[u8; 16]>,
+    Memory::Address: Send + Clone + From<[u8; ADDRESS_LENGTH]>,
+    Memory::Word: Send + Debug + Clone + PartialEq + From<[u8; WORD_LENGTH]>,
     Memory::Error: Send + std::error::Error,
 {
     let mut rng = StdRng::from_seed(seed);
@@ -87,7 +91,7 @@ where
     let conflict_result = memory
         .guarded_write((a.clone(), None), vec![(
             a.clone(),
-            Memory::Word::from(rng.random::<u128>().to_be_bytes()),
+            Memory::Word::from(gen_bytes(&mut rng)),
         )])
         .await
         .unwrap();
@@ -113,17 +117,33 @@ where
     );
 }
 
+fn u128_to_array<const WORD_LENGTH: usize>(u: u128) -> [u8; WORD_LENGTH] {
+    let mut bytes = [0u8; WORD_LENGTH];
+    bytes[..16].copy_from_slice(&u.to_be_bytes());
+    bytes
+}
+
+fn word_to_array<const WORD_LENGTH: usize>(word: [u8; WORD_LENGTH]) -> u128 {
+    let mut bytes = [0; 16];
+    bytes.copy_from_slice(&word[..16]);
+    u128::from_be_bytes(bytes)
+}
+
 /// Tests concurrent guarded write operations on a Memory ADT implementation.
 ///
 /// Spawns multiple threads to perform concurrent counter increments.
 /// Uses retries to handle write contention between threads.
 /// Verifies the final counter matches the total number of threads.
-pub async fn test_guarded_write_concurrent<Memory>(memory: &Memory, seed: [u8; 32])
-where
+pub async fn test_guarded_write_concurrent<const WORD_LENGTH: usize, Memory>(
+    memory: &Memory,
+    seed: [u8; KEY_LENGTH],
+) where
     Memory: 'static + Send + Sync + MemoryADT + Clone,
-    Memory::Address: Send + From<[u8; 16]>,
-    Memory::Word: Send + Debug + PartialEq + From<[u8; 16]> + Into<[u8; 16]> + Clone + Default,
+    Memory::Address: Send + From<[u8; ADDRESS_LENGTH]>,
+    Memory::Word:
+        Send + Debug + PartialEq + From<[u8; WORD_LENGTH]> + Into<[u8; WORD_LENGTH]> + Clone,
     Memory::Error: Send + std::error::Error,
+    [(); WORD_LENGTH]: Sized,
 {
     {
         const N: usize = 100;
@@ -131,25 +151,25 @@ where
         let a = gen_bytes(&mut rng);
 
         // A worker increment N times the counter m[a].
-        let worker = |m: Memory, a: [u8; 16]| async move {
+        let worker = |m: Memory, a: [u8; ADDRESS_LENGTH]| async move {
             let mut cnt = 0u128;
             for _ in 0..N {
                 loop {
                     let guard = if 0 == cnt {
                         None
                     } else {
-                        Some(Memory::Word::from(cnt.to_be_bytes()))
+                        Some(Memory::Word::from(u128_to_array(cnt)))
                     };
 
                     let new_cnt = cnt + 1;
                     let cur_cnt = m
                         .guarded_write((a.into(), guard), vec![(
                             a.into(),
-                            Memory::Word::from(new_cnt.to_be_bytes()),
+                            Memory::Word::from(u128_to_array(new_cnt)),
                         )])
                         .await
                         .unwrap()
-                        .map(|w| <u128>::from_be_bytes(w.into()))
+                        .map(|w| word_to_array(w.into()))
                         .unwrap_or_default();
 
                     if cnt == cur_cnt {
@@ -179,12 +199,12 @@ where
             .expect("Counter should exist");
 
         assert_eq!(
-            u128::from_be_bytes(final_count.clone().into()),
+            word_to_array(final_count.clone().into()),
             (N * N) as u128,
             "test_guarded_write_concurrent failed. Expected the counter to be at {:?}, found \
              {:?}.\nDebug seed : {:?}.",
             N as u128,
-            u128::from_be_bytes(final_count.into()),
+            word_to_array(final_count.into()),
             seed
         );
     }
