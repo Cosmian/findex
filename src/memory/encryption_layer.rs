@@ -108,12 +108,12 @@ impl<
     async fn guarded_write(
         &self,
         guard: (Self::Address, Option<Self::Word>),
-        tasks: Vec<(Self::Address, Self::Word)>,
+        bindings: Vec<(Self::Address, Self::Word)>,
     ) -> Result<Option<Self::Word>, Self::Error> {
         let (address, v) = guard;
         let tok = self.permute(address);
         let old = v.map(|v| self.encrypt(v, *tok));
-        let bindings = tasks
+        let bindings = bindings
             .into_iter()
             .map(|(a, v)| {
                 let tok = self.permute(a);

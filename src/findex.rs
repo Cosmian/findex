@@ -102,18 +102,18 @@ impl<
     async fn insert(
         &self,
         keyword: Keyword,
-        bindings: impl Sync + Send + IntoIterator<Item = Value>,
+        values: impl Sync + Send + IntoIterator<Item = Value>,
     ) -> Result<(), Self::Error> {
-        self.push(Op::Insert, keyword, bindings.into_iter().collect())
+        self.push(Op::Insert, keyword, values.into_iter().collect())
             .await
     }
 
     async fn delete(
         &self,
         keyword: Keyword,
-        bindings: impl Sync + Send + IntoIterator<Item = Value>,
+        values: impl Sync + Send + IntoIterator<Item = Value>,
     ) -> Result<(), Self::Error> {
-        self.push(Op::Delete, keyword, bindings.into_iter().collect())
+        self.push(Op::Delete, keyword, values.into_iter().collect())
             .await
     }
 }

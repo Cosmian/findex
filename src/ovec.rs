@@ -111,7 +111,7 @@ where
 
     type Error = Error<Memory::Address>;
 
-    async fn push(&mut self, vs: Vec<Self::Value>) -> Result<(), Self::Error> {
+    async fn push(&mut self, values: Vec<Self::Value>) -> Result<(), Self::Error> {
         // Findex modifications are only lock-free, hence it does not guarantee a given client will
         // ever terminate.
         //
@@ -122,11 +122,11 @@ where
         loop {
             // Generates a new header with incremented counter.
             let mut new = old.clone().unwrap_or_default();
-            new.cnt += vs.len() as u64;
+            new.cnt += values.len() as u64;
 
             // Binds the correct addresses to the values.
-            let mut bindings = (new.cnt - vs.len() as u64..new.cnt)
-                .zip(vs.clone())
+            let mut bindings = (new.cnt - values.len() as u64..new.cnt)
+                .zip(values.clone())
                 .map(|(i, v)| (self.a.clone() + 1 + i, v)) // a is the header address
                 .collect::<Vec<_>>();
             bindings.push((

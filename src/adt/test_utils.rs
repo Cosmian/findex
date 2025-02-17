@@ -18,6 +18,21 @@ fn gen_bytes<const BYTES_LENGTH: usize>(rng: &mut impl RngCore) -> [u8; BYTES_LE
     bytes
 }
 
+fn u128_to_array<const WORD_LENGTH: usize>(u: u128) -> [u8; WORD_LENGTH] {
+    let mut bytes = [0u8; WORD_LENGTH];
+    bytes[..16].copy_from_slice(&u.to_be_bytes());
+    bytes
+}
+
+fn word_to_array<const WORD_LENGTH: usize>(word: [u8; WORD_LENGTH]) -> Result<u128, &'static str> {
+    if WORD_LENGTH < 16 {
+        return Err("WORD_LENGTH must be at least 16 bytes");
+    }
+    let mut bytes = [0; 16];
+    bytes.copy_from_slice(&word[..16]);
+    Ok(u128::from_be_bytes(bytes))
+}
+
 /// Tests the basic write and read operations of a Memory ADT implementation.
 ///
 /// This function first attempts reading empty addresses, then performing a
@@ -117,18 +132,6 @@ pub async fn test_wrong_guard<const WORD_LENGTH: usize, Memory>(
     );
 }
 
-fn u128_to_array<const WORD_LENGTH: usize>(u: u128) -> [u8; WORD_LENGTH] {
-    let mut bytes = [0u8; WORD_LENGTH];
-    bytes[..16].copy_from_slice(&u.to_be_bytes());
-    bytes
-}
-
-fn word_to_array<const WORD_LENGTH: usize>(word: [u8; WORD_LENGTH]) -> u128 {
-    let mut bytes = [0; 16];
-    bytes.copy_from_slice(&word[..16]);
-    u128::from_be_bytes(bytes)
-}
-
 /// Tests concurrent guarded write operations on a Memory ADT implementation.
 ///
 /// Spawns multiple threads to perform concurrent counter increments.
@@ -143,7 +146,6 @@ pub async fn test_guarded_write_concurrent<const WORD_LENGTH: usize, Memory>(
     Memory::Word:
         Send + Debug + PartialEq + From<[u8; WORD_LENGTH]> + Into<[u8; WORD_LENGTH]> + Clone,
     Memory::Error: Send + std::error::Error,
-    [(); WORD_LENGTH]: Sized,
 {
     {
         const N: usize = 100;
@@ -169,7 +171,7 @@ pub async fn test_guarded_write_concurrent<const WORD_LENGTH: usize, Memory>(
                         )])
                         .await
                         .unwrap()
-                        .map(|w| word_to_array(w.into()))
+                        .map(|w| word_to_array(w.into()).unwrap())
                         .unwrap_or_default();
 
                     if cnt == cur_cnt {
@@ -199,12 +201,12 @@ pub async fn test_guarded_write_concurrent<const WORD_LENGTH: usize, Memory>(
             .expect("Counter should exist");
 
         assert_eq!(
-            word_to_array(final_count.clone().into()),
+            word_to_array(final_count.clone().into()).unwrap(),
             (N * N) as u128,
             "test_guarded_write_concurrent failed. Expected the counter to be at {:?}, found \
              {:?}.\nDebug seed : {:?}.",
             N as u128,
-            word_to_array(final_count.into()),
+            word_to_array(final_count.into()).unwrap(),
             seed
         );
     }

@@ -60,13 +60,13 @@ impl<Address: Send + Sync + Hash + Eq + Debug, Value: Send + Sync + Clone + Eq +
     async fn guarded_write(
         &self,
         guard: (Self::Address, Option<Self::Word>),
-        tasks: Vec<(Self::Address, Self::Word)>,
+        bindings: Vec<(Self::Address, Self::Word)>,
     ) -> Result<Option<Self::Word>, Self::Error> {
         let store = &mut *self.inner.lock().expect("poisoned lock");
         let (a, old) = guard;
         let cur = store.get(&a).cloned();
         if old == cur {
-            for (k, v) in tasks {
+            for (k, v) in bindings {
                 store.insert(k, v);
             }
         }
