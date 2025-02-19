@@ -4,7 +4,7 @@ License text copyright (c) 2020 MariaDB Corporation Ab, All Rights Reserved.
 Parameters
 
 Licensor:             Cosmian Tech SAS.
-Licensed Work:        Cosmian KMS version 4.11.3 or later.
+Licensed Work:        Cosmian Findex version 6.0.0 or later.
                       The Licensed Work is (c) 2024 Cosmian Tech SAS.
 Additional Use Grant: You may use the Licensed Work in production, provided
                       your total use of does not exceed a total of 4 vCPUS on virtual
