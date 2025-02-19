@@ -4,3 +4,4 @@ target/
 perf*
 flamegraph.svg
 **/*.tgz
+.venv/
