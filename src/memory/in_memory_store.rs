@@ -52,9 +52,9 @@ impl<Address: Send + Sync + Hash + Eq + Debug, Value: Send + Sync + Clone + Eq +
 
     type Error = MemoryError;
 
-    async fn batch_read(&self, a: Vec<Address>) -> Result<Vec<Option<Value>>, Self::Error> {
+    async fn batch_read(&self, addresses: Vec<Address>) -> Result<Vec<Option<Value>>, Self::Error> {
         let store = self.inner.lock().expect("poisoned lock");
-        Ok(a.iter().map(|k| store.get(k).cloned()).collect())
+        Ok(addresses.iter().map(|k| store.get(k).cloned()).collect())
     }
 
     async fn guarded_write(

@@ -1,4 +1,5 @@
 #![warn(clippy::all, clippy::nursery, clippy::cargo)]
+#![allow(clippy::multiple_crate_versions)]
 
 mod address;
 mod adt;
@@ -9,12 +10,11 @@ mod memory;
 mod ovec;
 mod secret;
 mod symmetric_key;
-
-#[cfg(any(test, feature = "test-utils"))]
-pub use adt::test_utils;
 mod value;
 
 pub use address::Address;
+#[cfg(any(test, feature = "test-utils"))]
+pub use adt::test_utils;
 pub use adt::{IndexADT, MemoryADT};
 pub use encoding::{
     Decoder, Encoder,
@@ -28,7 +28,7 @@ pub use secret::Secret;
 pub use value::Value;
 
 #[cfg(feature = "redis-mem")]
-pub use memory::redis_store::{MemoryError, RedisMemory};
+pub use memory::{MemoryError, RedisMemory};
 
 #[cfg(any(test, feature = "test-utils"))]
 pub use encoding::{
