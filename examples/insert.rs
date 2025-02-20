@@ -1,9 +1,9 @@
 //! This example show-cases the use of Findex to securely store a hash-map.
 
-use cosmian_findex::{Findex, InMemory, IndexADT, Op, Secret};
+use cosmian_findex::{Findex, InMemory, IndexADT, MemoryEncryptionLayer, Op, Secret};
 use futures::executor::block_on;
 use rand_chacha::ChaChaRng;
-use rand_core::{CryptoRngCore, SeedableRng};
+use rand_core::{CryptoRng, SeedableRng};
 use std::collections::{HashMap, HashSet};
 
 /// This function generates a random set of (key, values) couples. Since Findex
@@ -14,7 +14,7 @@ use std::collections::{HashMap, HashSet};
 /// associated *keyword* of type `[u8; 8]` in this example. Since Findex only
 /// requires from the values to be hashable, we could have taken any type that
 /// implements `Hash` instead of the `u64`.
-fn gen_index(rng: &mut impl CryptoRngCore) -> HashMap<[u8; 8], HashSet<u64>> {
+fn gen_index(rng: &mut impl CryptoRng) -> HashMap<[u8; 8], HashSet<u64>> {
     (0..6)
         .map(|i| {
             let kw = rng.next_u64().to_be_bytes();
@@ -86,7 +86,7 @@ fn decoder(words: Vec<[u8; WORD_LENGTH]>) -> Result<HashSet<u64>, String> {
 fn main() {
     // For cryptographic applications, it is important to use a secure RNG. In
     // Rust, those RNG implement the `CryptoRng` trait.
-    let mut rng = ChaChaRng::from_entropy();
+    let mut rng = ChaChaRng::from_os_rng();
 
     // Generate fresh Findex key. In practice only one user is in charge of
     // generating the key (the administrator?): all users *must* share the same
@@ -100,16 +100,16 @@ fn main() {
     // trait. It corresponds to an in-memory key-value store implemented on top
     // of a hash-table. For real application a DB such as Redis would be
     // preferred.
-    let memory = InMemory::default();
+    let memory = MemoryEncryptionLayer::new(&key, InMemory::default());
 
     // Instantiating Findex requires passing the key, the memory used and the
     // encoder and decoder. Quite simple, after all :)
     let findex = Findex::<
-        WORD_LENGTH,    // size of a word
-        u64,            // type of a value
-        String,         // type of an encoding error
-        InMemory<_, _>, // type of the memory
-    >::new(&key, memory, encoder, decoder);
+        WORD_LENGTH, // size of a word
+        u64,         // type of a value
+        String,      // type of an encoding error
+        _,           // type of the memory
+    >::new(memory, encoder, decoder);
 
     // Here we insert all bindings one by one, blocking on each call. A better
     // way would be to performed all such calls in parallel using tasks.

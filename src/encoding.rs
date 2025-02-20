@@ -237,13 +237,13 @@ pub mod generic_encoding {
 
     #[cfg(test)]
     mod tests {
-        use rand::{RngCore, thread_rng};
+        use rand::{RngCore, rng};
 
         use super::*;
 
         #[test]
         fn test_metadata_encoding() {
-            let mut rng = thread_rng();
+            let mut rng = rng();
             for _ in 0..1000 {
                 let op = if rng.next_u32() % 2 == 1 {
                     Op::Insert
@@ -264,10 +264,12 @@ pub mod generic_encoding {
 
 #[cfg(any(test, feature = "test-utils"))]
 pub mod tests {
-    use crate::{Decoder, Encoder, Op};
+    use crate::Op;
 
-    use rand::{RngCore, thread_rng};
+    use rand::{RngCore, rng};
     use std::{collections::HashSet, fmt::Debug, hash::Hash};
+
+    use super::{Decoder, Encoder};
 
     /// Uses fuzzing to attempt asserting that: encode ∘ decode = identity.
     ///
@@ -298,7 +300,7 @@ pub mod tests {
         encode: Encoder<Value, Word, EncodingError>,
         decode: Decoder<Value, Word, EncodingError>,
     ) {
-        let mut rng = thread_rng();
+        let mut rng = rng();
 
         // Draws a random number of operations in [0,100].
         let n_ops = rng.next_u32() % 10;
