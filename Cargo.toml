@@ -22,6 +22,7 @@ path = "src/lib.rs"
 
 [features]
 redis-mem = ["redis"]
+sql-mem = ["rusqlite", "r2d2_sqlite", "r2d2"]
 test-utils = []
 
 [dependencies]
@@ -34,6 +35,10 @@ redis = { version = "0.28.1", features = [
     "connection-manager",
     "tokio-comp",
 ], optional = true }
+r2d2 = { version = "0.8.10", optional = true }
+r2d2_sqlite = { version = "0.26.0", optional = true }
+rusqlite = { version = "0.33.0", features = ["bundled"], optional = true }
+thiserror = "2.0.11"
 tiny-keccak = { version = "2.0.2", features = ["sha3"] }
 xts-mode = "0.5.1"
 zeroize = { version = "1.8.1", features = ["derive"] }
