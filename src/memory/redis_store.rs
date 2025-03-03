@@ -50,7 +50,8 @@ impl From<RedisError> for RedisMemoryError {
 pub struct RedisMemory<Address, Word> {
     manager: ConnectionManager,
     script_hash: String,
-    _marker: PhantomData<(Address, Word)>, // to ensure type checking despite that Address & Word are intentionally unused in fields
+    _marker: PhantomData<(Address, Word)>, /* to ensure type checking despite that Address &
+                                            * Word are intentionally unused in fields */
 }
 
 impl<Address, Word> fmt::Debug for RedisMemory<Address, Word> {
@@ -91,8 +92,8 @@ impl<const ADDRESS_LENGTH: usize, const WORD_LENGTH: usize> MemoryADT
     for RedisMemory<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>
 {
     type Address = Address<ADDRESS_LENGTH>;
-    type Word = [u8; WORD_LENGTH];
     type Error = RedisMemoryError;
+    type Word = [u8; WORD_LENGTH];
 
     async fn batch_read(
         &self,

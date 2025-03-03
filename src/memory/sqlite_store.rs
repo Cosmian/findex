@@ -1,9 +1,11 @@
-use crate::{Address, MemoryADT};
+use std::{marker::PhantomData, thread::sleep, time::Duration};
+
 use r2d2::Pool;
 use r2d2_sqlite::SqliteConnectionManager;
 use rusqlite::{params_from_iter, types::ToSqlOutput};
-use std::{marker::PhantomData, thread::sleep, time::Duration};
 use thiserror::Error;
+
+use crate::{Address, MemoryADT};
 
 #[derive(Error, Debug)]
 pub enum SqlMemoryError {
@@ -46,8 +48,9 @@ impl<Address: Sync, Word: Sync> SqlMemory<Address, Word> {
 
     /// Connects to a known DB url using the given URL.
     pub fn connect(url: &str, backoff: Option<bool>) -> Result<Self, SqlMemoryError> {
-        // SqliteConnectionManager::file is the equivalent of using `rusqlite::Connection::open`
-        // as documented in the function's source code.
+        // SqliteConnectionManager::file is the equivalent of using
+        // `rusqlite::Connection::open` as documented in the function's source
+        // code.
         let pool = r2d2::Pool::builder()
             .max_size(MAX_POOL_SIZE)
             .build(SqliteConnectionManager::file(url))?;
@@ -65,8 +68,8 @@ impl<const ADDRESS_LENGTH: usize, const WORD_LENGTH: usize> MemoryADT
     for SqlMemory<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>
 {
     type Address = Address<ADDRESS_LENGTH>;
-    type Word = [u8; WORD_LENGTH];
     type Error = SqlMemoryError;
+    type Word = [u8; WORD_LENGTH];
 
     async fn batch_read(
         &self,
@@ -149,7 +152,8 @@ impl<const ADDRESS_LENGTH: usize, const WORD_LENGTH: usize> MemoryADT
                 |row| row.get::<_, Self::Word>(0),
             ) {
                 Ok(word) => Some(word),
-                Err(rusqlite::Error::QueryReturnedNoRows) => None, // No row found (address doesn't exist)
+                // No rows returned, the address is not in the database
+                Err(rusqlite::Error::QueryReturnedNoRows) => None,
                 Err(e) => {
                     tx.rollback()?;
                     last_err = e;
@@ -184,7 +188,8 @@ impl<const ADDRESS_LENGTH: usize, const WORD_LENGTH: usize> MemoryADT
                 return Ok(previous_word);
             }
         }
-        // TODO: feature, ideally this should return a stack of all the errors that made the transaction fail
+        // TODO: feature, ideally this should return a stack of all the errors that made
+        // the transaction fail
         Err(SqlMemoryError::SqlError(last_err))
     }
 }

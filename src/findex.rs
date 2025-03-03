@@ -66,9 +66,11 @@ impl<
         a
     }
 
-    /// Pushes the given bindings to the vectors associated to the bound keyword.
+    /// Pushes the given bindings to the vectors associated to the bound
+    /// keyword.
     ///
-    /// All vector push operations are performed in parallel (via async calls), not batched.
+    /// All vector push operations are performed in parallel (via async calls),
+    /// not batched.
     async fn push<Keyword: Send + Sync + Hash + Eq>(
         &self,
         op: Op,
@@ -123,8 +125,8 @@ mod tests {
     use rand_core::SeedableRng;
 
     use crate::{
-        ADDRESS_LENGTH, Findex, InMemory, IndexADT, SqlMemory, Value, address::Address,
-        dummy_decode, dummy_encode, memory, secret::Secret,
+        ADDRESS_LENGTH, Findex, InMemory, IndexADT, Value, address::Address, dummy_decode,
+        dummy_encode, secret::Secret,
     };
 
     const WORD_LENGTH: usize = 16;
@@ -133,8 +135,7 @@ mod tests {
     fn test_insert_search_delete_search() {
         let mut rng = ChaChaRng::from_entropy();
         let seed = Secret::random(&mut rng);
-        // let memory = InMemory::<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>::default();
-        let memory = SqlMemory::in_memory(None).unwrap();
+        let memory = InMemory::<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>::default();
         let findex = Findex::new(&seed, memory, dummy_encode::<WORD_LENGTH, _>, dummy_decode);
         let cat_bindings = [Value::from(1), Value::from(3), Value::from(5)];
         let dog_bindings = [Value::from(0), Value::from(2), Value::from(4)];

@@ -1,13 +1,14 @@
 use std::{fmt::Debug, ops::Deref, sync::Arc};
 
-use crate::{
-    ADDRESS_LENGTH, KEY_LENGTH, MemoryADT, Secret, address::Address, symmetric_key::SymmetricKey,
-};
 use aes::{
     Aes256,
     cipher::{BlockEncrypt, KeyInit, generic_array::GenericArray},
 };
 use xts_mode::Xts128;
+
+use crate::{
+    ADDRESS_LENGTH, KEY_LENGTH, MemoryADT, Secret, address::Address, symmetric_key::SymmetricKey,
+};
 
 #[derive(Clone)]
 struct ClonableXts(Arc<Xts128<Aes256>>);
@@ -26,8 +27,9 @@ impl Deref for ClonableXts {
     }
 }
 
-/// The encryption layers is built on top of an encrypted memory implementing the `MemoryADT` and
-/// exposes a plaintext virtual memory interface implementing the `MemoryADT`.
+/// The encryption layers is built on top of an encrypted memory implementing
+/// the `MemoryADT` and exposes a plaintext virtual memory interface
+/// implementing the `MemoryADT`.
 ///
 /// This type is thread-safe.
 #[derive(Debug, Clone)]
@@ -55,8 +57,8 @@ impl<
         let aes = Aes256::new(GenericArray::from_slice(&k_p));
         let aes_e1 = Aes256::new(GenericArray::from_slice(&k_e1));
         let aes_e2 = Aes256::new(GenericArray::from_slice(&k_e2));
-        // The 128 in the XTS name refer to the block size. AES-256 is used here, which confers
-        // 128 bits of PQ security.
+        // The 128 in the XTS name refer to the block size. AES-256 is used here, which
+        // confers 128 bits of PQ security.
         let xts = ClonableXts(Arc::new(Xts128::new(aes_e1, aes_e2)));
         Self { aes, xts, mem: stm }
     }
@@ -87,10 +89,8 @@ impl<
 > MemoryADT for MemoryEncryptionLayer<WORD_LENGTH, Memory>
 {
     type Address = Address<ADDRESS_LENGTH>;
-
-    type Word = [u8; WORD_LENGTH];
-
     type Error = Memory::Error;
+    type Word = [u8; WORD_LENGTH];
 
     async fn batch_read(
         &self,
@@ -178,7 +178,8 @@ mod tests {
 
     /// Ensures a transaction can express a vector push operation:
     /// - the counter is correctly incremented and all values are written;
-    /// - using the wrong value in the guard fails the operation and returns the current value.
+    /// - using the wrong value in the guard fails the operation and returns the
+    ///   current value.
     #[test]
     fn test_vector_push() {
         let mut rng = ChaChaRng::from_entropy();

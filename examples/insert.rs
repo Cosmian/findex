@@ -1,10 +1,11 @@
 //! This example show-cases the use of Findex to securely store a hash-map.
 
+use std::collections::{HashMap, HashSet};
+
 use cosmian_findex::{Findex, InMemory, IndexADT, Op, Secret};
 use futures::executor::block_on;
 use rand_chacha::ChaChaRng;
 use rand_core::{CryptoRngCore, SeedableRng};
-use std::collections::{HashMap, HashSet};
 
 /// This function generates a random set of (key, values) couples. Since Findex
 /// API is those of an Index which only returns the *set* of values associated

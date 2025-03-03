@@ -8,9 +8,11 @@
 //!
 //! Both addresses and words are 16-byte long.
 
-use crate::MemoryADT;
-use rand::{Rng, RngCore, SeedableRng, rngs::StdRng};
 use std::fmt::Debug;
+
+use rand::{Rng, RngCore, SeedableRng, rngs::StdRng};
+
+use crate::MemoryADT;
 
 fn gen_bytes(rng: &mut impl RngCore) -> [u8; 16] {
     let mut bytes = [0; 16];

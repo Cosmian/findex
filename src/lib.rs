@@ -20,26 +20,21 @@ pub use encoding::{
     Decoder, Encoder,
     generic_encoding::{generic_decode, generic_encode},
 };
-pub use error::Error;
-pub use findex::Findex;
-pub use findex::Op;
-pub use secret::Secret;
-pub use value::Value;
-
-#[cfg(feature = "redis-mem")]
-pub use memory::redis_store::{RedisMemory, RedisMemoryError};
-
-#[cfg(feature = "sql-mem")]
-pub use memory::sqlite_store::{SqlMemory, SqlMemoryError};
-
 #[cfg(any(test, feature = "test-utils"))]
 pub use encoding::{
     dummy_encoding::{WORD_LENGTH, dummy_decode, dummy_encode},
     tests::test_encoding,
 };
-
+pub use error::Error;
+pub use findex::{Findex, Op};
 #[cfg(any(test, feature = "test-utils"))]
 pub use memory::InMemory;
+#[cfg(feature = "redis-mem")]
+pub use memory::redis_store::{RedisMemory, RedisMemoryError};
+#[cfg(feature = "sql-mem")]
+pub use memory::sqlite_store::{SqlMemory, SqlMemoryError};
+pub use secret::Secret;
+pub use value::Value;
 
 /// 16-byte addresses ensure a high collision resistance that poses virtually no
 /// limitation on the index.
