@@ -30,7 +30,7 @@ pub use value::Value;
 #[cfg(feature = "redis-mem")]
 pub use memory::{RedisMemory, RedisMemoryError};
 
-#[cfg(feature = "redis-mem")]
+#[cfg(feature = "sql-mem")]
 pub use memory::{SqlMemory, SqlMemoryError};
 
 #[cfg(any(test, feature = "test-utils"))]

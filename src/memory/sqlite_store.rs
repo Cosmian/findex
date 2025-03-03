@@ -9,7 +9,6 @@ use thiserror::Error;
 pub enum SqlMemoryError {
     #[error("Sql store memory error: {0}")]
     SqlError(#[from] rusqlite::Error),
-
     #[error("r2d2 pooling error: {0}")]
     PoolingError(#[from] r2d2::Error),
 }
@@ -186,7 +185,7 @@ impl<const ADDRESS_LENGTH: usize, const WORD_LENGTH: usize> MemoryADT
                 return Ok(previous_word);
             }
         }
-        // TODO: feature, ideally this should return a stack of all the errors that made
+        // TODO: ideally this should return a stack of all the errors that made
         // the transaction fail
         Err(SqlMemoryError::SqlError(last_err))
     }
