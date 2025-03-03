@@ -68,9 +68,11 @@ impl<
         a
     }
 
-    /// Pushes the given bindings to the vectors associated to the bound keyword.
+    /// Pushes the given bindings to the vectors associated to the bound
+    /// keyword.
     ///
-    /// All vector push operations are performed in parallel (via async calls), not batched.
+    /// All vector push operations are performed in parallel (via async calls),
+    /// not batched.
     async fn push<Keyword: Send + Sync + Hash + Eq>(
         &self,
         op: Op,

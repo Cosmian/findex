@@ -39,5 +39,5 @@ use_field_init_shorthand = true
 wrap_comments = true
 
 # Which version of the formatting rules to use. Version::One is backwards-compatible with Rustfmt 1.0. Other versions are only backwards compatible within a major version number.
-# Default value: "One"
-version = "Two"
+# The `version` option is deprecated. We use `style_edition` instead.
+style_edition = "2024"

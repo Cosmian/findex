@@ -3,6 +3,7 @@ use std::{
     pin::Pin,
 };
 
+use rand_core::CryptoRngCore;
 use zeroize::{Zeroize, ZeroizeOnDrop};
 
 use rand_core::CryptoRng;

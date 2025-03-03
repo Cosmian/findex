@@ -38,13 +38,15 @@ impl<const LENGTH: usize> From<SymmetricKey<LENGTH>> for Zeroizing<Vec<u8>> {
 }
 
 impl<const KEY_LENGTH: usize> SymmetricKey<KEY_LENGTH> {
-    /// Deterministically derive a new key from the given secret and additional information.
+    /// Deterministically derive a new key from the given secret and additional
+    /// information.
     ///
     /// # Error
     ///
-    /// Fails to generate the key in case the secret evidently does not contain enough entropy. The
-    /// check performed is based on the respective key and secret lengths. The secret needs to be
-    /// generated from a source containing enough entropy (greater than its length) for this check
+    /// Fails to generate the key in case the secret evidently does not contain
+    /// enough entropy. The check performed is based on the respective key
+    /// and secret lengths. The secret needs to be generated from a source
+    /// containing enough entropy (greater than its length) for this check
     /// to be valid.
     pub fn derive<const SECRET_LENGTH: usize>(
         secret: &Secret<SECRET_LENGTH>,
@@ -52,7 +54,8 @@ impl<const KEY_LENGTH: usize> SymmetricKey<KEY_LENGTH> {
     ) -> Result<Self, String> {
         if SECRET_LENGTH < KEY_LENGTH {
             return Err(format!(
-                "insufficient entropy to derive {KEY_LENGTH}-byte key from a {SECRET_LENGTH}-byte secret",
+                "insufficient entropy to derive {KEY_LENGTH}-byte key from a {SECRET_LENGTH}-byte \
+                 secret",
             ));
         }
         let mut key = Self::default();
