@@ -9,7 +9,8 @@
 //! Both addresses and words are 16-byte long.
 
 use crate::{ADDRESS_LENGTH, KEY_LENGTH, MemoryADT};
-use rand::{RngCore, SeedableRng, rngs::StdRng};
+use rand_chacha::ChaCha20Rng;
+use rand_core::{RngCore, SeedableRng};
 use std::fmt::Debug;
 
 fn gen_bytes<const BYTES_LENGTH: usize>(rng: &mut impl RngCore) -> [u8; BYTES_LENGTH] {
@@ -46,7 +47,7 @@ pub async fn test_single_write_and_read<const WORD_LENGTH: usize, Memory>(
     Memory::Word: Send + Debug + Clone + PartialEq + From<[u8; WORD_LENGTH]>,
     Memory::Error: std::error::Error,
 {
-    let mut rng = StdRng::from_seed(seed);
+    let mut rng = ChaCha20Rng::from_seed(seed);
     let empty_read_result = memory
         .batch_read(vec![
             Memory::Address::from(gen_bytes(&mut rng)),
@@ -93,7 +94,7 @@ pub async fn test_wrong_guard<const WORD_LENGTH: usize, Memory>(
     Memory::Word: Send + Debug + Clone + PartialEq + From<[u8; WORD_LENGTH]>,
     Memory::Error: Send + std::error::Error,
 {
-    let mut rng = StdRng::from_seed(seed);
+    let mut rng = ChaCha20Rng::from_seed(seed);
 
     let a = Memory::Address::from(gen_bytes(&mut rng));
     let w = Memory::Word::from(gen_bytes(&mut rng));
@@ -149,7 +150,7 @@ pub async fn test_guarded_write_concurrent<const WORD_LENGTH: usize, Memory>(
 {
     {
         const N: usize = 100;
-        let mut rng = StdRng::from_seed(seed);
+        let mut rng = ChaCha20Rng::from_seed(seed);
         let a = gen_bytes(&mut rng);
 
         // A worker increment N times the counter m[a].

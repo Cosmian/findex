@@ -237,13 +237,14 @@ pub mod generic_encoding {
 
     #[cfg(test)]
     mod tests {
-        use rand::{RngCore, rng};
+        use rand_chacha::ChaCha20Rng;
+        use rand_core::{RngCore, SeedableRng};
 
         use super::*;
 
         #[test]
         fn test_metadata_encoding() {
-            let mut rng = rng();
+            let mut rng = ChaCha20Rng::from_os_rng();
             for _ in 0..1000 {
                 let op = if rng.next_u32() % 2 == 1 {
                     Op::Insert
@@ -266,7 +267,8 @@ pub mod generic_encoding {
 pub mod tests {
     use crate::Op;
 
-    use rand::{RngCore, rng};
+    use rand_chacha::ChaCha20Rng;
+    use rand_core::{RngCore, SeedableRng};
     use std::{collections::HashSet, fmt::Debug, hash::Hash};
 
     use super::{Decoder, Encoder};
@@ -300,7 +302,7 @@ pub mod tests {
         encode: Encoder<Value, Word, EncodingError>,
         decode: Decoder<Value, Word, EncodingError>,
     ) {
-        let mut rng = rng();
+        let mut rng = ChaCha20Rng::from_os_rng();
 
         // Draws a random number of operations in [0,100].
         let n_ops = rng.next_u32() % 10;

@@ -134,9 +134,8 @@ mod tests {
         cipher::{BlockDecrypt, KeyInit, generic_array::GenericArray},
     };
     use futures::executor::block_on;
-    use rand::CryptoRng;
     use rand_chacha::ChaChaRng;
-    use rand_core::SeedableRng;
+    use rand_core::{CryptoRng, SeedableRng};
 
     use crate::{
         ADDRESS_LENGTH, MemoryADT,
