@@ -9,7 +9,7 @@ pub use encryption_layer::MemoryEncryptionLayer;
 pub mod redis_store;
 
 #[cfg(feature = "sql-mem")]
-pub mod sql_store;
+pub mod sqlite_store;
 
 #[cfg(any(test, feature = "test-utils"))]
 pub use in_memory_store::InMemory;
