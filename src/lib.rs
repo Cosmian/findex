@@ -29,6 +29,7 @@ pub use error::Error;
 pub use findex::{Findex, Op};
 #[cfg(any(test, feature = "test-utils"))]
 pub use memory::InMemory;
+pub use memory::MemoryEncryptionLayer;
 #[cfg(feature = "redis-mem")]
 pub use memory::redis_store::{RedisMemory, RedisMemoryError};
 #[cfg(feature = "sql-mem")]

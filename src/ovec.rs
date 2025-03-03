@@ -112,8 +112,6 @@ where
     type Error = Error<Memory::Address>;
     type Value = Memory::Word;
 
-    type Error = Error<Memory::Address>;
-
     async fn push(&mut self, values: Vec<Self::Value>) -> Result<(), Self::Error> {
         // Findex modifications are only lock-free, hence it does not guarantee a given client will
         // ever terminate.

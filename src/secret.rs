@@ -1,12 +1,9 @@
+use rand_core::CryptoRng;
 use std::{
     ops::{Deref, DerefMut},
     pin::Pin,
 };
-
-use rand_core::CryptoRngCore;
 use zeroize::{Zeroize, ZeroizeOnDrop};
-
-use rand_core::CryptoRng;
 
 /// Holds a secret information of `LENGTH` bytes.
 ///
