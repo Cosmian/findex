@@ -12,34 +12,26 @@ pub enum SqliteMemoryError {
     SqlError(rusqlite::Error),
     PoolingError(r2d2::Error),
 }
+impl Error for SqliteMemoryError {}
 
 impl fmt::Display for SqliteMemoryError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            SqliteMemoryError::SqlError(err) => write!(f, "Sql store memory error: {}", err),
-            SqliteMemoryError::PoolingError(err) => write!(f, "r2d2 pooling error: {}", err),
-        }
-    }
-}
-
-impl Error for SqliteMemoryError {
-    fn source(&self) -> Option<&(dyn Error + 'static)> {
-        match self {
-            SqliteMemoryError::SqlError(err) => Some(err),
-            SqliteMemoryError::PoolingError(err) => Some(err),
+            Self::SqlError(err) => write!(f, "Sql store memory error: {}", err),
+            Self::PoolingError(err) => write!(f, "r2d2 pooling error: {}", err),
         }
     }
 }
 
 impl From<rusqlite::Error> for SqliteMemoryError {
     fn from(err: rusqlite::Error) -> Self {
-        SqliteMemoryError::SqlError(err)
+        Self::SqlError(err)
     }
 }
 
 impl From<r2d2::Error> for SqliteMemoryError {
     fn from(err: r2d2::Error) -> Self {
-        SqliteMemoryError::PoolingError(err)
+        Self::PoolingError(err)
     }
 }
 
