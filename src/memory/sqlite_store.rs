@@ -2,7 +2,14 @@ use crate::{Address, MemoryADT};
 use r2d2::Pool;
 use r2d2_sqlite::SqliteConnectionManager;
 use rusqlite::{params_from_iter, types::ToSqlOutput};
-use std::{marker::PhantomData, thread::sleep, time::Duration};
+use std::{
+    collections::HashMap,
+    marker::PhantomData,
+    num::NonZero,
+    path::Path,
+    thread::{available_parallelism, sleep},
+    time::Duration,
+};
 use thiserror::Error;
 
 #[derive(Error, Debug)]
@@ -21,19 +28,27 @@ pub struct SqlMemory<Address, Word> {
     _marker: PhantomData<(Address, Word)>,
 }
 
-const MAX_POOL_SIZE: u32 = 10; // placeholder
 const CREATE_TABLE_SCRIPT: &str = "
-CREATE TABLE IF NOT EXISTS findex_aw_store
+CREATE TABLE IF NOT EXISTS memory
 (
-    adr BLOB PRIMARY KEY,
-    word BLOB NOT NULL
+    a BLOB PRIMARY KEY,
+    w BLOB NOT NULL
 )";
 
-impl<Address: Sync, Word: Sync> SqlMemory<Address, Word> {
+impl<Address, Word> SqlMemory<Address, Word> {
+    /// Get the number of CPUs available on the system.
+    fn get_cpu_count() -> u32 {
+        // Using less connections than the number of CPUs underuses the available ressources
+        // while using more connections than the number of CPUs can increase contention.
+        available_parallelism()
+            .unwrap_or(NonZero::new(1).unwrap())
+            .get() as u32 // safe cast
+    }
+
     /// Create a new in-memory database.
     pub fn in_memory(backoff: Option<bool>) -> Result<Self, SqlMemoryError> {
         let pool = r2d2::Pool::builder()
-            .max_size(MAX_POOL_SIZE)
+            .max_size(Self::get_cpu_count())
             .build(SqliteConnectionManager::memory())?;
         pool.get().unwrap().execute(CREATE_TABLE_SCRIPT, [])?;
         Ok(Self {
@@ -43,14 +58,14 @@ impl<Address: Sync, Word: Sync> SqlMemory<Address, Word> {
         })
     }
 
-    /// Connects to a known DB url using the given URL.
-    pub fn connect(url: &str, backoff: Option<bool>) -> Result<Self, SqlMemoryError> {
+    /// Connects to a known DB using the given path.
+    pub fn connect(path: &impl AsRef<Path>, backoff: Option<bool>) -> Result<Self, SqlMemoryError> {
         // SqliteConnectionManager::file is the equivalent of using
         // `rusqlite::Connection::open` as documented in the function's source
         // code.
         let pool = r2d2::Pool::builder()
-            .max_size(MAX_POOL_SIZE)
-            .build(SqliteConnectionManager::file(url))?;
+            .max_size(Self::get_cpu_count())
+            .build(SqliteConnectionManager::file(path))?;
         pool.get().unwrap().execute(CREATE_TABLE_SCRIPT, [])?;
 
         Ok(Self {
@@ -75,20 +90,16 @@ impl<const ADDRESS_LENGTH: usize, const WORD_LENGTH: usize> MemoryADT
         if addresses.is_empty() {
             return Ok(Vec::new());
         }
-        let mut conn = self.pool.get()?;
-
-        // Using a transaction to ensure the read is atomic
-        let tx = conn.transaction()?;
+        let conn = self.pool.get()?;
 
         let query = format!(
-            "SELECT adr, word FROM findex_aw_store WHERE adr IN ({})",
+            "SELECT a, w FROM memory WHERE a IN ({})",
             (0..addresses.len())
                 .map(|_| "?")
                 .collect::<Vec<&str>>()
                 .join(",")
         );
 
-        // Convert addresses to SQL parameters
         let params: Vec<ToSqlOutput> = addresses
             .iter()
             .map(|addr| {
@@ -96,21 +107,15 @@ impl<const ADDRESS_LENGTH: usize, const WORD_LENGTH: usize> MemoryADT
             })
             .collect();
 
-        // Execute the query
-        let mut stmt = tx.prepare(&query)?;
-        let mut rows = stmt.query(rusqlite::params_from_iter(params))?;
+        let result_map = conn
+            .prepare(&query)?
+            .query_map(rusqlite::params_from_iter(params), |row| {
+                let adr: Self::Address = row.get::<_, [u8; ADDRESS_LENGTH]>(0)?.into();
+                let word: Self::Word = row.get(1)?;
+                Ok((adr, word))
+            })?
+            .collect::<Result<HashMap<Self::Address, Self::Word>, _>>()?;
 
-        // Process all rows
-        let mut result_map = std::collections::HashMap::new();
-        while let Some(row) = rows.next()? {
-            let adr: Self::Address = row.get::<_, [u8; ADDRESS_LENGTH]>(0)?.into();
-            let word: Self::Word = row.get(1)?; // tb verified
-            // Convert to fixed-size array
-            result_map.insert(adr, word);
-        }
-
-        // Create results in the same order as input addresses
-        // TODO: Check if this is necessary of if the order is always respected anyway
         let results = addresses
             .iter()
             .map(|addr| result_map.get(addr).copied())
@@ -126,68 +131,57 @@ impl<const ADDRESS_LENGTH: usize, const WORD_LENGTH: usize> MemoryADT
     ) -> Result<Option<Self::Word>, Self::Error> {
         let mut conn = self.pool.get()?;
 
-        let (guard_address, guard_value) = guard;
+        let (ga, gw) = guard;
 
-        let max_retries = 5;
-        // start with a very small delay since SQLite is used locally
-        // only used if exponential_backoff is enabled
-        let base_delay_ms = 2;
-        let mut retries = 0;
-        let mut last_err = rusqlite::Error::ExecuteReturnedResults;
+        let tx = conn.transaction()?;
+        // Sets an implicit `busy_handler` that sleeps for a specified amount of time when a
+        // table is locked, handling `SQLITE_BUSY` errors. The handler will sleep multiple
+        // times until at least 5000 milliseconds of sleeping have accumulated.
+        // The value of `5000ms` is the current default busy timeout for new connections.
+        tx.busy_timeout(Duration::from_millis(5000))?;
 
-        while retries < max_retries {
-            if self.exponential_backoff && retries > 0 {
-                sleep(Duration::from_millis(base_delay_ms * 2_u64.pow(retries)));
+        let select_query = "SELECT w FROM memory WHERE a = ?";
+        let current_word = match tx.query_row(
+            select_query,
+            [rusqlite::types::Value::Blob(ga.to_vec())],
+            |row| row.get::<_, Self::Word>(0),
+        ) {
+            Ok(word) => Some(word),
+            // No rows returned means the address is not in the database
+            // This is an expected scenario and its result is `None`
+            Err(rusqlite::Error::QueryReturnedNoRows) => None,
+            Err(e) => {
+                tx.rollback()?;
+                return Err(SqlMemoryError::SqlError(e));
             }
-            retries += 1;
-            let tx = conn.transaction()?;
-            let first_query = "SELECT word AS previous_value FROM findex_aw_store WHERE adr = ?";
-            // Convert addresses to SQL parameters
-            let previous_word = match tx.query_row(
-                first_query,
-                [rusqlite::types::Value::Blob(guard_address.to_vec())],
-                |row| row.get::<_, Self::Word>(0),
-            ) {
-                Ok(word) => Some(word),
-                // No rows returned, the address is not in the database
-                Err(rusqlite::Error::QueryReturnedNoRows) => None,
-                Err(e) => {
-                    tx.rollback()?;
-                    last_err = e;
-                    continue; // Continue retry loop
-                }
-            };
+        };
 
-            if previous_word == guard_value {
-                // guard passed, flatten bindings
-                let params2 = params_from_iter(bindings.iter().flat_map(|(a, w)| {
-                    vec![
-                        rusqlite::types::Value::Blob(a.to_vec()),
-                        rusqlite::types::Value::Blob(w.to_vec()),
-                    ]
-                }));
-                let pts_dinterrogation = (0..bindings.len())
+        if current_word == gw {
+            // guard passed, flatten bindings
+            let args = params_from_iter(bindings.iter().flat_map(|(a, w)| {
+                vec![
+                    rusqlite::types::Value::Blob(a.to_vec()),
+                    rusqlite::types::Value::Blob(w.to_vec()),
+                ]
+            }));
+            let insert_query = "INSERT OR REPLACE INTO memory (a, w) VALUES ".to_owned()
+                + &(0..bindings.len())
                     .map(|_| "(?,?)")
                     .collect::<Vec<&str>>()
                     .join(",");
-                let second_query = "INSERT OR REPLACE INTO findex_aw_store (adr, word) VALUES "
-                    .to_owned()
-                    + &pts_dinterrogation;
-                let r = tx.execute(&second_query, params2)?;
-                if r == bindings.len() {
-                    tx.commit()?;
-                    return Ok(previous_word);
-                } else {
-                    last_err = rusqlite::Error::StatementChangedRows(bindings.len());
-                    tx.rollback()?;
-                }
+            let insert_count = tx.execute(&insert_query, args)?;
+            if insert_count == bindings.len() {
+                tx.commit()?;
+                return Ok(current_word);
             } else {
-                return Ok(previous_word);
+                tx.rollback()?;
+                return Err(SqlMemoryError::SqlError(
+                    rusqlite::Error::StatementChangedRows(insert_count),
+                ));
             }
+        } else {
+            return Ok(current_word);
         }
-        // TODO: ideally this should return a stack of all the errors that made
-        // the transaction fail
-        Err(SqlMemoryError::SqlError(last_err))
     }
 }
 
