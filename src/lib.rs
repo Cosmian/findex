@@ -31,7 +31,7 @@ pub use value::Value;
 pub use memory::{RedisMemory, RedisMemoryError};
 
 #[cfg(feature = "sql-mem")]
-pub use memory::{SqlMemory, SqlMemoryError};
+pub use memory::{SqliteMemory, SqliteMemoryError};
 
 #[cfg(any(test, feature = "test-utils"))]
 pub use encoding::{

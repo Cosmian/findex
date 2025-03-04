@@ -9,7 +9,7 @@ use std::{
 use thiserror::Error;
 
 #[derive(Error, Debug)]
-pub enum SqlMemoryError {
+pub enum SqliteMemoryError {
     #[error("Sql store memory error: {0}")]
     SqlError(#[from] rusqlite::Error),
     #[error("r2d2 pooling error: {0}")]
@@ -17,9 +17,8 @@ pub enum SqlMemoryError {
 }
 
 #[derive(Debug, Clone)]
-pub struct SqlMemory<Address, Word> {
+pub struct SqliteMemory<Address, Word> {
     pool: Pool<SqliteConnectionManager>,
-    // only enable this in case of a high contention scenario
     _marker: PhantomData<(Address, Word)>,
 }
 
@@ -30,7 +29,7 @@ CREATE TABLE IF NOT EXISTS memory
     w BLOB NOT NULL
 )";
 
-impl<Address, Word> SqlMemory<Address, Word> {
+impl<Address, Word> SqliteMemory<Address, Word> {
     /// Get the number of CPUs available on the system.
     fn get_cpu_count() -> u32 {
         // Using less connections than the number of CPUs underuses the available ressources
@@ -41,7 +40,7 @@ impl<Address, Word> SqlMemory<Address, Word> {
     }
 
     /// Create a new in-memory database.
-    pub fn in_memory() -> Result<Self, SqlMemoryError> {
+    pub fn in_memory() -> Result<Self, SqliteMemoryError> {
         let pool = r2d2::Pool::builder()
             .max_size(Self::get_cpu_count())
             .build(SqliteConnectionManager::memory())?;
@@ -53,7 +52,7 @@ impl<Address, Word> SqlMemory<Address, Word> {
     }
 
     /// Connects to a known DB using the given path.
-    pub fn connect(path: &impl AsRef<Path>) -> Result<Self, SqlMemoryError> {
+    pub fn connect(path: &impl AsRef<Path>) -> Result<Self, SqliteMemoryError> {
         // SqliteConnectionManager::file is the equivalent of using
         // `rusqlite::Connection::open` as documented in the function's source
         // code.
@@ -70,10 +69,10 @@ impl<Address, Word> SqlMemory<Address, Word> {
 }
 
 impl<const ADDRESS_LENGTH: usize, const WORD_LENGTH: usize> MemoryADT
-    for SqlMemory<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>
+    for SqliteMemory<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>
 {
     type Address = Address<ADDRESS_LENGTH>;
-    type Error = SqlMemoryError;
+    type Error = SqliteMemoryError;
     type Word = [u8; WORD_LENGTH];
 
     async fn batch_read(
@@ -145,7 +144,7 @@ impl<const ADDRESS_LENGTH: usize, const WORD_LENGTH: usize> MemoryADT
             Err(rusqlite::Error::QueryReturnedNoRows) => None,
             Err(e) => {
                 tx.rollback()?;
-                return Err(SqlMemoryError::SqlError(e));
+                return Err(SqliteMemoryError::SqlError(e));
             }
         };
 
@@ -168,7 +167,7 @@ impl<const ADDRESS_LENGTH: usize, const WORD_LENGTH: usize> MemoryADT
                 Ok(current_word)
             } else {
                 tx.rollback()?;
-                Err(SqlMemoryError::SqlError(
+                Err(SqliteMemoryError::SqlError(
                     rusqlite::Error::StatementChangedRows(insert_count),
                 ))
             }
@@ -190,22 +189,22 @@ mod tests {
     };
 
     #[tokio::test]
-    async fn test_rw_seq() -> Result<(), SqlMemoryError> {
-        let m = SqlMemory::<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>::in_memory()?;
+    async fn test_rw_seq() -> Result<(), SqliteMemoryError> {
+        let m = SqliteMemory::<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>::in_memory()?;
         test_single_write_and_read(&m, rand::random()).await;
         Ok(())
     }
 
     #[tokio::test]
-    async fn test_guard_seq() -> Result<(), SqlMemoryError> {
-        let m = SqlMemory::<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>::in_memory()?;
+    async fn test_guard_seq() -> Result<(), SqliteMemoryError> {
+        let m = SqliteMemory::<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>::in_memory()?;
         test_wrong_guard(&m, rand::random()).await;
         Ok(())
     }
 
     #[tokio::test]
-    async fn test_rw_ccr() -> Result<(), SqlMemoryError> {
-        let m = SqlMemory::<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>::in_memory()?;
+    async fn test_rw_ccr() -> Result<(), SqliteMemoryError> {
+        let m = SqliteMemory::<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>::in_memory()?;
         test_guarded_write_concurrent(&m, rand::random()).await;
         Ok(())
     }
