@@ -3,12 +3,8 @@ use r2d2::Pool;
 use r2d2_sqlite::SqliteConnectionManager;
 use rusqlite::{params_from_iter, types::ToSqlOutput};
 use std::{
-    collections::HashMap,
-    marker::PhantomData,
-    num::NonZero,
-    path::Path,
-    thread::{available_parallelism, sleep},
-    time::Duration,
+    collections::HashMap, marker::PhantomData, num::NonZero, path::Path,
+    thread::available_parallelism, time::Duration,
 };
 use thiserror::Error;
 
@@ -24,7 +20,6 @@ pub enum SqlMemoryError {
 pub struct SqlMemory<Address, Word> {
     pool: Pool<SqliteConnectionManager>,
     // only enable this in case of a high contention scenario
-    exponential_backoff: bool,
     _marker: PhantomData<(Address, Word)>,
 }
 
@@ -46,20 +41,19 @@ impl<Address, Word> SqlMemory<Address, Word> {
     }
 
     /// Create a new in-memory database.
-    pub fn in_memory(backoff: Option<bool>) -> Result<Self, SqlMemoryError> {
+    pub fn in_memory() -> Result<Self, SqlMemoryError> {
         let pool = r2d2::Pool::builder()
             .max_size(Self::get_cpu_count())
             .build(SqliteConnectionManager::memory())?;
         pool.get().unwrap().execute(CREATE_TABLE_SCRIPT, [])?;
         Ok(Self {
             pool,
-            exponential_backoff: backoff.unwrap_or(false),
             _marker: PhantomData,
         })
     }
 
     /// Connects to a known DB using the given path.
-    pub fn connect(path: &impl AsRef<Path>, backoff: Option<bool>) -> Result<Self, SqlMemoryError> {
+    pub fn connect(path: &impl AsRef<Path>) -> Result<Self, SqlMemoryError> {
         // SqliteConnectionManager::file is the equivalent of using
         // `rusqlite::Connection::open` as documented in the function's source
         // code.
@@ -70,7 +64,6 @@ impl<Address, Word> SqlMemory<Address, Word> {
 
         Ok(Self {
             pool,
-            exponential_backoff: backoff.unwrap_or(false),
             _marker: PhantomData,
         })
     }
@@ -172,15 +165,15 @@ impl<const ADDRESS_LENGTH: usize, const WORD_LENGTH: usize> MemoryADT
             let insert_count = tx.execute(&insert_query, args)?;
             if insert_count == bindings.len() {
                 tx.commit()?;
-                return Ok(current_word);
+                Ok(current_word)
             } else {
                 tx.rollback()?;
-                return Err(SqlMemoryError::SqlError(
+                Err(SqlMemoryError::SqlError(
                     rusqlite::Error::StatementChangedRows(insert_count),
-                ));
+                ))
             }
         } else {
-            return Ok(current_word);
+            Ok(current_word)
         }
     }
 }
@@ -198,21 +191,21 @@ mod tests {
 
     #[tokio::test]
     async fn test_rw_seq() -> Result<(), SqlMemoryError> {
-        let m = SqlMemory::<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>::in_memory(None)?;
+        let m = SqlMemory::<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>::in_memory()?;
         test_single_write_and_read(&m, rand::random()).await;
         Ok(())
     }
 
     #[tokio::test]
     async fn test_guard_seq() -> Result<(), SqlMemoryError> {
-        let m = SqlMemory::<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>::in_memory(None)?;
+        let m = SqlMemory::<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>::in_memory()?;
         test_wrong_guard(&m, rand::random()).await;
         Ok(())
     }
 
     #[tokio::test]
     async fn test_rw_ccr() -> Result<(), SqlMemoryError> {
-        let m = SqlMemory::<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>::in_memory(None)?;
+        let m = SqlMemory::<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>::in_memory()?;
         test_guarded_write_concurrent(&m, rand::random()).await;
         Ok(())
     }
