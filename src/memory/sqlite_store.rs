@@ -4,7 +4,7 @@ use r2d2_sqlite::SqliteConnectionManager;
 use rusqlite::{params_from_iter, types::ToSqlOutput};
 use std::{
     collections::HashMap, marker::PhantomData, num::NonZero, path::Path,
-    thread::available_parallelism, time::Duration,
+    thread::available_parallelism,
 };
 use thiserror::Error;
 
@@ -126,11 +126,6 @@ impl<const ADDRESS_LENGTH: usize, const WORD_LENGTH: usize> MemoryADT
         let (ga, gw) = guard;
 
         let tx = conn.transaction()?;
-        // Sets an implicit `busy_handler` that sleeps for a specified amount of time when a
-        // table is locked, handling `SQLITE_BUSY` errors. The handler will sleep multiple
-        // times until at least 5000 milliseconds of sleeping have accumulated.
-        // The value of `5000ms` is the current default busy timeout for new connections.
-        tx.busy_timeout(Duration::from_millis(5000))?;
 
         let select_query = "SELECT w FROM memory WHERE a = ?";
         let current_word = match tx.query_row(
@@ -149,7 +144,7 @@ impl<const ADDRESS_LENGTH: usize, const WORD_LENGTH: usize> MemoryADT
         };
 
         if current_word == gw {
-            // guard passed, flatten bindings
+            // guard passed, flatten bindings and convert to SQL BLOBs
             let args = params_from_iter(bindings.iter().flat_map(|(a, w)| {
                 vec![
                     rusqlite::types::Value::Blob(a.to_vec()),
