@@ -148,11 +148,12 @@ pub async fn test_guarded_write_concurrent<const WORD_LENGTH: usize, Memory>(
     Memory::Error: Send + std::error::Error,
 {
     // A worker increment N times the counter m[a].
-    async fn worker<const WORD_LENGTH: usize, Memory: MemoryADT>(
+    async fn worker<const WORD_LENGTH: usize, Memory>(
         m: Memory,
         a: [u8; ADDRESS_LENGTH],
     ) -> Result<(), Memory::Error>
     where
+        Memory: 'static + Send + Sync + MemoryADT + Clone,
         Memory::Address: Send + From<[u8; ADDRESS_LENGTH]>,
         Memory::Word:
             Send + Debug + PartialEq + From<[u8; WORD_LENGTH]> + Into<[u8; WORD_LENGTH]> + Clone,

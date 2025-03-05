@@ -2,10 +2,7 @@ use crate::{Address, MemoryADT};
 use r2d2::Pool;
 use r2d2_sqlite::SqliteConnectionManager;
 use rusqlite::{OptionalExtension, params_from_iter, types::Value::Blob};
-use std::{
-    collections::HashMap, marker::PhantomData, num::NonZero, ops::Deref, path::Path,
-    thread::available_parallelism,
-};
+use std::{collections::HashMap, marker::PhantomData, ops::Deref, path::Path};
 use thiserror::Error;
 
 #[derive(Error, Debug)]
@@ -124,23 +121,31 @@ mod tests {
         },
     };
 
+    const DB_PATH: &str = "./sqlite.db";
+
     #[tokio::test]
     async fn test_rw_seq() -> Result<(), SqliteMemoryError> {
-        let m = SqliteMemory::<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>::in_memory()?;
+        let m = SqliteMemory::<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>::connect(&Path::new(
+            DB_PATH,
+        ))?;
         test_single_write_and_read(&m, rand::random()).await;
         Ok(())
     }
 
     #[tokio::test]
     async fn test_guard_seq() -> Result<(), SqliteMemoryError> {
-        let m = SqliteMemory::<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>::in_memory()?;
+        let m = SqliteMemory::<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>::connect(&Path::new(
+            DB_PATH,
+        ))?;
         test_wrong_guard(&m, rand::random()).await;
         Ok(())
     }
 
     #[tokio::test]
     async fn test_rw_ccr() -> Result<(), SqliteMemoryError> {
-        let m = SqliteMemory::<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>::in_memory()?;
+        let m = SqliteMemory::<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>::connect(&Path::new(
+            DB_PATH,
+        ))?;
         test_guarded_write_concurrent(&m, rand::random()).await;
         Ok(())
     }
