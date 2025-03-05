@@ -57,7 +57,7 @@ impl<const ADDRESS_LENGTH: usize, const WORD_LENGTH: usize> MemoryADT
 
         // Return order of an SQL select statement is undefined, and
         // mismatched are ignored. A post-processing is thus needed to
-        // generate a returned value complying with the batch-read spec.
+        // generate a returned value complying to the batch-read spec.
         let mut bindings = conn
             .prepare(&format!(
                 "SELECT a, w FROM memory WHERE a IN ({})",
