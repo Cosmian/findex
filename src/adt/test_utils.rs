@@ -147,67 +147,72 @@ pub async fn test_guarded_write_concurrent<const WORD_LENGTH: usize, Memory>(
         Send + Debug + PartialEq + From<[u8; WORD_LENGTH]> + Into<[u8; WORD_LENGTH]> + Clone,
     Memory::Error: Send + std::error::Error,
 {
+    // A worker increment N times the counter m[a].
+    async fn worker<const WORD_LENGTH: usize, Memory: MemoryADT>(
+        m: Memory,
+        a: [u8; ADDRESS_LENGTH],
+    ) -> Result<(), Memory::Error>
+    where
+        Memory::Address: Send + From<[u8; ADDRESS_LENGTH]>,
+        Memory::Word:
+            Send + Debug + PartialEq + From<[u8; WORD_LENGTH]> + Into<[u8; WORD_LENGTH]> + Clone,
     {
-        const N: usize = 100;
-        let mut rng = StdRng::from_seed(seed);
-        let a = gen_bytes(&mut rng);
+        let mut cnt = 0u128;
+        for _ in 0..N {
+            loop {
+                let guard = if 0 == cnt {
+                    None
+                } else {
+                    Some(Memory::Word::from(u128_to_array(cnt)))
+                };
 
-        // A worker increment N times the counter m[a].
-        let worker = |m: Memory, a: [u8; ADDRESS_LENGTH]| async move {
-            let mut cnt = 0u128;
-            for _ in 0..N {
-                loop {
-                    let guard = if 0 == cnt {
-                        None
-                    } else {
-                        Some(Memory::Word::from(u128_to_array(cnt)))
-                    };
+                let new_cnt = cnt + 1;
+                let cur_cnt = m
+                    .guarded_write((a.into(), guard), vec![(
+                        a.into(),
+                        Memory::Word::from(u128_to_array(new_cnt)),
+                    )])
+                    .await?
+                    .map(|w| word_to_array(w.into()).unwrap())
+                    .unwrap_or_default();
 
-                    let new_cnt = cnt + 1;
-                    let cur_cnt = m
-                        .guarded_write((a.into(), guard), vec![(
-                            a.into(),
-                            Memory::Word::from(u128_to_array(new_cnt)),
-                        )])
-                        .await
-                        .unwrap()
-                        .map(|w| word_to_array(w.into()).unwrap())
-                        .unwrap_or_default();
-
-                    if cnt == cur_cnt {
-                        cnt = new_cnt;
-                        break;
-                    } else {
-                        cnt = cur_cnt;
-                    }
+                if cnt == cur_cnt {
+                    cnt = new_cnt;
+                    break;
+                } else {
+                    cnt = cur_cnt;
                 }
             }
-        };
-
-        // Spawn N concurrent workers.
-        let handles: Vec<_> = (0..N)
-            .map(|_| {
-                let m = memory.clone();
-                std::thread::spawn(move || worker(m, a))
-            })
-            .collect();
-
-        for handle in handles {
-            handle.join().unwrap().await;
         }
-
-        let final_count = memory.batch_read(vec![a.into()]).await.unwrap()[0]
-            .clone()
-            .expect("Counter should exist");
-
-        assert_eq!(
-            word_to_array(final_count.clone().into()).unwrap(),
-            (N * N) as u128,
-            "test_guarded_write_concurrent failed. Expected the counter to be at {:?}, found \
-             {:?}.\nDebug seed : {:?}.",
-            N as u128,
-            word_to_array(final_count.into()).unwrap(),
-            seed
-        );
+        Ok(())
     }
+
+    const N: usize = 100;
+    let mut rng = StdRng::from_seed(seed);
+    let a = gen_bytes(&mut rng);
+
+    let handles = (0..N)
+        .map(|_| {
+            let m = memory.clone();
+            std::thread::spawn(move || worker(m, a))
+        })
+        .collect::<Vec<_>>();
+
+    for handle in handles {
+        handle.join().unwrap().await.unwrap();
+    }
+
+    let final_count = memory.batch_read(vec![a.into()]).await.unwrap()[0]
+        .clone()
+        .expect("Counter should exist");
+
+    assert_eq!(
+        word_to_array(final_count.clone().into()).unwrap(),
+        (N * N) as u128,
+        "test_guarded_write_concurrent failed. Expected the counter to be at {:?}, found \
+             {:?}.\nDebug seed : {:?}.",
+        N as u128,
+        word_to_array(final_count.into()).unwrap(),
+        seed
+    );
 }
