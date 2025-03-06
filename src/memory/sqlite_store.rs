@@ -1,7 +1,6 @@
 use crate::{Address, MemoryADT};
 use r2d2::Pool;
 use r2d2_sqlite::SqliteConnectionManager;
-
 use rusqlite::{OptionalExtension, params_from_iter, types::Value::Blob};
 use std::{collections::HashMap, fmt, marker::PhantomData, ops::Deref, path::Path};
 
@@ -52,9 +51,18 @@ impl<Address, Word> SqliteMemory<Address, Word> {
     pub fn connect(path: &impl AsRef<Path>) -> Result<Self, SqliteMemoryError> {
         // SqliteConnectionManager::file is the equivalent of using
         // `rusqlite::Connection::open` as documented in the function's source
-        // code.
-        let pool = r2d2::Pool::builder().build(SqliteConnectionManager::file(path))?;
-        pool.get().unwrap().execute(CREATE_TABLE_SCRIPT, [])?;
+        // code. Two pragmas are set to drastically improve performance :
+        // - journal_mode = WAL : WAL journaling is faster than the default DELETE mode without compromising reliability as it
+        //   safe from corruption with synchronous=NORMAL
+        // - synchronous = NORMAL : fsync only in critical moments, drastically improving performance as
+        //   fsync is a very expensive operation.
+        let manager = SqliteConnectionManager::file(path.as_ref()).with_init(|conn| {
+            conn.pragma_update(None, "journal_mode", "WAL")?;
+            conn.pragma_update(None, "synchronous", "NORMAL")?;
+            Ok(())
+        });
+        let pool = r2d2::Pool::builder().build(manager)?;
+        pool.get()?.execute(CREATE_TABLE_SCRIPT, [])?;
 
         Ok(Self {
             pool,
@@ -105,7 +113,7 @@ impl<const ADDRESS_LENGTH: usize, const WORD_LENGTH: usize> MemoryADT
         let (ag, wg) = guard;
 
         let mut conn = self.pool.get()?;
-        let tx = conn.transaction()?;
+        let tx = conn.transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)?;
 
         let current_word = tx
             .query_row("SELECT w FROM memory WHERE a = ?", [&*ag], |row| row.get(0))
@@ -167,7 +175,7 @@ mod tests {
         let m = SqliteMemory::<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>::connect(&Path::new(
             DB_PATH,
         ))?;
-        test_guarded_write_concurrent(&m, rand::random(), None).await;
+        test_guarded_write_concurrent(&m, rand::random(), Some(1000)).await;
         Ok(())
     }
 }
