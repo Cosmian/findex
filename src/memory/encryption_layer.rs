@@ -274,6 +274,7 @@ mod tests {
         test_guarded_write_concurrent::<WORD_LENGTH, _>(
             &create_memory(&mut ChaChaRng::from_os_rng()),
             rand::random(),
+            None,
         )
         .await;
     }
