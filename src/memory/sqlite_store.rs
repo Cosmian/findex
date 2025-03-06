@@ -2,15 +2,35 @@ use crate::{Address, MemoryADT};
 use r2d2::Pool;
 use r2d2_sqlite::SqliteConnectionManager;
 use rusqlite::{OptionalExtension, params_from_iter, types::Value::Blob};
-use std::{collections::HashMap, marker::PhantomData, ops::Deref, path::Path};
-use thiserror::Error;
+use std::{collections::HashMap, fmt, marker::PhantomData, ops::Deref, path::Path};
 
-#[derive(Error, Debug)]
+#[derive(Debug)]
 pub enum SqliteMemoryError {
-    #[error("Sql store memory error: {0}")]
-    SqlError(#[from] rusqlite::Error),
-    #[error("r2d2 pooling error: {0}")]
-    PoolingError(#[from] r2d2::Error),
+    SqlError(rusqlite::Error),
+    PoolingError(r2d2::Error),
+}
+
+impl std::error::Error for SqliteMemoryError {}
+
+impl fmt::Display for SqliteMemoryError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::SqlError(err) => write!(f, "Sql store memory error: {}", err),
+            Self::PoolingError(err) => write!(f, "r2d2 pooling error: {}", err),
+        }
+    }
+}
+
+impl From<rusqlite::Error> for SqliteMemoryError {
+    fn from(err: rusqlite::Error) -> Self {
+        Self::SqlError(err)
+    }
+}
+
+impl From<r2d2::Error> for SqliteMemoryError {
+    fn from(err: r2d2::Error) -> Self {
+        Self::PoolingError(err)
+    }
 }
 
 #[derive(Debug, Clone)]
