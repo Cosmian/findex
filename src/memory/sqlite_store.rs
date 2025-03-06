@@ -146,7 +146,7 @@ mod tests {
         let m = SqliteMemory::<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>::connect(&Path::new(
             DB_PATH,
         ))?;
-        test_guarded_write_concurrent(&m, rand::random()).await;
+        test_guarded_write_concurrent(&m, rand::random(), None).await;
         Ok(())
     }
 }

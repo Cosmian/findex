@@ -137,9 +137,18 @@ pub async fn test_wrong_guard<const WORD_LENGTH: usize, Memory>(
 /// Spawns multiple threads to perform concurrent counter increments.
 /// Uses retries to handle write contention between threads.
 /// Verifies the final counter matches the total number of threads.
+///
+///
+/// # Arguments
+///
+/// * `memory` - The Memory ADT implementation to test.
+/// * `seed` - The seed used to initialize the random number generator.
+/// * `n_threads` - The number of threads to spawn. If None, defaults to 100 which should
+///                be enough to stress test most implementations with minimal delay.
 pub async fn test_guarded_write_concurrent<const WORD_LENGTH: usize, Memory>(
     memory: &Memory,
     seed: [u8; KEY_LENGTH],
+    n_threads: Option<usize>,
 ) where
     Memory: 'static + Send + Sync + MemoryADT + Clone,
     Memory::Address: Send + From<[u8; ADDRESS_LENGTH]>,
@@ -159,7 +168,7 @@ pub async fn test_guarded_write_concurrent<const WORD_LENGTH: usize, Memory>(
             Send + Debug + PartialEq + From<[u8; WORD_LENGTH]> + Into<[u8; WORD_LENGTH]> + Clone,
     {
         let mut cnt = 0u128;
-        for _ in 0..N {
+        for _ in 0..M {
             loop {
                 let guard = if 0 == cnt {
                     None
@@ -188,11 +197,12 @@ pub async fn test_guarded_write_concurrent<const WORD_LENGTH: usize, Memory>(
         Ok(())
     }
 
-    const N: usize = 100;
+    let n: usize = if let Some(n) = n_threads { n } else { 100 }; // number of workers
+    const M: usize = 10; // number of increments per worker
     let mut rng = StdRng::from_seed(seed);
     let a = gen_bytes(&mut rng);
 
-    let handles = (0..N)
+    let handles = (0..n)
         .map(|_| {
             let m = memory.clone();
             std::thread::spawn(move || worker(m, a))
@@ -209,10 +219,10 @@ pub async fn test_guarded_write_concurrent<const WORD_LENGTH: usize, Memory>(
 
     assert_eq!(
         word_to_array(final_count.clone().into()).unwrap(),
-        (N * N) as u128,
+        (n * M) as u128,
         "test_guarded_write_concurrent failed. Expected the counter to be at {:?}, found \
              {:?}.\nDebug seed : {:?}.",
-        N as u128,
+        n as u128,
         word_to_array(final_count.into()).unwrap(),
         seed
     );

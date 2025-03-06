@@ -170,7 +170,7 @@ mod tests {
     #[tokio::test]
     async fn test_rw_ccr() -> Result<(), RedisMemoryError> {
         let m = RedisMemory::connect(&get_redis_url()).await.unwrap();
-        test_guarded_write_concurrent::<WORD_LENGTH, _>(&m, rand::random()).await;
+        test_guarded_write_concurrent::<WORD_LENGTH, _>(&m, rand::random(), None).await;
         Ok(())
     }
 }
