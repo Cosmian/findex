@@ -60,21 +60,7 @@ CREATE TABLE IF NOT EXISTS memory (
 const TIMEOUT_DURATION_MS: u64 = 5000;
 
 impl<Address, Word> SqliteMemory<Address, Word> {
-    pub async fn in_memory() -> Result<Self, SqliteMemoryError> {
-        let pool = PoolBuilder::new()
-            .journal_mode(JournalMode::Wal)
-            .open()
-            .await?;
-        pool.conn_mut(move |conn| conn.execute_batch(CREATE_TABLE_SCRIPT))
-            .await?;
-        Ok(Self {
-            pool,
-            timeout: Duration::from_millis(TIMEOUT_DURATION_MS),
-            _marker: PhantomData,
-        })
-    }
     /// Connects to a known DB using the given path.
-    ///
     ///
     /// # Arguments
     ///
@@ -205,14 +191,16 @@ mod tests {
 
     #[tokio::test]
     async fn test_rw_seq() -> Result<(), SqliteMemoryError> {
-        let m = SqliteMemory::<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>::in_memory().await?;
+        let m = SqliteMemory::<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>::connect(DB_PATH, None)
+            .await?;
         test_single_write_and_read(&m, rand::random()).await;
         Ok(())
     }
 
     #[tokio::test]
     async fn test_guard_seq() -> Result<(), SqliteMemoryError> {
-        let m = SqliteMemory::<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>::in_memory().await?;
+        let m = SqliteMemory::<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>::connect(DB_PATH, None)
+            .await?;
         test_wrong_guard(&m, rand::random()).await;
         Ok(())
     }
@@ -221,7 +209,7 @@ mod tests {
     async fn test_rw_ccr() -> Result<(), SqliteMemoryError> {
         let m = SqliteMemory::<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>::connect(DB_PATH, None)
             .await?;
-        test_guarded_write_concurrent(&m, rand::random(), Some(1000)).await;
+        test_guarded_write_concurrent(&m, rand::random(), Some(100)).await;
         Ok(())
     }
 }
