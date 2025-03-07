@@ -22,7 +22,7 @@ path = "src/lib.rs"
 
 [features]
 redis-mem = ["redis"]
-sql-mem = ["rusqlite", "r2d2_sqlite", "r2d2", "async-sqlite"]
+sql-mem = ["async-sqlite"]
 test-utils = []
 
 [dependencies]

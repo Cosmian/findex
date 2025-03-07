@@ -1,19 +1,19 @@
 use crate::{Address, MemoryADT};
-use async_sqlite::{JournalMode, Pool, PoolBuilder};
-use rusqlite::{OptionalExtension, params_from_iter, types::Value::Blob};
+use async_sqlite::{
+    JournalMode, Pool, PoolBuilder,
+    rusqlite::{OptionalExtension, params_from_iter},
+};
 use std::{
     collections::HashMap,
     fmt::{self, Debug},
     marker::PhantomData,
     ops::Deref,
-    path::Path,
     sync::Arc,
+    time::Duration,
 };
 
 #[derive(Debug)]
 pub enum SqliteMemoryError {
-    SqlError(rusqlite::Error),
-    PoolingError(r2d2::Error),
     AsyncSqliteError(async_sqlite::Error),
 }
 
@@ -22,22 +22,8 @@ impl std::error::Error for SqliteMemoryError {}
 impl fmt::Display for SqliteMemoryError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::SqlError(err) => write!(f, "Sql store memory error: {}", err),
-            Self::PoolingError(err) => write!(f, "r2d2 pooling error: {}", err),
             Self::AsyncSqliteError(err) => write!(f, "async-sqlite error: {}", err),
         }
-    }
-}
-
-impl From<rusqlite::Error> for SqliteMemoryError {
-    fn from(err: rusqlite::Error) -> Self {
-        Self::SqlError(err)
-    }
-}
-
-impl From<r2d2::Error> for SqliteMemoryError {
-    fn from(err: r2d2::Error) -> Self {
-        Self::PoolingError(err)
     }
 }
 
@@ -47,10 +33,10 @@ impl From<async_sqlite::Error> for SqliteMemoryError {
     }
 }
 
-// TODO : mix pragma and wal calls
 #[derive(Clone)]
 pub struct SqliteMemory<Address, Word> {
     pool: Pool,
+    timeout: Duration,
     _marker: PhantomData<(Address, Word)>,
 }
 
@@ -58,6 +44,7 @@ impl<Address, Word> Debug for SqliteMemory<Address, Word> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("SqliteMemory")
             .field("pool", &"<async_sqlite::Pool>")
+            .field("timeout", &self.timeout)
             .field("_marker", &PhantomData::<(Address, Word)>)
             .finish()
     }
@@ -69,28 +56,52 @@ CREATE TABLE IF NOT EXISTS memory (
     w BLOB NOT NULL
 );";
 
+// 5 seconds is the current default timeout for sqlite3 busy handlers.
+const TIMEOUT_DURATION_MS: u64 = 5000;
+
 impl<Address, Word> SqliteMemory<Address, Word> {
+    pub async fn in_memory() -> Result<Self, SqliteMemoryError> {
+        let pool = PoolBuilder::new()
+            .journal_mode(JournalMode::Wal)
+            .open()
+            .await?;
+        pool.conn_mut(move |conn| conn.execute_batch(CREATE_TABLE_SCRIPT))
+            .await?;
+        Ok(Self {
+            pool,
+            timeout: Duration::from_millis(TIMEOUT_DURATION_MS),
+            _marker: PhantomData,
+        })
+    }
     /// Connects to a known DB using the given path.
-    pub async fn connect(path: &str) -> Result<Self, SqliteMemoryError> {
-        // SqliteConnectionManager::file is the equivalent of using
-        // `rusqlite::Connection::open` as documented in the function's source
-        // code. Two pragmas are set to drastically improve performance :
-        // - journal_mode = WAL : WAL journaling is faster than the default DELETE mode without compromising reliability as it
-        //   safe from corruption with synchronous=NORMAL
-        // - synchronous = NORMAL : fsync only in critical moments, drastically improving performance as
-        //   fsync is a very expensive operation.
+    ///
+    ///
+    /// # Arguments
+    ///
+    /// * `path` - The path to the sqlite3 database file.
+    /// * `timeout` - Optional : the timeout for the busy handler in milliseconds, to be only changed if necessary.
+    pub async fn connect(path: &str, timeout: Option<Duration>) -> Result<Self, SqliteMemoryError> {
+        // This pool connections number defaults to the number of logical CPUs of the current system.
+        // The following settings are used to improve performance:
+        // - journal_mode = WAL : WAL journaling is faster than the default DELETE mode without compromising reliability
+        // - synchronous = NORMAL : makes calling the (expensive) `fsync` only done in critical moments
         let pool = PoolBuilder::new()
             .path(path)
             .journal_mode(JournalMode::Wal)
             .open()
-            .await
-            .unwrap();
-
-        pool.conn(|conn| conn.execute_batch(CREATE_TABLE_SCRIPT))
             .await?;
+
+        let timeout = timeout.unwrap_or(Duration::from_millis(TIMEOUT_DURATION_MS));
+
+        pool.conn_mut(move |conn| {
+            conn.busy_timeout(timeout)?;
+            conn.execute_batch(CREATE_TABLE_SCRIPT)
+        })
+        .await?;
 
         Ok(Self {
             pool,
+            timeout,
             _marker: PhantomData,
         })
     }
@@ -107,32 +118,31 @@ impl<const ADDRESS_LENGTH: usize, const WORD_LENGTH: usize> MemoryADT
         &self,
         addresses: Vec<Self::Address>,
     ) -> Result<Vec<Option<Self::Word>>, Self::Error> {
-        let adr_arc = Arc::new(addresses);
-        let adr_arc_clone = Arc::clone(&adr_arc);
-
-        let mut bindings = self
+        let res = self
             .pool
-            .conn(move |conn| {
-                conn.prepare(&format!(
-                    "SELECT a, w FROM memory WHERE a IN ({})",
-                    vec!["?"; adr_arc_clone.len()].join(",")
-                ))?
-                .query_map(
-                    params_from_iter(adr_arc_clone.iter().map(Deref::deref)),
-                    |row| {
-                        let a = Address::from(row.get::<_, [u8; ADDRESS_LENGTH]>(0)?);
-                        let w = row.get(1)?;
-                        Ok((a, w))
-                    },
-                )?
-                .collect::<Result<HashMap<_, _>, _>>()
+            .conn_mut(move |conn| {
+                let mut bindings = conn
+                    .prepare(&format!(
+                        "SELECT a, w FROM memory WHERE a IN ({})",
+                        vec!["?"; addresses.len()].join(",")
+                    ))?
+                    .query_map(
+                        params_from_iter(addresses.iter().map(Deref::deref)),
+                        |row| {
+                            let a = Address::from(row.get::<_, [u8; ADDRESS_LENGTH]>(0)?);
+                            let w = row.get(1)?;
+                            Ok((a, w))
+                        },
+                    )?
+                    .collect::<Result<HashMap<_, _>, _>>()?;
+
+                // Return order of an SQL select statement is undefined, and
+                // mismatched are ignored. A post-processing is thus needed to
+                // generate a returned value complying to the batch-read spec.
+                Ok(addresses.iter().map(|addr| bindings.remove(addr)).collect())
             })
             .await?;
-
-        // Return order of an SQL select statement is undefined, and
-        // mismatched are ignored. A post-processing is thus needed to
-        // generate a returned value complying to the batch-read spec.
-        Ok(adr_arc.iter().map(|addr| bindings.remove(addr)).collect())
+        Ok(res)
     }
 
     async fn guarded_write(
@@ -141,12 +151,15 @@ impl<const ADDRESS_LENGTH: usize, const WORD_LENGTH: usize> MemoryADT
         bindings: Vec<(Self::Address, Self::Word)>,
     ) -> Result<Option<Self::Word>, Self::Error> {
         let (ag, wg) = guard;
+        let duration = Arc::new(self.timeout);
 
         let current_word = self
             .pool
             .conn_mut(move |conn| {
-                let tx =
-                    conn.transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)?;
+                let tx = conn.transaction_with_behavior(
+                    async_sqlite::rusqlite::TransactionBehavior::Immediate,
+                )?;
+                tx.busy_timeout(*duration)?; // 30s
 
                 let current_word = tx
                     .query_row("SELECT w FROM memory WHERE a = ?", [&*ag], |row| row.get(0))
@@ -162,7 +175,8 @@ impl<const ADDRESS_LENGTH: usize, const WORD_LENGTH: usize> MemoryADT
                             bindings
                                 .iter()
                                 // There seems to be no way to avoid cloning here.
-                                .flat_map(|(a, w)| [Blob(a.to_vec()), Blob(w.to_vec())]),
+                                // Wrapping a and w in `Blob` can be avoiding as the underlying structure is the same.
+                                .flat_map(|(a, w)| [a.to_vec(), w.to_vec()]),
                         ),
                     )?;
                     tx.commit()?;
@@ -187,29 +201,27 @@ mod tests {
         },
     };
 
-    const DB_PATH: &str = "./sqlite.db";
+    const DB_PATH: &str = "./target/debug/sqlite-test.db";
 
     #[tokio::test]
     async fn test_rw_seq() -> Result<(), SqliteMemoryError> {
-        let m =
-            SqliteMemory::<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>::connect(DB_PATH).await?;
+        let m = SqliteMemory::<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>::in_memory().await?;
         test_single_write_and_read(&m, rand::random()).await;
         Ok(())
     }
 
     #[tokio::test]
     async fn test_guard_seq() -> Result<(), SqliteMemoryError> {
-        let m =
-            SqliteMemory::<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>::connect(DB_PATH).await?;
+        let m = SqliteMemory::<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>::in_memory().await?;
         test_wrong_guard(&m, rand::random()).await;
         Ok(())
     }
 
     #[tokio::test]
     async fn test_rw_ccr() -> Result<(), SqliteMemoryError> {
-        let m =
-            SqliteMemory::<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>::connect(DB_PATH).await?;
-        test_guarded_write_concurrent(&m, rand::random(), Some(100)).await;
+        let m = SqliteMemory::<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>::connect(DB_PATH, None)
+            .await?;
+        test_guarded_write_concurrent(&m, rand::random(), Some(1000)).await;
         Ok(())
     }
 }

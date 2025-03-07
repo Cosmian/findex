@@ -197,7 +197,7 @@ pub async fn test_guarded_write_concurrent<const WORD_LENGTH: usize, Memory>(
         Ok(())
     }
 
-    let n: usize = if let Some(n) = n_threads { n } else { 100 }; // number of workers
+    let n: usize = n_threads.unwrap_or(100); // number of workers
     const M: usize = 10; // number of increments per worker
     let mut rng = StdRng::from_seed(seed);
     let a = gen_bytes(&mut rng);
