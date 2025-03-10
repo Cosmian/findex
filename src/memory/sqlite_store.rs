@@ -8,8 +8,6 @@ use std::{
     fmt::{self, Debug},
     marker::PhantomData,
     ops::Deref,
-    sync::Arc,
-    time::Duration,
 };
 
 #[derive(Debug)]
@@ -36,7 +34,6 @@ impl From<async_sqlite::Error> for SqliteMemoryError {
 #[derive(Clone)]
 pub struct SqliteMemory<Address, Word> {
     pool: Pool,
-    timeout: Duration,
     _marker: PhantomData<(Address, Word)>,
 }
 
@@ -44,7 +41,6 @@ impl<Address, Word> Debug for SqliteMemory<Address, Word> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("SqliteMemory")
             .field("pool", &"<async_sqlite::Pool>")
-            .field("timeout", &self.timeout)
             .field("_marker", &PhantomData::<(Address, Word)>)
             .finish()
     }
@@ -56,17 +52,13 @@ CREATE TABLE IF NOT EXISTS memory (
     w BLOB NOT NULL
 );";
 
-// 5 seconds is the current default timeout for sqlite3 busy handlers.
-const TIMEOUT_DURATION_MS: u64 = 5000;
-
 impl<Address, Word> SqliteMemory<Address, Word> {
     /// Connects to a known DB using the given path.
     ///
     /// # Arguments
     ///
     /// * `path` - The path to the sqlite3 database file.
-    /// * `timeout` - Optional : the timeout for the busy handler in milliseconds, to be only changed if necessary.
-    pub async fn connect(path: &str, timeout: Option<Duration>) -> Result<Self, SqliteMemoryError> {
+    pub async fn connect(path: &str) -> Result<Self, SqliteMemoryError> {
         // This pool connections number defaults to the number of logical CPUs of the current system.
         // The following settings are used to improve performance:
         // - journal_mode = WAL : WAL journaling is faster than the default DELETE mode without compromising reliability
@@ -77,17 +69,11 @@ impl<Address, Word> SqliteMemory<Address, Word> {
             .open()
             .await?;
 
-        let timeout = timeout.unwrap_or(Duration::from_millis(TIMEOUT_DURATION_MS));
-
-        pool.conn(move |conn| {
-            conn.busy_timeout(timeout)?;
-            conn.execute_batch(CREATE_TABLE_SCRIPT)
-        })
-        .await?;
+        pool.conn(move |conn| conn.execute_batch(CREATE_TABLE_SCRIPT))
+            .await?;
 
         Ok(Self {
             pool,
-            timeout,
             _marker: PhantomData,
         })
     }
@@ -104,7 +90,6 @@ impl<const ADDRESS_LENGTH: usize, const WORD_LENGTH: usize> MemoryADT
         &self,
         addresses: Vec<Self::Address>,
     ) -> Result<Vec<Option<Self::Word>>, Self::Error> {
-        // Read locks are no bottleneck, so no need to edit the default busy handler.
         self.pool
             .conn(move |conn| {
                 let mut bindings = conn
@@ -140,14 +125,12 @@ impl<const ADDRESS_LENGTH: usize, const WORD_LENGTH: usize> MemoryADT
         bindings: Vec<(Self::Address, Self::Word)>,
     ) -> Result<Option<Self::Word>, Self::Error> {
         let (ag, wg) = guard;
-        let duration = Arc::new(self.timeout);
 
         self.pool
             .conn_mut(move |conn| {
                 let tx = conn.transaction_with_behavior(
                     async_sqlite::rusqlite::TransactionBehavior::Immediate,
                 )?;
-                tx.busy_timeout(*duration)?;
 
                 let current_word = tx
                     .query_row("SELECT w FROM memory WHERE a = ?", [&*ag], |row| row.get(0))
@@ -191,32 +174,24 @@ mod tests {
 
     #[tokio::test]
     async fn test_rw_seq() -> Result<(), SqliteMemoryError> {
-        let m = SqliteMemory::<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>::connect(DB_PATH, None)
-            .await?;
+        let m =
+            SqliteMemory::<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>::connect(DB_PATH).await?;
         test_single_write_and_read(&m, rand::random()).await;
         Ok(())
     }
 
     #[tokio::test]
     async fn test_guard_seq() -> Result<(), SqliteMemoryError> {
-        let m = SqliteMemory::<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>::connect(DB_PATH, None)
-            .await?;
+        let m =
+            SqliteMemory::<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>::connect(DB_PATH).await?;
         test_wrong_guard(&m, rand::random()).await;
         Ok(())
     }
 
     #[tokio::test]
     async fn test_rw_ccr() -> Result<(), SqliteMemoryError> {
-        let m = SqliteMemory::<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>::connect(DB_PATH, None)
-            .await?;
-        test_guarded_write_concurrent(&m, rand::random(), Some(100)).await;
-        Ok(())
-    }
-
-    #[tokio::test]
-    async fn test_rw_ccr2() -> Result<(), SqliteMemoryError> {
-        let m = SqliteMemory::<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>::connect(DB_PATH, None)
-            .await?;
+        let m =
+            SqliteMemory::<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>::connect(DB_PATH).await?;
         test_guarded_write_concurrent(&m, rand::random(), Some(100)).await;
         Ok(())
     }
