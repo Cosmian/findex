@@ -28,7 +28,10 @@ pub use secret::Secret;
 pub use value::Value;
 
 #[cfg(feature = "redis-mem")]
-pub use memory::{MemoryError, RedisMemory};
+pub use memory::{RedisMemory, RedisMemoryError};
+
+#[cfg(feature = "sqlite-mem")]
+pub use memory::{SqliteMemory, SqliteMemoryError};
 
 #[cfg(any(test, feature = "test-utils"))]
 pub use encoding::{

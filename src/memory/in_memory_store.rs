@@ -144,6 +144,6 @@ mod tests {
     #[tokio::test]
     async fn test_concurrent_read_write() {
         let memory = InMemory::<[u8; 16], [u8; 16]>::default();
-        test_guarded_write_concurrent(&memory, rand::random()).await;
+        test_guarded_write_concurrent(&memory, rand::random(), None).await;
     }
 }
