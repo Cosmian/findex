@@ -143,8 +143,7 @@ pub async fn test_wrong_guard<const WORD_LENGTH: usize, Memory>(
 ///
 /// * `memory` - The Memory ADT implementation to test.
 /// * `seed` - The seed used to initialize the random number generator.
-/// * `n_threads` - The number of threads to spawn. If None, defaults to 100 which should
-///                be enough to stress test most implementations with minimal delay.
+/// * `n_threads` - The number of threads to spawn. If None, defaults to 100.
 pub async fn test_guarded_write_concurrent<const WORD_LENGTH: usize, Memory>(
     memory: &Memory,
     seed: [u8; KEY_LENGTH],

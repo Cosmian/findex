@@ -105,8 +105,7 @@ impl<const ADDRESS_LENGTH: usize, const WORD_LENGTH: usize> MemoryADT
         addresses: Vec<Self::Address>,
     ) -> Result<Vec<Option<Self::Word>>, Self::Error> {
         // Read locks are no bottleneck, so no need to edit the default busy handler.
-        let res = self
-            .pool
+        self.pool
             .conn(move |conn| {
                 let mut bindings = conn
                     .prepare(&format!(
@@ -126,10 +125,13 @@ impl<const ADDRESS_LENGTH: usize, const WORD_LENGTH: usize> MemoryADT
                 // Return order of an SQL select statement is undefined, and
                 // mismatches are ignored. A post-processing is thus needed to
                 // generate a returned value complying to the batch-read spec.
-                Ok(addresses.iter().map(|addr| bindings.remove(addr)).collect())
+                Ok(addresses
+                    .iter()
+                    .map(|addr| bindings.remove(addr))
+                    .collect::<Vec<Option<[u8; WORD_LENGTH]>>>())
             })
-            .await?;
-        Ok(res)
+            .await
+            .map_err(Self::Error::from)
     }
 
     async fn guarded_write(
@@ -140,8 +142,7 @@ impl<const ADDRESS_LENGTH: usize, const WORD_LENGTH: usize> MemoryADT
         let (ag, wg) = guard;
         let duration = Arc::new(self.timeout);
 
-        let current_word = self
-            .pool
+        self.pool
             .conn_mut(move |conn| {
                 let tx = conn.transaction_with_behavior(
                     async_sqlite::rusqlite::TransactionBehavior::Immediate,
@@ -162,7 +163,6 @@ impl<const ADDRESS_LENGTH: usize, const WORD_LENGTH: usize> MemoryADT
                             bindings
                                 .iter()
                                 // There seems to be no way to avoid cloning here.
-                                // Wrapping `x.to_vec()` and w in `Blob` can be avoided as the underlying structure is the same.
                                 .flat_map(|(a, w)| [a.to_vec(), w.to_vec()]),
                         ),
                     )?;
@@ -171,9 +171,8 @@ impl<const ADDRESS_LENGTH: usize, const WORD_LENGTH: usize> MemoryADT
 
                 Ok(current_word)
             })
-            .await?;
-
-        Ok(current_word)
+            .await
+            .map_err(Self::Error::from)
     }
 }
 
@@ -208,6 +207,14 @@ mod tests {
 
     #[tokio::test]
     async fn test_rw_ccr() -> Result<(), SqliteMemoryError> {
+        let m = SqliteMemory::<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>::connect(DB_PATH, None)
+            .await?;
+        test_guarded_write_concurrent(&m, rand::random(), Some(100)).await;
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_rw_ccr2() -> Result<(), SqliteMemoryError> {
         let m = SqliteMemory::<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>::connect(DB_PATH, None)
             .await?;
         test_guarded_write_concurrent(&m, rand::random(), Some(100)).await;
