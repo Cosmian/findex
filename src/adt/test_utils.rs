@@ -205,12 +205,12 @@ pub async fn test_guarded_write_concurrent<const WORD_LENGTH: usize, Memory>(
     let handles = (0..n)
         .map(|_| {
             let m = memory.clone();
-            std::thread::spawn(move || worker(m, a))
+            tokio::spawn(worker(m, a))
         })
         .collect::<Vec<_>>();
 
     for handle in handles {
-        handle.join().unwrap().await.unwrap();
+        handle.await.unwrap().unwrap();
     }
 
     let final_count = memory.batch_read(vec![a.into()]).await.unwrap()[0]
@@ -222,7 +222,7 @@ pub async fn test_guarded_write_concurrent<const WORD_LENGTH: usize, Memory>(
         (n * M) as u128,
         "test_guarded_write_concurrent failed. Expected the counter to be at {:?}, found \
              {:?}.\nDebug seed : {:?}.",
-        n as u128,
+        (n * M) as u128,
         word_to_array(final_count.into()).unwrap(),
         seed
     );

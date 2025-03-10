@@ -79,7 +79,7 @@ impl<Address, Word> SqliteMemory<Address, Word> {
 
         let timeout = timeout.unwrap_or(Duration::from_millis(TIMEOUT_DURATION_MS));
 
-        pool.conn_mut(move |conn| {
+        pool.conn(move |conn| {
             conn.busy_timeout(timeout)?;
             conn.execute_batch(CREATE_TABLE_SCRIPT)
         })
@@ -104,9 +104,10 @@ impl<const ADDRESS_LENGTH: usize, const WORD_LENGTH: usize> MemoryADT
         &self,
         addresses: Vec<Self::Address>,
     ) -> Result<Vec<Option<Self::Word>>, Self::Error> {
+        // Read locks are no bottleneck, so no need to edit the default busy handler.
         let res = self
             .pool
-            .conn_mut(move |conn| {
+            .conn(move |conn| {
                 let mut bindings = conn
                     .prepare(&format!(
                         "SELECT a, w FROM memory WHERE a IN ({})",
@@ -123,7 +124,7 @@ impl<const ADDRESS_LENGTH: usize, const WORD_LENGTH: usize> MemoryADT
                     .collect::<Result<HashMap<_, _>, _>>()?;
 
                 // Return order of an SQL select statement is undefined, and
-                // mismatched are ignored. A post-processing is thus needed to
+                // mismatches are ignored. A post-processing is thus needed to
                 // generate a returned value complying to the batch-read spec.
                 Ok(addresses.iter().map(|addr| bindings.remove(addr)).collect())
             })
@@ -145,7 +146,7 @@ impl<const ADDRESS_LENGTH: usize, const WORD_LENGTH: usize> MemoryADT
                 let tx = conn.transaction_with_behavior(
                     async_sqlite::rusqlite::TransactionBehavior::Immediate,
                 )?;
-                tx.busy_timeout(*duration)?; // 30s
+                tx.busy_timeout(*duration)?;
 
                 let current_word = tx
                     .query_row("SELECT w FROM memory WHERE a = ?", [&*ag], |row| row.get(0))
@@ -161,7 +162,7 @@ impl<const ADDRESS_LENGTH: usize, const WORD_LENGTH: usize> MemoryADT
                             bindings
                                 .iter()
                                 // There seems to be no way to avoid cloning here.
-                                // Wrapping a and w in `Blob` can be avoiding as the underlying structure is the same.
+                                // Wrapping `x.to_vec()` and w in `Blob` can be avoided as the underlying structure is the same.
                                 .flat_map(|(a, w)| [a.to_vec(), w.to_vec()]),
                         ),
                     )?;
