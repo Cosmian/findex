@@ -1,8 +1,6 @@
-use std::{fmt, marker::PhantomData};
-
-use redis::{RedisError, aio::ConnectionManager};
-
 use crate::{Address, MemoryADT};
+use redis::aio::ConnectionManager;
+use std::{fmt, marker::PhantomData};
 
 // Arguments passed to the LUA script, in order:
 // 1. Guard address.
@@ -28,21 +26,23 @@ return value
 ";
 
 #[derive(Debug, PartialEq)]
-pub struct RedisMemoryError {
-    pub inner: RedisError,
+pub enum RedisMemoryError {
+    RedisError(redis::RedisError),
 }
 
 impl fmt::Display for RedisMemoryError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "Redis store memory error: {}", self.inner)
+        match self {
+            Self::RedisError(e) => write!(f, "Redis error: {}", e),
+        }
     }
 }
 
 impl std::error::Error for RedisMemoryError {}
 
-impl From<RedisError> for RedisMemoryError {
-    fn from(e: RedisError) -> Self {
-        Self { inner: e }
+impl From<redis::RedisError> for RedisMemoryError {
+    fn from(e: redis::RedisError) -> Self {
+        Self::RedisError(e)
     }
 }
 
@@ -103,7 +103,7 @@ impl<const ADDRESS_LENGTH: usize, const WORD_LENGTH: usize> MemoryADT
         // Cloning the connection manager is cheap since it is an `Arc`.
         cmd.query_async(&mut self.manager.clone())
             .await
-            .map_err(Self::Error::from)
+            .map_err(RedisMemoryError::RedisError)
     }
 
     async fn guarded_write(
@@ -131,7 +131,7 @@ impl<const ADDRESS_LENGTH: usize, const WORD_LENGTH: usize> MemoryADT
         // Cloning the connection manager is cheap since it is an `Arc`.
         cmd.query_async(&mut self.manager.clone())
             .await
-            .map_err(Self::Error::from)
+            .map_err(RedisMemoryError::RedisError)
     }
 }
 
