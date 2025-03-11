@@ -1,6 +1,6 @@
 use crate::{Address, MemoryADT};
 use async_sqlite::{
-    JournalMode, Pool, PoolBuilder,
+    Pool, PoolBuilder,
     rusqlite::{OptionalExtension, params_from_iter},
 };
 use std::{
@@ -46,7 +46,13 @@ impl<Address, Word> Debug for SqliteMemory<Address, Word> {
     }
 }
 
-const CREATE_TABLE_SCRIPT: &str = "PRAGMA synchronous = NORMAL;
+// The following settings are used to improve performance:
+// - journal_mode = WAL : WAL journaling is faster than the default DELETE mode.
+// - synchronous = NORMAL: Reduces disk I/O by only calling fsync() at critical moments rather
+//   than after every transaction (FULL mode); this does not compromise data integrity.
+const CREATE_TABLE_SCRIPT: &str = "
+PRAGMA synchronous = NORMAL;
+PRAGMA journal_mode = WAL;
 CREATE TABLE IF NOT EXISTS memory (
     a BLOB PRIMARY KEY,
     w BLOB NOT NULL
@@ -60,14 +66,7 @@ impl<Address, Word> SqliteMemory<Address, Word> {
     /// * `path` - The path to the sqlite3 database file.
     pub async fn connect(path: &str) -> Result<Self, SqliteMemoryError> {
         // This pool connections number defaults to the number of logical CPUs of the current system.
-        // The following settings are used to improve performance:
-        // - journal_mode = WAL : WAL journaling is faster than the default DELETE mode without compromising reliability
-        // - synchronous = NORMAL : makes calling the (expensive) `fsync` only done in critical moments
-        let pool = PoolBuilder::new()
-            .path(path)
-            .journal_mode(JournalMode::Wal)
-            .open()
-            .await?;
+        let pool = PoolBuilder::new().path(path).open().await?;
 
         pool.conn(move |conn| conn.execute_batch(CREATE_TABLE_SCRIPT))
             .await?;
