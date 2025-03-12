@@ -109,10 +109,7 @@ impl<const ADDRESS_LENGTH: usize, const WORD_LENGTH: usize> MemoryADT
                 // Return order of an SQL select statement is undefined, and
                 // mismatches are ignored. A post-processing is thus needed to
                 // generate a returned value complying to the batch-read spec.
-                Ok(addresses
-                    .iter()
-                    .map(|addr| bindings.remove(addr))
-                    .collect::<Vec<Option<[u8; WORD_LENGTH]>>>())
+                Ok(addresses.iter().map(|addr| bindings.remove(addr)).collect())
             })
             .await
             .map_err(Self::Error::from)
