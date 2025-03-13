@@ -9,4 +9,9 @@ pub use in_memory_store::InMemory;
 #[cfg(feature = "redis-mem")]
 mod redis_store;
 #[cfg(feature = "redis-mem")]
-pub use redis_store::{MemoryError, RedisMemory};
+pub use redis_store::{RedisMemory, RedisMemoryError};
+
+#[cfg(feature = "sqlite-mem")]
+pub mod sqlite_store;
+#[cfg(feature = "sqlite-mem")]
+pub use sqlite_store::{SqliteMemory, SqliteMemoryError};

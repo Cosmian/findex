@@ -1,8 +1,6 @@
-use std::{fmt, marker::PhantomData};
-
-use redis::{RedisError, aio::ConnectionManager};
-
 use crate::{Address, MemoryADT};
+use redis::aio::ConnectionManager;
+use std::{fmt, marker::PhantomData};
 
 // Arguments passed to the LUA script, in order:
 // 1. Guard address.
@@ -28,21 +26,23 @@ return value
 ";
 
 #[derive(Debug, PartialEq)]
-pub struct MemoryError {
-    pub inner: RedisError,
+pub enum RedisMemoryError {
+    RedisError(redis::RedisError),
 }
 
-impl fmt::Display for MemoryError {
+impl fmt::Display for RedisMemoryError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "Redis store memory error: {}", self.inner)
+        match self {
+            Self::RedisError(e) => write!(f, "Redis error: {}", e),
+        }
     }
 }
 
-impl std::error::Error for MemoryError {}
+impl std::error::Error for RedisMemoryError {}
 
-impl From<RedisError> for MemoryError {
-    fn from(e: RedisError) -> Self {
-        Self { inner: e }
+impl From<redis::RedisError> for RedisMemoryError {
+    fn from(e: redis::RedisError) -> Self {
+        Self::RedisError(e)
     }
 }
 
@@ -63,7 +63,9 @@ impl<Address, Word> fmt::Debug for RedisMemory<Address, Word> {
 
 impl<Address: Sync, Word: Sync> RedisMemory<Address, Word> {
     /// Connects to a Redis server with a `ConnectionManager`.
-    pub async fn connect_with_manager(mut manager: ConnectionManager) -> Result<Self, MemoryError> {
+    pub async fn connect_with_manager(
+        mut manager: ConnectionManager,
+    ) -> Result<Self, RedisMemoryError> {
         let script_hash = redis::cmd("SCRIPT")
             .arg("LOAD")
             .arg(GUARDED_WRITE_LUA_SCRIPT)
@@ -78,7 +80,7 @@ impl<Address: Sync, Word: Sync> RedisMemory<Address, Word> {
     }
 
     /// Connects to a Redis server using the given URL.
-    pub async fn connect(url: &str) -> Result<Self, MemoryError> {
+    pub async fn connect(url: &str) -> Result<Self, RedisMemoryError> {
         let client = redis::Client::open(url)?;
         let manager = client.get_connection_manager().await?;
         Self::connect_with_manager(manager).await
@@ -90,7 +92,7 @@ impl<const ADDRESS_LENGTH: usize, const WORD_LENGTH: usize> MemoryADT
 {
     type Address = Address<ADDRESS_LENGTH>;
     type Word = [u8; WORD_LENGTH];
-    type Error = MemoryError;
+    type Error = RedisMemoryError;
 
     async fn batch_read(
         &self,
@@ -101,7 +103,7 @@ impl<const ADDRESS_LENGTH: usize, const WORD_LENGTH: usize> MemoryADT
         // Cloning the connection manager is cheap since it is an `Arc`.
         cmd.query_async(&mut self.manager.clone())
             .await
-            .map_err(Self::Error::from)
+            .map_err(RedisMemoryError::RedisError)
     }
 
     async fn guarded_write(
@@ -129,7 +131,7 @@ impl<const ADDRESS_LENGTH: usize, const WORD_LENGTH: usize> MemoryADT
         // Cloning the connection manager is cheap since it is an `Arc`.
         cmd.query_async(&mut self.manager.clone())
             .await
-            .map_err(Self::Error::from)
+            .map_err(RedisMemoryError::RedisError)
     }
 }
 
@@ -152,23 +154,23 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_rw_seq() -> Result<(), MemoryError> {
+    async fn test_rw_seq() -> Result<(), RedisMemoryError> {
         let m = RedisMemory::connect(&get_redis_url()).await.unwrap();
         test_single_write_and_read::<WORD_LENGTH, _>(&m, rand::random()).await;
         Ok(())
     }
 
     #[tokio::test]
-    async fn test_guard_seq() -> Result<(), MemoryError> {
+    async fn test_guard_seq() -> Result<(), RedisMemoryError> {
         let m = RedisMemory::connect(&get_redis_url()).await.unwrap();
         test_wrong_guard::<WORD_LENGTH, _>(&m, rand::random()).await;
         Ok(())
     }
 
     #[tokio::test]
-    async fn test_rw_ccr() -> Result<(), MemoryError> {
+    async fn test_rw_ccr() -> Result<(), RedisMemoryError> {
         let m = RedisMemory::connect(&get_redis_url()).await.unwrap();
-        test_guarded_write_concurrent::<WORD_LENGTH, _>(&m, rand::random()).await;
+        test_guarded_write_concurrent::<WORD_LENGTH, _>(&m, rand::random(), None).await;
         Ok(())
     }
 }
