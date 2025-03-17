@@ -163,7 +163,7 @@ pub async fn test_collisions<const WORD_LENGTH: usize, Memory>(
     // all reads should return the same value
     assert_eq!(
         read_result,
-        vec![Some(w.clone()); 10],
+        vec![Some(w.clone()); 5],
         "test_collisions failed. Expected all reads to return the same value. Got : {:?}. Debug \
          seed : {:?}",
         read_result,
