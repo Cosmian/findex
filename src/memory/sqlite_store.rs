@@ -14,7 +14,6 @@ use std::{
 pub enum SqliteMemoryError {
     AsyncSqliteError(async_sqlite::Error),
 }
-
 impl std::error::Error for SqliteMemoryError {}
 
 impl fmt::Display for SqliteMemoryError {
