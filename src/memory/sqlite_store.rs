@@ -91,7 +91,7 @@ impl<const ADDRESS_LENGTH: usize, const WORD_LENGTH: usize> MemoryADT
     ) -> Result<Vec<Option<Self::Word>>, Self::Error> {
         self.pool
             .conn(move |conn| {
-                let mut bindings = conn
+                let results = conn
                     .prepare(&format!(
                         "SELECT a, w FROM memory WHERE a IN ({})",
                         vec!["?"; addresses.len()].join(",")
@@ -109,7 +109,10 @@ impl<const ADDRESS_LENGTH: usize, const WORD_LENGTH: usize> MemoryADT
                 // Return order of an SQL select statement is undefined, and
                 // mismatches are ignored. A post-processing is thus needed to
                 // generate a returned value complying to the batch-read spec.
-                Ok(addresses.iter().map(|addr| bindings.remove(addr)).collect())
+                Ok(addresses
+                    .iter()
+                    .map(|addr| results.get(addr).copied()) // no way to avoid copying here
+                    .collect())
             })
             .await
             .map_err(Self::Error::from)

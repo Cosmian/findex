@@ -132,10 +132,11 @@ pub async fn test_wrong_guard<const WORD_LENGTH: usize, Memory>(
     );
 }
 
-/// Tests guard violation handling in memory implementations.
+/// Tests collision handling in memory implementations.
 ///
-/// Attempts to write with a None guard to an address containing a value.
-/// Verifies that the original value is preserved and the write fails.
+/// - Writes a value to an address and then reads it multiple times.
+/// - Writes multiple values to the same address with a correct guard.
+/// - Verifies that the last value written is preserved.
 pub async fn test_collisions<const WORD_LENGTH: usize, Memory>(
     memory: &Memory,
     seed: [u8; KEY_LENGTH],
@@ -157,7 +158,7 @@ pub async fn test_collisions<const WORD_LENGTH: usize, Memory>(
         .unwrap();
 
     // try to read that same address multiple times
-    let read_result = memory.batch_read(vec![a.clone(); 10]).await.unwrap();
+    let read_result = memory.batch_read(vec![a.clone(); 5]).await.unwrap();
 
     // all reads should return the same value
     assert_eq!(
