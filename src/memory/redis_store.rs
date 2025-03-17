@@ -144,6 +144,7 @@ mod tests {
         adt::test_utils::{
             test_guarded_write_concurrent, test_single_write_and_read, test_wrong_guard,
         },
+        test_utils::test_collisions,
     };
 
     fn get_redis_url() -> String {
@@ -164,6 +165,14 @@ mod tests {
     async fn test_guard_seq() -> Result<(), RedisMemoryError> {
         let m = RedisMemory::connect(&get_redis_url()).await.unwrap();
         test_wrong_guard::<WORD_LENGTH, _>(&m, rand::random()).await;
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_collision_seq() -> Result<(), RedisMemoryError> {
+        let m: RedisMemory<Address<16>, [u8; WORD_LENGTH]> =
+            RedisMemory::connect(&get_redis_url()).await.unwrap();
+        test_collisions(&m, rand::random()).await;
         Ok(())
     }
 

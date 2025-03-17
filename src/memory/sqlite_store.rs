@@ -162,7 +162,8 @@ mod tests {
     use crate::{
         ADDRESS_LENGTH, WORD_LENGTH,
         adt::test_utils::{
-            test_guarded_write_concurrent, test_single_write_and_read, test_wrong_guard,
+            test_collisions, test_guarded_write_concurrent, test_single_write_and_read,
+            test_wrong_guard,
         },
     };
 
@@ -181,6 +182,14 @@ mod tests {
         let m =
             SqliteMemory::<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>::connect(DB_PATH).await?;
         test_wrong_guard(&m, rand::random()).await;
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_collision_seq() -> Result<(), SqliteMemoryError> {
+        let m =
+            SqliteMemory::<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>::connect(DB_PATH).await?;
+        test_collisions(&m, rand::random()).await;
         Ok(())
     }
 

@@ -132,6 +132,81 @@ pub async fn test_wrong_guard<const WORD_LENGTH: usize, Memory>(
     );
 }
 
+/// Tests guard violation handling in memory implementations.
+///
+/// Attempts to write with a None guard to an address containing a value.
+/// Verifies that the original value is preserved and the write fails.
+pub async fn test_collisions<const WORD_LENGTH: usize, Memory>(
+    memory: &Memory,
+    seed: [u8; KEY_LENGTH],
+) where
+    Memory: Send + Sync + MemoryADT,
+    Memory::Address: Send + Clone + From<[u8; ADDRESS_LENGTH]>,
+    Memory::Word: Send + Debug + Clone + PartialEq + From<[u8; WORD_LENGTH]>,
+    Memory::Error: Send + std::error::Error,
+{
+    let mut rng = StdRng::from_seed(seed);
+
+    let a = Memory::Address::from(gen_bytes(&mut rng));
+    let w = Memory::Word::from(gen_bytes(&mut rng));
+
+    // write to some address
+    memory
+        .guarded_write((a.clone(), None), vec![(a.clone(), w.clone())])
+        .await
+        .unwrap();
+
+    // try to read that same address multiple times
+    let read_result = memory.batch_read(vec![a.clone(); 10]).await.unwrap();
+
+    // all reads should return the same value
+    assert_eq!(
+        read_result,
+        vec![Some(w.clone()); 10],
+        "test_collisions failed. Expected all reads to return the same value. Got : {:?}. Debug \
+         seed : {:?}",
+        read_result,
+        seed
+    );
+
+    // try to write multiple values to the same address with a correct guard
+    let last_value = Memory::Word::from(gen_bytes(&mut rng));
+    let same_adr_write = memory
+        .guarded_write((a.clone(), Some(w.clone())), vec![
+            (a.clone(), Memory::Word::from(gen_bytes(&mut rng))),
+            (a.clone(), Memory::Word::from(gen_bytes(&mut rng))),
+            (a.clone(), Memory::Word::from(gen_bytes(&mut rng))),
+            (a.clone(), Memory::Word::from(gen_bytes(&mut rng))),
+            (a.clone(), last_value.clone()),
+        ])
+        .await
+        .unwrap();
+
+    // the guard should pass and return the last value in the input array
+    assert_eq!(
+        same_adr_write,
+        Some(w.clone()),
+        "test_wrong_guard failed.\nExpected value {:?} after write. Got : {:?}.\nDebug seed : {:?}",
+        same_adr_write,
+        Some(w),
+        seed
+    );
+
+    // a final read of the same address
+    let read_result = memory.batch_read(vec![a.clone()]).await.unwrap();
+
+    // the address should contain the last value written
+    assert_eq!(
+        read_result,
+        vec![Some(last_value.clone())],
+        "test_collisions failed. Expected the address to contain the last value written. Got : \
+         {:?} - This usually means that the guarded_write implementation does not insure sequential \
+         writes in case of non distinct addresses.\n Debug seed : {:?}",
+        read_result,
+        seed
+    );
+}
+
 /// Tests concurrent guarded write operations on a Memory ADT implementation.
 ///
 /// Spawns multiple threads to perform concurrent counter increments.
