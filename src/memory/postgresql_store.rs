@@ -2,8 +2,7 @@ use crate::{Address, MemoryADT};
 use deadpool_postgres::{CreatePoolError, Manager, ManagerConfig, Pool, RecyclingMethod, Runtime};
 use std::fmt;
 use std::marker::PhantomData;
-use std::sync::Arc;
-use tokio_postgres::{Config, NoTls, Socket, Statement, config::SslMode, tls::MakeTlsConnect};
+use tokio_postgres::{Config, NoTls, Socket, config::SslMode, tls::MakeTlsConnect};
 
 #[derive(Debug)]
 pub enum PostgresMemoryError {
@@ -74,7 +73,7 @@ const B_READ_STMT: &str = "
 const G_WRITE_STMT: &str = "
     WITH
     guard_check AS (
-        SELECT w FROM findex_db WHERE a = $1::bytea
+        SELECT w FROM findex_db WHERE a = $1::bytea -- FOR UPDATE
     ),
     dedup_input_table AS (
     SELECT DISTINCT ON (a) a, w
@@ -140,6 +139,89 @@ impl<const ADDRESS_LENGTH: usize, const WORD_LENGTH: usize>
         if returned != 0 {
             return Err(PostgresMemoryError::TableCreationError(returned));
         }
+        // Create the stored procedure with retry logic
+        let _ = pool
+            .get()
+            .await
+            .unwrap()
+            .execute(
+                "
+                CREATE OR REPLACE FUNCTION guarded_write_with_retry(
+                    guard_addr bytea, 
+                    guard_value bytea, 
+                    addresses bytea[], 
+                    valuesAA bytea[]
+                ) RETURNS bytea AS $$
+                DECLARE
+                    retry_count INT := 0;
+                    max_retries INT := 10;
+                    original_value bytea;
+                    backoff_time INT;
+                BEGIN
+          --      SET TRANSACTION ISOLATION LEVEL REPEATABLE READ;
+                    WHILE retry_count < max_retries LOOP
+                        BEGIN
+                            -- Start transaction with appropriate isolation
+                            
+                            WITH guard_check AS (
+                                SELECT w FROM findex_db WHERE a = guard_addr  FOR UPDATE
+                            ),
+                            dedup_input_table AS (
+                                SELECT DISTINCT ON (a) a, w
+                                FROM UNNEST(addresses, valuesAA) WITH ORDINALITY AS t(a, w, order_idx)
+                                ORDER BY a, order_idx DESC
+                            ),
+                            insert_cte AS (
+                                INSERT INTO findex_db (a, w)
+                                SELECT a, w FROM dedup_input_table AS t(a,w)
+                                WHERE (
+                                    guard_value IS NULL AND NOT EXISTS (SELECT 1 FROM guard_check)
+                                ) OR (
+                                    guard_value IS NOT NULL AND EXISTS (
+                                        SELECT 1 FROM guard_check WHERE w = guard_value
+                                    )
+                                )
+                                ON CONFLICT (a) DO UPDATE SET w = EXCLUDED.w
+                            )
+                            SELECT COALESCE((SELECT w FROM guard_check)) INTO original_value;
+                            
+                            -- Exit the retry loop if successful
+                            EXIT;
+                        EXCEPTION WHEN serialization_failure THEN
+                            -- Increment retry counter
+                            retry_count := retry_count + 1;
+                            
+                            -- Calculate exponential backoff with jitter
+                            backoff_time := retry_count * 10 + floor(random() * 10)::int;
+                            
+                            -- Perform server-side sleep
+                            PERFORM pg_sleep(backoff_time );
+                            
+                            -- Continue to next iteration
+                            CONTINUE;
+                        END;
+                    END LOOP;
+                    
+                    RETURN original_value;
+                END;
+                $$ LANGUAGE plpgsql;
+                ",
+                &[],
+            )
+            .await?;
+        // TODO: put this back
+        // let _ = pool
+        //     .get()
+        //     .await
+        //     .unwrap()
+        //     .execute(
+        //         "
+        //         ALTER TABLE findex_db
+        //         ALTER COLUMN a SET STORAGE EXTERNAL,
+        //         ALTER COLUMN w SET STORAGE EXTERNAL;",
+        //         &[],
+        //     )
+        //     .await?;
 
         Ok(Self {
             pool,
@@ -204,24 +286,34 @@ impl<const ADDRESS_LENGTH: usize, const WORD_LENGTH: usize> MemoryADT
         let (addresses, words): (Vec<[u8; ADDRESS_LENGTH]>, Vec<Self::Word>) =
             bindings.into_iter().map(|(a, w)| (*a, w)).unzip();
         let client = self.pool.get().await.unwrap();
-        let stmnt = client.prepare_cached(G_WRITE_STMT).await?;
+        // Start transaction with REPEATABLE READ isolation
+        // let tx = client
+        //     .build_transaction()
+        //     .isolation_level(tokio_postgres::IsolationLevel::Serializable)
+        //     .start()
+        //     .await?;
 
-        client
-            .query_opt(&stmnt, &[
-                &*guard.0,
-                match &guard.1 {
-                    Some(g) => g,
-                    None => &None::<&[u8]>,
-                },
-                &addresses,
-                &words,
-            ])
+        let res = client
+            .query_opt(
+                "SELECT guarded_write_with_retry($1, $2, $3, $4) as original_value",
+                &[
+                    &*guard.0,
+                    match &guard.1 {
+                        Some(g) => g,
+                        None => &None::<&[u8]>,
+                    },
+                    &addresses,
+                    &words,
+                ],
+            )
             .await?
             .map_or(Ok(None), |row| {
                 row.try_get::<_, Option<&[u8]>>(0)?
                     .map(|b| b.try_into())
                     .map_or(Ok(None), |r| Ok(Some(r?)))
-            })
+            });
+
+        res
     }
 }
 
@@ -238,7 +330,7 @@ mod tests {
         },
     };
 
-    const DB_URI: &str = "postgres://cosmian_findex:cosmian_findex@localhost/cosmian?application_name=findex_rust&sslmode=prefer";
+    // const DB_URI: &str = "postgres://cosmian_findex:cosmian_findex@localhost/cosmian?application_name=findex_rust&sslmode=prefer";
 
     #[tokio::test]
     async fn test_rw_seq() -> Result<(), PostgresMemoryError> {
