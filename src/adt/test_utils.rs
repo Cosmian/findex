@@ -302,3 +302,18 @@ pub async fn test_guarded_write_concurrent<const WORD_LENGTH: usize, Memory>(
         seed
     );
 }
+
+/// Tests that different memories can use the DB at the same time
+pub async fn test_guarded_write_concurrent<const WORD_LENGTH: usize, Memory>(
+    memory: &Memory,
+    seed: [u8; KEY_LENGTH],
+    n_threads: Option<usize>,
+) where
+    Memory: 'static + Send + Sync + MemoryADT + Clone,
+    Memory::Address: Send + From<[u8; ADDRESS_LENGTH]>,
+    Memory::Word:
+        Send + Debug + PartialEq + From<[u8; WORD_LENGTH]> + Into<[u8; WORD_LENGTH]> + Clone,
+    Memory::Error: Send + std::error::Error,
+{
+    todo!("work in progress");
+}
