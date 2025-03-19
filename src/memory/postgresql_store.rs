@@ -3,9 +3,7 @@ use deadpool_postgres::{CreatePoolError, Manager, ManagerConfig, Pool, Recycling
 use std::fmt;
 use std::marker::PhantomData;
 use std::sync::Arc;
-use tokio_postgres::{
-    Client, Config, Connection, NoTls, Socket, Statement, config::SslMode, tls::MakeTlsConnect,
-};
+use tokio_postgres::{Config, NoTls, Socket, Statement, config::SslMode, tls::MakeTlsConnect};
 
 #[derive(Debug)]
 pub enum PostgresMemoryError {
@@ -62,10 +60,7 @@ impl From<std::array::TryFromSliceError> for PostgresMemoryError {
 
 #[derive(Clone, Debug)]
 pub struct PostGresMemory<Address, Word> {
-    client: Option<Arc<Client>>,
-    pool: Option<deadpool_postgres::Pool>,
-    select_stmt: Arc<Statement>,
-    insert_stmt: Arc<Statement>,
+    pool: Pool,
     _marker: PhantomData<(Address, Word)>,
 }
 
@@ -103,61 +98,6 @@ const G_WRITE_STMT: &str = "
 impl<const ADDRESS_LENGTH: usize, const WORD_LENGTH: usize>
     PostGresMemory<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>
 {
-    pub async fn connect<T>(
-        client: Client,
-        connection: Connection<Socket, T::Stream>,
-    ) -> Result<Self, PostgresMemoryError>
-    where
-        T: MakeTlsConnect<Socket>,
-        T::Stream: Send + 'static, // 'static bound simply ensures that the type is fully owned
-    {
-        // The connection object performs the actual communication with the database
-        // `Connection` only resolves when the connection is closed, either because a fatal error has
-        // occurred, or because its associated `Client` has dropped and all outstanding work has completed.
-        tokio::spawn(async move {
-            if let Err(e) = connection.await {
-                eprintln!("connection error: {}", e);
-            }
-        });
-
-        let returned = client
-            .execute(
-                &format!(
-                    "
-                    CREATE TABLE IF NOT EXISTS findex_db (
-                        a BYTEA PRIMARY KEY CHECK (octet_length(a) = {}),
-                        w BYTEA NOT NULL CHECK (octet_length(w) = {})
-                    );",
-                    ADDRESS_LENGTH, WORD_LENGTH
-                ),
-                &[],
-            )
-            .await?;
-        if returned != 0 {
-            return Err(PostgresMemoryError::TableCreationError(returned));
-        }
-
-        let _ = client
-            .execute(
-                "
-                ALTER TABLE findex_db
-                ALTER COLUMN a SET STORAGE EXTERNAL,
-                ALTER COLUMN w SET STORAGE EXTERNAL;",
-                &[],
-            )
-            .await?;
-        let select_stmt = client.prepare(B_READ_STMT).await?;
-        let insert_stmt = client.prepare(G_WRITE_STMT).await?;
-
-        Ok(Self {
-            client: Some(Arc::new(client)),
-            pool: None,
-            select_stmt: Arc::new(select_stmt),
-            insert_stmt: Arc::new(insert_stmt),
-            _marker: PhantomData,
-        })
-    }
-
     pub async fn connect_with_pool<T>() -> Result<Self, PostgresMemoryError>
     where
         T: MakeTlsConnect<Socket>,
@@ -176,7 +116,7 @@ impl<const ADDRESS_LENGTH: usize, const WORD_LENGTH: usize>
         };
         let mgr = Manager::from_config(pg_config, NoTls, mgr_config);
         let pool = Pool::builder(mgr)
-            .max_size(16)
+            .max_size(8)
             .runtime(Runtime::Tokio1)
             .build()
             .unwrap();
@@ -201,26 +141,8 @@ impl<const ADDRESS_LENGTH: usize, const WORD_LENGTH: usize>
             return Err(PostgresMemoryError::TableCreationError(returned));
         }
 
-        let _ = pool
-            .get()
-            .await
-            .unwrap()
-            .execute(
-                "
-                ALTER TABLE findex_db
-                ALTER COLUMN a SET STORAGE EXTERNAL,
-                ALTER COLUMN w SET STORAGE EXTERNAL;",
-                &[],
-            )
-            .await?;
-        let select_stmt = pool.get().await.unwrap().prepare(B_READ_STMT).await?;
-        let insert_stmt = pool.get().await.unwrap().prepare(G_WRITE_STMT).await?;
-
         Ok(Self {
-            client: None,
-            pool: Some(pool),
-            select_stmt: Arc::new(select_stmt),
-            insert_stmt: Arc::new(insert_stmt),
+            pool,
             _marker: PhantomData,
         })
     }
@@ -242,15 +164,13 @@ impl<const ADDRESS_LENGTH: usize, const WORD_LENGTH: usize> MemoryADT
         &self,
         addresses: Vec<Self::Address>,
     ) -> Result<Vec<Option<Self::Word>>, Self::Error> {
-        self.pool
-            .as_ref()
-            .unwrap()
-            .get()
-            .await
-            .unwrap()
+        let client = self.pool.get().await.unwrap();
+        let stmnt = client.prepare_cached(B_READ_STMT).await?;
+
+        client
             // the left join is necessary to ensure that the order of the addresses is preserved
             // as well as to return None for addresses that don't exist
-            .query(&*self.select_stmt, &[&addresses
+            .query(&stmnt, &[&addresses
                 .iter()
                 .map(|addr| addr.as_slice())
                 .collect::<Vec<_>>()])
@@ -283,14 +203,11 @@ impl<const ADDRESS_LENGTH: usize, const WORD_LENGTH: usize> MemoryADT
 
         let (addresses, words): (Vec<[u8; ADDRESS_LENGTH]>, Vec<Self::Word>) =
             bindings.into_iter().map(|(a, w)| (*a, w)).unzip();
+        let client = self.pool.get().await.unwrap();
+        let stmnt = client.prepare_cached(G_WRITE_STMT).await?;
 
-        self.pool
-            .as_ref()
-            .unwrap()
-            .get()
-            .await
-            .unwrap()
-            .query_opt(&*self.insert_stmt, &[
+        client
+            .query_opt(&stmnt, &[
                 &*guard.0,
                 match &guard.1 {
                     Some(g) => g,
@@ -360,7 +277,7 @@ mod tests {
             NoTls,
         >()
         .await?;
-        test_guarded_write_concurrent(&m, rand::random(), Some(10)).await;
+        test_guarded_write_concurrent(&m, rand::random(), Some(100)).await;
         Ok(())
     }
 }
