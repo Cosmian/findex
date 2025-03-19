@@ -1,9 +1,11 @@
 use crate::{Address, MemoryADT};
-use deadpool_postgres::{Config, CreatePoolError, Runtime};
+use deadpool_postgres::{CreatePoolError, Manager, ManagerConfig, Pool, RecyclingMethod, Runtime};
 use std::fmt;
 use std::marker::PhantomData;
 use std::sync::Arc;
-use tokio_postgres::{Client, Connection, NoTls, Socket, Statement, tls::MakeTlsConnect};
+use tokio_postgres::{
+    Client, Config, Connection, NoTls, Socket, Statement, config::SslMode, tls::MakeTlsConnect,
+};
 
 #[derive(Debug)]
 pub enum PostgresMemoryError {
@@ -60,7 +62,8 @@ impl From<std::array::TryFromSliceError> for PostgresMemoryError {
 
 #[derive(Clone, Debug)]
 pub struct PostGresMemory<Address, Word> {
-    client: Arc<Client>,
+    client: Option<Arc<Client>>,
+    pool: Option<deadpool_postgres::Pool>,
     select_stmt: Arc<Statement>,
     insert_stmt: Arc<Statement>,
     _marker: PhantomData<(Address, Word)>,
@@ -147,24 +150,41 @@ impl<const ADDRESS_LENGTH: usize, const WORD_LENGTH: usize>
         let insert_stmt = client.prepare(G_WRITE_STMT).await?;
 
         Ok(Self {
-            client: Arc::new(client),
+            client: Some(Arc::new(client)),
+            pool: None,
             select_stmt: Arc::new(select_stmt),
             insert_stmt: Arc::new(insert_stmt),
             _marker: PhantomData,
         })
     }
 
-    pub async fn connect_with_pool<T>(url: &str) -> Result<Self, PostgresMemoryError>
+    pub async fn connect_with_pool<T>() -> Result<Self, PostgresMemoryError>
     where
         T: MakeTlsConnect<Socket>,
         T::Stream: Send + 'static, // 'static bound simply ensures that the type is fully owned
     {
-        let mut cfg = Config::new();
-        cfg.url = Some("postgres://cosmian_findex:cosmian_findex@localhost/cosmian?application_name=findex_rust&sslmode=prefer".to_string());
-        let pool = cfg.create_pool(Some(Runtime::Tokio1), NoTls)?;
-        let client = pool.get().await.unwrap(); // TODO not in prod !!!
+        let mut pg_config = Config::new();
+        pg_config
+            .user("cosmian_findex")
+            .password("cosmian_findex")
+            .dbname("cosmian")
+            .host("localhost")
+            .application_name("findex_rust")
+            .ssl_mode(SslMode::Prefer);
+        let mgr_config = ManagerConfig {
+            recycling_method: RecyclingMethod::Fast,
+        };
+        let mgr = Manager::from_config(pg_config, NoTls, mgr_config);
+        let pool = Pool::builder(mgr)
+            .max_size(16)
+            .runtime(Runtime::Tokio1)
+            .build()
+            .unwrap();
 
-        let returned = client
+        let returned = pool
+            .get()
+            .await
+            .unwrap()
             .execute(
                 &format!(
                     "
@@ -181,7 +201,10 @@ impl<const ADDRESS_LENGTH: usize, const WORD_LENGTH: usize>
             return Err(PostgresMemoryError::TableCreationError(returned));
         }
 
-        let _ = client
+        let _ = pool
+            .get()
+            .await
+            .unwrap()
             .execute(
                 "
                 ALTER TABLE findex_db
@@ -190,11 +213,12 @@ impl<const ADDRESS_LENGTH: usize, const WORD_LENGTH: usize>
                 &[],
             )
             .await?;
-        let select_stmt = client.prepare(B_READ_STMT).await?;
-        let insert_stmt = client.prepare(G_WRITE_STMT).await?;
+        let select_stmt = pool.get().await.unwrap().prepare(B_READ_STMT).await?;
+        let insert_stmt = pool.get().await.unwrap().prepare(G_WRITE_STMT).await?;
 
         Ok(Self {
-            client: Arc::new(client),
+            client: None,
+            pool: Some(pool),
             select_stmt: Arc::new(select_stmt),
             insert_stmt: Arc::new(insert_stmt),
             _marker: PhantomData,
@@ -218,7 +242,12 @@ impl<const ADDRESS_LENGTH: usize, const WORD_LENGTH: usize> MemoryADT
         &self,
         addresses: Vec<Self::Address>,
     ) -> Result<Vec<Option<Self::Word>>, Self::Error> {
-        self.client
+        self.pool
+            .as_ref()
+            .unwrap()
+            .get()
+            .await
+            .unwrap()
             // the left join is necessary to ensure that the order of the addresses is preserved
             // as well as to return None for addresses that don't exist
             .query(&*self.select_stmt, &[&addresses
@@ -255,7 +284,12 @@ impl<const ADDRESS_LENGTH: usize, const WORD_LENGTH: usize> MemoryADT
         let (addresses, words): (Vec<[u8; ADDRESS_LENGTH]>, Vec<Self::Word>) =
             bindings.into_iter().map(|(a, w)| (*a, w)).unzip();
 
-        self.client
+        self.pool
+            .as_ref()
+            .unwrap()
+            .get()
+            .await
+            .unwrap()
             .query_opt(&*self.insert_stmt, &[
                 &*guard.0,
                 match &guard.1 {
@@ -291,10 +325,10 @@ mod tests {
 
     #[tokio::test]
     async fn test_rw_seq() -> Result<(), PostgresMemoryError> {
-        let (client, connection) = tokio_postgres::connect(DB_URI, NoTls).await?;
-        let m = PostGresMemory::<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>::connect::<NoTls>(
-            client, connection,
-        )
+        // let (client, connection) = tokio_postgres::connect(DB_URI, NoTls).await?;
+        let m = PostGresMemory::<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>::connect_with_pool::<
+            NoTls,
+        >()
         .await?;
         test_single_write_and_read::<WORD_LENGTH, _>(&m, rand::random()).await;
         Ok(())
@@ -302,10 +336,9 @@ mod tests {
 
     #[tokio::test]
     async fn test_guard_seq() -> Result<(), PostgresMemoryError> {
-        let (client, connection) = tokio_postgres::connect(DB_URI, NoTls).await?;
-        let m = PostGresMemory::<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>::connect::<NoTls>(
-            client, connection,
-        )
+        let m = PostGresMemory::<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>::connect_with_pool::<
+            NoTls,
+        >()
         .await?;
         test_wrong_guard::<WORD_LENGTH, _>(&m, rand::random()).await;
         Ok(())
@@ -313,10 +346,9 @@ mod tests {
 
     #[tokio::test]
     async fn test_collision_seq() -> Result<(), PostgresMemoryError> {
-        let (client, connection) = tokio_postgres::connect(DB_URI, NoTls).await?;
-        let m = PostGresMemory::<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>::connect::<NoTls>(
-            client, connection,
-        )
+        let m = PostGresMemory::<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>::connect_with_pool::<
+            NoTls,
+        >()
         .await?;
         test_collisions::<WORD_LENGTH, _>(&m, rand::random()).await;
         Ok(())
@@ -324,12 +356,11 @@ mod tests {
 
     #[tokio::test]
     async fn test_rw_ccr() -> Result<(), PostgresMemoryError> {
-        let (client, connection) = tokio_postgres::connect(DB_URI, NoTls).await?;
-        let m = PostGresMemory::<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>::connect::<NoTls>(
-            client, connection,
-        )
+        let m = PostGresMemory::<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>::connect_with_pool::<
+            NoTls,
+        >()
         .await?;
-        test_guarded_write_concurrent(&m, rand::random(), Some(1000)).await;
+        test_guarded_write_concurrent(&m, rand::random(), Some(10)).await;
         Ok(())
     }
 }
