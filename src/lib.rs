@@ -8,9 +8,6 @@ mod error;
 mod findex;
 mod memory;
 mod ovec;
-mod secret;
-mod symmetric_key;
-mod value;
 
 pub use address::Address;
 #[cfg(any(test, feature = "test-utils"))]
@@ -24,8 +21,6 @@ pub use error::Error;
 pub use findex::Findex;
 pub use findex::Op;
 pub use memory::MemoryEncryptionLayer;
-pub use secret::Secret;
-pub use value::Value;
 
 #[cfg(feature = "redis-mem")]
 pub use memory::{RedisMemory, RedisMemoryError};

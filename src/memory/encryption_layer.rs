@@ -1,12 +1,11 @@
 use std::{fmt::Debug, ops::Deref, sync::Arc};
 
-use crate::{
-    ADDRESS_LENGTH, KEY_LENGTH, MemoryADT, Secret, address::Address, symmetric_key::SymmetricKey,
-};
+use crate::{ADDRESS_LENGTH, KEY_LENGTH, MemoryADT, address::Address};
 use aes::{
     Aes256,
     cipher::{BlockEncrypt, KeyInit, generic_array::GenericArray},
 };
+use cosmian_crypto_core::{Secret, SymmetricKey};
 use xts_mode::Xts128;
 
 #[derive(Clone)]
@@ -52,9 +51,9 @@ impl<
             SymmetricKey::<{ KEY_LENGTH }>::derive(seed, &[1]).expect("secret is large enough");
         let k_e2 =
             SymmetricKey::<{ KEY_LENGTH }>::derive(seed, &[2]).expect("secret is large enough");
-        let aes = Aes256::new(GenericArray::from_slice(&k_p));
-        let aes_e1 = Aes256::new(GenericArray::from_slice(&k_e1));
-        let aes_e2 = Aes256::new(GenericArray::from_slice(&k_e2));
+        let aes = Aes256::new(GenericArray::from_slice(&*k_p));
+        let aes_e1 = Aes256::new(GenericArray::from_slice(&*k_e1));
+        let aes_e2 = Aes256::new(GenericArray::from_slice(&*k_e2));
         // The 128 in the XTS name refer to the block size. AES-256 is used here, which confers
         // 128 bits of PQ security.
         let xts = ClonableXts(Arc::new(Xts128::new(aes_e1, aes_e2)));
@@ -133,24 +132,25 @@ mod tests {
         Aes256,
         cipher::{BlockDecrypt, KeyInit, generic_array::GenericArray},
     };
+    use cosmian_crypto_core::{
+        CsRng, Secret, SymmetricKey,
+        reexport::rand_core::{CryptoRngCore, SeedableRng},
+    };
     use futures::executor::block_on;
-    use rand::CryptoRng;
-    use rand_chacha::ChaChaRng;
-    use rand_core::SeedableRng;
 
     use crate::{
         ADDRESS_LENGTH, MemoryADT,
         address::Address,
         memory::{MemoryEncryptionLayer, in_memory_store::InMemory},
-        secret::Secret,
-        symmetric_key::SymmetricKey,
-        test_utils::{test_guarded_write_concurrent, test_single_write_and_read, test_wrong_guard},
+        test_utils::{
+            gen_seed, test_guarded_write_concurrent, test_single_write_and_read, test_wrong_guard,
+        },
     };
 
     const WORD_LENGTH: usize = 128;
 
     fn create_memory<const WORD_LENGTH: usize>(
-        rng: &mut impl CryptoRng,
+        rng: &mut impl CryptoRngCore,
     ) -> MemoryEncryptionLayer<WORD_LENGTH, InMemory<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>>
     {
         let seed = Secret::random(rng);
@@ -160,10 +160,10 @@ mod tests {
 
     #[test]
     fn test_address_permutation() {
-        let mut rng = ChaChaRng::from_os_rng();
+        let mut rng = CsRng::from_entropy();
         let seed = Secret::random(&mut rng);
         let k_p = SymmetricKey::<32>::derive(&seed, &[0]).expect("secret is large enough");
-        let aes = Aes256::new(GenericArray::from_slice(&k_p));
+        let aes = Aes256::new(GenericArray::from_slice(&*k_p));
         let memory = InMemory::<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>::default();
         let obf = MemoryEncryptionLayer::new(&seed, memory);
         let a = Address::<ADDRESS_LENGTH>::random(&mut rng);
@@ -175,7 +175,7 @@ mod tests {
 
     #[test]
     fn test_encrypt_decrypt() {
-        let mut rng = ChaChaRng::from_os_rng();
+        let mut rng = CsRng::from_entropy();
         let obf = create_memory(&mut rng);
         let tok = Address::<ADDRESS_LENGTH>::random(&mut rng);
         let ptx = [1; WORD_LENGTH];
@@ -190,7 +190,7 @@ mod tests {
     /// - using the wrong value in the guard fails the operation and returns the current value.
     #[test]
     fn test_vector_push() {
-        let mut rng = ChaChaRng::from_os_rng();
+        let mut rng = CsRng::from_entropy();
         let obf = create_memory(&mut rng);
 
         let header_addr = Address::<ADDRESS_LENGTH>::random(&mut rng);
@@ -254,26 +254,23 @@ mod tests {
     #[tokio::test]
     async fn test_sequential_read_write() {
         test_single_write_and_read::<WORD_LENGTH, _>(
-            &create_memory(&mut ChaChaRng::from_os_rng()),
-            rand::random(),
+            &create_memory(&mut CsRng::from_entropy()),
+            gen_seed(),
         )
         .await;
     }
 
     #[tokio::test]
     async fn test_sequential_wrong_guard() {
-        test_wrong_guard::<WORD_LENGTH, _>(
-            &create_memory(&mut ChaChaRng::from_os_rng()),
-            rand::random(),
-        )
-        .await;
+        test_wrong_guard::<WORD_LENGTH, _>(&create_memory(&mut CsRng::from_entropy()), gen_seed())
+            .await;
     }
 
     #[tokio::test]
     async fn test_concurrent_read_write() {
         test_guarded_write_concurrent::<WORD_LENGTH, _>(
-            &create_memory(&mut ChaChaRng::from_os_rng()),
-            rand::random(),
+            &create_memory(&mut CsRng::from_entropy()),
+            gen_seed(),
             None,
         )
         .await;

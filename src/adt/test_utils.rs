@@ -8,9 +8,21 @@
 //!
 //! Both addresses and words are 16-byte long.
 
-use crate::{ADDRESS_LENGTH, KEY_LENGTH, MemoryADT};
-use rand::{RngCore, SeedableRng, rngs::StdRng};
+use crate::{ADDRESS_LENGTH, MemoryADT};
+use cosmian_crypto_core::{
+    CsRng,
+    reexport::rand_core::{RngCore, SeedableRng},
+};
 use std::fmt::Debug;
+
+pub const SEED_LENGTH: usize = 32;
+
+pub fn gen_seed() -> [u8; SEED_LENGTH] {
+    let mut rng = CsRng::from_entropy();
+    let mut bytes = [0; SEED_LENGTH];
+    rng.fill_bytes(&mut bytes);
+    bytes
+}
 
 fn gen_bytes<const BYTES_LENGTH: usize>(rng: &mut impl RngCore) -> [u8; BYTES_LENGTH] {
     let mut bytes = [0; BYTES_LENGTH];
@@ -39,14 +51,14 @@ fn word_to_array<const WORD_LENGTH: usize>(word: [u8; WORD_LENGTH]) -> Result<u1
 /// guarded write, and finally validating the written value.
 pub async fn test_single_write_and_read<const WORD_LENGTH: usize, Memory>(
     memory: &Memory,
-    seed: [u8; KEY_LENGTH],
+    seed: [u8; SEED_LENGTH],
 ) where
     Memory: Send + Sync + MemoryADT,
     Memory::Address: Send + Clone + From<[u8; ADDRESS_LENGTH]>,
     Memory::Word: Send + Debug + Clone + PartialEq + From<[u8; WORD_LENGTH]>,
     Memory::Error: std::error::Error,
 {
-    let mut rng = StdRng::from_seed(seed);
+    let mut rng = CsRng::from_seed(seed);
     let empty_read_result = memory
         .batch_read(vec![
             Memory::Address::from(gen_bytes(&mut rng)),
@@ -86,14 +98,14 @@ pub async fn test_single_write_and_read<const WORD_LENGTH: usize, Memory>(
 /// Verifies that the original value is preserved and the write fails.
 pub async fn test_wrong_guard<const WORD_LENGTH: usize, Memory>(
     memory: &Memory,
-    seed: [u8; KEY_LENGTH],
+    seed: [u8; SEED_LENGTH],
 ) where
     Memory: Send + Sync + MemoryADT,
     Memory::Address: Send + Clone + From<[u8; ADDRESS_LENGTH]>,
     Memory::Word: Send + Debug + Clone + PartialEq + From<[u8; WORD_LENGTH]>,
     Memory::Error: Send + std::error::Error,
 {
-    let mut rng = StdRng::from_seed(seed);
+    let mut rng = CsRng::from_seed(seed);
 
     let a = Memory::Address::from(gen_bytes(&mut rng));
     let w = Memory::Word::from(gen_bytes(&mut rng));
@@ -140,7 +152,7 @@ pub async fn test_wrong_guard<const WORD_LENGTH: usize, Memory>(
 /// 3. Verifies that one of the written values is properly stored
 pub async fn test_rw_same_address<const WORD_LENGTH: usize, Memory>(
     memory: &Memory,
-    seed: [u8; KEY_LENGTH],
+    seed: [u8; SEED_LENGTH],
 ) where
     Memory: Send + Sync + MemoryADT,
     Memory::Address: Send + Clone + From<[u8; ADDRESS_LENGTH]>,
@@ -148,7 +160,7 @@ pub async fn test_rw_same_address<const WORD_LENGTH: usize, Memory>(
     Memory::Error: Send + std::error::Error,
 {
     const REPETITION: usize = 5;
-    let mut rng = StdRng::from_seed(seed);
+    let mut rng = CsRng::from_seed(seed);
 
     let a = Memory::Address::from(gen_bytes(&mut rng));
     let w = Memory::Word::from(gen_bytes(&mut rng));
@@ -220,7 +232,7 @@ pub async fn test_rw_same_address<const WORD_LENGTH: usize, Memory>(
 /// * `n_threads` - The number of threads to spawn. If None, defaults to 100.
 pub async fn test_guarded_write_concurrent<const WORD_LENGTH: usize, Memory>(
     memory: &Memory,
-    seed: [u8; KEY_LENGTH],
+    seed: [u8; SEED_LENGTH],
     n_threads: Option<usize>,
 ) where
     Memory: 'static + Send + Sync + MemoryADT + Clone,
@@ -272,7 +284,7 @@ pub async fn test_guarded_write_concurrent<const WORD_LENGTH: usize, Memory>(
 
     let n: usize = n_threads.unwrap_or(100); // number of workers
     const M: usize = 10; // number of increments per worker
-    let mut rng = StdRng::from_seed(seed);
+    let mut rng = CsRng::from_seed(seed);
     let a = gen_bytes(&mut rng);
 
     let handles = (0..n)

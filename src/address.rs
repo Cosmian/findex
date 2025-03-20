@@ -1,6 +1,6 @@
 use std::ops::{Add, Deref, DerefMut};
 
-use rand_core::CryptoRng;
+use cosmian_crypto_core::reexport::rand_core::CryptoRngCore;
 
 // NOTE: a more efficient implementation of the address could be a big-int.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -39,7 +39,7 @@ impl<const LENGTH: usize> Default for Address<LENGTH> {
 }
 
 impl<const LENGTH: usize> Address<LENGTH> {
-    pub fn random(rng: &mut impl CryptoRng) -> Self {
+    pub fn random(rng: &mut impl CryptoRngCore) -> Self {
         let mut res = Self([0; LENGTH]);
         rng.fill_bytes(&mut *res);
         res

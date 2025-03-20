@@ -100,6 +100,7 @@ mod tests {
         adt::test_utils::{
             test_guarded_write_concurrent, test_single_write_and_read, test_wrong_guard,
         },
+        test_utils::gen_seed,
     };
 
     use super::InMemory;
@@ -132,18 +133,18 @@ mod tests {
     #[tokio::test]
     async fn test_sequential_read_write() {
         let memory = InMemory::<[u8; 16], [u8; 16]>::default();
-        test_single_write_and_read(&memory, rand::random()).await;
+        test_single_write_and_read(&memory, gen_seed()).await;
     }
 
     #[tokio::test]
     async fn test_sequential_wrong_guard() {
         let memory = InMemory::<[u8; 16], [u8; 16]>::default();
-        test_wrong_guard(&memory, rand::random()).await;
+        test_wrong_guard(&memory, gen_seed()).await;
     }
 
     #[tokio::test]
     async fn test_concurrent_read_write() {
         let memory = InMemory::<[u8; 16], [u8; 16]>::default();
-        test_guarded_write_concurrent(&memory, rand::random(), None).await;
+        test_guarded_write_concurrent(&memory, gen_seed(), None).await;
     }
 }

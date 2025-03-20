@@ -120,30 +120,48 @@ impl<
 
 #[cfg(test)]
 mod tests {
-    use std::collections::HashSet;
-
-    use futures::executor::block_on;
-    use rand_chacha::ChaChaRng;
-    use rand_core::SeedableRng;
-
     use crate::{
-        ADDRESS_LENGTH, Findex, InMemory, IndexADT, Value, address::Address, dummy_decode,
-        dummy_encode, memory::MemoryEncryptionLayer, secret::Secret,
+        ADDRESS_LENGTH, Findex, InMemory, IndexADT, address::Address, dummy_decode, dummy_encode,
+        memory::MemoryEncryptionLayer,
     };
-
-    const WORD_LENGTH: usize = 16;
+    use cosmian_crypto_core::{CsRng, Secret, define_byte_type, reexport::rand_core::SeedableRng};
+    use futures::executor::block_on;
+    use std::collections::HashSet;
 
     #[test]
     fn test_insert_search_delete_search() {
-        let mut rng = ChaChaRng::from_os_rng();
+        // Define a byte type, and use `Value` as an alias for 8-bytes values of
+        // that type.
+        type Value = Bytes<8>;
+
+        define_byte_type!(Bytes);
+
+        impl<const LENGTH: usize> TryFrom<usize> for Bytes<LENGTH> {
+            type Error = String;
+            fn try_from(value: usize) -> Result<Self, Self::Error> {
+                Self::try_from(value.to_be_bytes().as_slice()).map_err(|e| e.to_string())
+            }
+        }
+
+        const WORD_LENGTH: usize = 16;
+
+        let mut rng = CsRng::from_entropy();
         let seed = Secret::random(&mut rng);
         let memory = MemoryEncryptionLayer::new(
             &seed,
             InMemory::<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>::default(),
         );
-        let findex = Findex::new(memory, dummy_encode::<WORD_LENGTH, _>, dummy_decode);
-        let cat_bindings = [Value::from(1), Value::from(3), Value::from(5)];
-        let dog_bindings = [Value::from(0), Value::from(2), Value::from(4)];
+        let findex = Findex::new(memory, dummy_encode::<WORD_LENGTH, Value>, dummy_decode);
+        let cat_bindings = [
+            Value::try_from(1).unwrap(),
+            Value::try_from(3).unwrap(),
+            Value::try_from(5).unwrap(),
+        ];
+        let dog_bindings = [
+            Value::try_from(0).unwrap(),
+            Value::try_from(2).unwrap(),
+            Value::try_from(4).unwrap(),
+        ];
         block_on(findex.insert("cat".to_string(), cat_bindings.clone())).unwrap();
         block_on(findex.insert("dog".to_string(), dog_bindings.clone())).unwrap();
         let cat_res = block_on(findex.search(&"cat".to_string())).unwrap();

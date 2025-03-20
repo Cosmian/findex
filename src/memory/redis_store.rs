@@ -145,6 +145,7 @@ mod tests {
             test_guarded_write_concurrent, test_rw_same_address, test_single_write_and_read,
             test_wrong_guard,
         },
+        test_utils::gen_seed,
     };
 
     fn get_redis_url() -> String {
@@ -157,24 +158,24 @@ mod tests {
     #[tokio::test]
     async fn test_rw_seq() {
         let m = RedisMemory::connect(&get_redis_url()).await.unwrap();
-        test_single_write_and_read::<WORD_LENGTH, _>(&m, rand::random()).await
+        test_single_write_and_read::<WORD_LENGTH, _>(&m, gen_seed()).await
     }
 
     #[tokio::test]
     async fn test_guard_seq() {
         let m = RedisMemory::connect(&get_redis_url()).await.unwrap();
-        test_wrong_guard::<WORD_LENGTH, _>(&m, rand::random()).await
+        test_wrong_guard::<WORD_LENGTH, _>(&m, gen_seed()).await
     }
 
     #[tokio::test]
     async fn test_collision_seq() {
         let m = RedisMemory::connect(&get_redis_url()).await.unwrap();
-        test_rw_same_address::<WORD_LENGTH, _>(&m, rand::random()).await
+        test_rw_same_address::<WORD_LENGTH, _>(&m, gen_seed()).await
     }
 
     #[tokio::test]
     async fn test_rw_ccr() {
         let m = RedisMemory::connect(&get_redis_url()).await.unwrap();
-        test_guarded_write_concurrent::<WORD_LENGTH, _>(&m, rand::random(), None).await
+        test_guarded_write_concurrent::<WORD_LENGTH, _>(&m, gen_seed(), None).await
     }
 }
