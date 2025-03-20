@@ -1,7 +1,3 @@
-// It is too much trouble to deactivate everything if none of the features are
-// activated.
-#![allow(unused_imports, unused_variables, unused_mut, dead_code)]
-
 use cosmian_crypto_core::{CsRng, reexport::rand_core::SeedableRng};
 use cosmian_findex::{
     bench_memory_contention, bench_memory_insert_multiple_bindings, bench_memory_one_to_many,
@@ -21,9 +17,6 @@ use cosmian_findex::RedisMemory;
 // Number of points in each graph.
 const N_PTS: usize = 9;
 
-#[cfg(feature = "sqlite-mem")]
-const SQLITE_PATH: &str = "./target/benches.sqlite";
-
 #[cfg(feature = "redis-mem")]
 fn get_redis_url() -> String {
     std::env::var("REDIS_HOST").map_or_else(
@@ -31,6 +24,15 @@ fn get_redis_url() -> String {
         |var_env| format!("redis://{var_env}:6379"),
     )
 }
+
+#[cfg(feature = "sqlite-mem")]
+const SQLITE_PATH: &str = "./target/benches.sqlite";
+
+#[cfg(feature = "redis-mem")]
+const REDIS_URL: &str = "redis://redis:6379";
+
+// Use this URL for use with a local instance.
+// const REDIS_URL: &str = "redis://localhost:6379";
 
 fn bench_search_multiple_bindings(c: &mut Criterion) {
     let mut rng = CsRng::from_entropy();
