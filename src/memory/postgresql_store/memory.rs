@@ -194,7 +194,7 @@ mod tests {
         },
     };
 
-    // Template function to create for pool creation
+    // Template function for pool creation
     pub async fn create_testing_pool<T>() -> Result<Pool, PostgresMemoryError>
     where
         T: MakeTlsConnect<Socket>,
@@ -206,7 +206,6 @@ mod tests {
             .password("cosmian_findex") // in production code, use a secure way to store the password
             .dbname("cosmian")
             .host("localhost")
-            .application_name("findex_rust")
             .ssl_mode(SslMode::Prefer);
 
         let mgr = Manager::from_config(pg_config, NoTls, ManagerConfig {
@@ -215,8 +214,8 @@ mod tests {
         });
 
         let pool = Pool::builder(mgr)
-            // a bigger pool size might be more appropriate, tune according to your needs and the available resources
-            // the command `SHOW max_connections;` in psql will give you the maximum number of connections, which is 100 by default
+            // A different pool size might be more appropriate, tune according to your needs and the available resources.
+            // The command `SHOW max_connections;` in psql will give you the maximum number of connections on your DB, (100 by default)
             .max_size(16)
             .runtime(Runtime::Tokio1)
             .build()?;
@@ -261,7 +260,7 @@ mod tests {
             NoTls,
         >(create_testing_pool::<NoTls>().await.unwrap())
         .await?;
-        test_guarded_write_concurrent(&m, rand::random(), Some(20)).await;
+        test_guarded_write_concurrent(&m, rand::random(), Some(100)).await;
         Ok(())
     }
 }
