@@ -18,5 +18,6 @@ pub use sqlite_store::{SqliteMemory, SqliteMemoryError};
 
 #[cfg(feature = "postgres-mem")]
 pub mod postgresql_store;
+
 #[cfg(feature = "postgres-mem")]
 pub use postgresql_store::{PostGresMemory, PostgresMemoryError};
