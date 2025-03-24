@@ -91,7 +91,7 @@ impl<const ADDRESS_LENGTH: usize, const WORD_LENGTH: usize> MemoryADT
     ) -> Result<Vec<Option<Self::Word>>, Self::Error> {
         self.pool
             .conn(move |conn| {
-                let mut bindings = conn
+                let results = conn
                     .prepare(&format!(
                         "SELECT a, w FROM memory WHERE a IN ({})",
                         vec!["?"; addresses.len()].join(",")
@@ -109,7 +109,11 @@ impl<const ADDRESS_LENGTH: usize, const WORD_LENGTH: usize> MemoryADT
                 // Return order of an SQL select statement is undefined, and
                 // mismatches are ignored. A post-processing is thus needed to
                 // generate a returned value complying to the batch-read spec.
-                Ok(addresses.iter().map(|addr| bindings.remove(addr)).collect())
+                Ok(addresses
+                    .iter()
+                    // Copying is necessary here since the same word could be returned multiple times.
+                    .map(|addr| results.get(addr).copied())
+                    .collect())
             })
             .await
             .map_err(Self::Error::from)
@@ -162,33 +166,42 @@ mod tests {
     use crate::{
         ADDRESS_LENGTH, WORD_LENGTH,
         adt::test_utils::{
-            test_guarded_write_concurrent, test_single_write_and_read, test_wrong_guard,
+            test_guarded_write_concurrent, test_rw_same_address, test_single_write_and_read,
+            test_wrong_guard,
         },
     };
 
     const DB_PATH: &str = "./target/debug/sqlite-test.db";
 
     #[tokio::test]
-    async fn test_rw_seq() -> Result<(), SqliteMemoryError> {
-        let m =
-            SqliteMemory::<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>::connect(DB_PATH).await?;
-        test_single_write_and_read(&m, rand::random()).await;
-        Ok(())
+    async fn test_rw_seq() {
+        let m = SqliteMemory::<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>::connect(DB_PATH)
+            .await
+            .unwrap();
+        test_single_write_and_read(&m, rand::random()).await
     }
 
     #[tokio::test]
-    async fn test_guard_seq() -> Result<(), SqliteMemoryError> {
-        let m =
-            SqliteMemory::<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>::connect(DB_PATH).await?;
-        test_wrong_guard(&m, rand::random()).await;
-        Ok(())
+    async fn test_guard_seq() {
+        let m = SqliteMemory::<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>::connect(DB_PATH)
+            .await
+            .unwrap();
+        test_wrong_guard(&m, rand::random()).await
     }
 
     #[tokio::test]
-    async fn test_rw_ccr() -> Result<(), SqliteMemoryError> {
-        let m =
-            SqliteMemory::<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>::connect(DB_PATH).await?;
-        test_guarded_write_concurrent(&m, rand::random(), Some(100)).await;
-        Ok(())
+    async fn test_collision_seq() {
+        let m = SqliteMemory::<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>::connect(DB_PATH)
+            .await
+            .unwrap();
+        test_rw_same_address(&m, rand::random()).await
+    }
+
+    #[tokio::test]
+    async fn test_rw_ccr() {
+        let m = SqliteMemory::<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>::connect(DB_PATH)
+            .await
+            .unwrap();
+        test_guarded_write_concurrent(&m, rand::random(), Some(100)).await
     }
 }

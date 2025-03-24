@@ -132,6 +132,80 @@ pub async fn test_wrong_guard<const WORD_LENGTH: usize, Memory>(
     );
 }
 
+/// Tests operations on repeated addresses in memory implementations.
+///
+/// This test verifies the behavior when the same address is used multiple times:
+/// 1. Writes a value to an address and then confirms it can be read back multiple times consistently
+/// 2. Performs multiple writes to the same address with a correct guard
+/// 3. Verifies that one of the written values is properly stored
+pub async fn test_rw_same_address<const WORD_LENGTH: usize, Memory>(
+    memory: &Memory,
+    seed: [u8; KEY_LENGTH],
+) where
+    Memory: Send + Sync + MemoryADT,
+    Memory::Address: Send + Clone + From<[u8; ADDRESS_LENGTH]>,
+    Memory::Word: Send + Debug + Clone + PartialEq + From<[u8; WORD_LENGTH]>,
+    Memory::Error: Send + std::error::Error,
+{
+    const REPETITION: usize = 5;
+    let mut rng = StdRng::from_seed(seed);
+
+    let a = Memory::Address::from(gen_bytes(&mut rng));
+    let w = Memory::Word::from(gen_bytes(&mut rng));
+
+    memory
+        .guarded_write((a.clone(), None), vec![(a.clone(), w.clone())])
+        .await
+        .unwrap();
+
+    // try to read that same address multiple times
+    let read_result = memory
+        .batch_read(vec![a.clone(); REPETITION])
+        .await
+        .unwrap();
+
+    assert_eq!(
+        read_result,
+        vec![Some(w.clone()); REPETITION],
+        "test_collisions failed. Expected all reads to return the same value. Got : {:?}. Debug \
+         seed : {:?}",
+        read_result,
+        seed
+    );
+
+    // try to write multiple values to the same address with a guard that should pass
+    let values = (0..REPETITION)
+        .map(|_| Memory::Word::from(gen_bytes(&mut rng)))
+        .collect::<Vec<_>>();
+    let same_adr_write = memory
+        .guarded_write(
+            (a.clone(), Some(w.clone())),
+            (0..values.len())
+                .map(|i| (a.clone(), values[i].clone()))
+                .collect::<Vec<_>>(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(
+        same_adr_write,
+        Some(w.clone()),
+        "test_wrong_guard failed.\nExpected value {:?} after write. Got : {:?}.\nDebug seed : {:?}",
+        same_adr_write,
+        Some(w),
+        seed
+    );
+
+    let written_value = memory.batch_read(vec![a.clone()]).await.unwrap();
+
+    assert!(
+        values.iter().any(|v| Some(v.clone()) == written_value[0]),
+        "Value not found in the written values list. Got: {:?}, Values: {:?}",
+        written_value,
+        values
+    );
+}
+
 /// Tests concurrent guarded write operations on a Memory ADT implementation.
 ///
 /// Spawns multiple threads to perform concurrent counter increments.
