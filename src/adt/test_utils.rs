@@ -174,7 +174,7 @@ pub async fn test_rw_same_address<const WORD_LENGTH: usize, Memory>(
     );
 
     // try to write multiple values to the same address with a guard that should pass
-    let values = (1..REPETITION)
+    let values = (0..REPETITION)
         .map(|_| Memory::Word::from(gen_bytes(&mut rng)))
         .collect::<Vec<_>>();
     let same_adr_write = memory
