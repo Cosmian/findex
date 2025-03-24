@@ -10,8 +10,8 @@ jobs:
       postgres:
         image: postgres:14
         env:
-          POSTGRES_USER: cosmian_findex
-          POSTGRES_PASSWORD: cosmian_findex
+          POSTGRES_USER: cosmian
+          POSTGRES_PASSWORD: cosmian
           POSTGRES_DB: cosmian
         ports:
           - 5432:5432

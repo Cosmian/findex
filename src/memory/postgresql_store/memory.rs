@@ -202,8 +202,8 @@ mod tests {
     {
         let mut pg_config = Config::new();
         pg_config
-            .user("cosmian_findex")
-            .password("cosmian_findex") // in production code, use a secure way to store the password
+            .user("cosmian")
+            .password("cosmian") // in production code, use a secure way to store the password
             .dbname("cosmian")
             .host("localhost")
             .ssl_mode(SslMode::Prefer);
