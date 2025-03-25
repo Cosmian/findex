@@ -118,31 +118,32 @@ impl<const ADDRESS_LENGTH: usize, const WORD_LENGTH: usize> MemoryADT
             let stmnt = client
                 .prepare_cached(
                     format!(
-                    " WITH
-                            guard_check AS (
-                                SELECT w FROM {0} WHERE a = $1::bytea
-                            ),
-                            dedup_input_table AS (
-                            SELECT DISTINCT ON (a) a, w
-                                FROM UNNEST($3::bytea[], $4::bytea[]) WITH ORDINALITY AS t(a, w, order_idx)
-                                ORDER BY a, order_idx DESC
-                            ),
-                            insert_cte AS (
-                                INSERT INTO {0} (a, w)
-                                SELECT a, w FROM dedup_input_table AS t(a,w)
-                                WHERE (
-                                    $2::bytea IS NULL AND NOT EXISTS (SELECT 1 FROM guard_check)
-                                ) OR (
-                                    $2::bytea IS NOT NULL AND EXISTS (
-                                        SELECT 1 FROM guard_check WHERE w = $2::bytea
-                                    )
-                                )
-                                ON CONFLICT (a) DO UPDATE SET w = EXCLUDED.w
+                        "
+                    WITH
+                    guard_check AS (
+                        SELECT w FROM {0} WHERE a = $1::bytea
+                    ),
+                    dedup_input_table AS (
+                    SELECT DISTINCT ON (a) a, w
+                        FROM UNNEST($3::bytea[], $4::bytea[]) WITH ORDINALITY AS t(a, w, order_idx)
+                        ORDER BY a, order_idx DESC
+                    ),
+                    insert_cte AS (
+                        INSERT INTO {0} (a, w)
+                        SELECT a, w FROM dedup_input_table AS t(a,w)
+                        WHERE (
+                            $2::bytea IS NULL AND NOT EXISTS (SELECT 1 FROM guard_check)
+                        ) OR (
+                            $2::bytea IS NOT NULL AND EXISTS (
+                                SELECT 1 FROM guard_check WHERE w = $2::bytea
                             )
-                            SELECT COALESCE((SELECT w FROM guard_check)) AS original_guard_value;",
-                            self.table_name,
                         )
-                        .as_str()
+                        ON CONFLICT (a) DO UPDATE SET w = EXCLUDED.w
+                    )
+                    SELECT COALESCE((SELECT w FROM guard_check)) AS original_guard_value;",
+                        self.table_name,
+                    )
+                    .as_str(),
                 )
                 .await?;
 
