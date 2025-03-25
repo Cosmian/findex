@@ -101,7 +101,7 @@ impl<const ADDRESS_LENGTH: usize, const WORD_LENGTH: usize> MemoryADT
             bindings.into_iter().map(|(a, w)| (*a, w)).unzip();
         const MAX_RETRIES: usize = 10;
 
-        for _ in 0..MAX_RETRIES {
+        for i in 0..MAX_RETRIES {
             // while counterintuitive, getting a new client on each retry is a better approach
             // than trying to reuse the same client since it allows other operations to use the
             // connection between retries.
@@ -134,6 +134,9 @@ impl<const ADDRESS_LENGTH: usize, const WORD_LENGTH: usize> MemoryADT
                 .await?;
 
             // INFO: a backoff mechanism can be added here to handle high contention use cases
+            if i > 0 {
+                tokio::time::sleep(std::time::Duration::from_millis(10 * i as u64)).await;
+            }
 
             let result = async {
                 // Start transaction with SERIALIZABLE isolation
