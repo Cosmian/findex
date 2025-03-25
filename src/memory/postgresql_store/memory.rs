@@ -7,6 +7,7 @@ use tokio_postgres::{Socket, tls::MakeTlsConnect};
 #[derive(Clone, Debug)]
 pub struct PostGresMemory<Address, Word> {
     pool: Pool,
+    table_name: String,
     _marker: PhantomData<(Address, Word)>,
 }
 
@@ -47,6 +48,7 @@ impl<const ADDRESS_LENGTH: usize, const WORD_LENGTH: usize>
 
         Ok(Self {
             pool,
+            table_name,
             _marker: PhantomData,
         })
     }
@@ -67,10 +69,14 @@ impl<const ADDRESS_LENGTH: usize, const WORD_LENGTH: usize> MemoryADT
         // in psql, statements are cached per connection and not per pool
         let stmnt = client
             .prepare_cached(
-                "SELECT f.w
+                format!(
+                    "SELECT f.w
                         FROM UNNEST($1::bytea[]) WITH ORDINALITY AS params(addr, idx)
-                        LEFT JOIN findex_db f ON params.addr = f.a
+                        LEFT JOIN {} f ON params.addr = f.a
                         ORDER BY params.idx;",
+                    self.table_name
+                )
+                .as_str(),
             )
             .await?;
 
@@ -111,9 +117,10 @@ impl<const ADDRESS_LENGTH: usize, const WORD_LENGTH: usize> MemoryADT
             let mut client = self.pool.get().await?;
             let stmnt = client
                 .prepare_cached(
+                    format!(
                     " WITH
                             guard_check AS (
-                                SELECT w FROM findex_db WHERE a = $1::bytea
+                                SELECT w FROM {0} WHERE a = $1::bytea
                             ),
                             dedup_input_table AS (
                             SELECT DISTINCT ON (a) a, w
@@ -121,7 +128,7 @@ impl<const ADDRESS_LENGTH: usize, const WORD_LENGTH: usize> MemoryADT
                                 ORDER BY a, order_idx DESC
                             ),
                             insert_cte AS (
-                                INSERT INTO findex_db (a, w)
+                                INSERT INTO {0} (a, w)
                                 SELECT a, w FROM dedup_input_table AS t(a,w)
                                 WHERE (
                                     $2::bytea IS NULL AND NOT EXISTS (SELECT 1 FROM guard_check)
@@ -133,6 +140,9 @@ impl<const ADDRESS_LENGTH: usize, const WORD_LENGTH: usize> MemoryADT
                                 ON CONFLICT (a) DO UPDATE SET w = EXCLUDED.w
                             )
                             SELECT COALESCE((SELECT w FROM guard_check)) AS original_guard_value;",
+                            self.table_name,
+                        )
+                        .as_str()
                 )
                 .await?;
 
