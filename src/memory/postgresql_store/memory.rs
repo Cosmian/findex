@@ -2,25 +2,46 @@ use super::PostgresMemoryError;
 use crate::{Address, MemoryADT};
 use deadpool_postgres::Pool;
 use std::marker::PhantomData;
-use tokio_postgres::{Socket, tls::MakeTlsConnect};
 
 #[derive(Clone, Debug)]
-pub struct PostGresMemory<Address, Word> {
+pub struct PostgresMemory<Address, Word> {
     pool: Pool,
     table_name: String,
     _marker: PhantomData<(Address, Word)>,
 }
 
 impl<const ADDRESS_LENGTH: usize, const WORD_LENGTH: usize>
-    PostGresMemory<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>
+    PostgresMemory<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>
 {
+    // /// Connect to a Postgres database and create a table if it doesn't exist
+    // pub async fn init(table_name: String) -> Result<Self, PostgresMemoryError> {
+    //     pool.get()
+    //         .await?
+    //         .execute(
+    //             &format!(
+    //                 "
+    //                     CREATE TABLE IF NOT EXISTS {} (
+    //                         a BYTEA PRIMARY KEY CHECK (octet_length(a) = {}),
+    //                         w BYTEA NOT NULL CHECK (octet_length(w) = {})
+    //                     );
+    //                     ",
+    //                 table_name, ADDRESS_LENGTH, WORD_LENGTH
+    //             ),
+    //             &[],
+    //         )
+    //         .await?;
+
+    //     Ok(Self {
+    //         pool,
+    //         table_name,
+    //         _marker: PhantomData,
+    //     })
+    // }
     /// Connect to a Postgres database and create a table if it doesn't exist
     pub async fn connect_with_pool(
         pool: Pool,
         table_name: String,
     ) -> Result<Self, PostgresMemoryError> {
-        let table_name = table_name.unwrap_or_else(|| "findex_db".to_string());
-
         pool.get()
             .await?
             .execute(
@@ -46,7 +67,7 @@ impl<const ADDRESS_LENGTH: usize, const WORD_LENGTH: usize>
 }
 
 impl<const ADDRESS_LENGTH: usize, const WORD_LENGTH: usize> MemoryADT
-    for PostGresMemory<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>
+    for PostgresMemory<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>
 {
     type Address = Address<ADDRESS_LENGTH>;
     type Word = [u8; WORD_LENGTH];
@@ -187,8 +208,8 @@ impl<const ADDRESS_LENGTH: usize, const WORD_LENGTH: usize> MemoryADT
 
 #[cfg(test)]
 mod tests {
-    use deadpool_postgres::{Manager, ManagerConfig, RecyclingMethod, Runtime};
-    use tokio_postgres::{Config, NoTls, config::SslMode};
+    use deadpool_postgres::{Manager, ManagerConfig, RecyclingMethod, Runtime, SslMode};
+    use tokio_postgres::{Config, NoTls, Socket, tls::MakeTlsConnect};
 
     use super::*;
     use crate::{
@@ -205,13 +226,15 @@ mod tests {
         T: MakeTlsConnect<Socket>,
         T::Stream: Send + 'static,
     {
+        // TODO : I think i can move to deadpool_postgres::Config::from_url
+        // this hits 2 birds with 1 stone : we can connect with the url
+        // and we will get rid of tokio_postgres imports, at least here
         let mut pg_config = Config::new();
         pg_config
-            .user("cosmian")
-            .password("cosmian") // in production code, use a secure way to store the password
+            .user("max")
+            .password("max") // in production code, use a secure way to store the password
             .dbname("cosmian")
-            .host("localhost")
-            .ssl_mode(SslMode::Prefer);
+            .host("localhost");
 
         let mgr = Manager::from_config(pg_config, NoTls, ManagerConfig {
             // The default fast recycling method is usually appropriate for non  hard-closed network connections
@@ -234,11 +257,11 @@ mod tests {
         test_fn: F,
     ) -> Result<(), PostgresMemoryError>
     where
-        F: FnOnce(PostGresMemory<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>) -> Fut + Send,
+        F: FnOnce(PostgresMemory<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>) -> Fut + Send,
         Fut: std::future::Future<Output = ()> + Send,
     {
         let test_pool = create_testing_pool::<NoTls>().await.unwrap();
-        let m = PostGresMemory::<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>::connect_with_pool(
+        let m = PostgresMemory::<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>::connect_with_pool(
             test_pool.clone(),
             table_name.to_string(),
         )
@@ -282,18 +305,9 @@ mod tests {
 
     #[tokio::test]
     async fn test_rw_ccr() -> Result<(), PostgresMemoryError> {
-        let test_pool = create_testing_pool::<NoTls>().await.unwrap();
-        let m = PostGresMemory::<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>::connect_with_pool(
-            test_pool.clone(),
-            "findex_db_rw_ccr".to_string(),
-        )
-        .await?;
-        test_guarded_write_concurrent(&m, rand::random(), Some(100)).await;
-        test_pool
-            .get()
-            .await?
-            .execute("DROP table findex_db_rw_ccr;", &[])
-            .await?;
-        Ok(())
+        setup_and_run_test("findex_test_rw_same_address_seq", |m| async move {
+            test_guarded_write_concurrent::<WORD_LENGTH, _>(&m, rand::random(), Some(100)).await;
+        })
+        .await
     }
 }

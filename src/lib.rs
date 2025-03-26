@@ -34,7 +34,7 @@ pub use memory::{RedisMemory, RedisMemoryError};
 pub use memory::{SqliteMemory, SqliteMemoryError};
 
 #[cfg(feature = "postgres-mem")]
-pub use memory::{PostGresMemory, PostgresMemoryError};
+pub use memory::{PostgresMemory, PostgresMemoryError};
 
 #[cfg(any(test, feature = "test-utils"))]
 pub use encoding::{
