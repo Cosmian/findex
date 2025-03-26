@@ -15,19 +15,10 @@ impl<const ADDRESS_LENGTH: usize, const WORD_LENGTH: usize>
     PostGresMemory<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>
 {
     /// Connect to a Postgres database and create a table if it doesn't exist
-    ///
-    /// # Arguments
-    ///
-    /// * `pool` - A configured deadpool_postgres::Pool instance
-    /// * `table_name` - The name of the table to be created. If not provided, the default name is `findex_db`
-    pub async fn connect_with_pool<T>(
+    pub async fn connect_with_pool(
         pool: Pool,
-        table_name: Option<String>,
-    ) -> Result<Self, PostgresMemoryError>
-    where
-        T: MakeTlsConnect<Socket>,
-        T::Stream: Send + 'static, // 'static bound simply ensures that the type is fully owned
-    {
+        table_name: String,
+    ) -> Result<Self, PostgresMemoryError> {
         let table_name = table_name.unwrap_or_else(|| "findex_db".to_string());
 
         pool.get()
@@ -247,9 +238,10 @@ mod tests {
         Fut: std::future::Future<Output = ()> + Send,
     {
         let test_pool = create_testing_pool::<NoTls>().await.unwrap();
-        let m = PostGresMemory::<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>::connect_with_pool::<
-            NoTls,
-        >(test_pool.clone(), Some(table_name.to_string()))
+        let m = PostGresMemory::<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>::connect_with_pool(
+            test_pool.clone(),
+            table_name.to_string(),
+        )
         .await?;
 
         test_fn(m).await;
@@ -291,9 +283,10 @@ mod tests {
     #[tokio::test]
     async fn test_rw_ccr() -> Result<(), PostgresMemoryError> {
         let test_pool = create_testing_pool::<NoTls>().await.unwrap();
-        let m = PostGresMemory::<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>::connect_with_pool::<
-            NoTls,
-        >(test_pool.clone(), Some("findex_db_rw_ccr".to_string()))
+        let m = PostGresMemory::<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>::connect_with_pool(
+            test_pool.clone(),
+            "findex_db_rw_ccr".to_string(),
+        )
         .await?;
         test_guarded_write_concurrent(&m, rand::random(), Some(100)).await;
         test_pool
