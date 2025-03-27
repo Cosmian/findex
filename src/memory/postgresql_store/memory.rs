@@ -99,14 +99,14 @@ impl<const ADDRESS_LENGTH: usize, const WORD_LENGTH: usize> MemoryADT
         addresses: Vec<Self::Address>,
     ) -> Result<Vec<Option<Self::Word>>, Self::Error> {
         let client = self.pool.get().await?;
-        // in psql, statements are cached per connection and not per pool
+        // in Postgres databases, statements are cached per connection and not per pool
         let stmnt = client
             .prepare_cached(
                 format!(
-                    "SELECT f.w
-                        FROM UNNEST($1::bytea[]) WITH ORDINALITY AS params(addr, idx)
-                        LEFT JOIN {} f ON params.addr = f.a
-                        ORDER BY params.idx;",
+                    "SELECT existing_addresses.w
+                    FROM UNNEST($1::bytea[]) WITH ORDINALITY AS params(addr, idx)
+                    LEFT JOIN {} existing_addresses ON params.addr = existing_addresses.a
+                    ORDER BY params.idx;",
                     self.table_name
                 )
                 .as_str(),
@@ -232,6 +232,7 @@ impl<const ADDRESS_LENGTH: usize, const WORD_LENGTH: usize> MemoryADT
 #[cfg(test)]
 mod tests {
     use deadpool_postgres::{Config, ManagerConfig, RecyclingMethod, Runtime};
+    use rand::{RngCore, SeedableRng, rngs::StdRng};
     use tokio_postgres::{
         NoTls, Socket,
         tls::{MakeTlsConnect, TlsConnect},
@@ -239,7 +240,7 @@ mod tests {
 
     use super::*;
     use crate::{
-        ADDRESS_LENGTH, Address, WORD_LENGTH,
+        ADDRESS_LENGTH, Address, KEY_LENGTH, WORD_LENGTH,
         adt::test_utils::{
             test_guarded_write_concurrent, test_rw_same_address, test_single_write_and_read,
             test_wrong_guard,
@@ -364,6 +365,56 @@ mod tests {
     async fn test_rw_ccr() -> Result<(), PostgresMemoryError> {
         setup_and_run_test("findex_test_rw_same_address_seq", |m| async move {
             test_guarded_write_concurrent::<WORD_LENGTH, _>(&m, rand::random(), Some(100)).await;
+        })
+        .await
+    }
+
+    #[tokio::test]
+    async fn bench_reading() -> Result<(), PostgresMemoryError> {
+        setup_and_run_test("findex_test_rw_same_address_seq", |m| async move {
+            test_guarded_write_concurrent::<WORD_LENGTH, _>(&m, rand::random(), Some(100)).await;
+        })
+        .await
+    }
+    fn gen_bytes<const BYTES_LENGTH: usize>(rng: &mut impl RngCore) -> [u8; BYTES_LENGTH] {
+        let mut bytes = [0; BYTES_LENGTH];
+        rng.fill_bytes(&mut bytes);
+        bytes
+    }
+    #[tokio::test]
+    async fn bench_batch_read() -> Result<(), PostgresMemoryError> {
+        setup_and_run_test("findex_bench_batch_read", |m| async move {
+            const NUM_ADDRESSES: usize = 1000;
+            const NUM_ITERATIONS: usize = 3000;
+            let mut rng = StdRng::from_seed([0; KEY_LENGTH]);
+
+            // Generate random addresses
+            let addresses: Vec<Address<ADDRESS_LENGTH>> = (0..NUM_ADDRESSES)
+                .map(|_| Address::from(gen_bytes::<ADDRESS_LENGTH>(&mut rng)))
+                .collect();
+
+            // Pre-write data to all addresses
+            for address in &addresses {
+                let word = gen_bytes::<WORD_LENGTH>(&mut rng);
+                m.guarded_write((address.clone(), None), vec![(address.clone(), word)])
+                    .await
+                    .unwrap();
+            }
+
+            // Benchmark batch reads
+            let start = tokio::time::Instant::now();
+            for _ in 0..NUM_ITERATIONS {
+                m.batch_read(addresses.clone()).await.unwrap();
+            }
+            let elapsed = start.elapsed();
+
+            println!(
+                "Performed {} batch reads of {} addresses in {:?} ({:?}/read)",
+                NUM_ITERATIONS,
+                NUM_ADDRESSES,
+                elapsed,
+                elapsed / NUM_ITERATIONS as u32
+            );
         })
         .await
     }
