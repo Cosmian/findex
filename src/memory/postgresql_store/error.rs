@@ -2,13 +2,14 @@ use std::fmt;
 
 #[derive(Debug)]
 pub enum PostgresMemoryError {
-    TokioPostgresError(tokio_postgres::Error),
+    TokioPostgresError(deadpool_postgres::tokio_postgres::Error),
     TryFromSliceError(std::array::TryFromSliceError),
     BuildPoolError(deadpool_postgres::BuildError),
     GetConnectionFromPoolError(deadpool_postgres::PoolError),
-    CreatePoolError(deadpool_postgres::CreatePoolError),
+    PoolConfigError(deadpool_postgres::ConfigError),
     RetryExhaustedError(usize),
     InvalidDataLength(usize),
+    TableCreationError(u64),
 }
 
 impl std::error::Error for PostgresMemoryError {}
@@ -25,7 +26,7 @@ impl fmt::Display for PostgresMemoryError {
                     len
                 )
             }
-            Self::CreatePoolError(err) => {
+            Self::PoolConfigError(err) => {
                 write!(f, "deadpool_postgres error during pool creation: {}", err)
             }
             Self::BuildPoolError(err) => {
@@ -39,12 +40,19 @@ impl fmt::Display for PostgresMemoryError {
             Self::RetryExhaustedError(retries) => {
                 write!(f, "retries exhausted after {} attempts", retries)
             }
+            Self::TableCreationError(err) => {
+                write!(
+                    f,
+                    "error creating table, {} rows returned while 0 were expected.",
+                    err
+                )
+            }
         }
     }
 }
 
-impl From<tokio_postgres::Error> for PostgresMemoryError {
-    fn from(err: tokio_postgres::Error) -> Self {
+impl From<deadpool_postgres::tokio_postgres::Error> for PostgresMemoryError {
+    fn from(err: deadpool_postgres::tokio_postgres::Error) -> Self {
         Self::TokioPostgresError(err)
     }
 }
@@ -55,9 +63,9 @@ impl From<std::array::TryFromSliceError> for PostgresMemoryError {
     }
 }
 
-impl From<deadpool_postgres::CreatePoolError> for PostgresMemoryError {
-    fn from(err: deadpool_postgres::CreatePoolError) -> Self {
-        Self::CreatePoolError(err)
+impl From<deadpool_postgres::ConfigError> for PostgresMemoryError {
+    fn from(err: deadpool_postgres::ConfigError) -> Self {
+        Self::PoolConfigError(err)
     }
 }
 

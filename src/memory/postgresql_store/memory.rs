@@ -2,6 +2,7 @@ use super::PostgresMemoryError;
 use crate::{Address, MemoryADT};
 use deadpool_postgres::Pool;
 use std::marker::PhantomData;
+use tokio_postgres::{Socket, tls::MakeTlsConnect};
 
 #[derive(Clone, Debug)]
 pub struct PostgresMemory<Address, Word> {
@@ -13,30 +14,50 @@ pub struct PostgresMemory<Address, Word> {
 impl<const ADDRESS_LENGTH: usize, const WORD_LENGTH: usize>
     PostgresMemory<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>
 {
-    // /// Connect to a Postgres database and create a table if it doesn't exist
-    // pub async fn init(table_name: String) -> Result<Self, PostgresMemoryError> {
-    //     pool.get()
-    //         .await?
-    //         .execute(
-    //             &format!(
-    //                 "
-    //                     CREATE TABLE IF NOT EXISTS {} (
-    //                         a BYTEA PRIMARY KEY CHECK (octet_length(a) = {}),
-    //                         w BYTEA NOT NULL CHECK (octet_length(w) = {})
-    //                     );
-    //                     ",
-    //                 table_name, ADDRESS_LENGTH, WORD_LENGTH
-    //             ),
-    //             &[],
-    //         )
-    //         .await?;
+    /// Connect to a Postgres database and create a table if it doesn't exist
+    pub async fn initialize_table<T>(
+        &self,
+        db_url: String,
+        table_name: String,
+        tls: T,
+    ) -> Result<(), PostgresMemoryError>
+    where
+        T: MakeTlsConnect<Socket>,
+        T::Stream: Send + 'static,
+    {
+        let (client, connection) = tokio_postgres::connect(&db_url, tls).await?;
 
-    //     Ok(Self {
-    //         pool,
-    //         table_name,
-    //         _marker: PhantomData,
-    //     })
-    // }
+        // The connection object performs the actual communication with the database
+        // `Connection` only resolves when the connection is closed, either because a fatal error has
+        // occurred, or because its associated `Client` has dropped and all outstanding work has completed.
+        let conn_handle = tokio::spawn(async move {
+            if let Err(e) = connection.await {
+                eprintln!("connection error: {}", e);
+            }
+        });
+
+        let returned = client
+            .execute(
+                &format!(
+                    "
+                    CREATE TABLE IF NOT EXISTS {} (
+                        a BYTEA PRIMARY KEY CHECK (octet_length(a) = {}),
+                        w BYTEA NOT NULL CHECK (octet_length(w) = {})
+                    );",
+                    table_name, ADDRESS_LENGTH, WORD_LENGTH
+                ),
+                &[],
+            )
+            .await?;
+        if returned != 0 {
+            return Err(PostgresMemoryError::TableCreationError(returned));
+        }
+
+        drop(client);
+        let _ = conn_handle.await; // ensures that the connection is closed
+        Ok(())
+    }
+
     /// Connect to a Postgres database and create a table if it doesn't exist
     pub async fn connect_with_pool(
         pool: Pool,
@@ -165,7 +186,9 @@ impl<const ADDRESS_LENGTH: usize, const WORD_LENGTH: usize> MemoryADT
                 // Start transaction with SERIALIZABLE isolation
                 let tx = client
                     .build_transaction()
-                    .isolation_level(tokio_postgres::IsolationLevel::Serializable)
+                    .isolation_level(
+                        deadpool_postgres::tokio_postgres::IsolationLevel::Serializable,
+                    )
                     .start() // BEGIN PG statement equivalent
                     .await?;
 
@@ -208,8 +231,11 @@ impl<const ADDRESS_LENGTH: usize, const WORD_LENGTH: usize> MemoryADT
 
 #[cfg(test)]
 mod tests {
-    use deadpool_postgres::{Manager, ManagerConfig, RecyclingMethod, Runtime, SslMode};
-    use tokio_postgres::{Config, NoTls, Socket, tls::MakeTlsConnect};
+    use deadpool_postgres::{Config, ManagerConfig, RecyclingMethod, Runtime};
+    use tokio_postgres::{
+        NoTls, Socket,
+        tls::{MakeTlsConnect, TlsConnect},
+    };
 
     use super::*;
     use crate::{
@@ -220,30 +246,24 @@ mod tests {
         },
     };
 
-    // Template function for pool creation
-    pub async fn create_testing_pool<T>() -> Result<Pool, PostgresMemoryError>
-    where
-        T: MakeTlsConnect<Socket>,
-        T::Stream: Send + 'static,
-    {
-        // TODO : I think i can move to deadpool_postgres::Config::from_url
-        // this hits 2 birds with 1 stone : we can connect with the url
-        // and we will get rid of tokio_postgres imports, at least here
-        let mut pg_config = Config::new();
-        pg_config
-            .user("max")
-            .password("max") // in production code, use a secure way to store the password
-            .dbname("cosmian")
-            .host("localhost");
+    const DB_URL: &str = "postgres://cosmian:cosmian@localhost/cosmian";
 
-        let mgr = Manager::from_config(pg_config, NoTls, ManagerConfig {
-            // The default fast recycling method is usually appropriate for non  hard-closed network connections
-            recycling_method: RecyclingMethod::Fast,
+    // Template function for pool creation
+    pub async fn create_testing_pool<T>(db_url: &str, tls: T) -> Result<Pool, PostgresMemoryError>
+    where
+        T: MakeTlsConnect<Socket> + Clone + Sync + Send + 'static,
+        T::Stream: Sync + Send,
+        T::TlsConnect: Sync + Send,
+        <T::TlsConnect as TlsConnect<Socket>>::Future: Send,
+    {
+        let mut pg_config = Config::new();
+        pg_config.url = Some(db_url.to_string());
+        pg_config.manager = Some(ManagerConfig {
+            recycling_method: { RecyclingMethod::Fast },
         });
 
-        let pool = Pool::builder(mgr)
-            // A different pool size might be more appropriate, tune according to your needs and the available resources.
-            // The command `SHOW max_connections;` in psql will give you the maximum number of connections on your DB, (100 by default)
+        let pool = pg_config
+            .builder(tls)?
             .max_size(16)
             .runtime(Runtime::Tokio1)
             .build()?;
@@ -260,12 +280,15 @@ mod tests {
         F: FnOnce(PostgresMemory<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>) -> Fut + Send,
         Fut: std::future::Future<Output = ()> + Send,
     {
-        let test_pool = create_testing_pool::<NoTls>().await.unwrap();
+        let test_pool = create_testing_pool(DB_URL, NoTls).await.unwrap();
         let m = PostgresMemory::<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>::connect_with_pool(
             test_pool.clone(),
             table_name.to_string(),
         )
         .await?;
+
+        m.initialize_table(DB_URL.to_string(), "aa".to_string(), NoTls)
+            .await?;
 
         test_fn(m).await;
 
@@ -274,6 +297,40 @@ mod tests {
             .get()
             .await?
             .execute(&format!("DROP table {};", table_name), &[])
+            .await?;
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_initialization() -> Result<(), PostgresMemoryError> {
+        let table_name: &str = "test_initialization";
+        let test_pool = create_testing_pool(DB_URL, NoTls).await.unwrap();
+        let m = PostgresMemory::<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>::connect_with_pool(
+            test_pool.clone(),
+            table_name.to_string(),
+        )
+        .await?;
+
+        m.initialize_table(DB_URL.to_string(), "test_initialization".to_string(), NoTls)
+            .await?;
+
+        // check that the table actually exists
+        let client = test_pool.get().await?;
+        let returned = client
+            .query(
+                "SELECT COUNT(*) FROM information_schema.tables WHERE table_name = 'test_initialization';",
+                &[],
+            )
+            .await?;
+
+        assert_eq!(returned[0].get::<_, i64>(0), 1);
+
+        // Cleanup - drop the table to avoid flacky tests
+        test_pool
+            .get()
+            .await?
+            .execute("DROP table test_initialization;", &[])
             .await?;
 
         Ok(())
