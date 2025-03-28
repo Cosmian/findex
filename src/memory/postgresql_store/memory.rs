@@ -2,7 +2,10 @@ use super::PostgresMemoryError;
 use crate::{Address, MemoryADT};
 use deadpool_postgres::Pool;
 use std::marker::PhantomData;
-use tokio_postgres::{Socket, tls::MakeTlsConnect};
+use tokio_postgres::{
+    Socket,
+    tls::{MakeTlsConnect, TlsConnect},
+};
 
 #[derive(Clone, Debug)]
 pub struct PostgresMemory<Address, Word> {
@@ -22,8 +25,10 @@ impl<const ADDRESS_LENGTH: usize, const WORD_LENGTH: usize>
         tls: T,
     ) -> Result<(), PostgresMemoryError>
     where
-        T: MakeTlsConnect<Socket>,
+        T: MakeTlsConnect<Socket> + Send,
         T::Stream: Send + 'static,
+        T::TlsConnect: Send,
+        <T::TlsConnect as TlsConnect<Socket>>::Future: Send,
     {
         let (client, connection) = tokio_postgres::connect(&db_url, tls).await?;
 
@@ -63,22 +68,6 @@ impl<const ADDRESS_LENGTH: usize, const WORD_LENGTH: usize>
         pool: Pool,
         table_name: String,
     ) -> Result<Self, PostgresMemoryError> {
-        pool.get()
-            .await?
-            .execute(
-                &format!(
-                    "
-                    CREATE TABLE IF NOT EXISTS {} (
-                        a BYTEA PRIMARY KEY CHECK (octet_length(a) = {}),
-                        w BYTEA NOT NULL CHECK (octet_length(w) = {})
-                    );
-                    ",
-                    table_name, ADDRESS_LENGTH, WORD_LENGTH
-                ),
-                &[],
-            )
-            .await?;
-
         Ok(Self {
             pool,
             table_name,
@@ -99,14 +88,14 @@ impl<const ADDRESS_LENGTH: usize, const WORD_LENGTH: usize> MemoryADT
         addresses: Vec<Self::Address>,
     ) -> Result<Vec<Option<Self::Word>>, Self::Error> {
         let client = self.pool.get().await?;
-        // in Postgres databases, statements are cached per connection and not per pool
-        let stmnt = client
+        // in psql, statements are cached per connection and not per pool
+        let stmt = client
             .prepare_cached(
                 format!(
-                    "SELECT existing_addresses.w
-                    FROM UNNEST($1::bytea[]) WITH ORDINALITY AS params(addr, idx)
-                    LEFT JOIN {} existing_addresses ON params.addr = existing_addresses.a
-                    ORDER BY params.idx;",
+                    "SELECT f.w
+                        FROM UNNEST($1::bytea[]) WITH ORDINALITY AS params(addr, idx)
+                        LEFT JOIN {} f ON params.addr = f.a
+                        ORDER BY params.idx;",
                     self.table_name
                 )
                 .as_str(),
@@ -116,7 +105,7 @@ impl<const ADDRESS_LENGTH: usize, const WORD_LENGTH: usize> MemoryADT
         client
             // the left join is necessary to ensure that the order of the addresses is preserved
             // as well as to return None for addresses that don't exist
-            .query(&stmnt, &[&addresses
+            .query(&stmt, &[&addresses
                 .iter()
                 .map(|addr| addr.as_slice())
                 .collect::<Vec<_>>()])
@@ -131,7 +120,7 @@ impl<const ADDRESS_LENGTH: usize, const WORD_LENGTH: usize> MemoryADT
                         .map_err(|_| PostgresMemoryError::InvalidDataLength(slice.len()))
                 })
             })
-            .collect::<Result<Vec<_>, Self::Error>>()
+            .collect()
     }
 
     async fn guarded_write(
@@ -139,6 +128,33 @@ impl<const ADDRESS_LENGTH: usize, const WORD_LENGTH: usize> MemoryADT
         guard: (Self::Address, Option<Self::Word>),
         bindings: Vec<(Self::Address, Self::Word)>,
     ) -> Result<Option<Self::Word>, Self::Error> {
+        let g_write_script = format!(
+            "
+        WITH
+        guard_check AS (
+            SELECT w FROM {0} WHERE a = $1::bytea
+        ),
+        dedup_input_table AS (
+        SELECT DISTINCT ON (a) a, w
+            FROM UNNEST($3::bytea[], $4::bytea[]) WITH ORDINALITY AS t(a, w, order_idx)
+            ORDER BY a, order_idx DESC
+        ),
+        insert_cte AS (
+            INSERT INTO {0} (a, w)
+            SELECT a, w FROM dedup_input_table AS t(a,w)
+            WHERE (
+                $2::bytea IS NULL AND NOT EXISTS (SELECT 1 FROM guard_check)
+            ) OR (
+                $2::bytea IS NOT NULL AND EXISTS (
+                    SELECT 1 FROM guard_check WHERE w = $2::bytea
+                )
+            )
+            ON CONFLICT (a) DO UPDATE SET w = EXCLUDED.w
+        )
+        SELECT COALESCE((SELECT w FROM guard_check)) AS original_guard_value;",
+            self.table_name
+        );
+
         let (addresses, words): (Vec<[u8; ADDRESS_LENGTH]>, Vec<Self::Word>) =
             bindings.into_iter().map(|(a, w)| (*a, w)).unzip();
         const MAX_RETRIES: usize = 10;
@@ -148,39 +164,7 @@ impl<const ADDRESS_LENGTH: usize, const WORD_LENGTH: usize> MemoryADT
             // than trying to reuse the same client since it allows other operations to use the
             // connection between retries.
             let mut client = self.pool.get().await?;
-            let stmnt = client
-                .prepare_cached(
-                    format!(
-                        "
-                    WITH
-                    guard_check AS (
-                        SELECT w FROM {0} WHERE a = $1::bytea
-                    ),
-                    dedup_input_table AS (
-                    SELECT DISTINCT ON (a) a, w
-                        FROM UNNEST($3::bytea[], $4::bytea[]) WITH ORDINALITY AS t(a, w, order_idx)
-                        ORDER BY a, order_idx DESC
-                    ),
-                    insert_cte AS (
-                        INSERT INTO {0} (a, w)
-                        SELECT a, w FROM dedup_input_table AS t(a,w)
-                        WHERE (
-                            $2::bytea IS NULL AND NOT EXISTS (SELECT 1 FROM guard_check)
-                        ) OR (
-                            $2::bytea IS NOT NULL AND EXISTS (
-                                SELECT 1 FROM guard_check WHERE w = $2::bytea
-                            )
-                        )
-                        ON CONFLICT (a) DO UPDATE SET w = EXCLUDED.w
-                    )
-                    SELECT COALESCE((SELECT w FROM guard_check)) AS original_guard_value;",
-                        self.table_name,
-                    )
-                    .as_str(),
-                )
-                .await?;
-
-            // INFO: a backoff mechanism can be added here to handle high contention use cases
+            let stmt = client.prepare_cached(g_write_script.as_str()).await?;
 
             let result = async {
                 // Start transaction with SERIALIZABLE isolation
@@ -189,13 +173,13 @@ impl<const ADDRESS_LENGTH: usize, const WORD_LENGTH: usize> MemoryADT
                     .isolation_level(
                         deadpool_postgres::tokio_postgres::IsolationLevel::Serializable,
                     )
-                    .start() // BEGIN PG statement equivalent
+                    .start()
                     .await?;
 
                 let res = tx
-                    .query_opt(&stmnt, &[
+                    .query_opt(&stmt, &[
                         &*guard.0,
-                        guard.1.as_ref().map_or(&None::<&[u8]>, |g| g),
+                        &guard.1.as_ref().map(|w| w.as_slice()),
                         &addresses,
                         &words,
                     ])
@@ -204,8 +188,7 @@ impl<const ADDRESS_LENGTH: usize, const WORD_LENGTH: usize> MemoryADT
                         Ok::<Option<[u8; WORD_LENGTH]>, PostgresMemoryError>(None),
                         |row| {
                             row.try_get::<_, Option<&[u8]>>(0)?
-                                .map(|b| b.try_into())
-                                .map_or(Ok(None), |r| Ok(Some(r?)))
+                                .map_or(Ok(None), |r| Ok(Some(r.try_into()?)))
                         },
                     )?;
                 tx.commit().await?;
@@ -231,16 +214,12 @@ impl<const ADDRESS_LENGTH: usize, const WORD_LENGTH: usize> MemoryADT
 
 #[cfg(test)]
 mod tests {
-    use deadpool_postgres::{Config, ManagerConfig, RecyclingMethod, Runtime};
-    use rand::{RngCore, SeedableRng, rngs::StdRng};
-    use tokio_postgres::{
-        NoTls, Socket,
-        tls::{MakeTlsConnect, TlsConnect},
-    };
+    use deadpool_postgres::Config;
+    use tokio_postgres::NoTls;
 
     use super::*;
     use crate::{
-        ADDRESS_LENGTH, Address, KEY_LENGTH, WORD_LENGTH,
+        ADDRESS_LENGTH, Address, WORD_LENGTH,
         adt::test_utils::{
             test_guarded_write_concurrent, test_rw_same_address, test_single_write_and_read,
             test_wrong_guard,
@@ -250,25 +229,10 @@ mod tests {
     const DB_URL: &str = "postgres://cosmian:cosmian@localhost/cosmian";
 
     // Template function for pool creation
-    pub async fn create_testing_pool<T>(db_url: &str, tls: T) -> Result<Pool, PostgresMemoryError>
-    where
-        T: MakeTlsConnect<Socket> + Clone + Sync + Send + 'static,
-        T::Stream: Sync + Send,
-        T::TlsConnect: Sync + Send,
-        <T::TlsConnect as TlsConnect<Socket>>::Future: Send,
-    {
+    pub async fn create_testing_pool(db_url: &str) -> Result<Pool, PostgresMemoryError> {
         let mut pg_config = Config::new();
         pg_config.url = Some(db_url.to_string());
-        pg_config.manager = Some(ManagerConfig {
-            recycling_method: { RecyclingMethod::Fast },
-        });
-
-        let pool = pg_config
-            .builder(tls)?
-            .max_size(16)
-            .runtime(Runtime::Tokio1)
-            .build()?;
-
+        let pool = pg_config.builder(NoTls)?.build()?;
         Ok(pool)
     }
 
@@ -281,14 +245,14 @@ mod tests {
         F: FnOnce(PostgresMemory<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>) -> Fut + Send,
         Fut: std::future::Future<Output = ()> + Send,
     {
-        let test_pool = create_testing_pool(DB_URL, NoTls).await.unwrap();
+        let test_pool = create_testing_pool(DB_URL).await.unwrap();
         let m = PostgresMemory::<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>::connect_with_pool(
             test_pool.clone(),
             table_name.to_string(),
         )
         .await?;
 
-        m.initialize_table(DB_URL.to_string(), "aa".to_string(), NoTls)
+        m.initialize_table(DB_URL.to_string(), table_name.to_string(), NoTls)
             .await?;
 
         test_fn(m).await;
@@ -306,14 +270,14 @@ mod tests {
     #[tokio::test]
     async fn test_initialization() -> Result<(), PostgresMemoryError> {
         let table_name: &str = "test_initialization";
-        let test_pool = create_testing_pool(DB_URL, NoTls).await.unwrap();
+        let test_pool = create_testing_pool(DB_URL).await.unwrap();
         let m = PostgresMemory::<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>::connect_with_pool(
             test_pool.clone(),
             table_name.to_string(),
         )
         .await?;
 
-        m.initialize_table(DB_URL.to_string(), "test_initialization".to_string(), NoTls)
+        m.initialize_table(DB_URL.to_string(), table_name.to_string(), NoTls)
             .await?;
 
         // check that the table actually exists
@@ -331,7 +295,7 @@ mod tests {
         test_pool
             .get()
             .await?
-            .execute("DROP table test_initialization;", &[])
+            .execute(&format!("DROP table {table_name};"), &[])
             .await?;
 
         Ok(())
@@ -363,58 +327,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_rw_ccr() -> Result<(), PostgresMemoryError> {
-        setup_and_run_test("findex_test_rw_same_address_seq", |m| async move {
+        setup_and_run_test("findex_test_rw_ccr", |m| async move {
             test_guarded_write_concurrent::<WORD_LENGTH, _>(&m, rand::random(), Some(100)).await;
-        })
-        .await
-    }
-
-    #[tokio::test]
-    async fn bench_reading() -> Result<(), PostgresMemoryError> {
-        setup_and_run_test("findex_test_rw_same_address_seq", |m| async move {
-            test_guarded_write_concurrent::<WORD_LENGTH, _>(&m, rand::random(), Some(100)).await;
-        })
-        .await
-    }
-    fn gen_bytes<const BYTES_LENGTH: usize>(rng: &mut impl RngCore) -> [u8; BYTES_LENGTH] {
-        let mut bytes = [0; BYTES_LENGTH];
-        rng.fill_bytes(&mut bytes);
-        bytes
-    }
-    #[tokio::test]
-    async fn bench_batch_read() -> Result<(), PostgresMemoryError> {
-        setup_and_run_test("findex_bench_batch_read", |m| async move {
-            const NUM_ADDRESSES: usize = 1000;
-            const NUM_ITERATIONS: usize = 3000;
-            let mut rng = StdRng::from_seed([0; KEY_LENGTH]);
-
-            // Generate random addresses
-            let addresses: Vec<Address<ADDRESS_LENGTH>> = (0..NUM_ADDRESSES)
-                .map(|_| Address::from(gen_bytes::<ADDRESS_LENGTH>(&mut rng)))
-                .collect();
-
-            // Pre-write data to all addresses
-            for address in &addresses {
-                let word = gen_bytes::<WORD_LENGTH>(&mut rng);
-                m.guarded_write((address.clone(), None), vec![(address.clone(), word)])
-                    .await
-                    .unwrap();
-            }
-
-            // Benchmark batch reads
-            let start = tokio::time::Instant::now();
-            for _ in 0..NUM_ITERATIONS {
-                m.batch_read(addresses.clone()).await.unwrap();
-            }
-            let elapsed = start.elapsed();
-
-            println!(
-                "Performed {} batch reads of {} addresses in {:?} ({:?}/read)",
-                NUM_ITERATIONS,
-                NUM_ADDRESSES,
-                elapsed,
-                elapsed / NUM_ITERATIONS as u32
-            );
         })
         .await
     }

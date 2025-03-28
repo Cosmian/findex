@@ -12,12 +12,11 @@ mod redis_store;
 pub use redis_store::{RedisMemory, RedisMemoryError};
 
 #[cfg(feature = "sqlite-mem")]
-pub mod sqlite_store;
+mod sqlite_store;
 #[cfg(feature = "sqlite-mem")]
 pub use sqlite_store::{SqliteMemory, SqliteMemoryError};
 
 #[cfg(feature = "postgres-mem")]
-pub mod postgresql_store;
-
+mod postgresql_store;
 #[cfg(feature = "postgres-mem")]
 pub use postgresql_store::{PostgresMemory, PostgresMemoryError};
