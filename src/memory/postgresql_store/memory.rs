@@ -1,7 +1,7 @@
 use super::PostgresMemoryError;
 use crate::{Address, MemoryADT};
 use deadpool_postgres::Pool;
-use std::marker::PhantomData;
+use std::{collections::HashMap, marker::PhantomData};
 use tokio_postgres::{
     Socket,
     tls::{MakeTlsConnect, TlsConnect},
@@ -88,23 +88,21 @@ impl<const ADDRESS_LENGTH: usize, const WORD_LENGTH: usize> MemoryADT
         addresses: Vec<Self::Address>,
     ) -> Result<Vec<Option<Self::Word>>, Self::Error> {
         let client = self.pool.get().await?;
-        // in psql, statements are cached per connection and not per pool
+        // in Postgres databases, statements are cached per connection and not per pool
         let stmt = client
             .prepare_cached(
                 format!(
-                    "SELECT f.w
-                        FROM UNNEST($1::bytea[]) WITH ORDINALITY AS params(addr, idx)
-                        LEFT JOIN {} f ON params.addr = f.a
-                        ORDER BY params.idx;",
+                    "SELECT a,w
+                    FROM {0}
+                    WHERE a = ANY($1::bytea[])
+                    ;",
                     self.table_name
                 )
                 .as_str(),
             )
             .await?;
 
-        client
-            // the left join is necessary to ensure that the order of the addresses is preserved
-            // as well as to return None for addresses that don't exist
+        let results = client
             .query(&stmt, &[&addresses
                 .iter()
                 .map(|addr| addr.as_slice())
@@ -112,17 +110,22 @@ impl<const ADDRESS_LENGTH: usize, const WORD_LENGTH: usize> MemoryADT
             .await?
             .iter()
             .map(|row| {
-                let bytes_slice: Option<&[u8]> = row.try_get("w")?; // `row.get(0)` can panic
-                bytes_slice.map_or(Ok(None), |slice| {
-                    slice
-                        .try_into()
-                        .map(Some)
-                        .map_err(|_| PostgresMemoryError::InvalidDataLength(slice.len()))
-                })
+                // TODO: REMOVE UNWRAP AND IMPLEMENT THE NECESSARY ERROR HANDLING
+                let a = Address::from(
+                    <&[u8] as TryInto<[u8; ADDRESS_LENGTH]>>::try_into(row.try_get("a").unwrap())
+                        .unwrap(),
+                );
+                let w: Self::Word = row.try_get::<_, &[u8]>("w").unwrap().try_into().unwrap();
+                (a, w)
             })
-            .collect()
-    }
+            .collect::<HashMap<_, _>>();
 
+        Ok(addresses
+            .iter()
+            // Copying is necessary here since the same word could be returned multiple times.
+            .map(|addr| results.get(addr).copied())
+            .collect())
+    }
     async fn guarded_write(
         &self,
         guard: (Self::Address, Option<Self::Word>),
@@ -215,11 +218,12 @@ impl<const ADDRESS_LENGTH: usize, const WORD_LENGTH: usize> MemoryADT
 #[cfg(test)]
 mod tests {
     use deadpool_postgres::Config;
+    use rand::{RngCore, SeedableRng, rngs::StdRng};
     use tokio_postgres::NoTls;
 
     use super::*;
     use crate::{
-        ADDRESS_LENGTH, Address, WORD_LENGTH,
+        ADDRESS_LENGTH, Address, KEY_LENGTH, WORD_LENGTH,
         adt::test_utils::{
             test_guarded_write_concurrent, test_rw_same_address, test_single_write_and_read,
             test_wrong_guard,
@@ -329,6 +333,63 @@ mod tests {
     async fn test_rw_ccr() -> Result<(), PostgresMemoryError> {
         setup_and_run_test("findex_test_rw_ccr", |m| async move {
             test_guarded_write_concurrent::<WORD_LENGTH, _>(&m, rand::random(), Some(100)).await;
+        })
+        .await
+    }
+    /* companion script
+        #!/bin/bash
+    total=0
+    count=40 # feel free to edit this
+    for ((i=1; i<=count; i++)); do
+        time_ms=$(cargo test bench_batch_read --features postgres-mem --release -- --nocapture 2>&1 | grep 'BENCHMARK_TIME:' | awk -F: '{print $2}')
+        if [ -n "$time_ms" ]; then
+            total=$((total + time_ms))
+            echo "Run $i: $time_ms ms"
+        else
+            echo "Run $i: Failed to capture time"
+        fi
+    done
+    if [ $total -ne 0 ]; then
+        average=$((total / count))
+        echo "Average time over $count runs: $average ms"
+    else
+        echo "No valid measurements were captured"
+    fi
+         */
+
+    fn gen_bytes<const BYTES_LENGTH: usize>(rng: &mut impl RngCore) -> [u8; BYTES_LENGTH] {
+        let mut bytes = [0; BYTES_LENGTH];
+        rng.fill_bytes(&mut bytes);
+        bytes
+    }
+    #[tokio::test]
+    async fn bench_batch_read() -> Result<(), PostgresMemoryError> {
+        setup_and_run_test("findex_bench_batch_read", |m| async move {
+            const NUM_ADDRESSES: usize = 100;
+            const NUM_ITERATIONS: usize = 1000;
+            let mut rng = StdRng::from_seed([0; KEY_LENGTH]);
+
+            // Generate random addresses
+            let addresses: Vec<Address<ADDRESS_LENGTH>> = (0..NUM_ADDRESSES)
+                .map(|_| Address::from(gen_bytes::<ADDRESS_LENGTH>(&mut rng)))
+                .collect();
+
+            // Pre-write data to all addresses
+            for address in &addresses {
+                let word = gen_bytes::<WORD_LENGTH>(&mut rng);
+                m.guarded_write((address.clone(), None), vec![(address.clone(), word)])
+                    .await
+                    .unwrap();
+            }
+
+            // Benchmark batch reads
+            let start = tokio::time::Instant::now();
+            for _ in 0..NUM_ITERATIONS {
+                m.batch_read(addresses.clone()).await.unwrap();
+            }
+            let elapsed = start.elapsed();
+
+            println!("BENCHMARK_TIME:{}:", elapsed.as_millis());
         })
         .await
     }
