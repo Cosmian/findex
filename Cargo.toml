@@ -27,7 +27,7 @@ test-utils = ["tokio"]
 
 [dependencies]
 aes = "0.8.4"
-cosmian_crypto_core = { git = "https://github.com/Cosmian/crypto_core.git", branch = "feat/define-byte-type", default-features = false, features = ["sha3"] }
+cosmian_crypto_core = { git = "https://github.com/Cosmian/crypto_core.git", branch = "develop", default-features = false, features = ["sha3"] }
 xts-mode = "0.5.1"
 
 # Memory dependencies
@@ -40,7 +40,7 @@ redis = { version = "0.28.2", features = [
 tokio = { version = "1.44.0", features = ["rt"], optional = true }
 
 [dev-dependencies]
-cosmian_crypto_core = { git = "https://github.com/Cosmian/crypto_core.git", branch = "feat/define-byte-type", default-features = false, features = ["sha3", "macro", "ser"] }
+cosmian_crypto_core = { git = "https://github.com/Cosmian/crypto_core.git", branch = "develop", default-features = false, features = ["sha3", "macro", "ser"] }
 criterion = "0.5.1"
 futures = "0.3.31"
 lazy_static = "1.5.0"
