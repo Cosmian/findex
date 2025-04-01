@@ -5,15 +5,20 @@ use cosmian_findex::{
 };
 use criterion::{Criterion, criterion_group, criterion_main};
 
-const N: usize = 2;
+// Number of points in each graph.
+const N_PTS: usize = 2;
+
+const SQLITE_PATH: &str = "./target/benches.sqlite";
+const REDIS_URL: &str = "redis://localhost:6379";
 
 fn bench_search_multiple_bindings(c: &mut Criterion) {
     let mut rng = CsRng::from_entropy();
 
+    #[cfg(feature = "rust-mem")]
     {
         bench_memory_search_multiple_bindings(
             "in-memory",
-            N,
+            N_PTS,
             async || InMemory::default(),
             c,
             &mut rng,
@@ -26,12 +31,8 @@ fn bench_search_multiple_bindings(c: &mut Criterion) {
 
         bench_memory_search_multiple_bindings(
             "Redis",
-            N,
-            async || {
-                RedisMemory::connect("redis://localhost:6379")
-                    .await
-                    .unwrap()
-            },
+            N_PTS,
+            async || RedisMemory::connect(REDIS_URL).await.unwrap(),
             c,
             &mut rng,
         );
@@ -42,8 +43,8 @@ fn bench_search_multiple_bindings(c: &mut Criterion) {
         use cosmian_findex::SqliteMemory;
         bench_memory_search_multiple_bindings(
             "SQLite",
-            N,
-            async || SqliteMemory::connect("benches.sqlite").await.unwrap(),
+            N_PTS,
+            async || SqliteMemory::connect(SQLITE_PATH).await.unwrap(),
             c,
             &mut rng,
         );
@@ -53,10 +54,11 @@ fn bench_search_multiple_bindings(c: &mut Criterion) {
 fn bench_search_multiple_keywords(c: &mut Criterion) {
     let mut rng = CsRng::from_entropy();
 
+    #[cfg(feature = "rust-mem")]
     {
         bench_memory_search_multiple_keywords(
             "in-memory",
-            N,
+            N_PTS,
             async || InMemory::default(),
             c,
             &mut rng,
@@ -69,12 +71,8 @@ fn bench_search_multiple_keywords(c: &mut Criterion) {
 
         bench_memory_search_multiple_keywords(
             "Redis",
-            N,
-            async || {
-                RedisMemory::connect("redis://localhost:6379")
-                    .await
-                    .unwrap()
-            },
+            N_PTS,
+            async || RedisMemory::connect(REDIS_URL).await.unwrap(),
             c,
             &mut rng,
         );
@@ -85,8 +83,8 @@ fn bench_search_multiple_keywords(c: &mut Criterion) {
         use cosmian_findex::SqliteMemory;
         bench_memory_search_multiple_keywords(
             "SQLite",
-            N,
-            async || SqliteMemory::connect("benches.sqlite").await.unwrap(),
+            N_PTS,
+            async || SqliteMemory::connect(SQLITE_PATH).await.unwrap(),
             c,
             &mut rng,
         );
@@ -96,6 +94,7 @@ fn bench_search_multiple_keywords(c: &mut Criterion) {
 fn bench_insert_multiple_bindings(c: &mut Criterion) {
     let mut rng = CsRng::from_entropy();
 
+    #[cfg(feature = "rust-mem")]
     {
         let clear = async |m: &InMemory<_, _>| -> Result<(), String> {
             m.clear();
@@ -104,7 +103,7 @@ fn bench_insert_multiple_bindings(c: &mut Criterion) {
 
         bench_memory_insert_multiple_bindings(
             "in-memory",
-            N,
+            N_PTS,
             async || InMemory::default(),
             c,
             clear,
@@ -118,12 +117,8 @@ fn bench_insert_multiple_bindings(c: &mut Criterion) {
 
         bench_memory_insert_multiple_bindings(
             "Redis",
-            N,
-            async || {
-                RedisMemory::connect("redis://localhost:6379")
-                    .await
-                    .unwrap()
-            },
+            N_PTS,
+            async || RedisMemory::connect(REDIS_URL).await.unwrap(),
             c,
             RedisMemory::clear,
             &mut rng,
@@ -136,8 +131,8 @@ fn bench_insert_multiple_bindings(c: &mut Criterion) {
 
         bench_memory_insert_multiple_bindings(
             "SQLite",
-            N,
-            async || SqliteMemory::connect("benches.sqlite").await.unwrap(),
+            N_PTS,
+            async || SqliteMemory::connect(SQLITE_PATH).await.unwrap(),
             c,
             SqliteMemory::clear,
             &mut rng,
@@ -156,7 +151,7 @@ fn bench_contention(c: &mut Criterion) {
 
         bench_memory_contention(
             "in-memory",
-            N,
+            N_PTS,
             async || InMemory::default(),
             c,
             clear,
@@ -170,7 +165,7 @@ fn bench_contention(c: &mut Criterion) {
 
         bench_memory_contention(
             "Redis",
-            N,
+            N_PTS,
             async || {
                 RedisMemory::connect("redis://localhost:6379")
                     .await
@@ -188,7 +183,7 @@ fn bench_contention(c: &mut Criterion) {
 
         bench_memory_contention(
             "SQLite",
-            N,
+            N_PTS,
             async || SqliteMemory::connect("benches.sqlite").await.unwrap(),
             c,
             SqliteMemory::clear,
