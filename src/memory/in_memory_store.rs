@@ -97,10 +97,8 @@ mod tests {
 
     use crate::{
         MemoryADT,
-        adt::test_utils::{
-            test_guarded_write_concurrent, test_single_write_and_read, test_wrong_guard,
-        },
         test_utils::gen_seed,
+        {test_guarded_write_concurrent, test_single_write_and_read, test_wrong_guard},
     };
 
     use super::InMemory;

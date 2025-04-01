@@ -8,10 +8,10 @@ mod error;
 mod findex;
 mod memory;
 mod ovec;
+#[cfg(any(test, feature = "test-utils"))]
+mod test_utils;
 
 pub use address::Address;
-#[cfg(any(test, feature = "test-utils"))]
-pub use adt::test_utils;
 pub use adt::{IndexADT, MemoryADT};
 pub use encoding::{
     Decoder, Encoder,
@@ -21,6 +21,9 @@ pub use error::Error;
 pub use findex::Findex;
 pub use findex::Op;
 pub use memory::MemoryEncryptionLayer;
+
+#[cfg(any(test, feature = "test-utils"))]
+pub use test_utils::*;
 
 #[cfg(feature = "redis-mem")]
 pub use memory::{RedisMemory, RedisMemoryError};

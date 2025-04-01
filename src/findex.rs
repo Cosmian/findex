@@ -21,16 +21,32 @@ pub enum Op {
     Delete,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct Findex<
     const WORD_LENGTH: usize,
     Value: Send + Sync + Hash + Eq,
     EncodingError: Send + Sync + Debug,
-    Memory: Send + Sync + Clone + MemoryADT<Address = Address<ADDRESS_LENGTH>, Word = [u8; WORD_LENGTH]>,
+    Memory: Send + Sync + MemoryADT<Address = Address<ADDRESS_LENGTH>, Word = [u8; WORD_LENGTH]>,
 > {
     el: Memory,
     encode: Arc<Encoder<Value, Memory::Word, EncodingError>>,
     decode: Arc<Decoder<Value, Memory::Word, EncodingError>>,
+}
+
+impl<
+    const WORD_LENGTH: usize,
+    Value: Send + Sync + Hash + Eq,
+    EncodingError: Send + Sync + Debug,
+    Memory: Send + Sync + Clone + MemoryADT<Address = Address<ADDRESS_LENGTH>, Word = [u8; WORD_LENGTH]>,
+> Clone for Findex<WORD_LENGTH, Value, EncodingError, Memory>
+{
+    fn clone(&self) -> Self {
+        Self {
+            el: self.el.clone(),
+            encode: self.encode.clone(),
+            decode: self.decode.clone(),
+        }
+    }
 }
 
 impl<

@@ -201,33 +201,40 @@ mod tests {
         let val_addr_4 = Address::<ADDRESS_LENGTH>::random(&mut rng);
 
         assert_eq!(
-            block_on(obf.guarded_write((header_addr.clone(), None), vec![
-                (header_addr.clone(), [2; WORD_LENGTH]),
-                (val_addr_1.clone(), [1; WORD_LENGTH]),
-                (val_addr_2.clone(), [1; WORD_LENGTH])
-            ]))
+            block_on(obf.guarded_write(
+                (header_addr.clone(), None),
+                vec![
+                    (header_addr.clone(), [2; WORD_LENGTH]),
+                    (val_addr_1.clone(), [1; WORD_LENGTH]),
+                    (val_addr_2.clone(), [1; WORD_LENGTH])
+                ]
+            ))
             .unwrap(),
             None
         );
 
         assert_eq!(
-            block_on(obf.guarded_write((header_addr.clone(), None), vec![
-                (header_addr.clone(), [2; WORD_LENGTH]),
-                (val_addr_1.clone(), [3; WORD_LENGTH]),
-                (val_addr_2.clone(), [3; WORD_LENGTH])
-            ]))
+            block_on(obf.guarded_write(
+                (header_addr.clone(), None),
+                vec![
+                    (header_addr.clone(), [2; WORD_LENGTH]),
+                    (val_addr_1.clone(), [3; WORD_LENGTH]),
+                    (val_addr_2.clone(), [3; WORD_LENGTH])
+                ]
+            ))
             .unwrap(),
             Some([2; WORD_LENGTH])
         );
 
         assert_eq!(
-            block_on(
-                obf.guarded_write((header_addr.clone(), Some([2; WORD_LENGTH])), vec![
+            block_on(obf.guarded_write(
+                (header_addr.clone(), Some([2; WORD_LENGTH])),
+                vec![
                     (header_addr.clone(), [4; WORD_LENGTH]),
                     (val_addr_3.clone(), [2; WORD_LENGTH]),
                     (val_addr_4.clone(), [2; WORD_LENGTH])
-                ])
-            )
+                ]
+            ))
             .unwrap(),
             Some([2; WORD_LENGTH])
         );

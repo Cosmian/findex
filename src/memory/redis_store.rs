@@ -85,6 +85,14 @@ impl<Address: Sync, Word: Sync> RedisMemory<Address, Word> {
         let manager = client.get_connection_manager().await?;
         Self::connect_with_manager(manager).await
     }
+
+    #[cfg(feature = "test-utils")]
+    pub async fn clear(&self) -> Result<(), RedisMemoryError> {
+        redis::cmd("FLUSHDB")
+            .query_async(&mut self.manager.clone())
+            .await
+            .map_err(RedisMemoryError::RedisError)
+    }
 }
 
 impl<const ADDRESS_LENGTH: usize, const WORD_LENGTH: usize> MemoryADT
@@ -141,11 +149,11 @@ mod tests {
     use super::*;
     use crate::{
         WORD_LENGTH,
-        adt::test_utils::{
+        test_utils::gen_seed,
+        {
             test_guarded_write_concurrent, test_rw_same_address, test_single_write_and_read,
             test_wrong_guard,
         },
-        test_utils::gen_seed,
     };
 
     fn get_redis_url() -> String {
