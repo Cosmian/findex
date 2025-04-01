@@ -201,10 +201,10 @@ criterion_group!(
     name    = benches;
     config  = Criterion::default().sample_size(5000);
     targets =
-    bench_contention,
     bench_search_multiple_bindings,
     bench_search_multiple_keywords,
     bench_insert_multiple_bindings,
+    bench_contention,
 );
 
 criterion_main!(benches);
