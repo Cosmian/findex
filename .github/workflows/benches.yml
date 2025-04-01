@@ -1,11 +1,12 @@
 ---
 name: Benches
 
-on: [workflow_dispatch]
+on: workflow_dispatch
 
 jobs:
   bench:
     uses: Cosmian/reusable_workflows/.github/workflows/cargo-bench.yml@develop
     with:
       toolchain: stable
+      features: test-utils
       force: true
