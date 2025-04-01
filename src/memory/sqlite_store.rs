@@ -122,7 +122,8 @@ impl<const ADDRESS_LENGTH: usize, const WORD_LENGTH: usize> MemoryADT
                 // generate a returned value complying to the batch-read spec.
                 Ok(addresses
                     .iter()
-                    // Copying is necessary here since the same word could be returned multiple times.
+                    // Copying is necessary here since the same word could be
+                    // returned multiple times.
                     .map(|addr| results.get(addr).copied())
                     .collect())
             })
