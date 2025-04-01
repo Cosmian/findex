@@ -8,5 +8,5 @@ jobs:
     uses: Cosmian/reusable_workflows/.github/workflows/cargo-bench.yml@develop
     with:
       toolchain: stable
-      features: test-utils
+      all-features: true
       force: true
