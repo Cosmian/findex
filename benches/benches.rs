@@ -24,7 +24,7 @@ const N_PTS: usize = 2;
 const SQLITE_PATH: &str = "./target/benches.sqlite";
 
 #[cfg(feature = "redis-mem")]
-const REDIS_URL: &str = "redis://localhost:6379";
+const REDIS_URL: &str = "redis://redis:6379";
 
 fn bench_search_multiple_bindings(c: &mut Criterion) {
     let mut rng = CsRng::from_entropy();
