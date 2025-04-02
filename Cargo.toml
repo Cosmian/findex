@@ -24,7 +24,7 @@ path = "src/lib.rs"
 rust-mem = []
 redis-mem = ["redis"]
 sqlite-mem = ["async-sqlite"]
-test-utils = ["tokio", "criterion", "futures"]
+test-utils = ["tokio", "criterion", "futures", "rand"]
 
 [dependencies]
 aes = "0.8"
@@ -34,7 +34,10 @@ xts-mode = "0.5"
 # Used in benches and tests.
 futures = { version = "0.3", optional = true }
 criterion = { version = "0.5", optional = true }
+rand = { version = "0.9.0", optional = true }
+rand_distr = { version = "0.5.1", optional = true }
 tokio = { version = "1.44", features = ["rt", "rt-multi-thread"], optional = true }
+
 
 # Memory dependencies
 async-sqlite = { version = "0.5", optional = true }
@@ -43,6 +46,7 @@ redis = { version = "0.28", features = [
     "connection-manager",
     "tokio-comp",
 ], optional = true }
+
 
 [dev-dependencies]
 cosmian_crypto_core = { git = "https://github.com/Cosmian/crypto_core.git", branch = "develop", default-features = false, features = ["sha3", "macro", "ser"] }
