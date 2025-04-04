@@ -105,10 +105,13 @@ impl<const ADDRESS_LENGTH: usize, const WORD_LENGTH: usize> MemoryADT
         client
             // the left join is necessary to ensure that the order of the addresses is preserved
             // as well as to return None for addresses that don't exist
-            .query(&stmt, &[&addresses
-                .iter()
-                .map(|addr| addr.as_slice())
-                .collect::<Vec<_>>()])
+            .query(
+                &stmt,
+                &[&addresses
+                    .iter()
+                    .map(|addr| addr.as_slice())
+                    .collect::<Vec<_>>()],
+            )
             .await?
             .iter()
             .map(|row| {
@@ -176,12 +179,15 @@ impl<const ADDRESS_LENGTH: usize, const WORD_LENGTH: usize> MemoryADT
                     .await?;
 
                 let res = tx
-                    .query_opt(&stmt, &[
-                        &*guard.0,
-                        &guard.1.as_ref().map(|w| w.as_slice()),
-                        &addresses,
-                        &words,
-                    ])
+                    .query_opt(
+                        &stmt,
+                        &[
+                            &*guard.0,
+                            &guard.1.as_ref().map(|w| w.as_slice()),
+                            &addresses,
+                            &words,
+                        ],
+                    )
                     .await?
                     .map_or(
                         Ok::<Option<[u8; WORD_LENGTH]>, PostgresMemoryError>(None),
@@ -219,7 +225,7 @@ mod tests {
     use super::*;
     use crate::{
         ADDRESS_LENGTH, Address, WORD_LENGTH,
-        adt::test_utils::{
+        {
             test_guarded_write_concurrent, test_rw_same_address, test_single_write_and_read,
             test_wrong_guard,
         },
