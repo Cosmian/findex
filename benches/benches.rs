@@ -2,7 +2,7 @@ use std::time::Duration;
 
 use cosmian_crypto_core::{CsRng, reexport::rand_core::SeedableRng};
 use cosmian_findex::{
-    MemoryADT, RedisMemoryError, bench_memory_contention, bench_memory_insert_multiple_bindings,
+    MemoryADT, bench_memory_contention, bench_memory_insert_multiple_bindings,
     bench_memory_one_to_many, bench_memory_search_multiple_bindings,
     bench_memory_search_multiple_keywords,
 };
@@ -16,7 +16,7 @@ use cosmian_findex::InMemory;
 use cosmian_findex::SqliteMemory;
 
 #[cfg(feature = "redis-mem")]
-use cosmian_findex::RedisMemory;
+use cosmian_findex::{RedisMemory, RedisMemoryError};
 use rand_distr::StandardNormal;
 
 // Number of points in each graph.
@@ -30,6 +30,25 @@ const REDIS_URL: &str = "redis://redis:6379";
 
 // Use this URL for use with a local instance.
 // const REDIS_URL: &str = "redis://localhost:6379";
+
+#[cfg(feature = "postgres-mem")]
+const POSTGRES_URL: &str = "postgres://cosmian:cosmian@localhost/cosmian";
+
+#[cfg(feature = "postgres-mem")]
+use deadpool_postgres::{Config, Pool};
+#[cfg(feature = "postgres-mem")]
+use tokio_postgres::NoTls;
+
+#[cfg(feature = "postgres-mem")]
+use cosmian_findex::{PostgresMemory, PostgresMemoryError};
+
+#[cfg(feature = "postgres-mem")]
+async fn create_testing_pool(db_url: &str) -> Result<Pool, PostgresMemoryError> {
+    let mut pg_config = Config::new();
+    pg_config.url = Some(db_url.to_string());
+    let pool = pg_config.builder(NoTls)?.build()?;
+    Ok(pool)
+}
 
 fn bench_search_multiple_bindings(c: &mut Criterion) {
     let mut rng = CsRng::from_entropy();
@@ -57,6 +76,27 @@ fn bench_search_multiple_bindings(c: &mut Criterion) {
         "SQLite",
         N_PTS,
         async || SqliteMemory::connect(SQLITE_PATH).await.unwrap(),
+        c,
+        &mut rng,
+    );
+
+    #[cfg(feature = "postgres-mem")]
+    bench_memory_search_multiple_bindings(
+        "Postgres",
+        N_PTS,
+        async || {
+            let table_name = "bench_memory_search_multiple_bindings";
+            let m = PostgresMemory::connect_with_pool(
+                create_testing_pool(POSTGRES_URL).await.unwrap(),
+                table_name.to_owned(),
+            )
+            .await
+            .unwrap();
+            m.initialize_table(POSTGRES_URL.to_string(), table_name.to_string(), NoTls)
+                .await
+                .unwrap();
+            m
+        },
         c,
         &mut rng,
     );
@@ -91,6 +131,22 @@ fn bench_search_multiple_keywords(c: &mut Criterion) {
         c,
         &mut rng,
     );
+
+    // #[cfg(feature = "postgres-mem")]
+    // bench_memory_search_multiple_keywords(
+    //     "Postgres",
+    //     N_PTS,
+    //     async || {
+    //         PostgresMemory::connect_with_pool(
+    //             create_testing_pool(POSTGRES_URL).await.unwrap(),
+    //             "bench_memory_search_multiple_keywords".to_owned(),
+    //         )
+    //         .await
+    //         .unwrap()
+    //     },
+    //     c,
+    //     &mut rng,
+    // );
 }
 
 fn bench_insert_multiple_bindings(c: &mut Criterion) {
