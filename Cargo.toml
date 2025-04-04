@@ -25,6 +25,7 @@ rust-mem = []
 redis-mem = ["redis"]
 sqlite-mem = ["async-sqlite"]
 test-utils = ["tokio", "criterion", "futures", "rand"]
+postgres-mem = ["tokio-postgres", "tokio/rt-multi-thread", "deadpool-postgres"]
 
 [dependencies]
 aes = "0.8"
@@ -40,12 +41,16 @@ tokio = { version = "1.44", features = ["rt", "rt-multi-thread"], optional = tru
 
 
 # Memory dependencies
-async-sqlite = { version = "0.5", optional = true }
-redis = { version = "0.28", features = [
+async-sqlite = { version = "0.5.0", optional = true }
+deadpool-postgres = { version = "0.14.1", optional = true }
+redis = { version = "0.28.2", features = [
     "aio",
     "connection-manager",
     "tokio-comp",
 ], optional = true }
+tokio-postgres = { version = "0.7.9", optional = true, features = [
+    "array-impls",
+] }
 
 
 [dev-dependencies]

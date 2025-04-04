@@ -7,7 +7,7 @@ use std::{fmt, marker::PhantomData};
 // 2. Guard value.
 // 3. Vector length.
 // 4+. Vector elements (address, word).
-const GUARDED_WRITE_LUA_SCRIPT: &str = r"
+const GUARDED_WRITE_LUA_SCRIPT: &str = "
 local guard_address = ARGV[1]
 local guard_value = ARGV[2]
 local length = ARGV[3]
