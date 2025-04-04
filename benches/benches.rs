@@ -25,11 +25,11 @@ const N_PTS: usize = 2;
 #[cfg(feature = "sqlite-mem")]
 const SQLITE_PATH: &str = "./target/benches.sqlite";
 
-#[cfg(feature = "redis-mem")]
-const REDIS_URL: &str = "redis://redis:6379";
+// const REDIS_URL: &str = "redis://redis:6379";
 
 // Use this URL for use with a local instance.
-// const REDIS_URL: &str = "redis://localhost:6379";
+#[cfg(feature = "redis-mem")]
+const REDIS_URL: &str = "redis://localhost:6379";
 
 #[cfg(feature = "postgres-mem")]
 const POSTGRES_URL: &str = "postgres://cosmian:cosmian@localhost/cosmian";
@@ -219,6 +219,29 @@ fn bench_insert_multiple_bindings(c: &mut Criterion) {
 fn bench_contention(c: &mut Criterion) {
     let mut rng = CsRng::from_entropy();
 
+    #[cfg(feature = "postgres-mem")]
+    bench_memory_contention(
+        "Postgres",
+        N_PTS,
+        async || {
+            let table_name = "bench_memory_contention";
+            let m = PostgresMemory::connect_with_pool(
+                create_testing_pool(POSTGRES_URL).await.unwrap(),
+                table_name.to_owned(),
+            )
+            .await
+            .unwrap();
+            m.initialize_table(POSTGRES_URL.to_string(), table_name.to_string(), NoTls)
+                .await
+                .unwrap();
+            m
+        },
+        c,
+        async |m: &PostgresMemory<_, _>| -> Result<(), PostgresMemoryError> {
+            m.clear("bench_memory_contention".to_owned()).await
+        },
+        &mut rng,
+    );
     #[cfg(feature = "rust-mem")]
     bench_memory_contention(
         "in-memory",
@@ -249,30 +272,6 @@ fn bench_contention(c: &mut Criterion) {
         async || SqliteMemory::connect(SQLITE_PATH).await.unwrap(),
         c,
         SqliteMemory::clear,
-        &mut rng,
-    );
-
-    #[cfg(feature = "postgres-mem")]
-    bench_memory_contention(
-        "Postgres",
-        N_PTS,
-        async || {
-            let table_name = "bench_memory_contention";
-            let m = PostgresMemory::connect_with_pool(
-                create_testing_pool(POSTGRES_URL).await.unwrap(),
-                table_name.to_owned(),
-            )
-            .await
-            .unwrap();
-            m.initialize_table(POSTGRES_URL.to_string(), table_name.to_string(), NoTls)
-                .await
-                .unwrap();
-            m
-        },
-        c,
-        async |m: &PostgresMemory<_, _>| -> Result<(), PostgresMemoryError> {
-            m.clear("bench_memory_contention".to_owned()).await
-        },
         &mut rng,
     );
 }
@@ -378,11 +377,11 @@ criterion_group!(
     name    = benches;
     config  = Criterion::default();
     targets =
-    bench_one_to_many,
-    bench_search_multiple_bindings,
-    bench_search_multiple_keywords,
+    // bench_one_to_many,
     bench_insert_multiple_bindings,
     bench_contention,
+    bench_search_multiple_bindings,
+    bench_search_multiple_keywords,
 );
 
 criterion_main!(benches);
