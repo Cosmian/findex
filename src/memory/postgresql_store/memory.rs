@@ -74,6 +74,17 @@ impl<const ADDRESS_LENGTH: usize, const WORD_LENGTH: usize>
             _marker: PhantomData,
         })
     }
+
+    /// Deletes all rows from the table
+    #[cfg(feature = "test-utils")]
+    pub async fn clear(&self, table_name: String) -> Result<(), PostgresMemoryError> {
+        self.pool
+            .get()
+            .await?
+            .execute(&format!("DROP table {};", table_name), &[])
+            .await?;
+        Ok(())
+    }
 }
 
 impl<const ADDRESS_LENGTH: usize, const WORD_LENGTH: usize> MemoryADT
