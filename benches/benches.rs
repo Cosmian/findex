@@ -20,7 +20,7 @@ use cosmian_findex::{RedisMemory, RedisMemoryError};
 use rand_distr::StandardNormal;
 
 // Number of points in each graph.
-const N_PTS: usize = 2;
+const N_PTS: usize = 9;
 
 #[cfg(feature = "sqlite-mem")]
 const SQLITE_PATH: &str = "./target/benches.sqlite";
