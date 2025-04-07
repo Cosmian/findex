@@ -1,6 +1,6 @@
 ---
 name: Benches
-run-name: Benchmarking ${{ github.ref_name }} @ ${{ github.sha }}
+run-name: Benchmark - ${{ github.event.head_repository.name }}@${{ github.sha.substring(0, 7) }}
 
 on: workflow_dispatch
 
