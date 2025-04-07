@@ -49,232 +49,232 @@ async fn create_testing_pool(db_url: &str) -> Result<Pool, PostgresMemoryError> 
     Ok(pool)
 }
 
-fn bench_search_multiple_bindings(c: &mut Criterion) {
-    let mut rng = CsRng::from_entropy();
+// fn bench_search_multiple_bindings(c: &mut Criterion) {
+//     let mut rng = CsRng::from_entropy();
 
-    #[cfg(feature = "rust-mem")]
-    bench_memory_search_multiple_bindings(
-        "in-memory",
-        N_PTS,
-        async || InMemory::default(),
-        c,
-        &mut rng,
-    );
+//     #[cfg(feature = "rust-mem")]
+//     bench_memory_search_multiple_bindings(
+//         "in-memory",
+//         N_PTS,
+//         async || InMemory::default(),
+//         c,
+//         &mut rng,
+//     );
 
-    #[cfg(feature = "redis-mem")]
-    bench_memory_search_multiple_bindings(
-        "Redis",
-        N_PTS,
-        async || RedisMemory::connect(REDIS_URL).await.unwrap(),
-        c,
-        &mut rng,
-    );
+//     #[cfg(feature = "redis-mem")]
+//     bench_memory_search_multiple_bindings(
+//         "Redis",
+//         N_PTS,
+//         async || RedisMemory::connect(REDIS_URL).await.unwrap(),
+//         c,
+//         &mut rng,
+//     );
 
-    #[cfg(feature = "sqlite-mem")]
-    bench_memory_search_multiple_bindings(
-        "SQLite",
-        N_PTS,
-        async || SqliteMemory::connect(SQLITE_PATH).await.unwrap(),
-        c,
-        &mut rng,
-    );
+//     #[cfg(feature = "sqlite-mem")]
+//     bench_memory_search_multiple_bindings(
+//         "SQLite",
+//         N_PTS,
+//         async || SqliteMemory::connect(SQLITE_PATH).await.unwrap(),
+//         c,
+//         &mut rng,
+//     );
 
-    #[cfg(feature = "postgres-mem")]
-    bench_memory_search_multiple_bindings(
-        "Postgres",
-        N_PTS,
-        async || {
-            let table_name = "bench_memory_search_multiple_bindings";
-            let m = PostgresMemory::connect_with_pool(
-                create_testing_pool(POSTGRES_URL).await.unwrap(),
-                table_name.to_owned(),
-            )
-            .await
-            .unwrap();
-            m.initialize_table(POSTGRES_URL.to_string(), table_name.to_string(), NoTls)
-                .await
-                .unwrap();
-            m
-        },
-        c,
-        &mut rng,
-    );
-}
+//     #[cfg(feature = "postgres-mem")]
+//     bench_memory_search_multiple_bindings(
+//         "Postgres",
+//         N_PTS,
+//         async || {
+//             let table_name = "bench_memory_search_multiple_bindings";
+//             let m = PostgresMemory::connect_with_pool(
+//                 create_testing_pool(POSTGRES_URL).await.unwrap(),
+//                 table_name.to_owned(),
+//             )
+//             .await
+//             .unwrap();
+//             m.initialize_table(POSTGRES_URL.to_string(), table_name.to_string(), NoTls)
+//                 .await
+//                 .unwrap();
+//             m
+//         },
+//         c,
+//         &mut rng,
+//     );
+// }
 
-fn bench_search_multiple_keywords(c: &mut Criterion) {
-    let mut rng = CsRng::from_entropy();
+// fn bench_search_multiple_keywords(c: &mut Criterion) {
+//     let mut rng = CsRng::from_entropy();
 
-    #[cfg(feature = "rust-mem")]
-    bench_memory_search_multiple_keywords(
-        "in-memory",
-        N_PTS,
-        async || InMemory::default(),
-        c,
-        &mut rng,
-    );
+//     #[cfg(feature = "rust-mem")]
+//     bench_memory_search_multiple_keywords(
+//         "in-memory",
+//         N_PTS,
+//         async || InMemory::default(),
+//         c,
+//         &mut rng,
+//     );
 
-    #[cfg(feature = "redis-mem")]
-    bench_memory_search_multiple_keywords(
-        "Redis",
-        N_PTS,
-        async || RedisMemory::connect(REDIS_URL).await.unwrap(),
-        c,
-        &mut rng,
-    );
+//     #[cfg(feature = "redis-mem")]
+//     bench_memory_search_multiple_keywords(
+//         "Redis",
+//         N_PTS,
+//         async || RedisMemory::connect(REDIS_URL).await.unwrap(),
+//         c,
+//         &mut rng,
+//     );
 
-    #[cfg(feature = "sqlite-mem")]
-    bench_memory_search_multiple_keywords(
-        "SQLite",
-        N_PTS,
-        async || SqliteMemory::connect(SQLITE_PATH).await.unwrap(),
-        c,
-        &mut rng,
-    );
+//     #[cfg(feature = "sqlite-mem")]
+//     bench_memory_search_multiple_keywords(
+//         "SQLite",
+//         N_PTS,
+//         async || SqliteMemory::connect(SQLITE_PATH).await.unwrap(),
+//         c,
+//         &mut rng,
+//     );
 
-    #[cfg(feature = "postgres-mem")]
-    bench_memory_search_multiple_keywords(
-        "Postgres",
-        N_PTS,
-        async || {
-            let table_name = "bench_memory_search_multiple_keywords";
-            let m = PostgresMemory::connect_with_pool(
-                create_testing_pool(POSTGRES_URL).await.unwrap(),
-                table_name.to_owned(),
-            )
-            .await
-            .unwrap();
-            m.initialize_table(POSTGRES_URL.to_string(), table_name.to_string(), NoTls)
-                .await
-                .unwrap();
-            m
-        },
-        c,
-        &mut rng,
-    );
-}
+//     #[cfg(feature = "postgres-mem")]
+//     bench_memory_search_multiple_keywords(
+//         "Postgres",
+//         N_PTS,
+//         async || {
+//             let table_name = "bench_memory_search_multiple_keywords";
+//             let m = PostgresMemory::connect_with_pool(
+//                 create_testing_pool(POSTGRES_URL).await.unwrap(),
+//                 table_name.to_owned(),
+//             )
+//             .await
+//             .unwrap();
+//             m.initialize_table(POSTGRES_URL.to_string(), table_name.to_string(), NoTls)
+//                 .await
+//                 .unwrap();
+//             m
+//         },
+//         c,
+//         &mut rng,
+//     );
+// }
 
-fn bench_insert_multiple_bindings(c: &mut Criterion) {
-    let mut rng = CsRng::from_entropy();
+// fn bench_insert_multiple_bindings(c: &mut Criterion) {
+//     let mut rng = CsRng::from_entropy();
 
-    #[cfg(feature = "rust-mem")]
-    bench_memory_insert_multiple_bindings(
-        "in-memory",
-        N_PTS,
-        async || InMemory::default(),
-        c,
-        async |m: &InMemory<_, _>| -> Result<(), String> {
-            m.clear();
-            Ok(())
-        },
-        &mut rng,
-    );
+//     #[cfg(feature = "rust-mem")]
+//     bench_memory_insert_multiple_bindings(
+//         "in-memory",
+//         N_PTS,
+//         async || InMemory::default(),
+//         c,
+//         async |m: &InMemory<_, _>| -> Result<(), String> {
+//             m.clear();
+//             Ok(())
+//         },
+//         &mut rng,
+//     );
 
-    #[cfg(feature = "redis-mem")]
-    bench_memory_insert_multiple_bindings(
-        "Redis",
-        N_PTS,
-        async || RedisMemory::connect(REDIS_URL).await.unwrap(),
-        c,
-        RedisMemory::clear,
-        &mut rng,
-    );
+//     #[cfg(feature = "redis-mem")]
+//     bench_memory_insert_multiple_bindings(
+//         "Redis",
+//         N_PTS,
+//         async || RedisMemory::connect(REDIS_URL).await.unwrap(),
+//         c,
+//         RedisMemory::clear,
+//         &mut rng,
+//     );
 
-    #[cfg(feature = "sqlite-mem")]
-    bench_memory_insert_multiple_bindings(
-        "SQLite",
-        N_PTS,
-        async || SqliteMemory::connect(SQLITE_PATH).await.unwrap(),
-        c,
-        SqliteMemory::clear,
-        &mut rng,
-    );
+//     #[cfg(feature = "sqlite-mem")]
+//     bench_memory_insert_multiple_bindings(
+//         "SQLite",
+//         N_PTS,
+//         async || SqliteMemory::connect(SQLITE_PATH).await.unwrap(),
+//         c,
+//         SqliteMemory::clear,
+//         &mut rng,
+//     );
 
-    #[cfg(feature = "postgres-mem")]
-    bench_memory_insert_multiple_bindings(
-        "Postgres",
-        N_PTS,
-        async || {
-            let table_name = "bench_memory_insert_multiple_bindings";
-            let m = PostgresMemory::connect_with_pool(
-                create_testing_pool(POSTGRES_URL).await.unwrap(),
-                table_name.to_owned(),
-            )
-            .await
-            .unwrap();
-            m.initialize_table(POSTGRES_URL.to_string(), table_name.to_string(), NoTls)
-                .await
-                .unwrap();
-            m
-        },
-        c,
-        async |m: &PostgresMemory<_, _>| -> Result<(), PostgresMemoryError> {
-            m.clear("bench_memory_insert_multiple_bindings".to_owned())
-                .await
-        },
-        &mut rng,
-    );
-}
+//     #[cfg(feature = "postgres-mem")]
+//     bench_memory_insert_multiple_bindings(
+//         "Postgres",
+//         N_PTS,
+//         async || {
+//             let table_name = "bench_memory_insert_multiple_bindings";
+//             let m = PostgresMemory::connect_with_pool(
+//                 create_testing_pool(POSTGRES_URL).await.unwrap(),
+//                 table_name.to_owned(),
+//             )
+//             .await
+//             .unwrap();
+//             m.initialize_table(POSTGRES_URL.to_string(), table_name.to_string(), NoTls)
+//                 .await
+//                 .unwrap();
+//             m
+//         },
+//         c,
+//         async |m: &PostgresMemory<_, _>| -> Result<(), PostgresMemoryError> {
+//             m.clear("bench_memory_insert_multiple_bindings".to_owned())
+//                 .await
+//         },
+//         &mut rng,
+//     );
+// }
 
-fn bench_contention(c: &mut Criterion) {
-    let mut rng = CsRng::from_entropy();
+// fn bench_contention(c: &mut Criterion) {
+//     let mut rng = CsRng::from_entropy();
 
-    #[cfg(feature = "rust-mem")]
-    bench_memory_contention(
-        "in-memory",
-        N_PTS,
-        async || InMemory::default(),
-        c,
-        async |m: &InMemory<_, _>| -> Result<(), String> {
-            m.clear();
-            Ok(())
-        },
-        &mut rng,
-    );
+//     #[cfg(feature = "rust-mem")]
+//     bench_memory_contention(
+//         "in-memory",
+//         N_PTS,
+//         async || InMemory::default(),
+//         c,
+//         async |m: &InMemory<_, _>| -> Result<(), String> {
+//             m.clear();
+//             Ok(())
+//         },
+//         &mut rng,
+//     );
 
-    #[cfg(feature = "redis-mem")]
-    bench_memory_contention(
-        "Redis",
-        N_PTS,
-        async || RedisMemory::connect(REDIS_URL).await.unwrap(),
-        c,
-        RedisMemory::clear,
-        &mut rng,
-    );
+//     #[cfg(feature = "redis-mem")]
+//     bench_memory_contention(
+//         "Redis",
+//         N_PTS,
+//         async || RedisMemory::connect(REDIS_URL).await.unwrap(),
+//         c,
+//         RedisMemory::clear,
+//         &mut rng,
+//     );
 
-    #[cfg(feature = "sqlite-mem")]
-    bench_memory_contention(
-        "SQLite",
-        N_PTS,
-        async || SqliteMemory::connect(SQLITE_PATH).await.unwrap(),
-        c,
-        SqliteMemory::clear,
-        &mut rng,
-    );
+//     #[cfg(feature = "sqlite-mem")]
+//     bench_memory_contention(
+//         "SQLite",
+//         N_PTS,
+//         async || SqliteMemory::connect(SQLITE_PATH).await.unwrap(),
+//         c,
+//         SqliteMemory::clear,
+//         &mut rng,
+//     );
 
-    #[cfg(feature = "postgres-mem")]
-    bench_memory_contention(
-        "Postgres",
-        N_PTS,
-        async || {
-            let table_name = "bench_memory_contention";
-            let m = PostgresMemory::connect_with_pool(
-                create_testing_pool(POSTGRES_URL).await.unwrap(),
-                table_name.to_owned(),
-            )
-            .await
-            .unwrap();
-            m.initialize_table(POSTGRES_URL.to_string(), table_name.to_string(), NoTls)
-                .await
-                .unwrap();
-            m
-        },
-        c,
-        async |m: &PostgresMemory<_, _>| -> Result<(), PostgresMemoryError> {
-            m.clear("bench_memory_contention".to_owned()).await
-        },
-        &mut rng,
-    );
-}
+//     #[cfg(feature = "postgres-mem")]
+//     bench_memory_contention(
+//         "Postgres",
+//         N_PTS,
+//         async || {
+//             let table_name = "bench_memory_contention";
+//             let m = PostgresMemory::connect_with_pool(
+//                 create_testing_pool(POSTGRES_URL).await.unwrap(),
+//                 table_name.to_owned(),
+//             )
+//             .await
+//             .unwrap();
+//             m.initialize_table(POSTGRES_URL.to_string(), table_name.to_string(), NoTls)
+//                 .await
+//                 .unwrap();
+//             m
+//         },
+//         c,
+//         async |m: &PostgresMemory<_, _>| -> Result<(), PostgresMemoryError> {
+//             m.clear("bench_memory_contention".to_owned()).await
+//         },
+//         &mut rng,
+//     );
+// }
 
 #[derive(Clone, Debug)]
 struct DelayedMemory<Memory> {
@@ -457,11 +457,11 @@ criterion_group!(
     name    = benches;
     config  = Criterion::default();
     targets =
-    // bench_one_to_many,
-    bench_contention,
-    bench_insert_multiple_bindings,
-    bench_search_multiple_bindings,
-    bench_search_multiple_keywords,
+    bench_one_to_many,
+    // bench_contention,
+    // bench_insert_multiple_bindings,
+    // bench_search_multiple_bindings,
+    // bench_search_multiple_keywords,
 );
 
 criterion_main!(benches);
