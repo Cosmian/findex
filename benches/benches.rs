@@ -274,7 +274,7 @@ criterion_group!(
     name    = benches;
     config  = Criterion::default();
     targets =
-    bench_one_to_many,
+    // bench_one_to_many,
     bench_search_multiple_bindings,
     bench_search_multiple_keywords,
     bench_insert_multiple_bindings,
