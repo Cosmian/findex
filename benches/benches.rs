@@ -31,7 +31,10 @@ const REDIS_URL: &str = "redis://redis:6379";
 // const REDIS_URL: &str = "redis://localhost:6379";
 
 #[cfg(feature = "postgres-mem")]
-const POSTGRES_URL: &str = "postgres://cosmian:cosmian@localhost/cosmian";
+const POSTGRES_URL: &str = "postgres://cosmian:cosmian@postgres/cosmian";
+
+// use this for local dev
+// const POSTGRES_URL: &str = "postgres://cosmian:cosmian@localhost/cosmian";
 
 #[cfg(feature = "postgres-mem")]
 use deadpool_postgres::{Config, Pool};
