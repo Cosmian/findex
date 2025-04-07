@@ -362,7 +362,7 @@ pub fn bench_memory_one_to_many<
                 b.iter_batched(
                     || {
                         rt.block_on(async {
-                            sleep(Duration::from_millis(10)).await;
+                            sleep(Duration::from_millis(4)).await;
                             clear(&m).await
                         })
                         .unwrap();
