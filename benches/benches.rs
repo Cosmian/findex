@@ -1,13 +1,9 @@
-use std::time::Duration;
-
 use cosmian_crypto_core::{CsRng, reexport::rand_core::SeedableRng};
 use cosmian_findex::{
-    MemoryADT, RedisMemoryError, bench_memory_contention, bench_memory_insert_multiple_bindings,
-    bench_memory_one_to_many, bench_memory_search_multiple_bindings,
-    bench_memory_search_multiple_keywords,
+    bench_memory_contention, bench_memory_insert_multiple_bindings, bench_memory_one_to_many,
+    bench_memory_search_multiple_bindings, bench_memory_search_multiple_keywords,
 };
 use criterion::{Criterion, criterion_group, criterion_main};
-use rand::Rng;
 
 #[cfg(feature = "rust-mem")]
 use cosmian_findex::InMemory;
@@ -17,10 +13,9 @@ use cosmian_findex::SqliteMemory;
 
 #[cfg(feature = "redis-mem")]
 use cosmian_findex::RedisMemory;
-use rand_distr::StandardNormal;
 
 // Number of points in each graph.
-const N_PTS: usize = 10;
+const N_PTS: usize = 9;
 
 #[cfg(feature = "sqlite-mem")]
 const SQLITE_PATH: &str = "./target/benches.sqlite";
@@ -167,66 +162,74 @@ fn bench_contention(c: &mut Criterion) {
     );
 }
 
-#[derive(Clone, Debug)]
-struct DelayedMemory<Memory> {
-    m: Memory,
-    mean: usize,
-    variance: usize,
-}
-
-impl<Memory> DelayedMemory<Memory> {
-    /// Wrap the given memory into a new delayed memory with an average network
-    /// delay of s milliseconds.
-    fn new(m: Memory, mean: usize, variance: usize) -> Self {
-        Self { m, mean, variance }
-    }
-
-    fn delay(&self) -> Duration {
-        let d =
-            self.mean as f32 + self.variance as f32 * rand::rng().sample::<f32, _>(StandardNormal);
-        // Use `max(d,1)` to prevent negative numbers and tiny delays.
-        Duration::from_secs_f32(d.max(self.mean as f32 / 1_000.) / 1_000.)
-    }
-}
-
-impl<Memory> MemoryADT for DelayedMemory<Memory>
-where
-    Memory: Send + Sync + MemoryADT,
-    Memory::Address: Send + Sync,
-    Memory::Word: Send + Sync,
-{
-    type Address = Memory::Address;
-
-    type Word = Memory::Word;
-
-    type Error = Memory::Error;
-
-    async fn batch_read(
-        &self,
-        addresses: Vec<Self::Address>,
-    ) -> Result<Vec<Option<Self::Word>>, Self::Error> {
-        tokio::time::sleep(self.delay()).await;
-        self.m.batch_read(addresses).await
-    }
-
-    async fn guarded_write(
-        &self,
-        guard: (Self::Address, Option<Self::Word>),
-        bindings: Vec<(Self::Address, Self::Word)>,
-    ) -> Result<Option<Self::Word>, Self::Error> {
-        tokio::time::sleep(self.delay()).await;
-        self.m.guarded_write(guard, bindings).await
-    }
-}
-
 #[cfg(feature = "redis-mem")]
-impl<Address, Word> DelayedMemory<RedisMemory<Address, Word>>
-where
-    Address: Send + Sync,
-    Word: Send + Sync,
-{
-    async fn clear(&self) -> Result<(), RedisMemoryError> {
-        self.m.clear().await
+mod delayed_memory {
+    use cosmian_findex::{MemoryADT, RedisMemory, RedisMemoryError};
+    use rand::Rng;
+    use rand_distr::StandardNormal;
+    use std::time::Duration;
+
+    #[derive(Clone, Debug)]
+    pub struct DelayedMemory<Memory> {
+        m: Memory,
+        mean: usize,
+        variance: usize,
+    }
+
+    #[cfg(feature = "redis-mem")]
+    impl<Memory> DelayedMemory<Memory> {
+        /// Wrap the given memory into a new delayed memory with an average network
+        /// delay of s milliseconds.
+        pub fn new(m: Memory, mean: usize, variance: usize) -> Self {
+            Self { m, mean, variance }
+        }
+
+        pub fn delay(&self) -> Duration {
+            let d = self.mean as f32
+                + self.variance as f32 * rand::rng().sample::<f32, _>(StandardNormal);
+            // Use `max(d,1)` to prevent negative numbers and tiny delays.
+            Duration::from_secs_f32(d.max(self.mean as f32 / 1_000.) / 1_000.)
+        }
+    }
+
+    impl<Memory> MemoryADT for DelayedMemory<Memory>
+    where
+        Memory: Send + Sync + MemoryADT,
+        Memory::Address: Send + Sync,
+        Memory::Word: Send + Sync,
+    {
+        type Address = Memory::Address;
+
+        type Word = Memory::Word;
+
+        type Error = Memory::Error;
+
+        async fn batch_read(
+            &self,
+            addresses: Vec<Self::Address>,
+        ) -> Result<Vec<Option<Self::Word>>, Self::Error> {
+            tokio::time::sleep(self.delay()).await;
+            self.m.batch_read(addresses).await
+        }
+
+        async fn guarded_write(
+            &self,
+            guard: (Self::Address, Option<Self::Word>),
+            bindings: Vec<(Self::Address, Self::Word)>,
+        ) -> Result<Option<Self::Word>, Self::Error> {
+            tokio::time::sleep(self.delay()).await;
+            self.m.guarded_write(guard, bindings).await
+        }
+    }
+
+    impl<Address, Word> DelayedMemory<RedisMemory<Address, Word>>
+    where
+        Address: Send + Sync,
+        Word: Send + Sync,
+    {
+        pub async fn clear(&self) -> Result<(), RedisMemoryError> {
+            self.m.clear().await
+        }
     }
 }
 
@@ -234,14 +237,17 @@ fn bench_one_to_many(c: &mut Criterion) {
     let mut rng = CsRng::from_entropy();
 
     #[cfg(feature = "redis-mem")]
-    bench_memory_one_to_many(
-        "Redis",
-        N_PTS,
-        async || DelayedMemory::new(RedisMemory::connect(REDIS_URL).await.unwrap(), 1, 1),
-        c,
-        DelayedMemory::clear,
-        &mut rng,
-    );
+    use delayed_memory::*;
+
+    // #[cfg(feature = "redis-mem")]
+    // bench_memory_one_to_many(
+    //     "Redis",
+    //     N_PTS,
+    //     async || DelayedMemory::new(RedisMemory::connect(REDIS_URL).await.unwrap(), 1, 1),
+    //     c,
+    //     DelayedMemory::clear,
+    //     &mut rng,
+    // );
 
     #[cfg(feature = "redis-mem")]
     bench_memory_one_to_many(

@@ -24,7 +24,7 @@ path = "src/lib.rs"
 rust-mem = []
 redis-mem = ["redis"]
 sqlite-mem = ["async-sqlite"]
-test-utils = ["tokio", "criterion", "futures", "rand"]
+test-utils = ["tokio", "criterion", "futures", "rand", "rand_distr"]
 
 [dependencies]
 aes = "0.8"
