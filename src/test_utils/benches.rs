@@ -328,6 +328,7 @@ pub fn bench_memory_one_to_many<
     clear: impl AsyncFn(&Memory) -> Result<(), E>,
     rng: &mut impl CryptoRngCore,
 ) {
+    let max_val = 100;
     // Redis memory backend requires a tokio runtime, and all operations to
     // happen in the same runtime, otherwise the connection returns a broken
     // pipe error.
@@ -347,7 +348,7 @@ pub fn bench_memory_one_to_many<
 
     {
         let mut group = c.benchmark_group(format!("one search to many insertions ({memory_name}"));
-        for x in make_scale(1, MAX_VAL, n) {
+        for x in make_scale(1, max_val, n) {
             let n_clients = x.ceil() as usize;
 
             // All clients use the same keyword and values.
@@ -395,7 +396,7 @@ pub fn bench_memory_one_to_many<
     {
         let mut group =
             c.benchmark_group(format!("one insertion to many insertions ({memory_name})"));
-        for x in make_scale(1, MAX_VAL, n) {
+        for x in make_scale(1, max_val, n) {
             let n_clients = x.ceil() as usize;
 
             // All clients use the same keyword and values.

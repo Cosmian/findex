@@ -5,8 +5,8 @@ on: workflow_dispatch
 
 jobs:
   bench:
-    uses: Cosmian/reusable_workflows/.github/workflows/cargo-bench.yml@fix/bench_not_sgx2
+    uses: Cosmian/reusable_workflows/.github/workflows/cargo-bench.yml@develop
     with:
       toolchain: stable
-      features: test-utils,redis-mem,sqlite-mem,rust-mem
+      features: test-utils,postgres-mem,redis-mem,sqlite-mem,rust-mem
       force: true
