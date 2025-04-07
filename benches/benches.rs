@@ -2,7 +2,7 @@ use std::time::Duration;
 
 use cosmian_crypto_core::{CsRng, reexport::rand_core::SeedableRng};
 use cosmian_findex::{
-    MemoryADT, bench_memory_contention, bench_memory_insert_multiple_bindings,
+    Address, MemoryADT, bench_memory_contention, bench_memory_insert_multiple_bindings,
     bench_memory_one_to_many, bench_memory_search_multiple_bindings,
     bench_memory_search_multiple_keywords,
 };
@@ -137,7 +137,7 @@ fn bench_search_multiple_keywords(c: &mut Criterion) {
         "Postgres",
         N_PTS,
         async || {
-            let table_name = "bench_memory_search_multiple_bindings";
+            let table_name = "bench_memory_search_multiple_keywords";
             let m = PostgresMemory::connect_with_pool(
                 create_testing_pool(POSTGRES_URL).await.unwrap(),
                 table_name.to_owned(),
@@ -219,29 +219,6 @@ fn bench_insert_multiple_bindings(c: &mut Criterion) {
 fn bench_contention(c: &mut Criterion) {
     let mut rng = CsRng::from_entropy();
 
-    #[cfg(feature = "postgres-mem")]
-    bench_memory_contention(
-        "Postgres",
-        N_PTS,
-        async || {
-            let table_name = "bench_memory_contention";
-            let m = PostgresMemory::connect_with_pool(
-                create_testing_pool(POSTGRES_URL).await.unwrap(),
-                table_name.to_owned(),
-            )
-            .await
-            .unwrap();
-            m.initialize_table(POSTGRES_URL.to_string(), table_name.to_string(), NoTls)
-                .await
-                .unwrap();
-            m
-        },
-        c,
-        async |m: &PostgresMemory<_, _>| -> Result<(), PostgresMemoryError> {
-            m.clear("bench_memory_contention".to_owned()).await
-        },
-        &mut rng,
-    );
     #[cfg(feature = "rust-mem")]
     bench_memory_contention(
         "in-memory",
@@ -272,6 +249,30 @@ fn bench_contention(c: &mut Criterion) {
         async || SqliteMemory::connect(SQLITE_PATH).await.unwrap(),
         c,
         SqliteMemory::clear,
+        &mut rng,
+    );
+
+    #[cfg(feature = "postgres-mem")]
+    bench_memory_contention(
+        "Postgres",
+        N_PTS,
+        async || {
+            let table_name = "bench_memory_contention";
+            let m = PostgresMemory::connect_with_pool(
+                create_testing_pool(POSTGRES_URL).await.unwrap(),
+                table_name.to_owned(),
+            )
+            .await
+            .unwrap();
+            m.initialize_table(POSTGRES_URL.to_string(), table_name.to_string(), NoTls)
+                .await
+                .unwrap();
+            m
+        },
+        c,
+        async |m: &PostgresMemory<_, _>| -> Result<(), PostgresMemoryError> {
+            m.clear("bench_memory_contention".to_owned()).await
+        },
         &mut rng,
     );
 }
@@ -339,6 +340,17 @@ where
     }
 }
 
+#[cfg(feature = "postgres-mem")]
+impl<const ADDRESS_LENGTH: usize, const WORD_LENGTH: usize>
+    DelayedMemory<PostgresMemory<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>>
+where
+    Address<ADDRESS_LENGTH>: Send + Sync,
+{
+    async fn clear(&self) -> Result<(), PostgresMemoryError> {
+        self.m.clear("bench_memory_contention".to_owned()).await
+    }
+}
+
 fn bench_one_to_many(c: &mut Criterion) {
     let mut rng = CsRng::from_entropy();
 
@@ -348,7 +360,7 @@ fn bench_one_to_many(c: &mut Criterion) {
         N_PTS,
         async || DelayedMemory::new(RedisMemory::connect(REDIS_URL).await.unwrap(), 1, 1),
         c,
-        DelayedMemory::clear,
+        DelayedMemory::<RedisMemory<_, _>>::clear,
         &mut rng,
     );
 
@@ -358,7 +370,7 @@ fn bench_one_to_many(c: &mut Criterion) {
         N_PTS,
         async || DelayedMemory::new(RedisMemory::connect(REDIS_URL).await.unwrap(), 10, 1),
         c,
-        DelayedMemory::clear,
+        DelayedMemory::<RedisMemory<_, _>>::clear,
         &mut rng,
     );
 
@@ -368,7 +380,76 @@ fn bench_one_to_many(c: &mut Criterion) {
         N_PTS,
         async || DelayedMemory::new(RedisMemory::connect(REDIS_URL).await.unwrap(), 10, 5),
         c,
-        DelayedMemory::clear,
+        DelayedMemory::<RedisMemory<_, _>>::clear,
+        &mut rng,
+    );
+
+    #[cfg(feature = "postgres-mem")]
+    bench_memory_one_to_many(
+        "Postgres",
+        N_PTS,
+        async || {
+            let table_name = "bench_memory_one_to_many";
+            let m = PostgresMemory::connect_with_pool(
+                create_testing_pool(POSTGRES_URL).await.unwrap(),
+                table_name.to_owned(),
+            )
+            .await
+            .unwrap();
+            m.initialize_table(POSTGRES_URL.to_string(), table_name.to_string(), NoTls)
+                .await
+                .unwrap();
+
+            DelayedMemory::new(m, 1, 1)
+        },
+        c,
+        DelayedMemory::<PostgresMemory<_, _>>::clear,
+        &mut rng,
+    );
+
+    #[cfg(feature = "postgres-mem")]
+    bench_memory_one_to_many(
+        "Postgres",
+        N_PTS,
+        async || {
+            let table_name = "bench_memory_one_to_many";
+            let m = PostgresMemory::connect_with_pool(
+                create_testing_pool(POSTGRES_URL).await.unwrap(),
+                table_name.to_owned(),
+            )
+            .await
+            .unwrap();
+            m.initialize_table(POSTGRES_URL.to_string(), table_name.to_string(), NoTls)
+                .await
+                .unwrap();
+
+            DelayedMemory::new(m, 10, 1)
+        },
+        c,
+        DelayedMemory::<PostgresMemory<_, _>>::clear,
+        &mut rng,
+    );
+
+    #[cfg(feature = "postgres-mem")]
+    bench_memory_one_to_many(
+        "Postgres",
+        N_PTS,
+        async || {
+            let table_name = "bench_memory_one_to_many";
+            let m = PostgresMemory::connect_with_pool(
+                create_testing_pool(POSTGRES_URL).await.unwrap(),
+                table_name.to_owned(),
+            )
+            .await
+            .unwrap();
+            m.initialize_table(POSTGRES_URL.to_string(), table_name.to_string(), NoTls)
+                .await
+                .unwrap();
+
+            DelayedMemory::new(m, 10, 5)
+        },
+        c,
+        DelayedMemory::<PostgresMemory<_, _>>::clear,
         &mut rng,
     );
 }
@@ -377,9 +458,9 @@ criterion_group!(
     name    = benches;
     config  = Criterion::default();
     targets =
-    // bench_one_to_many,
-    bench_insert_multiple_bindings,
+    bench_one_to_many,
     bench_contention,
+    bench_insert_multiple_bindings,
     bench_search_multiple_bindings,
     bench_search_multiple_keywords,
 );
