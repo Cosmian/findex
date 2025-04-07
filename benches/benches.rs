@@ -25,11 +25,10 @@ const N_PTS: usize = 2;
 #[cfg(feature = "sqlite-mem")]
 const SQLITE_PATH: &str = "./target/benches.sqlite";
 
-// const REDIS_URL: &str = "redis://redis:6379";
-
-// Use this URL for use with a local instance.
 #[cfg(feature = "redis-mem")]
-const REDIS_URL: &str = "redis://localhost:6379";
+const REDIS_URL: &str = "redis://redis:6379";
+// Use this URL for use with a local instance.
+// const REDIS_URL: &str = "redis://localhost:6379";
 
 #[cfg(feature = "postgres-mem")]
 const POSTGRES_URL: &str = "postgres://cosmian:cosmian@localhost/cosmian";
@@ -459,10 +458,10 @@ criterion_group!(
     config  = Criterion::default();
     targets =
     bench_one_to_many,
-    bench_contention,
-    bench_insert_multiple_bindings,
-    bench_search_multiple_bindings,
-    bench_search_multiple_keywords,
+    // bench_contention,
+    // bench_insert_multiple_bindings,
+    // bench_search_multiple_bindings,
+    // bench_search_multiple_keywords,
 );
 
 criterion_main!(benches);

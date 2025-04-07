@@ -62,7 +62,6 @@ tokio-postgres = { version = "0.7.9", optional = true, features = [
 cosmian_crypto_core = { git = "https://github.com/Cosmian/crypto_core.git", branch = "develop", default-features = false, features = [
     "sha3",
     "macro",
-    "ser",
 ] }
 futures = { version = "0.3" }
 tokio = { version = "1.43.0", features = [
