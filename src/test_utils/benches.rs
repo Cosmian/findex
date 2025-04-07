@@ -5,8 +5,11 @@ use crate::{
 use cosmian_crypto_core::{Secret, reexport::rand_core::CryptoRngCore};
 use criterion::{BenchmarkId, Criterion};
 use futures::future::join_all;
-use std::{collections::HashSet, fmt::Debug, sync::Arc};
-use tokio::runtime::{Builder, Runtime};
+use std::{collections::HashSet, fmt::Debug, sync::Arc, time::Duration};
+use tokio::{
+    runtime::{Builder, Runtime},
+    time::sleep,
+};
 
 const MAX_VAL: usize = 1_000;
 
@@ -276,7 +279,7 @@ pub fn bench_memory_contention<
     {
         // All clients use the same keyword.
         let kw = rng.next_u64().to_be_bytes();
-        let mut group = c.benchmark_group(format!("concurrent clients ({memory_name}"));
+        let mut group = c.benchmark_group(format!("concurrent clients ({memory_name})"));
         for x in make_scale(1, N_CLIENTS, n.min(N_CLIENTS)) {
             let n_clients = x.ceil() as usize;
             let bindings = (0..n_clients)
@@ -347,7 +350,7 @@ pub fn bench_memory_one_to_many<
     ));
 
     {
-        let mut group = c.benchmark_group(format!("one search to many insertions ({memory_name}"));
+        let mut group = c.benchmark_group(format!("one search to many insertions ({memory_name})"));
         for x in make_scale(1, max_val, n) {
             let n_clients = x.ceil() as usize;
 
@@ -358,7 +361,11 @@ pub fn bench_memory_one_to_many<
             group.bench_function(BenchmarkId::from_parameter(n_clients), |b| {
                 b.iter_batched(
                     || {
-                        rt.block_on(clear(&m)).unwrap();
+                        rt.block_on(async {
+                            sleep(Duration::from_millis(10)).await;
+                            clear(&m).await
+                        })
+                        .unwrap();
                         (
                             Vec::with_capacity(n_clients),
                             (0..n_clients).map(|_| (findex.clone(), vs.clone())),
