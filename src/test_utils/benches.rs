@@ -394,7 +394,7 @@ pub fn bench_memory_one_to_many<
 
     {
         let mut group =
-            c.benchmark_group(format!("one insertion to many insertions ({memory_name}"));
+            c.benchmark_group(format!("one insertion to many insertions ({memory_name})"));
         for x in make_scale(1, MAX_VAL, n) {
             let n_clients = x.ceil() as usize;
 
