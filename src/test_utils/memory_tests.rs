@@ -110,11 +110,13 @@ pub async fn test_wrong_guard<const WORD_LENGTH: usize, Memory>(
     let a = Memory::Address::from(gen_bytes(&mut rng));
     let w = Memory::Word::from(gen_bytes(&mut rng));
 
+    // write a value to some address
     memory
         .guarded_write((a.clone(), None), vec![(a.clone(), w.clone())])
         .await
         .unwrap();
 
+    // try to write to that address with a None guard
     let conflict_result = memory
         .guarded_write(
             (a.clone(), None),
@@ -123,6 +125,7 @@ pub async fn test_wrong_guard<const WORD_LENGTH: usize, Memory>(
         .await
         .unwrap();
 
+    // as the guard should not have passed, guarded_write should return the stored value
     assert_eq!(
         conflict_result,
         Some(w.clone()),

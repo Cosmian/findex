@@ -7,15 +7,16 @@ use std::{fmt, marker::PhantomData};
 // 2. Guard value.
 // 3. Vector length.
 // 4+. Vector elements (address, word).
-const GUARDED_WRITE_LUA_SCRIPT: &str = r"
+const GUARDED_WRITE_LUA_SCRIPT: &str = "
 local guard_address = ARGV[1]
 local guard_value = ARGV[2]
 local length = ARGV[3]
 
-local value = redis.call('GET',ARGV[1])
+local value = redis.call('GET',guard_address)
 
--- compare the value of the guard to the currently stored value
-if ((value == false) or (guard_value == value)) then
+-- compare the provided guard to the currently stored value
+-- if no value is found, nil will be converted to 'false' by the tostring function
+if guard_value == tostring(value) then
     -- guard passed, loop over bindings and insert them
     for i = 4,(length*2)+3,2
     do
@@ -131,6 +132,7 @@ impl<const ADDRESS_LENGTH: usize, const WORD_LENGTH: usize> MemoryADT
                     .map(|bytes| bytes.as_slice())
                     .unwrap_or(b"false".as_slice()),
             );
+        // .arg(Option::<&[u8]>::None);
 
         let cmd = bindings
             .iter()
