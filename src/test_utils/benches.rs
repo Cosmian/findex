@@ -361,11 +361,7 @@ pub fn bench_memory_one_to_many<
             group.bench_function(BenchmarkId::from_parameter(n_clients), |b| {
                 b.iter_batched(
                     || {
-                        rt.block_on(async {
-                            sleep(Duration::from_millis(4)).await;
-                            clear(&m).await
-                        })
-                        .unwrap();
+                        rt.block_on(clear(&m)).unwrap();
                         (
                             Vec::with_capacity(n_clients),
                             (0..n_clients).map(|_| (findex.clone(), vs.clone())),

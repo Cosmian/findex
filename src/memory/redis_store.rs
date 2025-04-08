@@ -13,9 +13,15 @@ local guard_value = ARGV[2]
 local length = ARGV[3]
 
 local value = redis.call('GET',ARGV[1])
+-- I got rid of (value == false) by converting using built-in tostring
+-- in the previous code, the problem was certainly how LUA handled nil
+-- when we wanted to check for non existant address we used to pass a b'string'
+-- when that case happenned, the value was nil, and the comparison failed because nil only compares to itself
+-- and as far as I know, there is no way to pass nil via rust
+-- by making explicit conversions, nil value will be converted to 'false' :)
 
 -- compare the value of the guard to the currently stored value
-if ((value == false) or (guard_value == value)) then
+if ((tostring(guard_value) == tostring(value))) then
     -- guard passed, loop over bindings and insert them
     for i = 4,(length*2)+3,2
     do
