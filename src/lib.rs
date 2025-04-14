@@ -1,4 +1,8 @@
 #![warn(clippy::all, clippy::nursery, clippy::cargo)]
+// This is necessary since CryptoCore depends on pkcs8 which depends on an old
+// version of rand_core, which depends on an old version of getrandom (0.2.15),
+// while CryptoCore also depends on gensym which depends on uuid, which depends
+// on a newer version of getrandom (0.3.2).
 #![allow(clippy::multiple_crate_versions)]
 
 mod address;
@@ -8,9 +12,6 @@ mod error;
 mod findex;
 mod memory;
 mod ovec;
-mod secret;
-mod symmetric_key;
-mod value;
 
 pub use address::Address;
 #[cfg(any(test, feature = "test-utils"))]
@@ -23,9 +24,7 @@ pub use encoding::{
 pub use error::Error;
 pub use findex::Findex;
 pub use findex::Op;
-pub use memory::MemoryEncryptionLayer;
-pub use secret::Secret;
-pub use value::Value;
+pub use memory::{KEY_LENGTH, MemoryEncryptionLayer};
 
 #[cfg(feature = "redis-mem")]
 pub use memory::{RedisMemory, RedisMemoryError};
@@ -45,7 +44,3 @@ pub use memory::InMemory;
 /// 16-byte addresses ensure a high collision resistance that poses virtually no
 /// limitation on the index.
 pub const ADDRESS_LENGTH: usize = 16;
-
-/// Using 32-byte cryptographic keys allows achieving post-quantum resistance
-/// with the AES primitive.
-pub const KEY_LENGTH: usize = 32;

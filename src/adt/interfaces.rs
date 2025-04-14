@@ -7,8 +7,8 @@
 
 use std::{collections::HashSet, future::Future, hash::Hash};
 
-/// An index stores *values*, that associate a keyword with a value. All values bound to the same
-/// keyword are said to be *indexed under* this keyword.
+/// An index stores *values*, that associate a keyword with a value. All values
+/// bound to the same keyword are said to be *indexed under* this keyword.
 pub trait IndexADT<Keyword: Send + Sync + Hash, Value: Send + Sync + Hash> {
     type Error: Send + Sync + std::error::Error;
 
@@ -67,8 +67,8 @@ pub trait MemoryADT {
         addresses: Vec<Self::Address>,
     ) -> impl Send + Future<Output = Result<Vec<Option<Self::Word>>, Self::Error>>;
 
-    /// Write the given words at the given addresses if the word currently stored at the guard
-    /// address is the given one, and returns this guard word.
+    /// Write the given bindings if the word currently stored at the guard
+    /// address is the guard word, and returns this word.
     fn guarded_write(
         &self,
         guard: (Self::Address, Option<Self::Word>),

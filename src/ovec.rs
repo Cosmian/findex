@@ -211,8 +211,7 @@ where
 
 #[cfg(test)]
 mod tests {
-    use rand_chacha::ChaChaRng;
-    use rand_core::SeedableRng;
+    use cosmian_crypto_core::{CsRng, Sampling, Secret, reexport::rand_core::SeedableRng};
 
     use crate::{
         ADDRESS_LENGTH, InMemory,
@@ -220,19 +219,18 @@ mod tests {
         adt::tests::{test_vector_concurrent, test_vector_sequential},
         memory::MemoryEncryptionLayer,
         ovec::IVec,
-        secret::Secret,
     };
 
     const WORD_LENGTH: usize = 16;
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 8)]
     async fn test_ovec() {
-        let mut rng = ChaChaRng::from_os_rng();
+        let mut rng = CsRng::from_entropy();
         let seed = Secret::random(&mut rng);
         let memory = InMemory::<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>::default();
         let obf = MemoryEncryptionLayer::new(&seed, memory.clone());
         let address = Address::random(&mut rng);
-        let v = IVec::<WORD_LENGTH, _>::new(address.clone(), obf);
+        let v = IVec::<WORD_LENGTH, _>::new(address, obf);
         test_vector_sequential(&v).await;
         memory.clear();
         test_vector_concurrent(&v).await;

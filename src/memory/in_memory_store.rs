@@ -93,57 +93,30 @@ impl<Address: Hash + Eq + Debug + Clone, Value: Clone + Eq + Debug> IntoIterator
 #[cfg(test)]
 mod tests {
 
-    use futures::executor::block_on;
-
     use crate::{
-        MemoryADT,
         adt::test_utils::{
             test_guarded_write_concurrent, test_single_write_and_read, test_wrong_guard,
         },
+        test_utils::gen_seed,
     };
 
     use super::InMemory;
 
-    /// Ensures a transaction can express a vector push operation:
-    /// - the counter is correctly incremented and all values are written;
-    /// - using the wrong value in the guard fails the operation and returns the current value.
-    #[test]
-    fn test_vector_push() {
-        let memory = InMemory::<u8, u8>::default();
-
-        assert_eq!(
-            block_on(memory.guarded_write((0, None), vec![(0, 2), (1, 1), (2, 1)])).unwrap(),
-            None
-        );
-        assert_eq!(
-            block_on(memory.guarded_write((0, None), vec![(0, 4), (3, 2), (4, 2)])).unwrap(),
-            Some(2)
-        );
-        assert_eq!(
-            block_on(memory.guarded_write((0, Some(2)), vec![(0, 4), (3, 3), (4, 3)])).unwrap(),
-            Some(2)
-        );
-        assert_eq!(
-            vec![Some(1), Some(1), Some(3), Some(3)],
-            block_on(memory.batch_read(vec![1, 2, 3, 4])).unwrap(),
-        )
-    }
-
     #[tokio::test]
     async fn test_sequential_read_write() {
         let memory = InMemory::<[u8; 16], [u8; 16]>::default();
-        test_single_write_and_read(&memory, rand::random()).await;
+        test_single_write_and_read(&memory, gen_seed()).await;
     }
 
     #[tokio::test]
     async fn test_sequential_wrong_guard() {
         let memory = InMemory::<[u8; 16], [u8; 16]>::default();
-        test_wrong_guard(&memory, rand::random()).await;
+        test_wrong_guard(&memory, gen_seed()).await;
     }
 
     #[tokio::test]
     async fn test_concurrent_read_write() {
         let memory = InMemory::<[u8; 16], [u8; 16]>::default();
-        test_guarded_write_concurrent(&memory, rand::random(), None).await;
+        test_guarded_write_concurrent(&memory, gen_seed(), None).await;
     }
 }

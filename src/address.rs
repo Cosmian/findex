@@ -1,50 +1,10 @@
-use std::ops::{Add, Deref, DerefMut};
+use cosmian_crypto_core::define_byte_type;
+use std::ops::Add;
 
-use rand_core::CryptoRng;
+// An address is a little-endian number encoded on LENGTH bytes.
+define_byte_type!(Address);
 
-// NOTE: a more efficient implementation of the address could be a big-int.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct Address<const LENGTH: usize>([u8; LENGTH]);
-
-impl<const LENGTH: usize> From<[u8; LENGTH]> for Address<LENGTH> {
-    fn from(bytes: [u8; LENGTH]) -> Self {
-        Self(bytes)
-    }
-}
-
-impl<const LENGTH: usize> From<Address<LENGTH>> for [u8; LENGTH] {
-    fn from(address: Address<LENGTH>) -> Self {
-        address.0
-    }
-}
-
-impl<const LENGTH: usize> Deref for Address<LENGTH> {
-    type Target = [u8; LENGTH];
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-impl<const LENGTH: usize> DerefMut for Address<LENGTH> {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
-    }
-}
-
-impl<const LENGTH: usize> Default for Address<LENGTH> {
-    fn default() -> Self {
-        Self([0; LENGTH])
-    }
-}
-
-impl<const LENGTH: usize> Address<LENGTH> {
-    pub fn random(rng: &mut impl CryptoRng) -> Self {
-        let mut res = Self([0; LENGTH]);
-        rng.fill_bytes(&mut *res);
-        res
-    }
-}
+impl<const LENGTH: usize> Copy for Address<LENGTH> {}
 
 impl<const LENGTH: usize> Add<u64> for Address<LENGTH> {
     type Output = Self;
@@ -79,21 +39,32 @@ mod tests {
 
     #[test]
     fn test_add() {
+        //
         // Test with one byte overflow.
-        assert_eq!(Address([0]) + 0, Address([0]));
-        assert_eq!(Address([0]) + 1, Address([1]));
-        assert_eq!(Address([0]) + 256, Address([0])); // 256 is the neutral element
+        //
+        let a0 = Address::from([0]);
+        let a1 = Address::from([1]);
+        assert_eq!(a0 + 0, a0);
+        assert_eq!(a0 + 1, a1);
+        assert_eq!(a0 + 256, a0); // 256 is the neutral element
 
+        //
         // Test with two bytes overflow.
-        assert_eq!(Address([0, 0]) + 1, Address([1, 0]));
-        assert_eq!(Address([0, 0]) + 256, Address([0, 1])); // 256 is a shift
+        //
+        let a00 = Address::from([0, 0]);
+        let a01 = Address::from([0, 1]);
+        let a10 = Address::from([1, 0]);
+        assert_eq!(a00 + 1, a10);
+        assert_eq!(a00 + 256, a01); // 256 is a shift
 
+        //
         // random add
+        //
         assert_eq!(4325 >> 8, 16);
         assert_eq!(4325 % 256, 229);
         assert_eq!(229 + 100 - 256, 73); // there will be a carry
-        assert_eq!(Address([100, 10]) + 4325, Address([73, 27]));
-
-        assert_eq!(Address([0, 0]) + (1 << 16), Address([0, 0])); // 2^16 is the neutral element
+        assert_eq!(Address::from([100, 10]) + 4325, Address::from([73, 27]));
+        // 2^16 is the neutral element
+        assert_eq!(Address::from([0, 0]) + (1 << 16), Address::from([0, 0]));
     }
 }

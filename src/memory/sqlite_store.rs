@@ -166,8 +166,8 @@ mod tests {
     use crate::{
         ADDRESS_LENGTH, WORD_LENGTH,
         adt::test_utils::{
-            test_guarded_write_concurrent, test_rw_same_address, test_single_write_and_read,
-            test_wrong_guard,
+            gen_seed, test_guarded_write_concurrent, test_rw_same_address,
+            test_single_write_and_read, test_wrong_guard,
         },
     };
 
@@ -178,7 +178,7 @@ mod tests {
         let m = SqliteMemory::<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>::connect(DB_PATH)
             .await
             .unwrap();
-        test_single_write_and_read(&m, rand::random()).await
+        test_single_write_and_read(&m, gen_seed()).await
     }
 
     #[tokio::test]
@@ -186,7 +186,7 @@ mod tests {
         let m = SqliteMemory::<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>::connect(DB_PATH)
             .await
             .unwrap();
-        test_wrong_guard(&m, rand::random()).await
+        test_wrong_guard(&m, gen_seed()).await
     }
 
     #[tokio::test]
@@ -194,7 +194,7 @@ mod tests {
         let m = SqliteMemory::<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>::connect(DB_PATH)
             .await
             .unwrap();
-        test_rw_same_address(&m, rand::random()).await
+        test_rw_same_address(&m, gen_seed()).await
     }
 
     #[tokio::test]
@@ -202,6 +202,6 @@ mod tests {
         let m = SqliteMemory::<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>::connect(DB_PATH)
             .await
             .unwrap();
-        test_guarded_write_concurrent(&m, rand::random(), Some(100)).await
+        test_guarded_write_concurrent(&m, gen_seed(), Some(100)).await
     }
 }
