@@ -1,3 +1,7 @@
+// It is too much trouble to deactivate everything if none of the features are
+// activated.
+#![allow(unused_imports, unused_variables, unused_mut, dead_code)]
+
 use cosmian_crypto_core::{CsRng, reexport::rand_core::SeedableRng};
 use cosmian_findex::{
     bench_memory_contention, bench_memory_insert_multiple_bindings, bench_memory_one_to_many,
@@ -235,11 +239,12 @@ mod delayed_memory {
     }
 }
 
-#[cfg(feature = "redis-mem")]
 fn bench_one_to_many(c: &mut Criterion) {
+    #[cfg(feature = "redis-mem")]
     let url = get_redis_url();
     let mut rng = CsRng::from_entropy();
 
+    #[cfg(feature = "redis-mem")]
     use delayed_memory::*;
 
     #[cfg(feature = "redis-mem")]
