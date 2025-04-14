@@ -62,7 +62,7 @@ impl<
         };
 
         // Hash the keyword twice to get enough collision resistance.
-        let mut a = Address::<ADDRESS_LENGTH>::default();
+        let mut a = Address::<ADDRESS_LENGTH>::from([0; ADDRESS_LENGTH]);
         a[..8].copy_from_slice(&h(1).to_be_bytes());
         a[8..].copy_from_slice(&h(2).to_be_bytes());
         a

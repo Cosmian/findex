@@ -211,7 +211,7 @@ where
 
 #[cfg(test)]
 mod tests {
-    use cosmian_crypto_core::{CsRng, Secret, reexport::rand_core::SeedableRng};
+    use cosmian_crypto_core::{CsRng, Sampling, Secret, reexport::rand_core::SeedableRng};
 
     use crate::{
         ADDRESS_LENGTH, InMemory,
@@ -230,7 +230,7 @@ mod tests {
         let memory = InMemory::<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>::default();
         let obf = MemoryEncryptionLayer::new(&seed, memory.clone());
         let address = Address::random(&mut rng);
-        let v = IVec::<WORD_LENGTH, _>::new(address.clone(), obf);
+        let v = IVec::<WORD_LENGTH, _>::new(address, obf);
         test_vector_sequential(&v).await;
         memory.clear();
         test_vector_concurrent(&v).await;

@@ -28,6 +28,7 @@ test-utils = ["tokio"]
 [dependencies]
 aes = "0.8.4"
 cosmian_crypto_core = { git = "https://github.com/Cosmian/crypto_core.git", branch = "develop", default-features = false, features = [
+    "macro",
     "sha3",
 ] }
 xts-mode = "0.5.1"

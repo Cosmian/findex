@@ -1,5 +1,5 @@
 mod encryption_layer;
-pub use encryption_layer::MemoryEncryptionLayer;
+pub use encryption_layer::{KEY_LENGTH, MemoryEncryptionLayer};
 
 #[cfg(any(test, feature = "test-utils"))]
 mod in_memory_store;
