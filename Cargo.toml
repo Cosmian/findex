@@ -45,7 +45,6 @@ redis = { version = "0.28", features = [
     "connection-manager",
     "tokio-comp",
 ], optional = true }
-tokio = { version = "1.44", features = ["rt-multi-thread"], optional = true }
 
 
 [dev-dependencies]

@@ -233,21 +233,21 @@ mod delayed_memory {
     }
 }
 
+#[cfg(feature = "redis-mem")]
 fn bench_one_to_many(c: &mut Criterion) {
     let mut rng = CsRng::from_entropy();
 
-    #[cfg(feature = "redis-mem")]
     use delayed_memory::*;
 
-    // #[cfg(feature = "redis-mem")]
-    // bench_memory_one_to_many(
-    //     "Redis",
-    //     N_PTS,
-    //     async || DelayedMemory::new(RedisMemory::connect(REDIS_URL).await.unwrap(), 1, 1),
-    //     c,
-    //     DelayedMemory::clear,
-    //     &mut rng,
-    // );
+    #[cfg(feature = "redis-mem")]
+    bench_memory_one_to_many(
+        "Redis",
+        N_PTS,
+        async || DelayedMemory::new(RedisMemory::connect(REDIS_URL).await.unwrap(), 1, 1),
+        c,
+        DelayedMemory::clear,
+        &mut rng,
+    );
 
     #[cfg(feature = "redis-mem")]
     bench_memory_one_to_many(
@@ -274,7 +274,7 @@ criterion_group!(
     name    = benches;
     config  = Criterion::default();
     targets =
-    // bench_one_to_many,
+    bench_one_to_many,
     bench_search_multiple_bindings,
     bench_search_multiple_keywords,
     bench_insert_multiple_bindings,
