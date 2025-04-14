@@ -5,7 +5,7 @@ on: workflow_dispatch
 
 jobs:
   bench:
-    uses: Cosmian/reusable_workflows/.github/workflows/cargo-bench.yml@benches_with_redis
+    uses: Cosmian/reusable_workflows/.github/workflows/cargo-bench.yml@develop
     with:
       toolchain: stable
       features: test-utils,redis-mem,sqlite-mem,rust-mem
