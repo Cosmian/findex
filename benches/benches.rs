@@ -21,10 +21,12 @@ const N_PTS: usize = 9;
 const SQLITE_PATH: &str = "./target/benches.sqlite";
 
 #[cfg(feature = "redis-mem")]
-const REDIS_URL: &str = "redis://redis:6379";
-
-// Use this URL for use with a local instance.
-// const REDIS_URL: &str = "redis://localhost:6379";
+fn get_redis_url() -> String {
+    std::env::var("REDIS_HOST").map_or_else(
+        |_| "redis://localhost:6379".to_owned(),
+        |var_env| format!("redis://{var_env}:6379"),
+    )
+}
 
 fn bench_search_multiple_bindings(c: &mut Criterion) {
     let mut rng = CsRng::from_entropy();
@@ -42,7 +44,7 @@ fn bench_search_multiple_bindings(c: &mut Criterion) {
     bench_memory_search_multiple_bindings(
         "Redis",
         N_PTS,
-        async || RedisMemory::connect(REDIS_URL).await.unwrap(),
+        async || RedisMemory::connect(&get_redis_url()).await.unwrap(),
         c,
         &mut rng,
     );
@@ -73,7 +75,7 @@ fn bench_search_multiple_keywords(c: &mut Criterion) {
     bench_memory_search_multiple_keywords(
         "Redis",
         N_PTS,
-        async || RedisMemory::connect(REDIS_URL).await.unwrap(),
+        async || RedisMemory::connect(&get_redis_url()).await.unwrap(),
         c,
         &mut rng,
     );
@@ -108,7 +110,7 @@ fn bench_insert_multiple_bindings(c: &mut Criterion) {
     bench_memory_insert_multiple_bindings(
         "Redis",
         N_PTS,
-        async || RedisMemory::connect(REDIS_URL).await.unwrap(),
+        async || RedisMemory::connect(&get_redis_url()).await.unwrap(),
         c,
         RedisMemory::clear,
         &mut rng,
@@ -145,7 +147,7 @@ fn bench_contention(c: &mut Criterion) {
     bench_memory_contention(
         "Redis",
         N_PTS,
-        async || RedisMemory::connect(REDIS_URL).await.unwrap(),
+        async || RedisMemory::connect(&get_redis_url()).await.unwrap(),
         c,
         RedisMemory::clear,
         &mut rng,
@@ -235,6 +237,7 @@ mod delayed_memory {
 
 #[cfg(feature = "redis-mem")]
 fn bench_one_to_many(c: &mut Criterion) {
+    let url = get_redis_url();
     let mut rng = CsRng::from_entropy();
 
     use delayed_memory::*;
@@ -243,7 +246,7 @@ fn bench_one_to_many(c: &mut Criterion) {
     bench_memory_one_to_many(
         "Redis",
         N_PTS,
-        async || DelayedMemory::new(RedisMemory::connect(REDIS_URL).await.unwrap(), 1, 1),
+        async || DelayedMemory::new(RedisMemory::connect(&url).await.unwrap(), 1, 1),
         c,
         DelayedMemory::clear,
         &mut rng,
@@ -253,7 +256,7 @@ fn bench_one_to_many(c: &mut Criterion) {
     bench_memory_one_to_many(
         "Redis",
         N_PTS,
-        async || DelayedMemory::new(RedisMemory::connect(REDIS_URL).await.unwrap(), 10, 1),
+        async || DelayedMemory::new(RedisMemory::connect(&url).await.unwrap(), 10, 1),
         c,
         DelayedMemory::clear,
         &mut rng,
@@ -263,7 +266,7 @@ fn bench_one_to_many(c: &mut Criterion) {
     bench_memory_one_to_many(
         "Redis",
         N_PTS,
-        async || DelayedMemory::new(RedisMemory::connect(REDIS_URL).await.unwrap(), 10, 5),
+        async || DelayedMemory::new(RedisMemory::connect(&url).await.unwrap(), 10, 5),
         c,
         DelayedMemory::clear,
         &mut rng,
