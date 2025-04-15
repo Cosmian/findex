@@ -13,7 +13,7 @@ local guard_word    = ARGV[2]
 local length        = ARGV[3]
 local current_word  = redis.call('GET',guard_address)
 
--- If no value is found, nil is converted to 'false'.
+-- If no word is found, nil is converted to 'false'.
 if guard_word == tostring(current_word) then
     for i = 4,(length*2)+3,2
     do
