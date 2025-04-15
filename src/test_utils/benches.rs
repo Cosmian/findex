@@ -332,7 +332,7 @@ pub fn bench_memory_one_to_many<
     // Redis memory backend requires a tokio runtime, and all operations to
     // happen in the same runtime, otherwise the connection returns a broken
     // pipe error.
-    let rt = Builder::new_multi_thread().enable_all().build().unwrap();
+    let rt = Builder::new_multi_thread().enable_time().build().unwrap();
 
     let m = rt.block_on(m());
 
