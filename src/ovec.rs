@@ -211,7 +211,7 @@ where
 
 #[cfg(test)]
 mod tests {
-    use cosmian_crypto_core::{CsRng, Secret, reexport::rand_core::SeedableRng};
+    use cosmian_crypto_core::{CsRng, Sampling, Secret, reexport::rand_core::SeedableRng};
 
     use crate::{
         ADDRESS_LENGTH, InMemory,

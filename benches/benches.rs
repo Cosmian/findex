@@ -15,9 +15,18 @@ const SQLITE_PATH: &str = "./target/benches.sqlite";
 
 #[cfg(feature = "redis-mem")]
 use cosmian_findex::RedisMemory;
+/// Gets the Redis URL to use based on the following priority:
+/// 1. If REDIS_HOST environment variable is set, use "redis://{REDIS_HOST}:6379"
+/// 2. If no environment variable is set but a Redis server is reachable at
+///    localhost (127.0.0.1:6379), use "redis://127.0.0.1:6379"
+/// 3. If neither of the above conditions are met, fall back to the default
+///    dockered Redis service at "redis://redis:6379"
 #[cfg(feature = "redis-mem")]
 fn get_redis_url() -> String {
-    // Try to connect to localhost first, if it fails, fallback to the default dockered redis service.
+    if let Ok(host) = std::env::var("REDIS_HOST") {
+        return format!("redis://{}:6379", host);
+    }
+
     use std::{net::TcpStream, time::Duration};
     match TcpStream::connect_timeout(
         &"127.0.0.1:6379".parse().unwrap(),
@@ -34,9 +43,21 @@ fn get_redis_url() -> String {
 /// dbname=cosmian
 /// user=cosmian
 /// password=cosmian
+///
+/// Gets the PostgreSQL URL to use based on the following priority:
+/// 1. If POSTGRES_HOST environment variable is set, use "postgres://cosmian:cosmian@{POSTGRES_HOST}/cosmian"
+/// 2. If no environment variable is set but a PostgreSQL server is reachable at
+///    localhost (127.0.0.1:5432), use "postgres://cosmian:cosmian@localhost/cosmian"
+/// 3. If neither of the above conditions are met, fall back to the default
+///    dockered PostgreSQL service at "postgres://cosmian:cosmian@postgres/cosmian"
 #[cfg(feature = "postgres-mem")]
 fn get_postgresql_url() -> String {
-    // Try to connect to localhost first, if it fails, fallback to the default dockered postgresql service.
+    // First check for POSTGRES_HOST environment variable
+    if let Ok(host) = std::env::var("POSTGRES_HOST") {
+        return format!("postgres://cosmian:cosmian@{}/cosmian", host);
+    }
+
+    // Try local connection, then fallback to docker service
     use std::{net::TcpStream, time::Duration};
     match TcpStream::connect_timeout(
         &"127.0.0.1:5432".parse().unwrap(),
@@ -53,16 +74,6 @@ use cosmian_findex::PostgresMemory;
 // Number of points in each graph.
 const N_PTS: usize = 9;
 
-#[cfg(feature = "redis-mem")]
-fn get_redis_url() -> String {
-    std::env::var("REDIS_HOST").map_or_else(
-        |var_env| format!("redis://{var_env}:6379"),
-        |_| "redis://localhost:6379".to_owned(),
-    )
-}
-
-#[cfg(feature = "sqlite-mem")]
-const SQLITE_PATH: &str = "./target/benches.sqlite";
 fn bench_search_multiple_bindings(c: &mut Criterion) {
     let mut rng = CsRng::from_entropy();
 
