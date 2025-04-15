@@ -1,4 +1,5 @@
 pkg/
+.cargo_check/
 target/
 **/Cargo.lock
 perf*
