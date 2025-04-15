@@ -225,11 +225,7 @@ pub fn bench_memory_contention<
     // Redis memory backend requires a tokio runtime, and all operations to
     // happen in the same runtime, otherwise the connection returns a broken
     // pipe error.
-    let rt = Builder::new_multi_thread()
-        .worker_threads(8)
-        .enable_all()
-        .build()
-        .unwrap();
+    let rt = Builder::new_multi_thread().enable_all().build().unwrap();
 
     let m = rt.block_on(m());
 
@@ -329,10 +325,11 @@ pub fn bench_memory_one_to_many<
     rng: &mut impl CryptoRngCore,
 ) {
     const MAX_VAL: usize = 100;
+
     // Redis memory backend requires a tokio runtime, and all operations to
     // happen in the same runtime, otherwise the connection returns a broken
     // pipe error.
-    let rt = Builder::new_multi_thread().enable_time().build().unwrap();
+    let rt = Builder::new_multi_thread().enable_all().build().unwrap();
 
     let m = rt.block_on(m());
 
