@@ -116,10 +116,10 @@ pub async fn test_wrong_guard<const WORD_LENGTH: usize, Memory>(
         .unwrap();
 
     let conflict_result = memory
-        .guarded_write((a.clone(), None), vec![(
-            a.clone(),
-            Memory::Word::from(gen_bytes(&mut rng)),
-        )])
+        .guarded_write(
+            (a.clone(), None),
+            vec![(a.clone(), Memory::Word::from(gen_bytes(&mut rng)))],
+        )
         .await
         .unwrap();
 
@@ -263,10 +263,10 @@ pub async fn test_guarded_write_concurrent<const WORD_LENGTH: usize, Memory>(
 
                 let new_cnt = cnt + 1;
                 let cur_cnt = m
-                    .guarded_write((a.into(), guard), vec![(
-                        a.into(),
-                        Memory::Word::from(u128_to_array(new_cnt)),
-                    )])
+                    .guarded_write(
+                        (a.into(), guard),
+                        vec![(a.into(), Memory::Word::from(u128_to_array(new_cnt)))],
+                    )
                     .await?
                     .map(|w| word_to_array(w.into()).unwrap())
                     .unwrap_or_default();

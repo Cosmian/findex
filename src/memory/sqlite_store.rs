@@ -65,7 +65,8 @@ impl<Address, Word> SqliteMemory<Address, Word> {
     ///
     /// * `path` - The path to the sqlite3 database file.
     pub async fn connect(path: &str) -> Result<Self, SqliteMemoryError> {
-        // This pool connections number defaults to the number of logical CPUs of the current system.
+        // This pool connections number defaults to the number of logical CPUs
+        // of the current system.
         let pool = PoolBuilder::new().path(path).open().await?;
 
         pool.conn(move |conn| conn.execute_batch(CREATE_TABLE_SCRIPT))
@@ -75,6 +76,16 @@ impl<Address, Word> SqliteMemory<Address, Word> {
             pool,
             _marker: PhantomData,
         })
+    }
+}
+
+impl<Address: Send + Sync, Word: Send + Sync> SqliteMemory<Address, Word> {
+    #[cfg(feature = "test-utils")]
+    pub async fn clear(&self) -> Result<(), SqliteMemoryError> {
+        self.pool
+            .conn(|cnx| cnx.execute("DELETE FROM memory", []))
+            .await?;
+        Ok(())
     }
 }
 
@@ -111,7 +122,8 @@ impl<const ADDRESS_LENGTH: usize, const WORD_LENGTH: usize> MemoryADT
                 // generate a returned value complying to the batch-read spec.
                 Ok(addresses
                     .iter()
-                    // Copying is necessary here since the same word could be returned multiple times.
+                    // Copying is necessary here since the same word could be
+                    // returned multiple times.
                     .map(|addr| results.get(addr).copied())
                     .collect())
             })
@@ -164,18 +176,15 @@ mod tests {
 
     use super::*;
     use crate::{
-        ADDRESS_LENGTH, WORD_LENGTH,
-        adt::test_utils::{
-            gen_seed, test_guarded_write_concurrent, test_rw_same_address,
-            test_single_write_and_read, test_wrong_guard,
-        },
+        WORD_LENGTH, gen_seed, test_guarded_write_concurrent, test_rw_same_address,
+        test_single_write_and_read, test_wrong_guard,
     };
 
     const DB_PATH: &str = "./target/debug/sqlite-test.db";
 
     #[tokio::test]
     async fn test_rw_seq() {
-        let m = SqliteMemory::<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>::connect(DB_PATH)
+        let m = SqliteMemory::<_, [u8; WORD_LENGTH]>::connect(DB_PATH)
             .await
             .unwrap();
         test_single_write_and_read(&m, gen_seed()).await
@@ -183,7 +192,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_guard_seq() {
-        let m = SqliteMemory::<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>::connect(DB_PATH)
+        let m = SqliteMemory::<_, [u8; WORD_LENGTH]>::connect(DB_PATH)
             .await
             .unwrap();
         test_wrong_guard(&m, gen_seed()).await
@@ -191,7 +200,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_collision_seq() {
-        let m = SqliteMemory::<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>::connect(DB_PATH)
+        let m = SqliteMemory::<_, [u8; WORD_LENGTH]>::connect(DB_PATH)
             .await
             .unwrap();
         test_rw_same_address(&m, gen_seed()).await
@@ -199,7 +208,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_rw_ccr() {
-        let m = SqliteMemory::<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>::connect(DB_PATH)
+        let m = SqliteMemory::<_, [u8; WORD_LENGTH]>::connect(DB_PATH)
             .await
             .unwrap();
         test_guarded_write_concurrent(&m, gen_seed(), Some(100)).await

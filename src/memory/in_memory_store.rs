@@ -93,14 +93,11 @@ impl<Address: Hash + Eq + Debug + Clone, Value: Clone + Eq + Debug> IntoIterator
 #[cfg(test)]
 mod tests {
 
-    use crate::{
-        adt::test_utils::{
-            test_guarded_write_concurrent, test_single_write_and_read, test_wrong_guard,
-        },
-        test_utils::gen_seed,
-    };
-
     use super::InMemory;
+    use crate::{
+        test_utils::gen_seed,
+        test_utils::{test_guarded_write_concurrent, test_single_write_and_read, test_wrong_guard},
+    };
 
     #[tokio::test]
     async fn test_sequential_read_write() {
