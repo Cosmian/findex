@@ -37,7 +37,7 @@ fn get_redis_url() -> String {
     }
 }
 
-/// To run the postgresql benchmarks, add the following service to your pg_service.conf file (usually under ~/.pg_service.conf):
+/// To run the postgresql benchmarks locally, add the following service to your pg_service.conf file (usually under ~/.pg_service.conf):
 /// [cosmian_service]
 /// host=localhost
 /// dbname=cosmian
@@ -365,7 +365,6 @@ mod delayed_memory {
 
 fn bench_one_to_many(c: &mut Criterion) {
     #[cfg(feature = "redis-mem")]
-    let url = get_redis_url();
     let mut rng = CsRng::from_entropy();
 
     #[cfg(any(feature = "redis-mem", feature = "postgres-mem"))]

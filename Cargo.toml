@@ -29,7 +29,8 @@ postgres-mem = ["tokio-postgres", "tokio/rt-multi-thread", "deadpool-postgres"]
 
 [dependencies]
 aes = "0.8"
-cosmian_crypto_core = { git = "https://github.com/Cosmian/crypto_core.git", branch = "develop", default-features = false, features = [
+cosmian_crypto_core = { version = "10.1", default-features = false, features = [
+    "macro",
     "sha3",
 ] }
 xts-mode = "0.5"
@@ -56,9 +57,6 @@ tokio-postgres = { version = "0.7.9", optional = true, features = [
 
 
 [dev-dependencies]
-cosmian_crypto_core = { git = "https://github.com/Cosmian/crypto_core.git", branch = "develop", default-features = false, features = [
-    "macro",
-] }
 futures = { version = "0.3" }
 tokio = { version = "1.43.0", features = ["macros", "rt-multi-thread", "time"] }
 
