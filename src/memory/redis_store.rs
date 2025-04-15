@@ -7,22 +7,20 @@ use std::{fmt, marker::PhantomData};
 // 2. Guard value.
 // 3. Vector length.
 // 4+. Vector elements (address, word).
-const GUARDED_WRITE_LUA_SCRIPT: &str = r"
+const GUARDED_WRITE_LUA_SCRIPT: &str = "
 local guard_address = ARGV[1]
-local guard_value = ARGV[2]
-local length = ARGV[3]
+local guard_word    = ARGV[2]
+local length        = ARGV[3]
+local current_word  = redis.call('GET',guard_address)
 
-local value = redis.call('GET',ARGV[1])
-
--- compare the value of the guard to the currently stored value
-if ((value == false) or (guard_value == value)) then
-    -- guard passed, loop over bindings and insert them
+-- If no word is found, nil is converted to 'false'.
+if guard_word == tostring(current_word) then
     for i = 4,(length*2)+3,2
     do
         redis.call('SET', ARGV[i], ARGV[i+1])
     end
 end
-return value
+return current_word
 ";
 
 #[derive(Debug, PartialEq)]
@@ -50,7 +48,7 @@ impl From<redis::RedisError> for RedisMemoryError {
 pub struct RedisMemory<Address, Word> {
     manager: ConnectionManager,
     script_hash: String,
-    _marker: PhantomData<(Address, Word)>, // to ensure type checking despite that Address & Word are intentionally unused in fields
+    _marker: PhantomData<(Address, Word)>,
 }
 
 impl<Address, Word> fmt::Debug for RedisMemory<Address, Word> {
