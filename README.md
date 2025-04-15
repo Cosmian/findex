@@ -18,7 +18,5 @@ To launch the benchmarks, run:
 cargo bench --all-features
 ```
 
-Note that benches are quite involving and require *several ours* for a full
-run. Once all benchmarks are run, one can reproduce our figure by replacing the
-data in the `.dat` files in `benches/data/` and compiling the latex script
-`benches/make_figures.tex`.
+Note that benches are quite involving and require *several hours* for a full
+run. Once all benchmarks are run, you will find detailed reports under `target/criterion`.

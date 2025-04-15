@@ -241,7 +241,7 @@ pub fn bench_memory_contention<
 
     // Reference: parallel clients.
     {
-        let mut group = c.benchmark_group(format!("parallel clients ({memory_name}"));
+        let mut group = c.benchmark_group(format!("parallel clients ({memory_name})"));
         for x in make_scale(1, N_CLIENTS, n.min(N_CLIENTS)) {
             let n_clients = x.ceil() as usize;
             let bindings = (0..n_clients)
@@ -276,7 +276,7 @@ pub fn bench_memory_contention<
     {
         // All clients use the same keyword.
         let kw = rng.next_u64().to_be_bytes();
-        let mut group = c.benchmark_group(format!("concurrent clients ({memory_name}"));
+        let mut group = c.benchmark_group(format!("concurrent clients ({memory_name})"));
         for x in make_scale(1, N_CLIENTS, n.min(N_CLIENTS)) {
             let n_clients = x.ceil() as usize;
             let bindings = (0..n_clients)
@@ -346,7 +346,7 @@ pub fn bench_memory_one_to_many<
     ));
 
     {
-        let mut group = c.benchmark_group(format!("one search to many insertions ({memory_name}"));
+        let mut group = c.benchmark_group(format!("one search to many insertions ({memory_name})"));
         for x in make_scale(1, MAX_VAL, n) {
             let n_clients = x.ceil() as usize;
 
@@ -394,7 +394,7 @@ pub fn bench_memory_one_to_many<
 
     {
         let mut group =
-            c.benchmark_group(format!("one insertion to many insertions ({memory_name}"));
+            c.benchmark_group(format!("one insertion to many insertions ({memory_name})"));
         for x in make_scale(1, MAX_VAL, n) {
             let n_clients = x.ceil() as usize;
 

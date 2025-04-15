@@ -74,6 +74,49 @@ impl<const ADDRESS_LENGTH: usize, const WORD_LENGTH: usize>
             _marker: PhantomData,
         })
     }
+
+    // Initialize the table in the database, used only for benching
+    #[cfg(feature = "test-utils")]
+    pub async fn connect_and_init_table(
+        db_url: String,
+        table_name: String,
+    ) -> Result<Self, PostgresMemoryError> {
+        use deadpool_postgres::Config;
+        use tokio_postgres::NoTls;
+
+        let mut pg_config = Config::new();
+        pg_config.url = Some(db_url.to_string());
+        let test_pool = pg_config.builder(NoTls)?.build()?;
+
+        let m = Self::connect_with_pool(test_pool, table_name.to_string()).await?;
+
+        m.initialize_table(db_url.to_string(), table_name, NoTls)
+            .await?;
+        Ok(m)
+    }
+
+    /// Deletes all rows from a given table, used only for benches
+    #[cfg(feature = "test-utils")]
+    pub async fn clear(&self) -> Result<(), PostgresMemoryError> {
+        let conn = self.pool.get().await?;
+        // Drop the existing table
+        conn.execute(&format!("DROP TABLE IF EXISTS {};", self.table_name), &[])
+            .await?;
+
+        // Recreate the table
+        conn.execute(
+            &format!(
+                "CREATE TABLE IF NOT EXISTS {} (
+                    a BYTEA PRIMARY KEY CHECK (octet_length(a) = {}),
+                    w BYTEA NOT NULL CHECK (octet_length(w) = {})
+                );",
+                self.table_name, ADDRESS_LENGTH, WORD_LENGTH
+            ),
+            &[],
+        )
+        .await?;
+        Ok(())
+    }
 }
 
 impl<const ADDRESS_LENGTH: usize, const WORD_LENGTH: usize> MemoryADT
@@ -88,7 +131,7 @@ impl<const ADDRESS_LENGTH: usize, const WORD_LENGTH: usize> MemoryADT
         addresses: Vec<Self::Address>,
     ) -> Result<Vec<Option<Self::Word>>, Self::Error> {
         let client = self.pool.get().await?;
-        // in psql, statements are cached per connection and not per pool
+        // statements are cached per connection and not per pool
         let stmt = client
             .prepare_cached(
                 format!(
@@ -170,7 +213,6 @@ impl<const ADDRESS_LENGTH: usize, const WORD_LENGTH: usize> MemoryADT
             let stmt = client.prepare_cached(g_write_script.as_str()).await?;
 
             let result = async {
-                // Start transaction with SERIALIZABLE isolation
                 let tx = client
                     .build_transaction()
                     .isolation_level(
@@ -225,8 +267,11 @@ mod tests {
 
     use super::*;
     use crate::{
-        ADDRESS_LENGTH, Address, WORD_LENGTH, gen_seed, test_guarded_write_concurrent,
-        test_rw_same_address, test_single_write_and_read, test_wrong_guard,
+        ADDRESS_LENGTH, Address, WORD_LENGTH,
+        test_utils::{
+            gen_seed, test_guarded_write_concurrent, test_rw_same_address,
+            test_single_write_and_read, test_wrong_guard,
+        },
     };
 
     const DB_URL: &str = "postgres://cosmian:cosmian@localhost/cosmian";
@@ -287,7 +332,10 @@ mod tests {
         let client = test_pool.get().await?;
         let returned = client
             .query(
-                "SELECT COUNT(*) FROM information_schema.tables WHERE table_name = 'test_initialization';",
+                &format!(
+                    "SELECT COUNT(*) FROM information_schema.tables WHERE table_name = '{}';",
+                    table_name
+                ),
                 &[],
             )
             .await?;
