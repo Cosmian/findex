@@ -259,7 +259,12 @@ impl<const ADDRESS_LENGTH: usize, const WORD_LENGTH: usize> MemoryADT
         Err(PostgresMemoryError::RetryExhaustedError(MAX_RETRIES))
     }
 }
-
+/// To run the postgresql benchmarks locally, add the following service to your pg_service.conf file (usually under ~/.pg_service.conf):
+/// [cosmian_service]
+/// host=localhost
+/// dbname=cosmian
+/// user=cosmian
+/// password=cosmian
 #[cfg(test)]
 mod tests {
     use deadpool_postgres::Config;

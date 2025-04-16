@@ -41,14 +41,11 @@ fn get_redis_url() -> String {
     }
 }
 
-/// To run the postgresql benchmarks locally, add the following service to your pg_service.conf file (usually under ~/.pg_service.conf):
-/// [cosmian_service]
-/// host=localhost
-/// dbname=cosmian
-/// user=cosmian
-/// password=cosmian
-///
-/// Gets the PostgreSQL URL to use based on the following priority:
+/// Refer to `src/memory/postgresql_store/memory.rs` for local setup instructions
+#[cfg(feature = "postgres-mem")]
+use cosmian_findex::PostgresMemory;
+
+/// Gets the PostgreSQL URL based on the following priority:
 /// 1. If POSTGRES_HOST environment variable is set, use "postgres://cosmian:cosmian@{POSTGRES_HOST}/cosmian"
 /// 2. If no environment variable is set but a PostgreSQL server is reachable at
 ///    localhost (127.0.0.1:5432), use "postgres://cosmian:cosmian@localhost/cosmian"
@@ -71,9 +68,6 @@ fn get_postgresql_url() -> String {
         Err(_) => "postgres://cosmian:cosmian@postgres/cosmian".to_string(),
     }
 }
-
-#[cfg(feature = "postgres-mem")]
-use cosmian_findex::PostgresMemory;
 
 // Number of points in each graph.
 const N_PTS: usize = 9;
@@ -374,89 +368,45 @@ fn bench_one_to_many(c: &mut Criterion) {
     #[cfg(any(feature = "redis-mem", feature = "postgres-mem"))]
     use delayed_memory::*;
 
-    #[cfg(feature = "redis-mem")]
-    bench_memory_one_to_many(
-        "Redis",
-        N_PTS,
-        async || DelayedMemory::new(RedisMemory::connect(&get_redis_url()).await.unwrap(), 1, 1),
-        c,
-        DelayedMemory::<RedisMemory<_, _>>::clear,
-        &mut rng,
-    );
+    let delay_params = vec![(1, 1), (10, 1), (10, 5)]; // tuples of (mean, variance)
 
-    #[cfg(feature = "redis-mem")]
-    bench_memory_one_to_many(
-        "Redis",
-        N_PTS,
-        async || DelayedMemory::new(RedisMemory::connect(&get_redis_url()).await.unwrap(), 10, 1),
-        c,
-        DelayedMemory::<RedisMemory<_, _>>::clear,
-        &mut rng,
-    );
+    for (mean, variance) in &delay_params {
+        #[cfg(feature = "redis-mem")]
+        bench_memory_one_to_many(
+            "Redis",
+            N_PTS,
+            async || {
+                DelayedMemory::new(
+                    RedisMemory::connect(&get_redis_url()).await.unwrap(),
+                    *mean,
+                    *variance,
+                )
+            },
+            c,
+            DelayedMemory::<RedisMemory<_, _>>::clear,
+            &mut rng,
+        );
+    }
 
-    #[cfg(feature = "redis-mem")]
-    bench_memory_one_to_many(
-        "Redis",
-        N_PTS,
-        async || DelayedMemory::new(RedisMemory::connect(&get_redis_url()).await.unwrap(), 10, 5),
-        c,
-        DelayedMemory::<RedisMemory<_, _>>::clear,
-        &mut rng,
-    );
-
-    #[cfg(feature = "postgres-mem")]
-    bench_memory_one_to_many(
-        "Postgres",
-        N_PTS,
-        async || {
-            let m = PostgresMemory::connect_and_init_table(
-                get_postgresql_url(),
-                "bench_memory_contention_m_1_var_1".to_string(),
-            )
-            .await
-            .unwrap();
-            DelayedMemory::new(m, 1, 1)
-        },
-        c,
-        DelayedMemory::<PostgresMemory<_, _>>::clear,
-        &mut rng,
-    );
-
-    #[cfg(feature = "postgres-mem")]
-    bench_memory_one_to_many(
-        "Postgres",
-        N_PTS,
-        async || {
-            let m = PostgresMemory::connect_and_init_table(
-                get_postgresql_url(),
-                "bench_memory_contention_m_10_var_1".to_string(),
-            )
-            .await
-            .unwrap();
-            DelayedMemory::new(m, 10, 1)
-        },
-        c,
-        DelayedMemory::<PostgresMemory<_, _>>::clear,
-        &mut rng,
-    );
-
-    #[cfg(feature = "postgres-mem")]
-    bench_memory_one_to_many(
-        "Postgres",
-        N_PTS,
-        async || {
-            let m = PostgresMemory::connect_and_init_table(
-                get_postgresql_url(),
-                "bench_memory_contention_m_10_var_5".to_string(),
-            )
-            .await
-            .unwrap();
-            DelayedMemory::new(m, 10, 5)
-        },
-        c,
-        DelayedMemory::<PostgresMemory<_, _>>::clear,
-        &mut rng,
-    );
+    for (mean, variance) in &delay_params {
+        #[cfg(feature = "postgres-mem")]
+        bench_memory_one_to_many(
+            "Postgres",
+            N_PTS,
+            async || {
+                let m = PostgresMemory::connect_and_init_table(
+                    get_postgresql_url(),
+                    format!("bench_memory_one_to_many_m_{}_var_{}", *mean, *variance),
+                )
+                .await
+                .unwrap();
+                DelayedMemory::new(m, *mean, *variance)
+            },
+            c,
+            DelayedMemory::<PostgresMemory<_, _>>::clear,
+            &mut rng,
+        );
+    }
 }
 
 criterion_group!(
