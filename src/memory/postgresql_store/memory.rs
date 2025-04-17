@@ -99,22 +99,10 @@ impl<const ADDRESS_LENGTH: usize, const WORD_LENGTH: usize>
     #[cfg(feature = "test-utils")]
     pub async fn clear(&self) -> Result<(), PostgresMemoryError> {
         let conn = self.pool.get().await?;
-        // Drop the existing table
-        conn.execute(&format!("DROP TABLE IF EXISTS {};", self.table_name), &[])
+
+        conn.execute(&format!("TRUNCATE TABLE {};", self.table_name), &[])
             .await?;
 
-        // Recreate the table
-        conn.execute(
-            &format!(
-                "CREATE TABLE IF NOT EXISTS {} (
-                    a BYTEA PRIMARY KEY CHECK (octet_length(a) = {}),
-                    w BYTEA NOT NULL CHECK (octet_length(w) = {})
-                );",
-                self.table_name, ADDRESS_LENGTH, WORD_LENGTH
-            ),
-            &[],
-        )
-        .await?;
         Ok(())
     }
 }
