@@ -58,7 +58,7 @@ tokio-postgres = { version = "0.7.9", optional = true, features = [
 
 [dev-dependencies]
 futures = { version = "0.3" }
-tokio = { version = "1.44.0", features = ["macros", "rt-multi-thread"] }
+tokio = { version = "1.44", features = ["macros", "rt-multi-thread"] }
 
 [[bench]]
 name = "benches"
