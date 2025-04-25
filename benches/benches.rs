@@ -19,56 +19,51 @@ const SQLITE_PATH: &str = "./target/benches.sqlite";
 
 #[cfg(feature = "redis-mem")]
 use cosmian_findex::RedisMemory;
-/// Gets the Redis URL to use based on the following priority:
-/// 1. If REDIS_HOST environment variable is set, use "redis://{REDIS_HOST}:6379"
-/// 2. If no environment variable is set but a Redis server is reachable at
-///    localhost (127.0.0.1:6379), use "redis://127.0.0.1:6379"
-/// 3. If neither of the above conditions are met, fall back to the default
-///    dockered Redis service at "redis://redis:6379"
+
 #[cfg(feature = "redis-mem")]
 fn get_redis_url() -> String {
-    if let Ok(host) = std::env::var("REDIS_HOST") {
-        return format!("redis://{}:6379", host);
-    }
-
-    use std::{net::TcpStream, time::Duration};
-    match TcpStream::connect_timeout(
-        &"127.0.0.1:6379".parse().unwrap(),
-        Duration::from_millis(20),
-    ) {
-        Ok(_) => "redis://127.0.0.1:6379".to_string(),
-        Err(_) => "redis://redis:6379".to_string(),
-    }
+    std::env::var("REDIS_HOST").map_or_else(
+        |_| "redis://localhost:6379".to_owned(),
+        |var_env| format!("redis://{var_env}:6379"),
+    )
 }
 
 /// Refer to `src/memory/postgresql_store/memory.rs` for local setup instructions
 #[cfg(feature = "postgres-mem")]
-use cosmian_findex::PostgresMemory;
+use cosmian_findex::{PostgresMemory, PostgresMemoryError};
 
-/// Gets the PostgreSQL URL based on the following priority:
-/// 1. If POSTGRES_HOST environment variable is set, use "postgres://cosmian:cosmian@{POSTGRES_HOST}/cosmian"
-/// 2. If no environment variable is set but a PostgreSQL server is reachable at
-///    localhost (127.0.0.1:5432), use "postgres://cosmian:cosmian@localhost/cosmian"
-/// 3. If neither of the above conditions are met, fall back to the default
-///    dockered PostgreSQL service at "postgres://cosmian:cosmian@postgres/cosmian"
 #[cfg(feature = "postgres-mem")]
 fn get_postgresql_url() -> String {
-    // First check for POSTGRES_HOST environment variable
-    if let Ok(host) = std::env::var("POSTGRES_HOST") {
-        return format!("postgres://cosmian:cosmian@{}/cosmian", host);
-    }
-
-    // Try local connection, then fallback to docker service
-    use std::{net::TcpStream, time::Duration};
-    match TcpStream::connect_timeout(
-        &"127.0.0.1:5432".parse().unwrap(),
-        Duration::from_millis(20),
-    ) {
-        Ok(_) => "postgres://cosmian:cosmian@localhost/cosmian".to_string(),
-        Err(_) => "postgres://cosmian:cosmian@postgres/cosmian".to_string(),
-    }
+    std::env::var("POSTGRES_HOST").map_or_else(
+        |_| "postgres://cosmian:cosmian@localhost/cosmian".to_string(),
+        |var_env| format!("postgres://cosmian:cosmian@{var_env}/cosmian"),
+    )
 }
 
+use cosmian_findex::{ADDRESS_LENGTH, Address, WORD_LENGTH};
+// Utility function used to initialize the PostgresMemory table
+#[cfg(feature = "postgres-mem")]
+async fn connect_and_init_table(
+    db_url: String,
+    table_name: String,
+) -> Result<PostgresMemory<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>, PostgresMemoryError> {
+    use deadpool_postgres::Config;
+    use tokio_postgres::NoTls;
+
+    let mut pg_config = Config::new();
+    pg_config.url = Some(db_url.to_string());
+    let test_pool = pg_config.builder(NoTls)?.build()?;
+
+    let m = PostgresMemory::<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>::connect_with_pool(
+        test_pool,
+        table_name.to_string(),
+    )
+    .await?;
+
+    m.initialize_table(db_url.to_string(), table_name, NoTls)
+        .await?;
+    Ok(m)
+}
 // Number of points in each graph.
 const N_PTS: usize = 9;
 
@@ -107,7 +102,7 @@ fn bench_search_multiple_bindings(c: &mut Criterion) {
         "Postgres",
         N_PTS,
         async || {
-            PostgresMemory::connect_and_init_table(
+            connect_and_init_table(
                 get_postgresql_url(),
                 "bench_memory_search_multiple_bindings".to_string(),
             )
@@ -154,7 +149,7 @@ fn bench_search_multiple_keywords(c: &mut Criterion) {
         "Postgres",
         N_PTS,
         async || {
-            PostgresMemory::connect_and_init_table(
+            connect_and_init_table(
                 get_postgresql_url(),
                 "bench_memory_search_multiple_keywords".to_string(),
             )
@@ -207,7 +202,7 @@ fn bench_insert_multiple_bindings(c: &mut Criterion) {
         "Postgres",
         N_PTS,
         async || {
-            PostgresMemory::connect_and_init_table(
+            connect_and_init_table(
                 get_postgresql_url(),
                 "bench_memory_insert_multiple_bindings".to_string(),
             )
@@ -263,12 +258,9 @@ fn bench_contention(c: &mut Criterion) {
         "Postgres",
         N_PTS,
         async || {
-            PostgresMemory::connect_and_init_table(
-                get_postgresql_url(),
-                "bench_memory_contention".to_string(),
-            )
-            .await
-            .unwrap()
+            connect_and_init_table(get_postgresql_url(), "bench_memory_contention".to_string())
+                .await
+                .unwrap()
         },
         c,
         async |m: &PostgresMemory<_, _>| -> Result<(), String> {
@@ -370,8 +362,8 @@ fn bench_one_to_many(c: &mut Criterion) {
 
     let delay_params = vec![(1, 1), (10, 1), (10, 5)]; // tuples of (mean, variance)
 
+    #[cfg(feature = "redis-mem")]
     for (mean, variance) in &delay_params {
-        #[cfg(feature = "redis-mem")]
         bench_memory_one_to_many(
             "Redis",
             N_PTS,
@@ -388,13 +380,13 @@ fn bench_one_to_many(c: &mut Criterion) {
         );
     }
 
+    #[cfg(feature = "postgres-mem")]
     for (mean, variance) in &delay_params {
-        #[cfg(feature = "postgres-mem")]
         bench_memory_one_to_many(
             "Postgres",
             N_PTS,
             async || {
-                let m = PostgresMemory::connect_and_init_table(
+                let m = connect_and_init_table(
                     get_postgresql_url(),
                     format!("bench_memory_one_to_many_m_{}_var_{}", *mean, *variance),
                 )

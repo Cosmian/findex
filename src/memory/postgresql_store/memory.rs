@@ -75,34 +75,14 @@ impl<const ADDRESS_LENGTH: usize, const WORD_LENGTH: usize>
         })
     }
 
-    // Initialize the table in the database, used only for benching
-    #[cfg(feature = "test-utils")]
-    pub async fn connect_and_init_table(
-        db_url: String,
-        table_name: String,
-    ) -> Result<Self, PostgresMemoryError> {
-        use deadpool_postgres::Config;
-        use tokio_postgres::NoTls;
-
-        let mut pg_config = Config::new();
-        pg_config.url = Some(db_url.to_string());
-        let test_pool = pg_config.builder(NoTls)?.build()?;
-
-        let m = Self::connect_with_pool(test_pool, table_name.to_string()).await?;
-
-        m.initialize_table(db_url.to_string(), table_name, NoTls)
-            .await?;
-        Ok(m)
-    }
-
-    /// Deletes all rows from a given table, used only for benches
+    /// Deletes all rows from the findex memory table
     #[cfg(feature = "test-utils")]
     pub async fn clear(&self) -> Result<(), PostgresMemoryError> {
-        let conn = self.pool.get().await?;
-
-        conn.execute(&format!("TRUNCATE TABLE {};", self.table_name), &[])
+        self.pool
+            .get()
+            .await?
+            .execute(&format!("TRUNCATE TABLE {};", self.table_name), &[])
             .await?;
-
         Ok(())
     }
 }
@@ -247,14 +227,16 @@ impl<const ADDRESS_LENGTH: usize, const WORD_LENGTH: usize> MemoryADT
         Err(PostgresMemoryError::RetryExhaustedError(MAX_RETRIES))
     }
 }
-/// To run the postgresql benchmarks locally, add the following service to your pg_service.conf file (usually under ~/.pg_service.conf):
-/// [cosmian_service]
-/// host=localhost
-/// dbname=cosmian
-/// user=cosmian
-/// password=cosmian
 #[cfg(test)]
 mod tests {
+    //! To run the postgresql benchmarks locally, add the following service to your pg_service.conf file
+    //! (usually under ~/.pg_service.conf):
+    //!
+    //! [cosmian_service]
+    //! host=localhost
+    //! dbname=cosmian
+    //! user=cosmian
+    //! password=cosmian
     use deadpool_postgres::Config;
     use tokio_postgres::NoTls;
 
