@@ -410,7 +410,6 @@ criterion_group!(
     bench_search_multiple_keywords,
     bench_insert_multiple_bindings,
     bench_contention,
-    bench_one_to_many,
 );
 
 criterion_main!(benches);
