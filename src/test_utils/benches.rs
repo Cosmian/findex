@@ -225,11 +225,7 @@ pub fn bench_memory_contention<
     // Redis memory backend requires a tokio runtime, and all operations to
     // happen in the same runtime, otherwise the connection returns a broken
     // pipe error.
-    let rt = Builder::new_multi_thread()
-        .worker_threads(8)
-        .enable_all()
-        .build()
-        .unwrap();
+    let rt = Builder::new_multi_thread().enable_all().build().unwrap();
 
     let m = rt.block_on(m());
 
@@ -241,7 +237,7 @@ pub fn bench_memory_contention<
 
     // Reference: parallel clients.
     {
-        let mut group = c.benchmark_group(format!("parallel clients ({memory_name}"));
+        let mut group = c.benchmark_group(format!("parallel clients ({memory_name})"));
         for x in make_scale(1, N_CLIENTS, n.min(N_CLIENTS)) {
             let n_clients = x.ceil() as usize;
             let bindings = (0..n_clients)
@@ -276,7 +272,7 @@ pub fn bench_memory_contention<
     {
         // All clients use the same keyword.
         let kw = rng.next_u64().to_be_bytes();
-        let mut group = c.benchmark_group(format!("concurrent clients ({memory_name}"));
+        let mut group = c.benchmark_group(format!("concurrent clients ({memory_name})"));
         for x in make_scale(1, N_CLIENTS, n.min(N_CLIENTS)) {
             let n_clients = x.ceil() as usize;
             let bindings = (0..n_clients)
@@ -328,14 +324,12 @@ pub fn bench_memory_one_to_many<
     clear: impl AsyncFn(&Memory) -> Result<(), E>,
     rng: &mut impl CryptoRngCore,
 ) {
+    const MAX_VAL: usize = 100;
+
     // Redis memory backend requires a tokio runtime, and all operations to
     // happen in the same runtime, otherwise the connection returns a broken
     // pipe error.
-    let rt = Builder::new_multi_thread()
-        .worker_threads(8)
-        .enable_all()
-        .build()
-        .unwrap();
+    let rt = Builder::new_multi_thread().enable_all().build().unwrap();
 
     let m = rt.block_on(m());
 
@@ -346,7 +340,7 @@ pub fn bench_memory_one_to_many<
     ));
 
     {
-        let mut group = c.benchmark_group(format!("one search to many insertions ({memory_name}"));
+        let mut group = c.benchmark_group(format!("one search to many insertions ({memory_name})"));
         for x in make_scale(1, MAX_VAL, n) {
             let n_clients = x.ceil() as usize;
 
@@ -394,7 +388,7 @@ pub fn bench_memory_one_to_many<
 
     {
         let mut group =
-            c.benchmark_group(format!("one insertion to many insertions ({memory_name}"));
+            c.benchmark_group(format!("one insertion to many insertions ({memory_name})"));
         for x in make_scale(1, MAX_VAL, n) {
             let n_clients = x.ceil() as usize;
 

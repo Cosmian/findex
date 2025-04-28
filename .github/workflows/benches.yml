@@ -1,5 +1,6 @@
 ---
 name: Benches
+run-name: Benchmark on ${{ github.ref_name }} - ${{ github.sha }}
 
 on: workflow_dispatch
 
@@ -8,5 +9,5 @@ jobs:
     uses: Cosmian/reusable_workflows/.github/workflows/cargo-bench.yml@develop
     with:
       toolchain: stable
-      features: test-utils,redis-mem,sqlite-mem,rust-mem
+      features: test-utils,redis-mem,sqlite-mem,rust-mem,postgres-mem
       force: true

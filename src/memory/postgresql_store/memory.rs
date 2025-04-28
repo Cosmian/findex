@@ -74,6 +74,17 @@ impl<const ADDRESS_LENGTH: usize, const WORD_LENGTH: usize>
             _marker: PhantomData,
         })
     }
+
+    /// Deletes all rows from the findex memory table
+    #[cfg(feature = "test-utils")]
+    pub async fn clear(&self) -> Result<(), PostgresMemoryError> {
+        self.pool
+            .get()
+            .await?
+            .execute(&format!("TRUNCATE TABLE {};", self.table_name), &[])
+            .await?;
+        Ok(())
+    }
 }
 
 impl<const ADDRESS_LENGTH: usize, const WORD_LENGTH: usize> MemoryADT
@@ -88,7 +99,7 @@ impl<const ADDRESS_LENGTH: usize, const WORD_LENGTH: usize> MemoryADT
         addresses: Vec<Self::Address>,
     ) -> Result<Vec<Option<Self::Word>>, Self::Error> {
         let client = self.pool.get().await?;
-        // in psql, statements are cached per connection and not per pool
+        // statements are cached per connection and not per pool
         let stmt = client
             .prepare_cached(
                 format!(
@@ -170,7 +181,6 @@ impl<const ADDRESS_LENGTH: usize, const WORD_LENGTH: usize> MemoryADT
             let stmt = client.prepare_cached(g_write_script.as_str()).await?;
 
             let result = async {
-                // Start transaction with SERIALIZABLE isolation
                 let tx = client
                     .build_transaction()
                     .isolation_level(
@@ -217,16 +227,26 @@ impl<const ADDRESS_LENGTH: usize, const WORD_LENGTH: usize> MemoryADT
         Err(PostgresMemoryError::RetryExhaustedError(MAX_RETRIES))
     }
 }
-
 #[cfg(test)]
 mod tests {
+    //! To run the postgresql benchmarks locally, add the following service to your pg_service.conf file
+    //! (usually under ~/.pg_service.conf):
+    //!
+    //! [cosmian_service]
+    //! host=localhost
+    //! dbname=cosmian
+    //! user=cosmian
+    //! password=cosmian
     use deadpool_postgres::Config;
     use tokio_postgres::NoTls;
 
     use super::*;
     use crate::{
-        ADDRESS_LENGTH, Address, WORD_LENGTH, gen_seed, test_guarded_write_concurrent,
-        test_rw_same_address, test_single_write_and_read, test_wrong_guard,
+        ADDRESS_LENGTH, Address, WORD_LENGTH,
+        test_utils::{
+            gen_seed, test_guarded_write_concurrent, test_rw_same_address,
+            test_single_write_and_read, test_wrong_guard,
+        },
     };
 
     const DB_URL: &str = "postgres://cosmian:cosmian@localhost/cosmian";
@@ -287,7 +307,10 @@ mod tests {
         let client = test_pool.get().await?;
         let returned = client
             .query(
-                "SELECT COUNT(*) FROM information_schema.tables WHERE table_name = 'test_initialization';",
+                &format!(
+                    "SELECT COUNT(*) FROM information_schema.tables WHERE table_name = '{}';",
+                    table_name
+                ),
                 &[],
             )
             .await?;

@@ -1,11 +1,10 @@
-use std::{fmt::Debug, ops::Deref, sync::Arc};
-
 use crate::{ADDRESS_LENGTH, MemoryADT, address::Address};
 use aes::{
     Aes256,
     cipher::{BlockEncrypt, KeyInit, generic_array::GenericArray},
 };
 use cosmian_crypto_core::{Secret, SymmetricKey};
+use std::{fmt::Debug, ops::Deref, sync::Arc};
 use xts_mode::Xts128;
 
 /// Using 32-byte cryptographic keys allows achieving post-quantum resistance
