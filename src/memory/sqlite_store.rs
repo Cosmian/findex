@@ -10,7 +10,7 @@ use std::{
     ops::Deref,
 };
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum SqliteMemoryError {
     AsyncSqliteError(async_sqlite::Error),
 }

@@ -23,7 +23,7 @@ end
 return current_word
 ";
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum RedisMemoryError {
     RedisError(redis::RedisError),
 }
