@@ -1,9 +1,11 @@
-//! We define here the main Abstract Data Types (ADTs) used in this crate, namely:
+//! We define here the main Abstract Data Types (ADTs) used in this crate,
+//! namely:
 //! - the index ADT;
 //! - the vector ADT;
 //! - the memory ADT.
 //!
-//! Each of them strive for simplicity and consistency with the classical CS notions.
+//! Each of them strive for simplicity and consistency with the classical CS
+//! notions.
 
 use std::{collections::HashSet, future::Future, hash::Hash};
 
@@ -82,13 +84,15 @@ pub mod tests {
     pub use vector::*;
 
     mod vector {
-        //! This module defines tests any implementation of the VectorADT interface must pass.
+        //! This module defines tests any implementation of the VectorADT
+        //! interface must pass.
 
-        use crate::adt::VectorADT;
         use futures::{executor::block_on, future::join_all};
 
-        /// Adding information from different copies of the same vector should be visible by all
-        /// copies.
+        use crate::adt::VectorADT;
+
+        /// Adding information from different copies of the same vector should
+        /// be visible by all copies.
         pub async fn test_vector_sequential<const LENGTH: usize>(
             v: &(impl Clone + VectorADT<Value = [u8; LENGTH]>),
         ) {
@@ -105,7 +109,8 @@ pub mod tests {
             );
         }
 
-        /// Concurrently adding data to instances of the same vector should not introduce data loss.
+        /// Concurrently adding data to instances of the same vector should not
+        /// introduce data loss.
         pub async fn test_vector_concurrent<
             const LENGTH: usize,
             V: 'static + Clone + VectorADT<Value = [u8; LENGTH]>,
