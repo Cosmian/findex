@@ -1,4 +1,4 @@
-use crate::{ADDRESS_LENGTH, MemoryADT, address::Address};
+
 use aes::{
     Aes256,
     cipher::{BlockEncrypt, KeyInit, generic_array::GenericArray},
@@ -6,6 +6,8 @@ use aes::{
 use cosmian_crypto_core::{Secret, SymmetricKey};
 use std::{fmt::Debug, ops::Deref, sync::Arc};
 use xts_mode::Xts128;
+
+use crate::{ADDRESS_LENGTH, MemoryADT, address::Address};
 
 /// Using 32-byte cryptographic keys allows achieving post-quantum resistance
 /// with the AES primitive.
@@ -90,10 +92,8 @@ impl<
 > MemoryADT for MemoryEncryptionLayer<WORD_LENGTH, Memory>
 {
     type Address = Address<ADDRESS_LENGTH>;
-
-    type Word = [u8; WORD_LENGTH];
-
     type Error = Memory::Error;
+    type Word = [u8; WORD_LENGTH];
 
     async fn batch_read(
         &self,

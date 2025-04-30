@@ -47,10 +47,8 @@ impl<Address: Send + Sync + Hash + Eq + Debug, Value: Send + Sync + Clone + Eq +
     for InMemory<Address, Value>
 {
     type Address = Address;
-
-    type Word = Value;
-
     type Error = MemoryError;
+    type Word = Value;
 
     async fn batch_read(&self, addresses: Vec<Address>) -> Result<Vec<Option<Value>>, Self::Error> {
         let store = self.inner.lock().expect("poisoned lock");
@@ -77,9 +75,8 @@ impl<Address: Send + Sync + Hash + Eq + Debug, Value: Send + Sync + Clone + Eq +
 impl<Address: Hash + Eq + Debug + Clone, Value: Clone + Eq + Debug> IntoIterator
     for InMemory<Address, Value>
 {
-    type Item = (Address, Value);
-
     type IntoIter = <HashMap<Address, Value> as IntoIterator>::IntoIter;
+    type Item = (Address, Value);
 
     fn into_iter(self) -> Self::IntoIter {
         self.inner
