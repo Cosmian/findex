@@ -1,8 +1,6 @@
-use std::{fmt, marker::PhantomData};
-
-use redis::aio::ConnectionManager;
-
 use crate::{Address, MemoryADT};
+use redis::aio::ConnectionManager;
+use std::{fmt, marker::PhantomData};
 
 // Arguments passed to the LUA script, in order:
 // 1. Guard address.
@@ -99,8 +97,8 @@ impl<const ADDRESS_LENGTH: usize, const WORD_LENGTH: usize> MemoryADT
     for RedisMemory<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>
 {
     type Address = Address<ADDRESS_LENGTH>;
-    type Error = RedisMemoryError;
     type Word = [u8; WORD_LENGTH];
+    type Error = RedisMemoryError;
 
     async fn batch_read(
         &self,

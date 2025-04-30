@@ -84,11 +84,9 @@ impl<
         a
     }
 
-    /// Pushes the given bindings to the vectors associated to the bound
-    /// keyword.
+    /// Pushes the given bindings to the vectors associated to the bound keyword.
     ///
-    /// All vector push operations are performed in parallel (via async calls),
-    /// not batched.
+    /// All vector push operations are performed in parallel (via async calls), not batched.
     async fn push<Keyword: Send + Sync + Hash + Eq>(
         &self,
         op: Op,
@@ -138,15 +136,13 @@ impl<
 
 #[cfg(test)]
 mod tests {
-    use std::collections::HashSet;
-
-    use cosmian_crypto_core::{CsRng, Secret, define_byte_type, reexport::rand_core::SeedableRng};
-    use futures::executor::block_on;
-
     use crate::{
         ADDRESS_LENGTH, Findex, InMemory, IndexADT, address::Address, dummy_decode, dummy_encode,
         memory::MemoryEncryptionLayer,
     };
+    use cosmian_crypto_core::{CsRng, Secret, define_byte_type, reexport::rand_core::SeedableRng};
+    use futures::executor::block_on;
+    use std::collections::HashSet;
 
     #[test]
     fn test_insert_search_delete_search() {
@@ -158,7 +154,6 @@ mod tests {
 
         impl<const LENGTH: usize> TryFrom<usize> for Bytes<LENGTH> {
             type Error = String;
-
             fn try_from(value: usize) -> Result<Self, Self::Error> {
                 Self::try_from(value.to_be_bytes().as_slice()).map_err(|e| e.to_string())
             }

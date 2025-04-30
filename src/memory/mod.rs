@@ -14,7 +14,7 @@ pub use redis_store::{RedisMemory, RedisMemoryError};
 #[cfg(feature = "sqlite-mem")]
 mod sqlite_store;
 #[cfg(feature = "sqlite-mem")]
-pub use sqlite_store::{FINDEX_TABLE_NAME, SqliteMemory, SqliteMemoryError};
+pub use sqlite_store::{SqliteMemory, SqliteMemoryError};
 
 #[cfg(feature = "postgres-mem")]
 mod postgresql_store;

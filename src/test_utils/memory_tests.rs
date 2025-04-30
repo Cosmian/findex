@@ -8,14 +8,12 @@
 //!
 //! Both addresses and words are 16-byte long.
 
-use std::fmt::Debug;
-
+use crate::{ADDRESS_LENGTH, MemoryADT};
 use cosmian_crypto_core::{
     CsRng,
     reexport::rand_core::{RngCore, SeedableRng},
 };
-
-use crate::{ADDRESS_LENGTH, MemoryADT};
+use std::fmt::Debug;
 
 pub const SEED_LENGTH: usize = 32;
 
@@ -148,10 +146,8 @@ pub async fn test_wrong_guard<const WORD_LENGTH: usize, Memory>(
 
 /// Tests operations on repeated addresses in memory implementations.
 ///
-/// This test verifies the behavior when the same address is used multiple
-/// times:
-/// 1. Writes a value to an address and then confirms it can be read back
-///    multiple times consistently
+/// This test verifies the behavior when the same address is used multiple times:
+/// 1. Writes a value to an address and then confirms it can be read back multiple times consistently
 /// 2. Performs multiple writes to the same address with a correct guard
 /// 3. Verifies that one of the written values is properly stored
 pub async fn test_rw_same_address<const WORD_LENGTH: usize, Memory>(
@@ -189,8 +185,7 @@ pub async fn test_rw_same_address<const WORD_LENGTH: usize, Memory>(
         seed
     );
 
-    // try to write multiple values to the same address with a guard that should
-    // pass
+    // try to write multiple values to the same address with a guard that should pass
     let values = (0..REPETITION)
         .map(|_| Memory::Word::from(gen_bytes(&mut rng)))
         .collect::<Vec<_>>();
@@ -311,7 +306,7 @@ pub async fn test_guarded_write_concurrent<const WORD_LENGTH: usize, Memory>(
         word_to_array(final_count.clone().into()).unwrap(),
         (n * M) as u128,
         "test_guarded_write_concurrent failed. Expected the counter to be at {:?}, found \
-         {:?}.\nDebug seed : {:?}.",
+             {:?}.\nDebug seed : {:?}.",
         (n * M) as u128,
         word_to_array(final_count.into()).unwrap(),
         seed

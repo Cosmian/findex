@@ -47,8 +47,10 @@ impl<Address: Send + Sync + Hash + Eq + Debug, Value: Send + Sync + Clone + Eq +
     for InMemory<Address, Value>
 {
     type Address = Address;
-    type Error = MemoryError;
+
     type Word = Value;
+
+    type Error = MemoryError;
 
     async fn batch_read(&self, addresses: Vec<Address>) -> Result<Vec<Option<Value>>, Self::Error> {
         let store = self.inner.lock().expect("poisoned lock");
@@ -75,8 +77,9 @@ impl<Address: Send + Sync + Hash + Eq + Debug, Value: Send + Sync + Clone + Eq +
 impl<Address: Hash + Eq + Debug + Clone, Value: Clone + Eq + Debug> IntoIterator
     for InMemory<Address, Value>
 {
-    type IntoIter = <HashMap<Address, Value> as IntoIterator>::IntoIter;
     type Item = (Address, Value);
+
+    type IntoIter = <HashMap<Address, Value> as IntoIterator>::IntoIter;
 
     fn into_iter(self) -> Self::IntoIter {
         self.inner
@@ -90,11 +93,12 @@ impl<Address: Hash + Eq + Debug + Clone, Value: Clone + Eq + Debug> IntoIterator
 #[cfg(test)]
 mod tests {
 
-    use super::InMemory;
     use crate::{
         test_utils::gen_seed,
         test_utils::{test_guarded_write_concurrent, test_single_write_and_read, test_wrong_guard},
     };
+
+    use super::InMemory;
 
     #[tokio::test]
     async fn test_sequential_read_write() {

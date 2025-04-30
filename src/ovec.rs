@@ -1,13 +1,11 @@
-//! This module implements a simple vector, defined as a data-structure that
-//! preserves the following invariant:
+//! This module implements a simple vector, defined as a data-structure that preserves the
+//! following invariant:
 //!
-//! `I_v`: the value of the counter stored at the vector address is equal to the
-//! number of values stored in this vector; these values are of homogeneous type
-//! and stored in contiguous memory words.
+//! `I_v`: the value of the counter stored at the vector address is equal to the number of values
+//! stored in this vector; these values are of homogeneous type and stored in contiguous memory words.
 //!
-//! This implementation is based on the assumption that an infinite array
-//! starting at the vector's address has been allocated, and thus stores values
-//! after the header:
+//! This implementation is based on the assumption that an infinite array starting at the vector's
+//! address has been allocated, and thus stores values after the header:
 //!
 //! ```txt
 //! +------------+-----+-----+-----+
@@ -94,8 +92,8 @@ impl<
     Memory: Clone + MemoryADT<Address = Address, Word = [u8; WORD_LENGTH]>,
 > IVec<WORD_LENGTH, Memory>
 {
-    /// (Lazily) instantiates a new vector at this address in this memory: no
-    /// value is written before the first push.
+    /// (Lazily) instantiates a new vector at this address in this memory: no value is written
+    /// before the first push.
     pub const fn new(a: Address, m: Memory) -> Self {
         Self { a, m }
     }
@@ -109,16 +107,17 @@ impl<
 where
     Memory::Error: Send + Sync,
 {
-    type Error = Error<Memory::Address>;
     type Value = Memory::Word;
 
+    type Error = Error<Memory::Address>;
+
     async fn push(&mut self, values: Vec<Self::Value>) -> Result<(), Self::Error> {
-        // Findex modifications are only lock-free, hence it does not guarantee a given
-        // client will ever terminate.
+        // Findex modifications are only lock-free, hence it does not guarantee a given client will
+        // ever terminate.
         //
-        // TODO: this loop will arguably terminate if the index is not highly contended,
-        // but we need a stronger guarantee. Maybe a return with an error after
-        // reaching a certain number of retries.
+        // TODO: this loop will arguably terminate if the index is not highly contended, but we
+        // need a stronger guarantee. Maybe a return with an error after reaching a certain
+        // number of retries.
         let mut old = Option::<Header>::None;
         loop {
             // Generates a new header with incremented counter.
