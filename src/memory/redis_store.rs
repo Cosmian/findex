@@ -25,7 +25,7 @@ end
 return value
 ";
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq)]
 pub enum RedisMemoryError {
     RedisError(redis::RedisError),
 }
