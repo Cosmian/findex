@@ -22,43 +22,27 @@ pub use encoding::{
     generic_encoding::{generic_decode, generic_encode},
 };
 pub use error::Error;
-<<<<<<< HEAD
 pub use findex::{Findex, Op};
 pub use memory::{KEY_LENGTH, MemoryEncryptionLayer};
 
 #[cfg(any(test, feature = "test-utils"))]
 pub use test_utils::*;
 
-=======
-pub use findex::Findex;
-pub use findex::Op;
-pub use memory::{KEY_LENGTH, MemoryEncryptionLayer};
-
->>>>>>> 0d0408f (Revert "what: a formatting commit")
 #[cfg(feature = "redis-mem")]
 pub use memory::{RedisMemory, RedisMemoryError};
 
 #[cfg(feature = "sqlite-mem")]
-<<<<<<< HEAD
 pub use memory::{FINDEX_TABLE_NAME, SqliteMemory, SqliteMemoryError};
 
 #[cfg(feature = "postgres-mem")]
 pub use memory::{PostgresMemory, PostgresMemoryError};
-=======
 pub use memory::{SqliteMemory, SqliteMemoryError};
->>>>>>> 0d0408f (Revert "what: a formatting commit")
 
 #[cfg(any(test, feature = "test-utils"))]
 pub use encoding::{
     dummy_encoding::{WORD_LENGTH, dummy_decode, dummy_encode},
     tests::test_encoding,
 };
-<<<<<<< HEAD
-=======
-
-#[cfg(any(test, feature = "test-utils"))]
-pub use memory::InMemory;
->>>>>>> 0d0408f (Revert "what: a formatting commit")
 
 /// 16-byte addresses ensure a high collision resistance that poses virtually no
 /// limitation on the index.
