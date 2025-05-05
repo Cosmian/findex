@@ -30,7 +30,7 @@ pub use memory::{KEY_LENGTH, MemoryEncryptionLayer};
 pub use memory::{RedisMemory, RedisMemoryError};
 
 #[cfg(feature = "sqlite-mem")]
-pub use memory::{SqliteMemory, SqliteMemoryError};
+pub use memory::{FINDEX_TABLE_NAME, SqliteMemory, SqliteMemoryError};
 
 #[cfg(any(test, feature = "test-utils"))]
 pub use encoding::{
