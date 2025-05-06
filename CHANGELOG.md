@@ -2,6 +2,30 @@
 
 All notable changes to this project will be documented in this file.
 
+## [7.1.0] - 2025-05-06
+
+### 🚀 Features
+
+- Extract memory encryption: pass an encrypted memory to Findex::new ([#110](https://github.com/Cosmian/findex/pull/110))
+- Use `tostring` to easy guard condition ([#134](https://github.com/Cosmian/findex/pull/134))
+- Add Redis Persistent Cache ([#132](https://github.com/Cosmian/findex/pull/132))
+- Re-use secrets, symmetric key, values, and CsRng from CryptoCore ([#130](https://github.com/Cosmian/findex/pull/130))
+- Support PostgreSQL ([#126](https://github.com/Cosmian/findex/pull/126))
+- Support SQLite3 ([#125](https://github.com/Cosmian/findex/pull/125))
+
+### 🧪 Testing
+
+- Add a test to detect concurrency errors originating from different memory interfaces using the same DB ([#133](https://github.com/Cosmian/findex/pull/133))
+- Test/isolate interface test  ([#129](https://github.com/Cosmian/findex/pull/129))
+- Test/collisions ([#128](https://github.com/Cosmian/findex/pull/128))
+
+### ⚙️ Miscellaneous Tasks
+
+- Benches:
+  - Write generic benches ([#136](https://github.com/Cosmian/findex/pull/136) and [#131](https://github.com/Cosmian/findex/pull/131))
+  - Add PostgreSQL benches ([#135](https://github.com/Cosmian/findex/pull/135))
+  - Use cargo-bench with Redis container
+
 ## [7.0.0] - 2025-02-03
 
 ### 🚀 Features
