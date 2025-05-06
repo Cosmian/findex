@@ -111,7 +111,7 @@ where
 
     type Error = Error<Memory::Address>;
 
-    async fn push(&mut self, vs: Vec<Self::Value>) -> Result<(), Self::Error> {
+    async fn push(&mut self, values: Vec<Self::Value>) -> Result<(), Self::Error> {
         // Findex modifications are only lock-free, hence it does not guarantee a given client will
         // ever terminate.
         //
@@ -122,11 +122,11 @@ where
         loop {
             // Generates a new header with incremented counter.
             let mut new = old.clone().unwrap_or_default();
-            new.cnt += vs.len() as u64;
+            new.cnt += values.len() as u64;
 
             // Binds the correct addresses to the values.
-            let mut bindings = (new.cnt - vs.len() as u64..new.cnt)
-                .zip(vs.clone())
+            let mut bindings = (new.cnt - values.len() as u64..new.cnt)
+                .zip(values.clone())
                 .map(|(i, v)| (self.a.clone() + 1 + i, v)) // a is the header address
                 .collect::<Vec<_>>();
             bindings.push((
@@ -177,7 +177,9 @@ where
             .map_err(|e| Error::Memory(e.to_string()))?;
 
         let second_batch = {
-            let cur_header = first_batch[0]
+            let cur_header = first_batch
+                .first()
+                .ok_or_else(|| Error::MissingValue(self.a.clone(), 0))?
                 .map(|v| Header::try_from(v.as_slice()))
                 .transpose()
                 .map_err(Error::Conversion)?
@@ -209,8 +211,7 @@ where
 
 #[cfg(test)]
 mod tests {
-    use rand_chacha::ChaChaRng;
-    use rand_core::SeedableRng;
+    use cosmian_crypto_core::{CsRng, Sampling, Secret, reexport::rand_core::SeedableRng};
 
     use crate::{
         ADDRESS_LENGTH, InMemory,
@@ -218,19 +219,18 @@ mod tests {
         adt::tests::{test_vector_concurrent, test_vector_sequential},
         memory::MemoryEncryptionLayer,
         ovec::IVec,
-        secret::Secret,
     };
 
     const WORD_LENGTH: usize = 16;
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 8)]
     async fn test_ovec() {
-        let mut rng = ChaChaRng::from_entropy();
+        let mut rng = CsRng::from_entropy();
         let seed = Secret::random(&mut rng);
         let memory = InMemory::<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>::default();
         let obf = MemoryEncryptionLayer::new(&seed, memory.clone());
         let address = Address::random(&mut rng);
-        let v = IVec::<WORD_LENGTH, _>::new(address.clone(), obf);
+        let v = IVec::<WORD_LENGTH, _>::new(address, obf);
         test_vector_sequential(&v).await;
         memory.clear();
         test_vector_concurrent(&v).await;

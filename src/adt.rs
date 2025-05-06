@@ -7,8 +7,8 @@
 
 use std::{collections::HashSet, future::Future, hash::Hash};
 
-/// An index stores *bindings*, that associate a keyword with a value. All values bound to the same
-/// keyword are said to be *indexed under* this keyword.
+/// An index stores *values*, that associate a keyword with a value. All values
+/// bound to the same keyword are said to be *indexed under* this keyword.
 pub trait IndexADT<Keyword: Send + Sync + Hash, Value: Send + Sync + Hash> {
     type Error: Send + Sync + std::error::Error;
 
@@ -18,18 +18,18 @@ pub trait IndexADT<Keyword: Send + Sync + Hash, Value: Send + Sync + Hash> {
         keyword: &Keyword,
     ) -> impl Future<Output = Result<HashSet<Value>, Self::Error>>;
 
-    /// Adds the given bindings to the index.
+    /// Adds the given values to the index.
     fn insert(
         &self,
-        kw: Keyword,
-        bindings: impl Sync + Send + IntoIterator<Item = Value>,
+        keyword: Keyword,
+        values: impl Sync + Send + IntoIterator<Item = Value>,
     ) -> impl Send + Future<Output = Result<(), Self::Error>>;
 
-    /// Removes the given bindings from the index.
+    /// Removes the given values from the index.
     fn delete(
         &self,
-        kw: Keyword,
-        bindings: impl Sync + Send + IntoIterator<Item = Value>,
+        keyword: Keyword,
+        values: impl Sync + Send + IntoIterator<Item = Value>,
     ) -> impl Send + Future<Output = Result<(), Self::Error>>;
 }
 
@@ -43,7 +43,7 @@ pub trait VectorADT: Send + Sync {
     /// Pushes the given values at the end of this vector.
     fn push(
         &mut self,
-        vs: Vec<Self::Value>,
+        values: Vec<Self::Value>,
     ) -> impl Send + Future<Output = Result<(), Self::Error>>;
 
     /// Reads all values stored in this vector.
@@ -64,15 +64,15 @@ pub trait MemoryADT {
     /// Reads the words from the given addresses.
     fn batch_read(
         &self,
-        a: Vec<Self::Address>,
+        addresses: Vec<Self::Address>,
     ) -> impl Send + Future<Output = Result<Vec<Option<Self::Word>>, Self::Error>>;
 
-    /// Write the given words at the given addresses if the word currently stored at the guard
-    /// address is the given one, and returns this guard word.
+    /// Write the given bindings if the word currently stored at the guard
+    /// address is the guard word, and returns this word.
     fn guarded_write(
         &self,
         guard: (Self::Address, Option<Self::Word>),
-        tasks: Vec<(Self::Address, Self::Word)>,
+        bindings: Vec<(Self::Address, Self::Word)>,
     ) -> impl Send + Future<Output = Result<Option<Self::Word>, Self::Error>>;
 }
 

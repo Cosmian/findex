@@ -7,15 +7,28 @@ jobs:
   hack:
     runs-on: ubuntu-latest
     services:
+      postgres:
+        image: postgres:14
+        env:
+          POSTGRES_USER: cosmian
+          POSTGRES_PASSWORD: cosmian
+          POSTGRES_DB: cosmian
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
       redis:
         image: redis
+        ports:
+          - 6379:6379
         options: >-
           --health-cmd "redis-cli ping"
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
-        ports:
-          - 6379:6379
     steps:
       - name: Check storage
         run: df -h
@@ -27,4 +40,4 @@ jobs:
       - name: Install cargo-hack
         run: cargo install --locked cargo-hack || true
       - name: Test all feature combinations
-        run: cargo hack test --feature-powerset --all-targets --clean-per-run
+        run: cargo hack test --feature-powerset --clean-per-run

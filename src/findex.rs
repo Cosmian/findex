@@ -8,8 +8,11 @@ use std::{
 };
 
 use crate::{
-    ADDRESS_LENGTH, Address, Decoder, Encoder, IndexADT, KEY_LENGTH, MemoryADT, Secret,
-    adt::VectorADT, error::Error, memory::MemoryEncryptionLayer, ovec::IVec,
+    ADDRESS_LENGTH, Address, IndexADT, MemoryADT,
+    adt::VectorADT,
+    encoding::{Decoder, Encoder},
+    error::Error,
+    ovec::IVec,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -18,16 +21,32 @@ pub enum Op {
     Delete,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct Findex<
     const WORD_LENGTH: usize,
     Value: Send + Sync + Hash + Eq,
     EncodingError: Send + Sync + Debug,
-    Memory: Send + Sync + Clone + MemoryADT<Address = Address<ADDRESS_LENGTH>, Word = [u8; WORD_LENGTH]>,
+    Memory: Send + Sync + MemoryADT<Address = Address<ADDRESS_LENGTH>, Word = [u8; WORD_LENGTH]>,
 > {
-    el: MemoryEncryptionLayer<WORD_LENGTH, Memory>,
+    el: Memory,
     encode: Arc<Encoder<Value, Memory::Word, EncodingError>>,
     decode: Arc<Decoder<Value, Memory::Word, EncodingError>>,
+}
+
+impl<
+    const WORD_LENGTH: usize,
+    Value: Send + Sync + Hash + Eq,
+    EncodingError: Send + Sync + Debug,
+    Memory: Send + Sync + Clone + MemoryADT<Address = Address<ADDRESS_LENGTH>, Word = [u8; WORD_LENGTH]>,
+> Clone for Findex<WORD_LENGTH, Value, EncodingError, Memory>
+{
+    fn clone(&self) -> Self {
+        Self {
+            el: self.el.clone(),
+            encode: self.encode.clone(),
+            decode: self.decode.clone(),
+        }
+    }
 }
 
 impl<
@@ -39,13 +58,12 @@ impl<
 {
     /// Instantiates Findex with the given seed, and memory.
     pub fn new(
-        seed: &Secret<KEY_LENGTH>,
-        mem: Memory,
-        encode: fn(Op, HashSet<Value>) -> Result<Vec<[u8; WORD_LENGTH]>, EncodingError>,
-        decode: fn(Vec<[u8; WORD_LENGTH]>) -> Result<HashSet<Value>, EncodingError>,
+        memory: Memory,
+        encode: Encoder<Value, Memory::Word, EncodingError>,
+        decode: Decoder<Value, Memory::Word, EncodingError>,
     ) -> Self {
         Self {
-            el: MemoryEncryptionLayer::new(seed, mem),
+            el: memory,
             encode: Arc::new(encode),
             decode: Arc::new(decode),
         }
@@ -60,7 +78,7 @@ impl<
         };
 
         // Hash the keyword twice to get enough collision resistance.
-        let mut a = Address::<ADDRESS_LENGTH>::default();
+        let mut a = Address::<ADDRESS_LENGTH>::from([0; ADDRESS_LENGTH]);
         a[..8].copy_from_slice(&h(1).to_be_bytes());
         a[8..].copy_from_slice(&h(2).to_be_bytes());
         a
@@ -72,11 +90,11 @@ impl<
     async fn push<Keyword: Send + Sync + Hash + Eq>(
         &self,
         op: Op,
-        kw: Keyword,
-        vs: HashSet<Value>,
+        keyword: Keyword,
+        values: HashSet<Value>,
     ) -> Result<(), <Self as IndexADT<Keyword, Value>>::Error> {
-        let words = (self.encode)(op, vs).map_err(|e| Error::Conversion(format!("{e:?}")))?;
-        let l = Self::hash_keyword(&kw);
+        let words = (self.encode)(op, values).map_err(|e| Error::Conversion(format!("{e:?}")))?;
+        let l = Self::hash_keyword(&keyword);
         IVec::new(l, self.el.clone()).push(words).await
     }
 }
@@ -91,52 +109,75 @@ impl<
 {
     type Error = Error<Address<ADDRESS_LENGTH>>;
 
-    async fn search(&self, kw: &Keyword) -> Result<HashSet<Value>, Self::Error> {
-        let l = Self::hash_keyword(kw);
+    async fn search(&self, keyword: &Keyword) -> Result<HashSet<Value>, Self::Error> {
+        let l = Self::hash_keyword(keyword);
         let words = IVec::new(l, self.el.clone()).read().await?;
         (self.decode)(words).map_err(|e| Error::Conversion(format!("{e:?}")))
     }
 
     async fn insert(
         &self,
-        kw: Keyword,
-        vs: impl Sync + Send + IntoIterator<Item = Value>,
+        keyword: Keyword,
+        values: impl Sync + Send + IntoIterator<Item = Value>,
     ) -> Result<(), Self::Error> {
-        self.push(Op::Insert, kw, vs.into_iter().collect()).await
+        self.push(Op::Insert, keyword, values.into_iter().collect())
+            .await
     }
 
     async fn delete(
         &self,
-        kw: Keyword,
-        vs: impl Sync + Send + IntoIterator<Item = Value>,
+        keyword: Keyword,
+        values: impl Sync + Send + IntoIterator<Item = Value>,
     ) -> Result<(), Self::Error> {
-        self.push(Op::Delete, kw, vs.into_iter().collect()).await
+        self.push(Op::Delete, keyword, values.into_iter().collect())
+            .await
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use std::collections::HashSet;
-
-    use futures::executor::block_on;
-    use rand_chacha::ChaChaRng;
-    use rand_core::SeedableRng;
-
     use crate::{
-        ADDRESS_LENGTH, Findex, InMemory, IndexADT, Value, address::Address, dummy_decode,
-        dummy_encode, secret::Secret,
+        ADDRESS_LENGTH, Findex, InMemory, IndexADT, address::Address, dummy_decode, dummy_encode,
+        memory::MemoryEncryptionLayer,
     };
-
-    const WORD_LENGTH: usize = 16;
+    use cosmian_crypto_core::{CsRng, Secret, define_byte_type, reexport::rand_core::SeedableRng};
+    use futures::executor::block_on;
+    use std::collections::HashSet;
 
     #[test]
     fn test_insert_search_delete_search() {
-        let mut rng = ChaChaRng::from_entropy();
+        // Define a byte type, and use `Value` as an alias for 8-bytes values of
+        // that type.
+        type Value = Bytes<8>;
+
+        define_byte_type!(Bytes);
+
+        impl<const LENGTH: usize> TryFrom<usize> for Bytes<LENGTH> {
+            type Error = String;
+            fn try_from(value: usize) -> Result<Self, Self::Error> {
+                Self::try_from(value.to_be_bytes().as_slice()).map_err(|e| e.to_string())
+            }
+        }
+
+        const WORD_LENGTH: usize = 16;
+
+        let mut rng = CsRng::from_entropy();
         let seed = Secret::random(&mut rng);
-        let memory = InMemory::<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>::default();
-        let findex = Findex::new(&seed, memory, dummy_encode::<WORD_LENGTH, _>, dummy_decode);
-        let cat_bindings = [Value::from(1), Value::from(3), Value::from(5)];
-        let dog_bindings = [Value::from(0), Value::from(2), Value::from(4)];
+        let memory = MemoryEncryptionLayer::new(
+            &seed,
+            InMemory::<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>::default(),
+        );
+        let findex = Findex::new(memory, dummy_encode::<WORD_LENGTH, Value>, dummy_decode);
+        let cat_bindings = [
+            Value::try_from(1).unwrap(),
+            Value::try_from(3).unwrap(),
+            Value::try_from(5).unwrap(),
+        ];
+        let dog_bindings = [
+            Value::try_from(0).unwrap(),
+            Value::try_from(2).unwrap(),
+            Value::try_from(4).unwrap(),
+        ];
         block_on(findex.insert("cat".to_string(), cat_bindings.clone())).unwrap();
         block_on(findex.insert("dog".to_string(), dog_bindings.clone())).unwrap();
         let cat_res = block_on(findex.search(&"cat".to_string())).unwrap();

@@ -1,410 +1,415 @@
-use std::{collections::HashSet, time::Duration};
+// It is too much trouble to deactivate everything if none of the features are
+// activated.
+#![allow(unused_imports, unused_variables, unused_mut, dead_code)]
 
+use cosmian_crypto_core::{CsRng, reexport::rand_core::SeedableRng};
 use cosmian_findex::{
-    Findex, InMemory, IndexADT, MemoryADT, Op, Secret, WORD_LENGTH, dummy_decode, dummy_encode,
+    bench_memory_contention, bench_memory_insert_multiple_bindings, bench_memory_one_to_many,
+    bench_memory_search_multiple_bindings, bench_memory_search_multiple_keywords,
 };
-use criterion::{BenchmarkId, Criterion, criterion_group, criterion_main};
-use futures::{executor::block_on, future::join_all};
-use lazy_static::lazy_static;
-use rand_chacha::ChaChaRng;
-use rand_core::{CryptoRngCore, RngCore, SeedableRng};
+use criterion::{Criterion, criterion_group, criterion_main};
 
-lazy_static! {
-    static ref scale: Vec<f32> = make_scale(0, 4, 20);
+#[cfg(feature = "rust-mem")]
+use cosmian_findex::InMemory;
+
+#[cfg(feature = "sqlite-mem")]
+use cosmian_findex::SqliteMemory;
+#[cfg(feature = "sqlite-mem")]
+const SQLITE_PATH: &str = "./target/benches.sqlite";
+
+#[cfg(feature = "redis-mem")]
+use cosmian_findex::RedisMemory;
+
+#[cfg(feature = "redis-mem")]
+fn get_redis_url() -> String {
+    std::env::var("REDIS_HOST").map_or_else(
+        |_| "redis://localhost:6379".to_owned(),
+        |var_env| format!("redis://{var_env}:6379"),
+    )
 }
 
-fn make_scale(start: usize, stop: usize, n: usize) -> Vec<f32> {
-    let step = ((stop - start) as f32) / n as f32;
-    let mut points = Vec::with_capacity(n);
-    for i in 0..=n {
-        points.push(start as f32 + i as f32 * step);
-    }
-    points
+/// Refer to `src/memory/postgresql_store/memory.rs` for local setup instructions
+#[cfg(feature = "postgres-mem")]
+use cosmian_findex::{PostgresMemory, PostgresMemoryError};
+
+#[cfg(feature = "postgres-mem")]
+fn get_postgresql_url() -> String {
+    std::env::var("POSTGRES_HOST").map_or_else(
+        |_| "postgres://cosmian:cosmian@localhost/cosmian".to_string(),
+        |var_env| format!("postgres://cosmian:cosmian@{var_env}/cosmian"),
+    )
 }
 
-/// Builds an index that associates each `kw_i` to x values, both random 64-bit values.
-fn build_benchmarking_bindings_index(
-    rng: &mut impl CryptoRngCore,
-) -> Vec<([u8; 8], HashSet<[u8; 8]>)> {
-    scale
-        .iter()
-        .map(|i| {
-            let kw = rng.next_u64().to_be_bytes();
-            let vals = (0..10f32.powf(*i).ceil() as usize)
-                .map(|_| rng.next_u64().to_be_bytes())
-                .collect::<HashSet<_>>();
-            (kw, vals)
-        })
-        .collect()
-}
+use cosmian_findex::{ADDRESS_LENGTH, Address, WORD_LENGTH};
+// Utility function used to initialize the PostgresMemory table
+#[cfg(feature = "postgres-mem")]
+async fn connect_and_init_table(
+    db_url: String,
+    table_name: String,
+) -> Result<PostgresMemory<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>, PostgresMemoryError> {
+    use deadpool_postgres::Config;
+    use tokio_postgres::NoTls;
 
-/// Builds an index that associates 10^3 `kw_i` to a single value, both random 64-bit values.
-fn build_benchmarking_keywords_index(
-    rng: &mut impl CryptoRngCore,
-) -> Vec<([u8; 8], HashSet<[u8; 8]>)> {
-    (0..10usize.pow(3))
-        .map(|_| {
-            let kw = rng.next_u64().to_be_bytes();
-            let val = rng.next_u64().to_be_bytes();
-            (kw, HashSet::from([val]))
-        })
-        .collect()
+    let mut pg_config = Config::new();
+    pg_config.url = Some(db_url.to_string());
+    let test_pool = pg_config.builder(NoTls)?.build()?;
+
+    let m = PostgresMemory::<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>::connect_with_pool(
+        test_pool,
+        table_name.to_string(),
+    )
+    .await?;
+
+    m.initialize_table(db_url.to_string(), table_name, NoTls)
+        .await?;
+    Ok(m)
 }
+// Number of points in each graph.
+const N_PTS: usize = 9;
 
 fn bench_search_multiple_bindings(c: &mut Criterion) {
-    let mut rng = ChaChaRng::from_entropy();
-    let seed = Secret::random(&mut rng);
-    let stm = InMemory::default();
-    let index = build_benchmarking_bindings_index(&mut rng);
-    let findex = Findex::new(&seed, stm, dummy_encode::<WORD_LENGTH, _>, dummy_decode);
-    index
-        .iter()
-        .cloned()
-        .for_each(|(kw, vs)| block_on(findex.insert(kw, vs)).unwrap());
+    let mut rng = CsRng::from_entropy();
 
-    let mut group = c.benchmark_group("Multiple bindings search (1 keyword)");
-    for (kw, vals) in index.clone().into_iter() {
-        group.bench_function(BenchmarkId::from_parameter(vals.len()), |b| {
-            b.iter_batched(
-                || [kw].into_iter(),
-                |kws| {
-                    kws.for_each(|kw| {
-                        block_on(findex.search(&kw)).expect("search failed");
-                    });
-                },
-                criterion::BatchSize::SmallInput,
-            );
-        });
-    }
+    #[cfg(feature = "rust-mem")]
+    bench_memory_search_multiple_bindings(
+        "in-memory",
+        N_PTS,
+        async || InMemory::default(),
+        c,
+        &mut rng,
+    );
+
+    #[cfg(feature = "redis-mem")]
+    bench_memory_search_multiple_bindings(
+        "Redis",
+        N_PTS,
+        async || RedisMemory::connect(&get_redis_url()).await.unwrap(),
+        c,
+        &mut rng,
+    );
+
+    #[cfg(feature = "sqlite-mem")]
+    bench_memory_search_multiple_bindings(
+        "SQLite",
+        N_PTS,
+        async || SqliteMemory::connect(SQLITE_PATH).await.unwrap(),
+        c,
+        &mut rng,
+    );
+
+    #[cfg(feature = "postgres-mem")]
+    bench_memory_search_multiple_bindings(
+        "Postgres",
+        N_PTS,
+        async || {
+            connect_and_init_table(
+                get_postgresql_url(),
+                "bench_memory_search_multiple_bindings".to_string(),
+            )
+            .await
+            .unwrap()
+        },
+        c,
+        &mut rng,
+    );
 }
 
 fn bench_search_multiple_keywords(c: &mut Criterion) {
-    let mut rng = ChaChaRng::from_entropy();
-    let seed = Secret::random(&mut rng);
+    let mut rng = CsRng::from_entropy();
 
-    let stm = InMemory::default();
-    let index = build_benchmarking_keywords_index(&mut rng);
-    let findex = Findex::new(
-        &seed,
-        stm.clone(),
-        dummy_encode::<WORD_LENGTH, _>,
-        dummy_decode,
+    #[cfg(feature = "rust-mem")]
+    bench_memory_search_multiple_keywords(
+        "in-memory",
+        N_PTS,
+        async || InMemory::default(),
+        c,
+        &mut rng,
     );
 
-    index
-        .iter()
-        .cloned()
-        .for_each(|(kw, vs)| block_on(findex.insert(kw, vs)).unwrap());
+    #[cfg(feature = "redis-mem")]
+    bench_memory_search_multiple_keywords(
+        "Redis",
+        N_PTS,
+        async || RedisMemory::connect(&get_redis_url()).await.unwrap(),
+        c,
+        &mut rng,
+    );
 
-    // Reference timings
-    {
-        let mut group = c.benchmark_group("retrieving words from memory");
-        for i in scale.iter() {
-            let n = 10f32.powf(*i).ceil() as usize;
-            group.bench_function(BenchmarkId::from_parameter(n), |b| {
-                // Attempts to bench all external costs (somehow, cloning the keywords impacts the
-                // benches).
-                b.iter_batched(
-                    || {
-                        stm.clone()
-                            .into_iter()
-                            .map(|(a, _)| a)
-                            .take(n)
-                            .collect::<Vec<_>>()
-                    },
-                    |addresses| block_on(stm.batch_read(addresses)).expect("batch read failed"),
-                    criterion::BatchSize::SmallInput,
-                );
-            });
-        }
-    }
-    // Benches
-    {
-        let mut group = c.benchmark_group("Multiple keywords search (1 binding)");
-        for i in scale.iter() {
-            let n = 10f32.powf(*i).ceil() as usize;
-            group.bench_function(BenchmarkId::from_parameter(n), |b| {
-                b.iter_batched(
-                    || {
-                        // Using .cloned() instead of .clone() reduces the overhead (maybe because it
-                        // only clones what is needed)
-                        index.iter().map(|(kw, _)| kw).take(n).cloned()
-                    },
-                    |kws| {
-                        kws.for_each(|kw| {
-                            block_on(findex.search(&kw)).expect("search failed");
-                        });
-                    },
-                    criterion::BatchSize::SmallInput,
-                );
-            });
-        }
-    }
+    #[cfg(feature = "sqlite-mem")]
+    bench_memory_search_multiple_keywords(
+        "SQLite",
+        N_PTS,
+        async || SqliteMemory::connect(SQLITE_PATH).await.unwrap(),
+        c,
+        &mut rng,
+    );
+
+    #[cfg(feature = "postgres-mem")]
+    bench_memory_search_multiple_keywords(
+        "Postgres",
+        N_PTS,
+        async || {
+            connect_and_init_table(
+                get_postgresql_url(),
+                "bench_memory_search_multiple_keywords".to_string(),
+            )
+            .await
+            .unwrap()
+        },
+        c,
+        &mut rng,
+    );
 }
 
 fn bench_insert_multiple_bindings(c: &mut Criterion) {
-    let mut rng = ChaChaRng::from_entropy();
-    let seed = Secret::random(&mut rng);
+    let mut rng = CsRng::from_entropy();
 
-    let index = build_benchmarking_bindings_index(&mut rng);
-    let n_max = 10usize.pow(3);
+    #[cfg(feature = "rust-mem")]
+    bench_memory_insert_multiple_bindings(
+        "in-memory",
+        N_PTS,
+        async || InMemory::default(),
+        c,
+        async |m: &InMemory<_, _>| -> Result<(), String> {
+            m.clear();
+            Ok(())
+        },
+        &mut rng,
+    );
 
-    // Reference: write one word per value inserted.
-    {
-        let mut group = c.benchmark_group("write n words to memory");
-        for (_, vals) in index.clone().into_iter() {
-            let stm = InMemory::with_capacity(n_max + 1);
-            group
-                .bench_function(BenchmarkId::from_parameter(vals.len()), |b| {
-                    b.iter_batched(
-                        || {
-                            let vals = vals.clone();
-                            let words = dummy_encode::<WORD_LENGTH, _>(Op::Insert, vals).unwrap();
-                            words
-                                .into_iter()
-                                .enumerate()
-                                .map(|(i, w)| ([i; 16], w))
-                                .collect::<Vec<_>>()
-                        },
-                        |bindings| {
-                            block_on(stm.guarded_write(([0; 16], None), bindings))
-                                .expect("search failed");
-                        },
-                        criterion::BatchSize::SmallInput,
-                    );
-                })
-                .measurement_time(Duration::from_secs(60));
-        }
-    }
-    // Bench it
-    {
-        let mut group = c.benchmark_group("Multiple bindings insert (same keyword)");
-        for (kw, vals) in index.clone().into_iter() {
-            let stm = InMemory::with_capacity(n_max + 1);
-            let findex = Findex::new(
-                &seed,
-                stm.clone(),
-                dummy_encode::<WORD_LENGTH, _>,
-                dummy_decode,
-            );
-            group
-                .bench_function(BenchmarkId::from_parameter(vals.len()), |b| {
-                    b.iter_batched(
-                        || {
-                            stm.clear();
-                            [(kw, vals.clone())].into_iter()
-                        },
-                        |bindings| {
-                            bindings.for_each(|(kw, vs)| {
-                                block_on(findex.insert(kw, vs)).expect("search failed")
-                            });
-                        },
-                        criterion::BatchSize::SmallInput,
-                    );
-                })
-                .measurement_time(Duration::from_secs(60));
-        }
-    }
-}
+    #[cfg(feature = "redis-mem")]
+    bench_memory_insert_multiple_bindings(
+        "Redis",
+        N_PTS,
+        async || RedisMemory::connect(&get_redis_url()).await.unwrap(),
+        c,
+        RedisMemory::clear,
+        &mut rng,
+    );
 
-fn bench_insert_multiple_keywords(c: &mut Criterion) {
-    let mut rng = ChaChaRng::from_entropy();
-    let seed = Secret::random(&mut rng);
+    #[cfg(feature = "sqlite-mem")]
+    bench_memory_insert_multiple_bindings(
+        "SQLite",
+        N_PTS,
+        async || SqliteMemory::connect(SQLITE_PATH).await.unwrap(),
+        c,
+        SqliteMemory::clear,
+        &mut rng,
+    );
 
-    // Reference: write one word per value inserted.
-    {
-        let mut group = c.benchmark_group("write 2n words to memory");
-        for i in scale.iter() {
-            let n = 10f32.powf(*i).ceil() as usize;
-            let stm = InMemory::with_capacity(2 * n);
-            group
-                .bench_function(BenchmarkId::from_parameter(n), |b| {
-                    b.iter_batched(
-                        || {
-                            stm.clear();
-                            (0..2 * n)
-                                .map(|_| {
-                                    let mut a = [0; 16];
-                                    let mut w = [0; WORD_LENGTH];
-                                    rng.fill_bytes(&mut a);
-                                    rng.fill_bytes(&mut w);
-                                    (a, w)
-                                })
-                                .collect::<Vec<_>>()
-                        },
-                        |bindings| {
-                            block_on(stm.guarded_write(([0; 16], None), bindings))
-                                .expect("search failed");
-                        },
-                        criterion::BatchSize::SmallInput,
-                    );
-                })
-                .measurement_time(Duration::from_secs(60));
-        }
-    }
-    // Bench it
-    {
-        let mut group = c.benchmark_group("Multiple keywords insert (one binding each)");
-        for i in scale.iter() {
-            let n = 10f32.powf(*i).ceil() as usize;
-            let stm = InMemory::with_capacity(2 * n);
-            let findex = Findex::new(
-                &seed,
-                stm.clone(),
-                dummy_encode::<WORD_LENGTH, _>,
-                dummy_decode,
-            );
-            group
-                .bench_function(BenchmarkId::from_parameter(n), |b| {
-                    b.iter_batched(
-                        || {
-                            stm.clear();
-                            (0..n)
-                                .map(|_| {
-                                    (
-                                        rng.next_u64().to_be_bytes(),
-                                        HashSet::<[u8; 8]>::from_iter([rng
-                                            .next_u64()
-                                            .to_be_bytes()]),
-                                    )
-                                })
-                                .collect::<Vec<_>>()
-                                .into_iter()
-                        },
-                        |bindings| {
-                            bindings.for_each(|(kw, vs)| {
-                                block_on(findex.insert(kw, vs)).expect("insert failed");
-                            });
-                        },
-                        criterion::BatchSize::SmallInput,
-                    );
-                })
-                .measurement_time(Duration::from_secs(60));
-        }
-    }
+    #[cfg(feature = "postgres-mem")]
+    bench_memory_insert_multiple_bindings(
+        "Postgres",
+        N_PTS,
+        async || {
+            connect_and_init_table(
+                get_postgresql_url(),
+                "bench_memory_insert_multiple_bindings".to_string(),
+            )
+            .await
+            .unwrap()
+        },
+        c,
+        async |m: &PostgresMemory<_, _>| -> Result<(), String> {
+            m.clear().await.map_err(|e| e.to_string())
+        },
+        &mut rng,
+    );
 }
 
 fn bench_contention(c: &mut Criterion) {
-    const N_BINDINGS: usize = 100;
-    const N_CLIENTS: usize = 8;
-    let mut rng = ChaChaRng::from_entropy();
-    let seed = Secret::random(&mut rng);
-    let kws = (0..N_CLIENTS)
-        .map(|_| rng.next_u64().to_be_bytes())
-        .collect::<Vec<_>>();
+    let mut rng = CsRng::from_entropy();
 
-    // Reference: parallel clients.
-    {
-        let mut group =
-            c.benchmark_group("Parallel clients ({N_BINDINGS} binding, different keywords)");
-        for i in 1..=N_CLIENTS {
-            let stm = InMemory::with_capacity(N_BINDINGS * i + 1);
-            let findex = Findex::new(
-                &seed,
-                stm.clone(),
-                dummy_encode::<WORD_LENGTH, _>,
-                dummy_decode,
-            );
-            let runtime = tokio::runtime::Builder::new_multi_thread()
-                .worker_threads(i)
-                .enable_all()
-                .build()
-                .unwrap();
+    #[cfg(feature = "rust-mem")]
+    bench_memory_contention(
+        "in-memory",
+        N_PTS,
+        async || InMemory::default(),
+        c,
+        async |m: &InMemory<_, _>| -> Result<(), String> {
+            m.clear();
+            Ok(())
+        },
+        &mut rng,
+    );
 
-            let instances = (0..i).map(|_| findex.clone()).collect::<Vec<_>>();
-            let bindings = kws
-                .clone()
-                .into_iter()
-                .map(|kw| {
-                    (
-                        kw, // All clients use a different keyword.
-                        HashSet::<[u8; 8]>::from_iter(
-                            (0..N_BINDINGS).map(|_| rng.next_u64().to_be_bytes()),
-                        ),
-                    )
-                })
-                .collect::<Vec<_>>();
+    #[cfg(feature = "redis-mem")]
+    bench_memory_contention(
+        "Redis",
+        N_PTS,
+        async || RedisMemory::connect(&get_redis_url()).await.unwrap(),
+        c,
+        RedisMemory::clear,
+        &mut rng,
+    );
 
-            group
-                .bench_function(BenchmarkId::from_parameter(i), |b| {
-                    b.iter_batched(
-                        || {
-                            stm.clear();
-                            instances.clone().into_iter().zip(bindings.clone())
-                        },
-                        |iterator| {
-                            runtime.block_on(async {
-                                join_all(iterator.map(|(findex, (kw, vs))| {
-                                    tokio::spawn(async move { findex.insert(kw, vs).await })
-                                }))
-                                .await
-                            })
-                        },
-                        criterion::BatchSize::SmallInput,
-                    );
-                })
-                .measurement_time(Duration::from_secs(60));
+    #[cfg(feature = "sqlite-mem")]
+    bench_memory_contention(
+        "SQLite",
+        N_PTS,
+        async || SqliteMemory::connect(SQLITE_PATH).await.unwrap(),
+        c,
+        SqliteMemory::clear,
+        &mut rng,
+    );
+
+    #[cfg(feature = "postgres-mem")]
+    bench_memory_contention(
+        "Postgres",
+        N_PTS,
+        async || {
+            connect_and_init_table(get_postgresql_url(), "bench_memory_contention".to_string())
+                .await
+                .unwrap()
+        },
+        c,
+        async |m: &PostgresMemory<_, _>| -> Result<(), String> {
+            m.clear().await.map_err(|e| e.to_string())
+        },
+        &mut rng,
+    );
+}
+
+#[cfg(any(feature = "redis-mem", feature = "postgres-mem"))]
+mod delayed_memory {
+    use cosmian_findex::{
+        Address, MemoryADT, PostgresMemory, PostgresMemoryError, RedisMemory, RedisMemoryError,
+    };
+    use rand::Rng;
+    use rand_distr::StandardNormal;
+    use std::time::Duration;
+
+    #[derive(Clone, Debug)]
+    pub struct DelayedMemory<Memory> {
+        m: Memory,
+        mean: usize,
+        variance: usize,
+    }
+
+    #[cfg(any(feature = "redis-mem", feature = "postgres-mem"))]
+    impl<Memory> DelayedMemory<Memory> {
+        /// Wrap the given memory into a new delayed memory with an average network
+        /// delay of s milliseconds.
+        pub fn new(m: Memory, mean: usize, variance: usize) -> Self {
+            Self { m, mean, variance }
+        }
+
+        pub fn delay(&self) -> Duration {
+            let d = self.mean as f32
+                + self.variance as f32 * rand::rng().sample::<f32, _>(StandardNormal);
+            // Use `max(d,1)` to prevent negative numbers and tiny delays.
+            Duration::from_secs_f32(d.max(self.mean as f32 / 1_000.) / 1_000.)
         }
     }
 
-    // Concurrent clients.
+    impl<Memory> MemoryADT for DelayedMemory<Memory>
+    where
+        Memory: Send + Sync + MemoryADT,
+        Memory::Address: Send + Sync,
+        Memory::Word: Send + Sync,
     {
-        let mut group = c.benchmark_group("Concurrent clients (single binding, same keyword)");
-        for i in 1..=N_CLIENTS {
-            let stm = InMemory::with_capacity(N_BINDINGS * i + 1);
-            let findex = Findex::new(
-                &seed,
-                stm.clone(),
-                dummy_encode::<WORD_LENGTH, _>,
-                dummy_decode,
-            );
-            let runtime = tokio::runtime::Builder::new_multi_thread()
-                .worker_threads(i)
-                .enable_all()
-                .build()
-                .unwrap();
+        type Address = Memory::Address;
 
-            let instances = (0..i).map(|_| findex.clone()).collect::<Vec<_>>();
-            let bindings = (0..i)
-                .map(|_| {
-                    (
-                        kws[0], // All clients use the same keyword
-                        HashSet::<[u8; 8]>::from_iter(
-                            (0..N_BINDINGS).map(|_| rng.next_u64().to_be_bytes()),
-                        ),
-                    )
-                })
-                .collect::<Vec<_>>();
+        type Word = Memory::Word;
 
-            group
-                .bench_function(BenchmarkId::from_parameter(i), |b| {
-                    b.iter_batched(
-                        || {
-                            stm.clear();
-                            instances.clone().into_iter().zip(bindings.clone())
-                        },
-                        |iterator| {
-                            runtime.block_on(async {
-                                join_all(iterator.map(|(findex, (kw, vs))| {
-                                    tokio::spawn(async move { findex.insert(kw, vs).await })
-                                }))
-                                .await
-                            })
-                        },
-                        criterion::BatchSize::SmallInput,
-                    );
-                })
-                .measurement_time(Duration::from_secs(60));
+        type Error = Memory::Error;
+
+        async fn batch_read(
+            &self,
+            addresses: Vec<Self::Address>,
+        ) -> Result<Vec<Option<Self::Word>>, Self::Error> {
+            tokio::time::sleep(self.delay()).await;
+            self.m.batch_read(addresses).await
         }
+
+        async fn guarded_write(
+            &self,
+            guard: (Self::Address, Option<Self::Word>),
+            bindings: Vec<(Self::Address, Self::Word)>,
+        ) -> Result<Option<Self::Word>, Self::Error> {
+            tokio::time::sleep(self.delay()).await;
+            self.m.guarded_write(guard, bindings).await
+        }
+    }
+
+    #[cfg(feature = "redis-mem")]
+    impl<Address, Word> DelayedMemory<RedisMemory<Address, Word>>
+    where
+        Address: Send + Sync,
+        Word: Send + Sync,
+    {
+        pub async fn clear(&self) -> Result<(), RedisMemoryError> {
+            self.m.clear().await
+        }
+    }
+
+    #[cfg(feature = "postgres-mem")]
+    impl<const ADDRESS_LENGTH: usize, const WORD_LENGTH: usize>
+        DelayedMemory<PostgresMemory<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>>
+    {
+        pub async fn clear(&self) -> Result<(), PostgresMemoryError> {
+            self.m.clear().await
+        }
+    }
+}
+
+fn bench_one_to_many(c: &mut Criterion) {
+    #[cfg(feature = "redis-mem")]
+    let mut rng = CsRng::from_entropy();
+
+    #[cfg(any(feature = "redis-mem", feature = "postgres-mem"))]
+    use delayed_memory::*;
+
+    let delay_params = vec![(1, 1), (10, 1), (10, 5)]; // tuples of (mean, variance)
+
+    #[cfg(feature = "redis-mem")]
+    for (mean, variance) in &delay_params {
+        bench_memory_one_to_many(
+            "Redis",
+            N_PTS,
+            async || {
+                DelayedMemory::new(
+                    RedisMemory::connect(&get_redis_url()).await.unwrap(),
+                    *mean,
+                    *variance,
+                )
+            },
+            c,
+            DelayedMemory::<RedisMemory<_, _>>::clear,
+            &mut rng,
+        );
+    }
+
+    #[cfg(feature = "postgres-mem")]
+    for (mean, variance) in &delay_params {
+        bench_memory_one_to_many(
+            "Postgres",
+            N_PTS,
+            async || {
+                let m = connect_and_init_table(
+                    get_postgresql_url(),
+                    format!("bench_memory_one_to_many_m_{}_var_{}", *mean, *variance),
+                )
+                .await
+                .unwrap();
+                DelayedMemory::new(m, *mean, *variance)
+            },
+            c,
+            DelayedMemory::<PostgresMemory<_, _>>::clear,
+            &mut rng,
+        );
     }
 }
 
 criterion_group!(
     name    = benches;
-    config  = Criterion::default().sample_size(5000).measurement_time(Duration::from_secs(60));
-    targets = bench_contention,
-              bench_search_multiple_bindings, bench_search_multiple_keywords,
-              bench_insert_multiple_bindings, bench_insert_multiple_keywords,
+    config  = Criterion::default();
+    targets =
+    bench_one_to_many,
+    bench_search_multiple_bindings,
+    bench_search_multiple_keywords,
+    bench_insert_multiple_bindings,
+    bench_contention,
 );
 
 criterion_main!(benches);
