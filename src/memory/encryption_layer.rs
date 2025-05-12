@@ -1,4 +1,3 @@
-
 use crate::{ADDRESS_LENGTH, MemoryADT, address::Address};
 use aes::{
     Aes256,
