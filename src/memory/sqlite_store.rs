@@ -1,16 +1,14 @@
+use crate::{Address, MemoryADT};
+use async_sqlite::{
+    Pool, PoolBuilder,
+    rusqlite::{OptionalExtension, params_from_iter},
+};
 use std::{
     collections::HashMap,
     fmt::{self, Debug},
     marker::PhantomData,
     ops::Deref,
 };
-
-use async_sqlite::{
-    Pool, PoolBuilder,
-    rusqlite::{OptionalExtension, params_from_iter},
-};
-
-use crate::{Address, MemoryADT};
 
 #[derive(Debug)]
 pub enum SqliteMemoryError {
