@@ -36,13 +36,15 @@ pub use memory::{FINDEX_TABLE_NAME, SqliteMemory, SqliteMemoryError};
 
 #[cfg(feature = "postgres-mem")]
 pub use memory::{PostgresMemory, PostgresMemoryError};
-pub use memory::{SqliteMemory, SqliteMemoryError};
 
 #[cfg(any(test, feature = "test-utils"))]
 pub use encoding::{
     dummy_encoding::{WORD_LENGTH, dummy_decode, dummy_encode},
     tests::test_encoding,
 };
+
+#[cfg(any(test, feature = "test-utils"))]
+pub use memory::InMemory;
 
 /// 16-byte addresses ensure a high collision resistance that poses virtually no
 /// limitation on the index.
