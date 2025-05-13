@@ -95,7 +95,7 @@ fn bench_search_multiple_bindings(c: &mut Criterion) {
     bench_memory_search_multiple_bindings(
         "SQLite",
         N_PTS,
-        async || SqliteMemory::connect(&SQLITE_PATH).await.unwrap(),
+        async || SqliteMemory::connect(SQLITE_PATH).await.unwrap(),
         c,
         &mut rng,
     );
