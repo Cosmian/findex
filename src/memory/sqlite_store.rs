@@ -112,7 +112,7 @@ impl<Address: Send + Sync, Word: Send + Sync> SqliteMemory<Address, Word> {
     #[cfg(feature = "test-utils")]
     pub async fn clear(&self) -> Result<(), SqliteMemoryError> {
         self.pool
-            .conn(|cnx| cnx.execute("DELETE FROM memory", []))
+            .conn(|cnx| cnx.execute(&format!("DELETE FROM {FINDEX_TABLE_NAME}"), []))
             .await?;
         Ok(())
     }
