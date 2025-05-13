@@ -89,7 +89,8 @@ impl<Address, Word> SqliteMemory<Address, Word> {
         })
     }
 
-    /// Creates the memory's table using a connection from the given pool.
+    /// Returns an `SqliteMemory` instance storing data in a table with the given name
+    /// and connecting to the DB using connections from the given pool.
     ///
     /// # Arguments
     ///
@@ -133,7 +134,8 @@ impl<const ADDRESS_LENGTH: usize, const WORD_LENGTH: usize> MemoryADT
             .conn(move |conn| {
                 let results = conn
                     .prepare(&format!(
-                        "SELECT a, w FROM findex_memory WHERE a IN ({})",
+                        "SELECT a, w FROM {} WHERE a IN ({})",
+                        FINDEX_TABLE_NAME,
                         vec!["?"; addresses.len()].join(",")
                     ))?
                     .query_map(
@@ -174,15 +176,18 @@ impl<const ADDRESS_LENGTH: usize, const WORD_LENGTH: usize> MemoryADT
                 )?;
 
                 let current_word = tx
-                    .query_row("SELECT w FROM findex_memory WHERE a = ?", [&*ag], |row| {
-                        row.get(0)
-                    })
+                    .query_row(
+                        &format!("SELECT w FROM {} WHERE a = ?", FINDEX_TABLE_NAME),
+                        [&*ag],
+                        |row| row.get(0),
+                    )
                     .optional()?;
 
                 if current_word == wg {
                     tx.execute(
                         &format!(
-                            "INSERT OR REPLACE INTO findex_memory (a, w) VALUES {}",
+                            "INSERT OR REPLACE INTO {} (a, w) VALUES {}",
+                            FINDEX_TABLE_NAME,
                             vec!["(?,?)"; bindings.len()].join(",")
                         ),
                         params_from_iter(
