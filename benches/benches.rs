@@ -95,11 +95,7 @@ fn bench_search_multiple_bindings(c: &mut Criterion) {
     bench_memory_search_multiple_bindings(
         "SQLite",
         N_PTS,
-        async || {
-            // prevents database locks on slower machines
-            let path = format!("{}-{}", SQLITE_PATH, CsRng::from_entropy().next_u64());
-            SqliteMemory::connect(&path).await.unwrap()
-        },
+        async || SqliteMemory::connect(&SQLITE_PATH).await.unwrap(),
         c,
         &mut rng,
     );

@@ -56,6 +56,7 @@ fn create_table_script(table_name: &str) -> String {
     format!(
         "
 PRAGMA synchronous = NORMAL;
+PRAGMA journal_mode = WAL;
 CREATE TABLE IF NOT EXISTS {} (
     a BLOB PRIMARY KEY,
     w BLOB NOT NULL
@@ -72,15 +73,11 @@ impl<Address, Word> SqliteMemory<Address, Word> {
     ///
     /// * `path` - The path to the sqlite3 database file.
     pub async fn connect(path: &str) -> Result<Self, SqliteMemoryError> {
-        // This pool connections number defaults to the number of logical CPUs of the
-        // current system.
-        let pool = PoolBuilder::new()
-            .journal_mode(async_sqlite::JournalMode::Wal)
-            .path(path)
-            .open()
-            .await?;
+        // The number of connections in this pools defaults to the number of
+        // logical CPUs of the system.
+        let pool = PoolBuilder::new().path(path).open().await?;
 
-        pool.conn(move |conn| conn.execute_batch(&create_table_script(FINDEX_TABLE_NAME)))
+        pool.conn(|conn| conn.execute_batch(&create_table_script(FINDEX_TABLE_NAME)))
             .await?;
 
         Ok(Self {
