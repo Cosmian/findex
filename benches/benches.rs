@@ -2,7 +2,10 @@
 // activated.
 #![allow(unused_imports, unused_variables, unused_mut, dead_code)]
 
-use cosmian_crypto_core::{CsRng, reexport::rand_core::SeedableRng};
+use cosmian_crypto_core::{
+    CsRng,
+    reexport::rand_core::{RngCore, SeedableRng},
+};
 use cosmian_findex::{
     bench_memory_contention, bench_memory_insert_multiple_bindings, bench_memory_one_to_many,
     bench_memory_search_multiple_bindings, bench_memory_search_multiple_keywords,
@@ -92,7 +95,11 @@ fn bench_search_multiple_bindings(c: &mut Criterion) {
     bench_memory_search_multiple_bindings(
         "SQLite",
         N_PTS,
-        async || SqliteMemory::connect(SQLITE_PATH).await.unwrap(),
+        async || {
+            // prevents database locks on slower machines
+            let path = format!("{}-{}", SQLITE_PATH, CsRng::from_entropy().next_u64());
+            SqliteMemory::connect(&path).await.unwrap()
+        },
         c,
         &mut rng,
     );
