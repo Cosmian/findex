@@ -31,6 +31,7 @@ impl From<async_sqlite::Error> for SqliteMemoryError {
     }
 }
 
+pub const FINDEX_TABLE_NAME: &str = "findex_memory";
 #[derive(Clone)]
 pub struct SqliteMemory<Address, Word> {
     pool: Pool,
@@ -48,30 +49,56 @@ impl<Address, Word> Debug for SqliteMemory<Address, Word> {
 
 // The following settings are used to improve performance:
 // - journal_mode = WAL : WAL journaling is faster than the default DELETE mode.
-// - synchronous = NORMAL: Reduces disk I/O by only calling fsync() at critical moments rather
-//   than after every transaction (FULL mode); this does not compromise data integrity.
-const CREATE_TABLE_SCRIPT: &str = "
+// - synchronous = NORMAL: Reduces disk I/O by only calling fsync() at critical
+//   moments rather than after every transaction (FULL mode); this does not
+//   compromise data integrity.
+fn create_table_script(table_name: &str) -> String {
+    format!(
+        "
 PRAGMA synchronous = NORMAL;
 PRAGMA journal_mode = WAL;
-CREATE TABLE IF NOT EXISTS memory (
+CREATE TABLE IF NOT EXISTS {} (
     a BLOB PRIMARY KEY,
     w BLOB NOT NULL
-);";
+);",
+        table_name
+    )
+}
 
 impl<Address, Word> SqliteMemory<Address, Word> {
-    /// Connects to a known DB using the given path.
+    /// Builds a pool connected to a known DB (using the given path) and creates
+    /// the `findex_memory` table.
     ///
     /// # Arguments
     ///
     /// * `path` - The path to the sqlite3 database file.
     pub async fn connect(path: &str) -> Result<Self, SqliteMemoryError> {
-        // This pool connections number defaults to the number of logical CPUs
-        // of the current system.
+        // The number of connections in this pools defaults to the number of
+        // logical CPUs of the system.
         let pool = PoolBuilder::new().path(path).open().await?;
 
-        pool.conn(move |conn| conn.execute_batch(CREATE_TABLE_SCRIPT))
+        pool.conn(|conn| conn.execute_batch(&create_table_script(FINDEX_TABLE_NAME)))
             .await?;
 
+        Ok(Self {
+            pool,
+            _marker: PhantomData,
+        })
+    }
+
+    /// Returns an `SqliteMemory` instance storing data in a table with the given name
+    /// and connecting to the DB using connections from the given pool.
+    ///
+    /// # Arguments
+    ///
+    /// * `pool` - The pool to use for the memory.
+    /// * `table_name` - The name of the table to create.
+    pub async fn connect_with_pool(
+        pool: Pool,
+        table_name: String,
+    ) -> Result<Self, SqliteMemoryError> {
+        pool.conn(move |conn| conn.execute_batch(&create_table_script(&table_name)))
+            .await?;
         Ok(Self {
             pool,
             _marker: PhantomData,
@@ -83,7 +110,7 @@ impl<Address: Send + Sync, Word: Send + Sync> SqliteMemory<Address, Word> {
     #[cfg(feature = "test-utils")]
     pub async fn clear(&self) -> Result<(), SqliteMemoryError> {
         self.pool
-            .conn(|cnx| cnx.execute("DELETE FROM memory", []))
+            .conn(|cnx| cnx.execute(&format!("DELETE FROM {FINDEX_TABLE_NAME}"), []))
             .await?;
         Ok(())
     }
@@ -104,7 +131,8 @@ impl<const ADDRESS_LENGTH: usize, const WORD_LENGTH: usize> MemoryADT
             .conn(move |conn| {
                 let results = conn
                     .prepare(&format!(
-                        "SELECT a, w FROM memory WHERE a IN ({})",
+                        "SELECT a, w FROM {} WHERE a IN ({})",
+                        FINDEX_TABLE_NAME,
                         vec!["?"; addresses.len()].join(",")
                     ))?
                     .query_map(
@@ -145,13 +173,18 @@ impl<const ADDRESS_LENGTH: usize, const WORD_LENGTH: usize> MemoryADT
                 )?;
 
                 let current_word = tx
-                    .query_row("SELECT w FROM memory WHERE a = ?", [&*ag], |row| row.get(0))
+                    .query_row(
+                        &format!("SELECT w FROM {} WHERE a = ?", FINDEX_TABLE_NAME),
+                        [&*ag],
+                        |row| row.get(0),
+                    )
                     .optional()?;
 
                 if current_word == wg {
                     tx.execute(
                         &format!(
-                            "INSERT OR REPLACE INTO memory (a, w) VALUES {}",
+                            "INSERT OR REPLACE INTO {} (a, w) VALUES {}",
+                            FINDEX_TABLE_NAME,
                             vec!["(?,?)"; bindings.len()].join(",")
                         ),
                         params_from_iter(

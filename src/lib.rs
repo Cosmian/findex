@@ -22,8 +22,7 @@ pub use encoding::{
     generic_encoding::{generic_decode, generic_encode},
 };
 pub use error::Error;
-pub use findex::Findex;
-pub use findex::Op;
+pub use findex::{Findex, Op};
 pub use memory::{KEY_LENGTH, MemoryEncryptionLayer};
 
 #[cfg(any(test, feature = "test-utils"))]
@@ -33,7 +32,7 @@ pub use test_utils::*;
 pub use memory::{RedisMemory, RedisMemoryError};
 
 #[cfg(feature = "sqlite-mem")]
-pub use memory::{SqliteMemory, SqliteMemoryError};
+pub use memory::{FINDEX_TABLE_NAME, SqliteMemory, SqliteMemoryError};
 
 #[cfg(feature = "postgres-mem")]
 pub use memory::{PostgresMemory, PostgresMemoryError};

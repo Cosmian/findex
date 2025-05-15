@@ -2,7 +2,10 @@
 // activated.
 #![allow(unused_imports, unused_variables, unused_mut, dead_code)]
 
-use cosmian_crypto_core::{CsRng, reexport::rand_core::SeedableRng};
+use cosmian_crypto_core::{
+    CsRng,
+    reexport::rand_core::{RngCore, SeedableRng},
+};
 use cosmian_findex::{
     bench_memory_contention, bench_memory_insert_multiple_bindings, bench_memory_one_to_many,
     bench_memory_search_multiple_bindings, bench_memory_search_multiple_keywords,
