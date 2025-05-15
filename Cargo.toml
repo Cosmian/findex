@@ -44,6 +44,8 @@ tokio = { version = "1.44", features = ["rt-multi-thread"], optional = true }
 
 
 # Memory dependencies
+# Due to dependency tree issues with sqlx requiring a lower version of `libsqlite3-sys`, do not upgrade the `async-sqlite` version above 0.4
+# before checking the update will not break findex-server's build.
 async-sqlite = { version = "0.4", optional = true }
 deadpool-postgres = { version = "0.14.1", optional = true }
 redis = { version = "0.28", features = [
