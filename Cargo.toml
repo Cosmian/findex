@@ -22,10 +22,7 @@ path = "src/lib.rs"
 
 [features]
 rust-mem = []
-redis-mem = ["redis"]
-sqlite-mem = ["async-sqlite"]
-test-utils = ["tokio", "criterion", "rand", "rand_distr"]
-postgres-mem = ["tokio-postgres", "tokio", "deadpool-postgres"]
+test-utils = ["tokio", "criterion", "futures", "rand", "rand_distr"]
 
 [dependencies]
 aes = "0.8"
