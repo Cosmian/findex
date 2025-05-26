@@ -7,7 +7,6 @@
 
 # See https://pre-commit.com for more information
 # See https://pre-commit.com/hooks.html for more hooks
-exclude: benches/data|benches/make_figures.tex
 repos:
   - repo: https://github.com/compilerla/conventional-pre-commit
     rev: v2.1.1
@@ -29,7 +28,14 @@ repos:
     rev: v0.33.0
     hooks:
       - id: markdownlint-fix
-        args: [--disable=MD004, --disable=MD013, --disable=MD033, --disable=MD024, --disable=MD041]
+        args:
+          [
+            --disable=MD004,
+            --disable=MD013,
+            --disable=MD033,
+            --disable=MD024,
+            --disable=MD041,
+          ]
 
   - repo: https://github.com/Lucas-C/pre-commit-hooks-nodejs
     rev: v1.1.2
@@ -48,7 +54,7 @@ repos:
     rev: 0.2.2
     hooks:
       - id: yamlfmt
-        args: [--mapping, '2', --sequence, '4', --offset, '2']
+        args: [--mapping, "2", --sequence, "4", --offset, "2"]
 
   - repo: https://github.com/crate-ci/typos
     rev: v1.14.4

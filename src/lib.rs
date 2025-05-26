@@ -29,15 +29,6 @@ pub use memory::{KEY_LENGTH, MemoryEncryptionLayer};
 #[cfg(any(test, feature = "test-utils"))]
 pub use test_utils::*;
 
-#[cfg(feature = "redis-mem")]
-pub use memory::{RedisMemory, RedisMemoryError};
-
-#[cfg(feature = "sqlite-mem")]
-pub use memory::{SqliteMemory, SqliteMemoryError};
-
-#[cfg(feature = "postgres-mem")]
-pub use memory::{PostgresMemory, PostgresMemoryError};
-
 #[cfg(any(test, feature = "test-utils"))]
 pub use encoding::{
     dummy_encoding::{WORD_LENGTH, dummy_decode, dummy_encode},
