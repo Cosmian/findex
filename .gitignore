@@ -3,5 +3,4 @@ pkg/
 target/
 **/Cargo.lock
 perf*
-flamegraph.svg
 **/*.tgz
