@@ -140,7 +140,7 @@ mod tests {
     use crate::{
         ADDRESS_LENGTH,
         address::Address,
-        memory::{MemoryEncryptionLayer, in_memory_store::InMemory},
+        memory::{MemoryEncryptionLayer, in_memory::InMemory},
         test_utils::{
             gen_seed, test_guarded_write_concurrent, test_single_write_and_read, test_wrong_guard,
         },

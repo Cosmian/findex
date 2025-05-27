@@ -9,5 +9,5 @@ jobs:
     uses: Cosmian/reusable_workflows/.github/workflows/cargo-bench.yml@develop
     with:
       toolchain: stable
-      features: test-utils,redis-mem,sqlite-mem,rust-mem,postgres-mem
+      features: test-utils
       force: true
