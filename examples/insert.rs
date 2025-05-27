@@ -5,7 +5,6 @@ use cosmian_crypto_core::{
     reexport::rand_core::{CryptoRngCore, SeedableRng},
 };
 use cosmian_findex::{Findex, InMemory, IndexADT, MemoryEncryptionLayer, Op};
-use futures::executor::block_on;
 use std::collections::{HashMap, HashSet};
 
 /// This function generates a random set of (key, values) couples. Since Findex
@@ -85,7 +84,8 @@ fn decoder(words: Vec<[u8; WORD_LENGTH]>) -> Result<HashSet<u64>, String> {
     Ok(values)
 }
 
-fn main() {
+#[tokio::main]
+async fn main() {
     // For cryptographic applications, it is important to use a secure RNG. In
     // Rust, those RNG implement the `CryptoRng` trait.
     let mut rng = CsRng::from_entropy();
@@ -115,17 +115,15 @@ fn main() {
 
     // Here we insert all bindings one by one, blocking on each call. A better
     // way would be to performed all such calls in parallel using tasks.
-    index
-        .clone()
-        .into_iter()
-        .for_each(|(kw, vs)| block_on(findex.insert(kw, vs)).expect("insert failed"));
-
+    for (kw, vs) in index.clone().into_iter() {
+        findex.insert(kw, vs).await.expect("insert failed");
+    }
     // In order to verify insertion was correctly performed, we search for all
     // the indexed keywords...
     let res = index
         .keys()
         .cloned()
-        .map(|kw| (kw, block_on(findex.search(&kw)).expect("search failed")))
+        .map(|kw| (kw, findex.search(&kw).await.expect("search failed")))
         .collect::<HashMap<_, _>>();
 
     // ... and verify we get the whole index back!

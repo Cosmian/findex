@@ -141,11 +141,10 @@ mod tests {
         memory::MemoryEncryptionLayer,
     };
     use cosmian_crypto_core::{CsRng, Secret, define_byte_type, reexport::rand_core::SeedableRng};
-    use futures::executor::block_on;
     use std::collections::HashSet;
 
-    #[test]
-    fn test_insert_search_delete_search() {
+    #[tokio::test]
+    async fn test_insert_search_delete_search() {
         // Define a byte type, and use `Value` as an alias for 8-bytes values of
         // that type.
         type Value = Bytes<8>;
@@ -178,10 +177,16 @@ mod tests {
             Value::try_from(2).unwrap(),
             Value::try_from(4).unwrap(),
         ];
-        block_on(findex.insert("cat".to_string(), cat_bindings.clone())).unwrap();
-        block_on(findex.insert("dog".to_string(), dog_bindings.clone())).unwrap();
-        let cat_res = block_on(findex.search(&"cat".to_string())).unwrap();
-        let dog_res = block_on(findex.search(&"dog".to_string())).unwrap();
+        findex
+            .insert("cat".to_string(), cat_bindings.clone())
+            .await
+            .unwrap();
+        findex
+            .insert("dog".to_string(), dog_bindings.clone())
+            .await
+            .unwrap();
+        let cat_res = findex.search(&"cat".to_string()).await.unwrap();
+        let dog_res = findex.search(&"dog".to_string()).await.unwrap();
         assert_eq!(
             cat_bindings.iter().cloned().collect::<HashSet<_>>(),
             cat_res
@@ -191,10 +196,10 @@ mod tests {
             dog_res
         );
 
-        block_on(findex.delete("dog", dog_bindings)).unwrap();
-        block_on(findex.delete("cat", cat_bindings)).unwrap();
-        let cat_res = block_on(findex.search(&"cat".to_string())).unwrap();
-        let dog_res = block_on(findex.search(&"dog".to_string())).unwrap();
+        findex.delete("dog", dog_bindings).await.unwrap();
+        findex.delete("cat", cat_bindings).await.unwrap();
+        let cat_res = findex.search(&"cat".to_string()).await.unwrap();
+        let dog_res = findex.search(&"dog".to_string()).await.unwrap();
         assert_eq!(HashSet::new(), cat_res);
         assert_eq!(HashSet::new(), dog_res);
     }

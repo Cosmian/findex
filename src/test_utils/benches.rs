@@ -4,7 +4,6 @@ use crate::{
 };
 use cosmian_crypto_core::{Secret, reexport::rand_core::CryptoRngCore};
 use criterion::{BenchmarkId, Criterion};
-use futures::future::join_all;
 use std::{collections::HashSet, fmt::Debug, sync::Arc};
 use tokio::runtime::{Builder, Runtime};
 
