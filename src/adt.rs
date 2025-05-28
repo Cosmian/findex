@@ -127,7 +127,8 @@ pub mod tests {
                 })
                 .collect::<Vec<_>>();
             for h in handles {
-                h.await.unwrap();
+                h.await
+                    .expect("Join handle failed during test_vector_concurrent");
             }
             let mut res = v.read().await.unwrap();
             let old = res.clone();
