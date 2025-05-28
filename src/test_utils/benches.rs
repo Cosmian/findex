@@ -261,7 +261,7 @@ pub fn bench_memory_contention<
                                 })
                                 .collect::<Vec<_>>();
                             for h in handles {
-                                h.await.expect("Insert task failed");
+                                h.await.expect("Insert task failed").unwrap();
                             }
                         })
                     },
