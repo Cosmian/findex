@@ -120,11 +120,11 @@ async fn main() {
     }
     // In order to verify insertion was correctly performed, we search for all
     // the indexed keywords...
-    let res = index
-        .keys()
-        .cloned()
-        .map(|kw| (kw, findex.search(&kw).await.expect("search failed")))
-        .collect::<HashMap<_, _>>();
+    let mut res = HashMap::new();
+    for kw in index.keys().cloned() {
+        let values = findex.search(&kw).await.expect("search failed");
+        res.insert(kw, values);
+    }
 
     // ... and verify we get the whole index back!
     assert_eq!(res, index);

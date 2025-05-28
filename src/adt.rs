@@ -85,7 +85,6 @@ pub mod tests {
         //! This module defines tests any implementation of the VectorADT interface must pass.
 
         use crate::adt::VectorADT;
-        use futures::{executor::block_on, future::join_all};
 
         /// Adding information from different copies of the same vector should be visible by all
         /// copies.
@@ -127,10 +126,10 @@ pub mod tests {
                     })
                 })
                 .collect::<Vec<_>>();
-            for h in join_all(handles).await {
-                h.unwrap();
+            for h in handles {
+                h.await.unwrap();
             }
-            let mut res = block_on(v.read()).unwrap();
+            let mut res = v.read().await.unwrap();
             let old = res.clone();
             res.sort();
             assert_ne!(old, res);

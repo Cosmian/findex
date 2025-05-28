@@ -138,8 +138,8 @@ pub fn bench_memory_search_multiple_keywords<
                             let findex = findex.clone();
                             handles.push(tokio::spawn(async move { findex.search(&kw).await }))
                         }
-                        for res in join_all(handles).await {
-                            res.unwrap().unwrap();
+                        for res in handles {
+                            res.await.expect("Search task failed").unwrap();
                         }
                     })
                 },
@@ -255,10 +255,14 @@ pub fn bench_memory_contention<
                     },
                     |iterator| {
                         rt.block_on(async {
-                            join_all(iterator.map(|(findex, (kw, vs))| {
-                                tokio::spawn(async move { findex.insert(kw, vs).await })
-                            }))
-                            .await
+                            let handles = iterator
+                                .map(|(findex, (kw, vs))| {
+                                    tokio::spawn(async move { findex.insert(kw, vs).await })
+                                })
+                                .collect::<Vec<_>>();
+                            for h in handles {
+                                h.await.expect("Insert task failed");
+                            }
                         })
                     },
                     criterion::BatchSize::SmallInput,
@@ -296,7 +300,9 @@ pub fn bench_memory_contention<
                                 let h = tokio::spawn(async move { findex.insert(kw, vs).await });
                                 handles.push(h);
                             }
-                            join_all(handles).await
+                            for h in handles {
+                                h.await.expect("Insert task failed").unwrap();
+                            }
                         })
                     },
                     criterion::BatchSize::SmallInput,
