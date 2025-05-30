@@ -22,7 +22,7 @@ path = "src/lib.rs"
 
 [features]
 default = []
-test-utils = ["tokio", "criterion", "futures"]
+test-utils = ["tokio", "criterion"]
 
 [dependencies]
 aes = "0.8"
