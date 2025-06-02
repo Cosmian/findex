@@ -223,7 +223,7 @@ pub trait TaskSpawner: Send + Sync {
     type JoinHandle<T: Send + 'static>: Future<Output = Result<T, Self::JoinError>> + Send;
     type JoinError: std::error::Error + Send;
 
-    fn spawn<F>(&self, future: F) -> Self::JoinHandle<F::Output>
+    fn spawn<F>(future: F) -> Self::JoinHandle<F::Output>
     where
         F: Future + Send + 'static,
         F::Output: Send + 'static;
@@ -235,7 +235,7 @@ impl TaskSpawner for TokioSpawner {
     type JoinHandle<T: Send + 'static> = tokio::task::JoinHandle<T>;
     type JoinError = tokio::task::JoinError;
 
-    fn spawn<F>(&self, future: F) -> Self::JoinHandle<F::Output>
+    fn spawn<F>(future: F) -> Self::JoinHandle<F::Output>
     where
         F: Future + Send + 'static,
         F::Output: Send + 'static,
@@ -260,7 +260,6 @@ pub async fn test_guarded_write_concurrent<const WORD_LENGTH: usize, Memory, S>(
     memory: &Memory,
     seed: [u8; SEED_LENGTH],
     n_threads: Option<usize>,
-    spawer: &S,
 ) where
     Memory: 'static + Send + Sync + MemoryADT + Clone,
     Memory::Address: Send + From<[u8; ADDRESS_LENGTH]>,
@@ -318,7 +317,7 @@ pub async fn test_guarded_write_concurrent<const WORD_LENGTH: usize, Memory, S>(
     let handles = (0..n)
         .map(|_| {
             let m = memory.clone();
-            spawer.spawn(worker(m, a))
+            S::spawn(worker(m, a))
         })
         .collect::<Vec<_>>();
 

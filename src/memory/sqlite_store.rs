@@ -211,6 +211,7 @@ mod tests {
         let m = SqliteMemory::<_, [u8; WORD_LENGTH]>::connect(DB_PATH)
             .await
             .unwrap();
-        test_guarded_write_concurrent(&m, gen_seed(), Some(100), &TokioSpawner).await
+        test_guarded_write_concurrent::<WORD_LENGTH, _, TokioSpawner>(&m, gen_seed(), Some(100))
+            .await
     }
 }

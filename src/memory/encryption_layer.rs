@@ -185,7 +185,6 @@ mod tests {
     #[tokio::test]
     async fn test_concurrent_read_write() {
         let mem = create_memory(&mut CsRng::from_entropy());
-        test_guarded_write_concurrent::<WORD_LENGTH, _, _>(&mem, gen_seed(), None, &TokioSpawner)
-            .await;
+        test_guarded_write_concurrent::<WORD_LENGTH, _, TokioSpawner>(&mem, gen_seed(), None).await;
     }
 }

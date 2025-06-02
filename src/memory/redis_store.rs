@@ -182,7 +182,6 @@ mod tests {
     #[tokio::test]
     async fn test_rw_ccr() {
         let m = RedisMemory::connect(&get_redis_url()).await.unwrap();
-        test_guarded_write_concurrent::<WORD_LENGTH, _, _>(&m, gen_seed(), None, &TokioSpawner)
-            .await
+        test_guarded_write_concurrent::<WORD_LENGTH, _, TokioSpawner>(&m, gen_seed(), None).await
     }
 }

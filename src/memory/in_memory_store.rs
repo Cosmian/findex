@@ -95,28 +95,29 @@ mod tests {
 
     use super::InMemory;
     use crate::{
-        test_utils::gen_seed,
+        ADDRESS_LENGTH, WORD_LENGTH,
         test_utils::{
-            TokioSpawner, test_guarded_write_concurrent, test_single_write_and_read,
+            TokioSpawner, gen_seed, test_guarded_write_concurrent, test_single_write_and_read,
             test_wrong_guard,
         },
     };
 
     #[tokio::test]
     async fn test_sequential_read_write() {
-        let memory = InMemory::<[u8; 16], [u8; 16]>::default();
+        let memory = InMemory::<[u8; ADDRESS_LENGTH], [u8; WORD_LENGTH]>::default();
         test_single_write_and_read(&memory, gen_seed()).await;
     }
 
     #[tokio::test]
     async fn test_sequential_wrong_guard() {
-        let memory = InMemory::<[u8; 16], [u8; 16]>::default();
+        let memory = InMemory::<[u8; ADDRESS_LENGTH], [u8; WORD_LENGTH]>::default();
         test_wrong_guard(&memory, gen_seed()).await;
     }
 
     #[tokio::test]
     async fn test_concurrent_read_write() {
-        let memory = InMemory::<[u8; 16], [u8; 16]>::default();
-        test_guarded_write_concurrent(&memory, gen_seed(), None, &TokioSpawner).await;
+        let memory = InMemory::<[u8; ADDRESS_LENGTH], [u8; WORD_LENGTH]>::default();
+        test_guarded_write_concurrent::<WORD_LENGTH, _, TokioSpawner>(&memory, gen_seed(), None)
+            .await;
     }
 }
