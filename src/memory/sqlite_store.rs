@@ -176,7 +176,7 @@ mod tests {
 
     use super::*;
     use crate::{
-        WORD_LENGTH, gen_seed, test_guarded_write_concurrent, test_rw_same_address,
+        TokioSpawner, WORD_LENGTH, gen_seed, test_guarded_write_concurrent, test_rw_same_address,
         test_single_write_and_read, test_wrong_guard,
     };
 
@@ -211,6 +211,6 @@ mod tests {
         let m = SqliteMemory::<_, [u8; WORD_LENGTH]>::connect(DB_PATH)
             .await
             .unwrap();
-        test_guarded_write_concurrent(&m, gen_seed(), Some(100)).await
+        test_guarded_write_concurrent(&m, gen_seed(), Some(100), &TokioSpawner).await
     }
 }

@@ -96,7 +96,10 @@ mod tests {
     use super::InMemory;
     use crate::{
         test_utils::gen_seed,
-        test_utils::{test_guarded_write_concurrent, test_single_write_and_read, test_wrong_guard},
+        test_utils::{
+            TokioSpawner, test_guarded_write_concurrent, test_single_write_and_read,
+            test_wrong_guard,
+        },
     };
 
     #[tokio::test]
@@ -114,6 +117,6 @@ mod tests {
     #[tokio::test]
     async fn test_concurrent_read_write() {
         let memory = InMemory::<[u8; 16], [u8; 16]>::default();
-        test_guarded_write_concurrent(&memory, gen_seed(), None).await;
+        test_guarded_write_concurrent(&memory, gen_seed(), None, &TokioSpawner).await;
     }
 }

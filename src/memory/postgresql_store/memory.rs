@@ -242,7 +242,7 @@ mod tests {
 
     use super::*;
     use crate::{
-        ADDRESS_LENGTH, Address, WORD_LENGTH,
+        ADDRESS_LENGTH, Address, TokioSpawner, WORD_LENGTH,
         test_utils::{
             gen_seed, test_guarded_write_concurrent, test_rw_same_address,
             test_single_write_and_read, test_wrong_guard,
@@ -354,7 +354,13 @@ mod tests {
     #[tokio::test]
     async fn test_rw_ccr() -> Result<(), PostgresMemoryError> {
         setup_and_run_test("findex_test_rw_ccr", |m| async move {
-            test_guarded_write_concurrent::<WORD_LENGTH, _>(&m, gen_seed(), Some(100)).await;
+            test_guarded_write_concurrent::<WORD_LENGTH, _, _>(
+                &m,
+                gen_seed(),
+                Some(100),
+                &TokioSpawner,
+            )
+            .await;
         })
         .await
     }

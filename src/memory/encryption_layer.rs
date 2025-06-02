@@ -142,7 +142,8 @@ mod tests {
         address::Address,
         memory::{MemoryEncryptionLayer, in_memory_store::InMemory},
         test_utils::{
-            gen_seed, test_guarded_write_concurrent, test_single_write_and_read, test_wrong_guard,
+            TokioSpawner, gen_seed, test_guarded_write_concurrent, test_single_write_and_read,
+            test_wrong_guard,
         },
     };
 
@@ -184,6 +185,7 @@ mod tests {
     #[tokio::test]
     async fn test_concurrent_read_write() {
         let mem = create_memory(&mut CsRng::from_entropy());
-        test_guarded_write_concurrent::<WORD_LENGTH, _>(&mem, gen_seed(), None).await;
+        test_guarded_write_concurrent::<WORD_LENGTH, _, _>(&mem, gen_seed(), None, &TokioSpawner)
+            .await;
     }
 }

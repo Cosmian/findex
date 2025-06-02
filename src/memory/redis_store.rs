@@ -149,8 +149,8 @@ mod tests {
         WORD_LENGTH,
         test_utils::gen_seed,
         {
-            test_guarded_write_concurrent, test_rw_same_address, test_single_write_and_read,
-            test_wrong_guard,
+            TokioSpawner, test_guarded_write_concurrent, test_rw_same_address,
+            test_single_write_and_read, test_wrong_guard,
         },
     };
 
@@ -182,6 +182,7 @@ mod tests {
     #[tokio::test]
     async fn test_rw_ccr() {
         let m = RedisMemory::connect(&get_redis_url()).await.unwrap();
-        test_guarded_write_concurrent::<WORD_LENGTH, _>(&m, gen_seed(), None).await
+        test_guarded_write_concurrent::<WORD_LENGTH, _, _>(&m, gen_seed(), None, &TokioSpawner)
+            .await
     }
 }

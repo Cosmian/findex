@@ -13,7 +13,7 @@ use cosmian_crypto_core::{
     CsRng,
     reexport::rand_core::{RngCore, SeedableRng},
 };
-use std::fmt::Debug;
+use std::{fmt::Debug, future::Future};
 
 pub const SEED_LENGTH: usize = 32;
 
@@ -218,6 +218,32 @@ pub async fn test_rw_same_address<const WORD_LENGTH: usize, Memory>(
     );
 }
 
+/// Trait for spawning async tasks in a runtime-agnostic way
+pub trait TaskSpawner: Send + Sync {
+    type JoinHandle<T: Send + 'static>: Future<Output = Result<T, Self::JoinError>> + Send;
+    type JoinError: std::error::Error + Send;
+
+    fn spawn<F>(&self, future: F) -> Self::JoinHandle<F::Output>
+    where
+        F: Future + Send + 'static,
+        F::Output: Send + 'static;
+}
+
+pub struct TokioSpawner;
+
+impl TaskSpawner for TokioSpawner {
+    type JoinHandle<T: Send + 'static> = tokio::task::JoinHandle<T>;
+    type JoinError = tokio::task::JoinError;
+
+    fn spawn<F>(&self, future: F) -> Self::JoinHandle<F::Output>
+    where
+        F: Future + Send + 'static,
+        F::Output: Send + 'static,
+    {
+        tokio::spawn(future)
+    }
+}
+
 /// Tests concurrent guarded write operations on a Memory ADT implementation.
 ///
 /// Spawns multiple threads to perform concurrent counter increments.
@@ -230,16 +256,18 @@ pub async fn test_rw_same_address<const WORD_LENGTH: usize, Memory>(
 /// * `memory` - The Memory ADT implementation to test.
 /// * `seed` - The seed used to initialize the random number generator.
 /// * `n_threads` - The number of threads to spawn. If None, defaults to 100.
-pub async fn test_guarded_write_concurrent<const WORD_LENGTH: usize, Memory>(
+pub async fn test_guarded_write_concurrent<const WORD_LENGTH: usize, Memory, S>(
     memory: &Memory,
     seed: [u8; SEED_LENGTH],
     n_threads: Option<usize>,
+    spawer: &S,
 ) where
     Memory: 'static + Send + Sync + MemoryADT + Clone,
     Memory::Address: Send + From<[u8; ADDRESS_LENGTH]>,
     Memory::Word:
         Send + Debug + PartialEq + From<[u8; WORD_LENGTH]> + Into<[u8; WORD_LENGTH]> + Clone,
     Memory::Error: Send + std::error::Error,
+    S: TaskSpawner,
 {
     // A worker increment N times the counter m[a].
     async fn worker<const WORD_LENGTH: usize, Memory>(
@@ -290,7 +318,7 @@ pub async fn test_guarded_write_concurrent<const WORD_LENGTH: usize, Memory>(
     let handles = (0..n)
         .map(|_| {
             let m = memory.clone();
-            tokio::spawn(worker(m, a))
+            spawer.spawn(worker(m, a))
         })
         .collect::<Vec<_>>();
 
