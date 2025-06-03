@@ -22,24 +22,14 @@ description = "Symmetric Searchable Encryption"
 
 
 [workspace.dependencies]
-aes = "0.8"
 cosmian_crypto_core = { version = "10.1", default-features = false, features = [
     "macro",
     "sha3",
 ] }
-xts-mode = "0.5"
 criterion = { version = "0.6" }
 rand = { version = "0.9.0" }
 rand_distr = { version = "0.5.1" }
 tokio = { version = "1.44" }
-async-sqlite = { version = "0.5" }
-deadpool-postgres = { version = "0.14.1" }
-redis = { version = "0.28", features = [
-    "aio",
-    "connection-manager",
-    "tokio-comp",
-] }
-tokio-postgres = { version = "0.7.9", features = ["array-impls"] }
 
 
 # TODO: later

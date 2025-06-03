@@ -13,19 +13,49 @@ edition.workspace = true
 name = "cosmian_findex_memories"
 path = "src/lib.rs"
 
-# [features]
-# test-utils = ["tokio", "criterion", "rand", "rand_distr"]
+[features]
+redis-mem = ["redis"]
+sqlite-mem = ["async-sqlite"]
+postgres-mem = ["tokio-postgres", "tokio", "deadpool-postgres"]
 
-# [dependencies]
-# aes.workspace = true
-# cosmian_crypto_core.workspace = true
-# xts-mode.workspace = true
+[dependencies]
+cosmian_crypto_core.workspace = true
+cosmian_findex = { path = "../findex" }
+async-sqlite = { version = "0.4", optional = true } # `async-sqlite` dependency is pinned at v0.4 due to dependency tree issues with sqlx requiring a lower version of `libsqlite3-sys`
+deadpool-postgres = { version = "0.14.1", optional = true }
+redis = { version = "0.31", features = [
+    "aio",
+    "connection-manager",
+    "tokio-comp",
+], optional = true }
+tokio-postgres = { version = "0.7.9", optional = true, features = [
+    "array-impls",
+] }
+tokio = { workspace = true, features = ["rt-multi-thread"], optional = true }
 
-# # Optional dependencies for test-utils
-# tokio = { workspace = true, optional = true }
-# criterion = { workspace = true, optional = true }
-# rand = { workspace = true, optional = true }
-# rand_distr = { workspace = true, optional = true }
 
-# [dev-dependencies]
-# tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
+[dev-dependencies]
+cosmian_findex = { path = "../findex", features = ["test-utils"] }
+futures = { version = "0.3" }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
+criterion = { workspace = true }
+rand = { workspace = true }
+rand_distr = { workspace = true }
+
+# Optional dependencies for t TOD TODO 
+# [[bench]]
+# name = "benches"
+# harness = false
+# required-features = ["redis-mem", "sqlite-mem", "postgres-mem"]
+
+# [[example]]
+# name = "redis"
+# required-features = ["redis-mem"]
+
+# [[example]]
+# name = "sqlite"
+# required-features = ["sqlite-mem"]
+
+# [[example]]
+# name = "postgresql"
+# required-features = ["postgres-mem"]
