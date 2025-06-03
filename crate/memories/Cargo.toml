@@ -1,0 +1,31 @@
+[package]
+name = "cosmian_findex_memories"
+version.workspace = true
+authors.workspace = true
+license.workspace = true
+edition.workspace = true
+# categories.workspace = true
+# keywords.workspace = true
+# repository.workspace = true
+# description.workspace = true
+
+[lib]
+name = "cosmian_findex_memories"
+path = "src/lib.rs"
+
+# [features]
+# test-utils = ["tokio", "criterion", "rand", "rand_distr"]
+
+# [dependencies]
+# aes.workspace = true
+# cosmian_crypto_core.workspace = true
+# xts-mode.workspace = true
+
+# # Optional dependencies for test-utils
+# tokio = { workspace = true, optional = true }
+# criterion = { workspace = true, optional = true }
+# rand = { workspace = true, optional = true }
+# rand_distr = { workspace = true, optional = true }
+
+# [dev-dependencies]
+# tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }

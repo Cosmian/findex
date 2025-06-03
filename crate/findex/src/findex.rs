@@ -166,6 +166,7 @@ mod tests {
             &seed,
             InMemory::<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>::default(),
         );
+
         let findex = Findex::new(memory, dummy_encode::<WORD_LENGTH, Value>, dummy_decode);
         let cat_bindings = [
             Value::try_from(1).unwrap(),

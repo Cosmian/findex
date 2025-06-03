@@ -1,3 +1,5 @@
+//! A simple RAM-based implementation of the MemoryADT trait that stores key-value pairs in a thread-safe in-memory HashMap.
+
 use std::{
     collections::HashMap,
     fmt::{Debug, Display},
@@ -97,7 +99,7 @@ mod tests {
     use crate::{
         test_utils::gen_seed,
         test_utils::{
-            TokioSpawner, test_guarded_write_concurrent, test_single_write_and_read,
+            test_guarded_write_concurrent, test_rw_same_address, test_single_write_and_read,
             test_wrong_guard,
         },
     };
@@ -115,8 +117,14 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_sequential_rw_same_address() {
+        let memory = InMemory::<[u8; 16], [u8; 16]>::default();
+        test_rw_same_address(&memory, gen_seed()).await;
+    }
+
+    #[tokio::test]
     async fn test_concurrent_read_write() {
         let memory = InMemory::<[u8; 16], [u8; 16]>::default();
-        test_guarded_write_concurrent(&memory, gen_seed(), None, &TokioSpawner).await;
+        test_guarded_write_concurrent(&memory, gen_seed(), None).await;
     }
 }
