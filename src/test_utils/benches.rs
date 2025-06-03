@@ -1,15 +1,13 @@
 //! This module provides a comprehensive benchmarking suite for testing the performance of Findex memory implementations.
 //! These benchmarks are designed to be generic and work with any memory backend that implements the MemoryADT trait.
-//! The [findex-memories](https://github.com/Cosmian/findex-memories) crate provides a set of memory backends that have been benched.
 use crate::{
     ADDRESS_LENGTH, Address, Findex, IndexADT, MemoryADT, MemoryEncryptionLayer, WORD_LENGTH,
     dummy_decode, dummy_encode,
 };
+use agnostic::{AsyncSpawner, RuntimeLite, tokio::TokioRuntime};
 use cosmian_crypto_core::{Secret, reexport::rand_core::CryptoRngCore};
 use criterion::{BenchmarkId, Criterion};
 use std::{collections::HashSet, fmt::Debug, sync::Arc};
-use tokio::runtime::{Builder, Runtime};
-
 const MAX_VAL: usize = 1_000;
 
 fn make_scale(start: usize, stop: usize, n: usize) -> impl Iterator<Item = f32> {
@@ -62,10 +60,8 @@ pub fn bench_memory_search_multiple_bindings<
     // Redis memory backend requires a tokio runtime, and all operations to
     // happen in the same runtime, otherwise the connection returns a broken
     // pipe error.
-    let rt = Runtime::new().unwrap();
-
     let findex = Findex::new(
-        MemoryEncryptionLayer::new(&Secret::random(rng), rt.block_on(m())),
+        MemoryEncryptionLayer::new(&Secret::random(rng), TokioRuntime::block_on(m())),
         dummy_encode::<WORD_LENGTH, _>,
         dummy_decode,
     );
@@ -75,12 +71,12 @@ pub fn bench_memory_search_multiple_bindings<
     index
         .clone()
         .into_iter()
-        .for_each(|(kw, vs)| rt.block_on(findex.insert(kw, vs)).unwrap());
+        .for_each(|(kw, vs)| TokioRuntime::block_on(findex.insert(kw, vs)).unwrap());
 
     let mut group = c.benchmark_group(format!("multiple-binding search ({})", memory_name));
     for (kw, vals) in index.iter() {
         group.bench_with_input(BenchmarkId::from_parameter(vals.len()), &(), |b, ()| {
-            b.iter(|| rt.block_on(findex.search(kw)).expect("search failed"));
+            b.iter(|| TokioRuntime::block_on(findex.search(kw)).expect("search failed"));
         });
     }
 }
@@ -103,10 +99,8 @@ pub fn bench_memory_search_multiple_keywords<
     // Redis memory backend requires a tokio runtime, and all operations to
     // happen in the same runtime, otherwise the connection returns a broken
     // pipe error.
-    let rt = Runtime::new().unwrap();
-
     let findex = Arc::new(Findex::new(
-        MemoryEncryptionLayer::new(&Secret::random(rng), rt.block_on(m())),
+        MemoryEncryptionLayer::new(&Secret::random(rng), TokioRuntime::block_on(m())),
         dummy_encode::<WORD_LENGTH, _>,
         dummy_decode,
     ));
@@ -116,7 +110,7 @@ pub fn bench_memory_search_multiple_keywords<
     index
         .clone()
         .into_iter()
-        .for_each(|(kw, vs)| rt.block_on(findex.insert(kw, vs)).unwrap());
+        .for_each(|(kw, vs)| TokioRuntime::block_on(findex.insert(kw, vs)).unwrap());
 
     let mut group = c.benchmark_group(format!("multiple-keyword search ({memory_name})"));
     for i in make_scale(1, MAX_VAL, n) {
@@ -135,11 +129,13 @@ pub fn bench_memory_search_multiple_keywords<
                     )
                 },
                 |(kws, findex)| {
-                    rt.block_on(async {
+                    TokioRuntime::block_on(async {
                         let mut handles = Vec::with_capacity(n);
                         for kw in kws {
                             let findex = findex.clone();
-                            handles.push(tokio::spawn(async move { findex.search(&kw).await }))
+                            handles.push(agnostic::tokio::TokioSpawner::spawn(async move {
+                                findex.search(&kw).await
+                            }))
                         }
                         for res in handles {
                             res.await.expect("Search task failed").unwrap();
@@ -172,9 +168,7 @@ pub fn bench_memory_insert_multiple_bindings<
     // Redis memory backend requires a tokio runtime, and all operations to
     // happen in the same runtime, otherwise the connection returns a broken
     // pipe error.
-    let rt = Runtime::new().unwrap();
-
-    let mut m = rt.block_on(m());
+    let mut m = TokioRuntime::block_on(m());
 
     let findex = Arc::new(Findex::new(
         MemoryEncryptionLayer::new(&Secret::random(rng), m.clone()),
@@ -187,17 +181,17 @@ pub fn bench_memory_insert_multiple_bindings<
     index
         .clone()
         .into_iter()
-        .for_each(|(kw, vs)| rt.block_on(findex.insert(kw, vs)).unwrap());
+        .for_each(|(kw, vs)| TokioRuntime::block_on(findex.insert(kw, vs)).unwrap());
 
     let mut group = c.benchmark_group(format!("multiple-binding insert ({memory_name})"));
     for (kw, vs) in index.into_iter() {
         group.bench_function(BenchmarkId::from_parameter(vs.len()), |b| {
             b.iter_batched(
                 || {
-                    rt.block_on(clear(&mut m)).unwrap();
+                    TokioRuntime::block_on(clear(&mut m)).unwrap();
                     (kw, vs.clone())
                 },
-                |(kw, vs)| rt.block_on(findex.insert(kw, vs)).expect("search failed"),
+                |(kw, vs)| TokioRuntime::block_on(findex.insert(kw, vs)).expect("search failed"),
                 criterion::BatchSize::SmallInput,
             );
         });
@@ -227,9 +221,7 @@ pub fn bench_memory_contention<
     // Redis memory backend requires a tokio runtime, and all operations to
     // happen in the same runtime, otherwise the connection returns a broken
     // pipe error.
-    let rt = Builder::new_multi_thread().enable_all().build().unwrap();
-
-    let m = rt.block_on(m());
+    let m = TokioRuntime::block_on(m());
 
     let findex = Arc::new(Findex::new(
         MemoryEncryptionLayer::new(&Secret::random(rng), m.clone()),
@@ -253,14 +245,16 @@ pub fn bench_memory_contention<
             group.bench_function(BenchmarkId::from_parameter(n_clients), |b| {
                 b.iter_batched(
                     || {
-                        rt.block_on(clear(&m)).unwrap();
+                        TokioRuntime::block_on(clear(&m)).unwrap();
                         (0..n_clients).map(|_| findex.clone()).zip(bindings.clone())
                     },
                     |iterator| {
-                        rt.block_on(async {
+                        TokioRuntime::block_on(async {
                             let handles = iterator
                                 .map(|(findex, (kw, vs))| {
-                                    tokio::spawn(async move { findex.insert(kw, vs).await })
+                                    agnostic::tokio::TokioSpawner::spawn(async move {
+                                        findex.insert(kw, vs).await
+                                    })
                                 })
                                 .collect::<Vec<_>>();
                             for h in handles {
@@ -291,16 +285,18 @@ pub fn bench_memory_contention<
             group.bench_function(BenchmarkId::from_parameter(n_clients), |b| {
                 b.iter_batched(
                     || {
-                        rt.block_on(clear(&m)).unwrap();
+                        TokioRuntime::block_on(clear(&m)).unwrap();
                         (
                             Vec::with_capacity(n_clients),
                             (0..n_clients).map(|_| findex.clone()).zip(bindings.clone()),
                         )
                     },
                     |(mut handles, iterator)| {
-                        rt.block_on(async {
+                        TokioRuntime::block_on(async {
                             for (findex, (kw, vs)) in iterator {
-                                let h = tokio::spawn(async move { findex.insert(kw, vs).await });
+                                let h = agnostic::tokio::TokioSpawner::spawn(async move {
+                                    findex.insert(kw, vs).await
+                                });
                                 handles.push(h);
                             }
                             for h in handles {
@@ -337,9 +333,7 @@ pub fn bench_memory_one_to_many<
     // Redis memory backend requires a tokio runtime, and all operations to
     // happen in the same runtime, otherwise the connection returns a broken
     // pipe error.
-    let rt = Builder::new_multi_thread().enable_all().build().unwrap();
-
-    let m = rt.block_on(m());
+    let m = TokioRuntime::block_on(m());
 
     let findex = Arc::new(Findex::new(
         MemoryEncryptionLayer::new(&Secret::random(rng), m.clone()),
@@ -359,16 +353,16 @@ pub fn bench_memory_one_to_many<
             group.bench_function(BenchmarkId::from_parameter(n_clients), |b| {
                 b.iter_batched(
                     || {
-                        rt.block_on(clear(&m)).unwrap();
+                        TokioRuntime::block_on(clear(&m)).unwrap();
                         (
                             Vec::with_capacity(n_clients),
                             (0..n_clients).map(|_| (findex.clone(), vs.clone())),
                         )
                     },
                     |(mut handles, iterator)| {
-                        rt.block_on(async {
+                        TokioRuntime::block_on(async {
                             for (findex, vs) in iterator {
-                                handles.push(tokio::spawn(async move {
+                                handles.push(agnostic::tokio::TokioSpawner::spawn(async move {
                                     loop {
                                         findex.insert(kw, vs.clone()).await.unwrap();
                                     }
@@ -376,7 +370,7 @@ pub fn bench_memory_one_to_many<
                             }
 
                             let findex = findex.clone();
-                            tokio::spawn(async move {
+                            agnostic::tokio::TokioSpawner::spawn(async move {
                                 let kw = kw;
                                 findex.search(&kw).await.unwrap();
                             })
@@ -407,15 +401,15 @@ pub fn bench_memory_one_to_many<
             group.bench_function(BenchmarkId::from_parameter(n_clients), |b| {
                 b.iter_batched(
                     || {
-                        rt.block_on(clear(&m)).unwrap();
+                        TokioRuntime::block_on(clear(&m)).unwrap();
                     },
                     |_| {
-                        rt.block_on(async {
+                        TokioRuntime::block_on(async {
                             let mut handles = Vec::new();
                             for _ in 0..n_clients {
                                 let findex = findex.clone();
                                 let vs = vs.clone();
-                                handles.push(tokio::spawn(async move {
+                                handles.push(agnostic::tokio::TokioSpawner::spawn(async move {
                                     loop {
                                         findex.insert(kw, vs.clone()).await.unwrap();
                                     }
@@ -424,7 +418,7 @@ pub fn bench_memory_one_to_many<
 
                             let findex = findex.clone();
                             let vs = vs.clone();
-                            tokio::spawn(async move {
+                            agnostic::tokio::TokioSpawner::spawn(async move {
                                 let kw = kw;
                                 findex.insert(&kw, vs).await.unwrap();
                             })

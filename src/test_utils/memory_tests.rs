@@ -13,7 +13,7 @@ use cosmian_crypto_core::{
     CsRng,
     reexport::rand_core::{RngCore, SeedableRng},
 };
-use std::{fmt::Debug, future::Future};
+use std::fmt::Debug;
 
 pub const SEED_LENGTH: usize = 32;
 
@@ -218,32 +218,6 @@ pub async fn test_rw_same_address<const WORD_LENGTH: usize, Memory>(
     );
 }
 
-/// Trait for spawning async tasks in a runtime-agnostic way
-pub trait TaskSpawner: Send + Sync {
-    type JoinHandle<T: Send + 'static>: Future<Output = Result<T, Self::JoinError>> + Send;
-    type JoinError: std::error::Error + Send;
-
-    fn spawn<F>(future: F) -> Self::JoinHandle<F::Output>
-    where
-        F: Future + Send + 'static,
-        F::Output: Send + 'static;
-}
-
-pub struct TokioSpawner;
-
-impl TaskSpawner for TokioSpawner {
-    type JoinHandle<T: Send + 'static> = tokio::task::JoinHandle<T>;
-    type JoinError = tokio::task::JoinError;
-
-    fn spawn<F>(future: F) -> Self::JoinHandle<F::Output>
-    where
-        F: Future + Send + 'static,
-        F::Output: Send + 'static,
-    {
-        tokio::spawn(future)
-    }
-}
-
 /// Tests concurrent guarded write operations on a Memory ADT implementation.
 ///
 /// Spawns multiple threads to perform concurrent counter increments.
@@ -266,7 +240,7 @@ pub async fn test_guarded_write_concurrent<const WORD_LENGTH: usize, Memory, S>(
     Memory::Word:
         Send + Debug + PartialEq + From<[u8; WORD_LENGTH]> + Into<[u8; WORD_LENGTH]> + Clone,
     Memory::Error: Send + std::error::Error,
-    S: TaskSpawner,
+    S: agnostic::AsyncSpawner,
 {
     // A worker increment N times the counter m[a].
     async fn worker<const WORD_LENGTH: usize, Memory>(

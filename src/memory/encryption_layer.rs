@@ -132,6 +132,7 @@ impl<
 
 #[cfg(test)]
 mod tests {
+    use agnostic::RuntimeLite;
     use cosmian_crypto_core::{
         CsRng, Sampling, Secret,
         reexport::rand_core::{CryptoRngCore, SeedableRng},
@@ -142,8 +143,7 @@ mod tests {
         address::Address,
         memory::{MemoryEncryptionLayer, in_memory_store::InMemory},
         test_utils::{
-            TokioSpawner, gen_seed, test_guarded_write_concurrent, test_single_write_and_read,
-            test_wrong_guard,
+            gen_seed, test_guarded_write_concurrent, test_single_write_and_read, test_wrong_guard,
         },
     };
 
@@ -183,8 +183,26 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_concurrent_read_write() {
+    async fn test_concurrent_read_write_tokio() {
         let mem = create_memory(&mut CsRng::from_entropy());
-        test_guarded_write_concurrent::<WORD_LENGTH, _, TokioSpawner>(&mem, gen_seed(), None).await;
+        test_guarded_write_concurrent::<WORD_LENGTH, _, agnostic::tokio::TokioSpawner>(
+            &mem,
+            gen_seed(),
+            None,
+        )
+        .await;
+    }
+
+    #[test]
+    fn test_concurrent_read_write_smol() {
+        agnostic::smol::SmolRuntime::block_on(async {
+            let mem = create_memory(&mut CsRng::from_entropy());
+            test_guarded_write_concurrent::<WORD_LENGTH, _, agnostic::smol::SmolSpawner>(
+                &mem,
+                gen_seed(),
+                None,
+            )
+            .await;
+        });
     }
 }

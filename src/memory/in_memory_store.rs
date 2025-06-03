@@ -97,8 +97,7 @@ mod tests {
     use crate::{
         ADDRESS_LENGTH, WORD_LENGTH,
         test_utils::{
-            TokioSpawner, gen_seed, test_guarded_write_concurrent, test_single_write_and_read,
-            test_wrong_guard,
+            gen_seed, test_guarded_write_concurrent, test_single_write_and_read, test_wrong_guard,
         },
     };
 
@@ -115,9 +114,13 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_concurrent_read_write() {
+    async fn test_concurrent_read_write_tokio() {
         let memory = InMemory::<[u8; ADDRESS_LENGTH], [u8; WORD_LENGTH]>::default();
-        test_guarded_write_concurrent::<WORD_LENGTH, _, TokioSpawner>(&memory, gen_seed(), None)
-            .await;
+        test_guarded_write_concurrent::<WORD_LENGTH, _, agnostic::tokio::TokioSpawner>(
+            &memory,
+            gen_seed(),
+            None,
+        )
+        .await;
     }
 }

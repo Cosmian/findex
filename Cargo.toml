@@ -24,8 +24,8 @@ path = "src/lib.rs"
 rust-mem = []
 redis-mem = ["redis"]
 sqlite-mem = ["async-sqlite"]
-test-utils = ["tokio", "criterion", "rand", "rand_distr"]
-postgres-mem = ["tokio-postgres", "tokio", "deadpool-postgres"]
+test-utils = ["criterion", "rand", "rand_distr", "agnostic/tokio"]
+postgres-mem = ["tokio-postgres", "deadpool-postgres"]
 
 [dependencies]
 aes = "0.8"
@@ -39,7 +39,6 @@ xts-mode = "0.5"
 criterion = { version = "0.6", optional = true }
 rand = { version = "0.9.0", optional = true }
 rand_distr = { version = "0.5.1", optional = true }
-tokio = { version = "1.44", features = ["rt-multi-thread"], optional = true }
 
 # Memory dependencies
 async-sqlite = { version = "0.5", optional = true }
@@ -52,9 +51,11 @@ redis = { version = "0.28", features = [
 tokio-postgres = { version = "0.7.9", features = [
     "array-impls",
 ], optional = true }
+agnostic = { version = "0.7", optional = true, features = ["tokio", "smol"] }
 
 
 [dev-dependencies]
+agnostic = { version = "0.7", features = ["tokio", "smol"] }
 tokio = { version = "1.44", features = ["macros", "rt-multi-thread"] }
 
 [[bench]]

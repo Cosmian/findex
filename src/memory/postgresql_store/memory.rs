@@ -1,5 +1,6 @@
 use super::PostgresMemoryError;
 use crate::{Address, MemoryADT};
+use agnostic::AsyncSpawner;
 use deadpool_postgres::Pool;
 use std::marker::PhantomData;
 use tokio_postgres::{
@@ -35,7 +36,8 @@ impl<const ADDRESS_LENGTH: usize, const WORD_LENGTH: usize>
         // The connection object performs the actual communication with the database
         // `Connection` only resolves when the connection is closed, either because a fatal error has
         // occurred, or because its associated `Client` has dropped and all outstanding work has completed.
-        let conn_handle = tokio::spawn(async move {
+        // TODO: generise this
+        let conn_handle = agnostic::tokio::TokioSpawner::spawn(async move {
             if let Err(e) = connection.await {
                 eprintln!("connection error: {}", e);
             }
@@ -242,7 +244,7 @@ mod tests {
 
     use super::*;
     use crate::{
-        ADDRESS_LENGTH, Address, TokioSpawner, WORD_LENGTH,
+        ADDRESS_LENGTH, Address, WORD_LENGTH,
         test_utils::{
             gen_seed, test_guarded_write_concurrent, test_rw_same_address,
             test_single_write_and_read, test_wrong_guard,
@@ -354,7 +356,7 @@ mod tests {
     #[tokio::test]
     async fn test_rw_ccr() -> Result<(), PostgresMemoryError> {
         setup_and_run_test("findex_test_rw_ccr", |m| async move {
-            test_guarded_write_concurrent::<WORD_LENGTH, _, TokioSpawner>(
+            test_guarded_write_concurrent::<WORD_LENGTH, _, agnostic::tokio::TokioSpawner>(
                 &m,
                 gen_seed(),
                 Some(100),
