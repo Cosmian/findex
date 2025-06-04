@@ -15,7 +15,7 @@ use criterion::{Criterion, criterion_group, criterion_main};
 #[cfg(feature = "sqlite-mem")]
 use cosmian_findex_memories::SqliteMemory;
 #[cfg(feature = "sqlite-mem")]
-const SQLITE_PATH: &str = "./target/benches.sqlite";
+const SQLITE_PATH: &str = "benches.sqlite.db";
 
 #[cfg(feature = "redis-mem")]
 use cosmian_findex_memories::RedisMemory;
