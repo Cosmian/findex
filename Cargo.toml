@@ -25,7 +25,7 @@ rust-mem = []
 redis-mem = ["redis"]
 sqlite-mem = ["async-sqlite"]
 test-utils = ["criterion", "rand", "rand_distr", "agnostic/tokio"]
-postgres-mem = ["tokio-postgres", "deadpool-postgres"]
+postgres-mem = ["agnostic/tokio", "tokio-postgres", "deadpool-postgres"]
 
 [dependencies]
 aes = "0.8"
@@ -35,7 +35,7 @@ cosmian_crypto_core = { version = "10.1", default-features = false, features = [
 ] }
 xts-mode = "0.5"
 
-# Used only in benches and tests
+# Used in benches and tests.
 criterion = { version = "0.6", optional = true }
 rand = { version = "0.9.0", optional = true }
 rand_distr = { version = "0.5.1", optional = true }

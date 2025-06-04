@@ -138,7 +138,9 @@ pub fn bench_memory_search_multiple_keywords<
                             }))
                         }
                         for res in handles {
-                            res.await.expect("Search task failed").unwrap();
+                            res.await
+                                .expect("Join failure during search operation")
+                                .expect("Search task failed");
                         }
                     })
                 },
@@ -191,7 +193,7 @@ pub fn bench_memory_insert_multiple_bindings<
                     TokioRuntime::block_on(clear(&mut m)).unwrap();
                     (kw, vs.clone())
                 },
-                |(kw, vs)| TokioRuntime::block_on(findex.insert(kw, vs)).expect("search failed"),
+                |(kw, vs)| TokioRuntime::block_on(findex.insert(kw, vs)).expect("Search failed"),
                 criterion::BatchSize::SmallInput,
             );
         });
@@ -258,7 +260,9 @@ pub fn bench_memory_contention<
                                 })
                                 .collect::<Vec<_>>();
                             for h in handles {
-                                h.await.expect("Insert task failed").unwrap();
+                                h.await
+                                    .expect("Join handle failed during insert.")
+                                    .expect("Insert task failed");
                             }
                         })
                     },
@@ -300,7 +304,9 @@ pub fn bench_memory_contention<
                                 handles.push(h);
                             }
                             for h in handles {
-                                h.await.expect("Insert task failed").unwrap();
+                                h.await
+                                    .expect("Join handle failed during insert.")
+                                    .expect("Insert task failed");
                             }
                         })
                     },
