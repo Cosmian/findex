@@ -1,5 +1,4 @@
 [workspace]
-default-members = ["crate/findex"]
 members = ["crate/findex", "crate/memories"]
 resolver = "2"
 
@@ -19,6 +18,7 @@ keywords = ["SSE"]
 license = "BUSL-1.1"
 repository = "https://github.com/Cosmian/findex/"
 description = "Symmetric Searchable Encryption"
+readme = "README.md"
 
 
 [workspace.dependencies]
@@ -30,14 +30,3 @@ criterion = { version = "0.6" }
 rand = { version = "0.9.0" }
 rand_distr = { version = "0.5.1" }
 tokio = { version = "1.44" }
-
-
-# TODO: later
-# [[bench]]
-# name = "benches"
-# harness = false
-# required-features = ["test-utils"]
-
-# [[example]]
-# name = "insert"
-# required-features = ["test-utils"]

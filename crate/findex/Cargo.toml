@@ -8,6 +8,7 @@ keywords.workspace = true
 license.workspace = true
 repository.workspace = true
 description.workspace = true
+readme = "README.md"
 
 [lib]
 name = "cosmian_findex"
@@ -32,3 +33,12 @@ rand_distr = { workspace = true, optional = true }
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
+
+[[bench]]
+name = "benches"
+harness = false
+required-features = ["test-utils"]
+
+[[example]]
+name = "insert"
+required-features = ["test-utils"]

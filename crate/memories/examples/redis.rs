@@ -1,12 +1,12 @@
-//! This example show-cases the use of Findex to securely store a hash-map.
+//! This example show-cases the use of Findex to securely store a hash-map with redis.
 #[path = "shared_utils.rs"]
 mod shared_utils;
 
-use cosmian_crypto_core::{reexport::rand_core::SeedableRng, CsRng, Secret};
-use cosmian_findex::{Address, Findex, IndexADT, MemoryEncryptionLayer, ADDRESS_LENGTH};
+use cosmian_crypto_core::{CsRng, Secret, reexport::rand_core::SeedableRng};
+use cosmian_findex::{ADDRESS_LENGTH, Address, Findex, IndexADT, MemoryEncryptionLayer};
 use cosmian_findex_memories::RedisMemory;
 use futures::executor::block_on;
-use shared_utils::{decoder, encoder, gen_index, WORD_LENGTH};
+use shared_utils::{WORD_LENGTH, decoder, encoder, gen_index};
 use std::collections::HashMap;
 
 const DB_PATH: &str = "redis://localhost:6379";
