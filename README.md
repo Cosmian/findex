@@ -1,22 +1,33 @@
-# Findex
+# Findex: Symmetric Searchable Encryption
 
-To build Findex simply run:
+[![Crates.io](https://img.shields.io/crates/v/cosmian_findex.svg)](https://crates.io/crates/cosmian_findex)
+[![Documentation](https://docs.rs/cosmian_findex/badge.svg)](https://docs.rs/cosmian_findex)
+[![License](https://img.shields.io/badge/License-BUSL--1.1-blue.svg)](LICENSE)
 
-```bash
-cargo build --release
+Findex is a Symmetric Searchable Encryption (SSE) library that enables encrypted search over encrypted data. It allows you to securely index and search encrypted data without compromising privacy or security.
+
+## Architecture
+
+This repository is organized as a Rust workspace with two crates:
+
+- `cosmian_findex`: Core library implementing the SSE algorithms
+- `cosmian_findex_memories`: Storage backend implementations for different databases
+
+## Installation
+
+Add `cosmian_findex` to your Cargo.toml:
+
+```toml
+[dependencies]
+cosmian_findex = "7.1.0"
+# Optional - include backend implementations
+cosmian_findex_memories = { version = "7.1.0", features = ["redis-mem", "sqlite-mem", "postgres-mem"] }
 ```
 
-To test, run:
+## Related Projects
+[Findex Server](github.com/cosmian/findex-server) - A production-ready Findex server implementation
 
-```bash
-cargo test --release --all-features
-```
+## License
 
-To launch the benchmarks, run:
+This project is licensed under the Business Source License 1.1 (BUSL-1.1).
 
-```bash
-cargo bench --all-features
-```
-
-Note that benches are quite involving and require *several hours* for a full
-run. Once all benchmarks are run, you will find detailed reports under `target/criterion`.
