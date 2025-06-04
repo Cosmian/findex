@@ -106,15 +106,15 @@ impl<Address, Word> SqliteMemory<Address, Word> {
     }
 }
 
-// impl<Address: Send + Sync, Word: Send + Sync> SqliteMemory<Address, Word> {
-//     #[cfg(feature = "test-utils")]
-//     pub async fn clear(&self) -> Result<(), SqliteMemoryError> {
-//         self.pool
-//             .conn(|cnx| cnx.execute(&format!("DELETE FROM {FINDEX_TABLE_NAME}"), []))
-//             .await?;
-//         Ok(())
-//     }
-// }
+impl<Address: Send + Sync, Word: Send + Sync> SqliteMemory<Address, Word> {
+    #[cfg(feature = "test-utils")]
+    pub async fn clear(&self) -> Result<(), SqliteMemoryError> {
+        self.pool
+            .conn(|cnx| cnx.execute(&format!("DELETE FROM {FINDEX_TABLE_NAME}"), []))
+            .await?;
+        Ok(())
+    }
+}
 
 impl<const ADDRESS_LENGTH: usize, const WORD_LENGTH: usize> MemoryADT
     for SqliteMemory<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>

@@ -1,0 +1,65 @@
+//! This example show-cases the use of Findex to securely store a hash-map.
+#[path = "shared_utils.rs"]
+mod shared_utils;
+
+use cosmian_crypto_core::{reexport::rand_core::SeedableRng, CsRng, Secret};
+use cosmian_findex::{Address, Findex, IndexADT, MemoryEncryptionLayer, ADDRESS_LENGTH};
+use cosmian_findex_memories::RedisMemory;
+use futures::executor::block_on;
+use shared_utils::{decoder, encoder, gen_index, WORD_LENGTH};
+use std::collections::HashMap;
+
+const DB_PATH: &str = "redis://localhost:6379";
+
+#[tokio::main]
+async fn main() {
+    // For cryptographic applications, it is important to use a secure RNG. In
+    // Rust, those RNG implement the `CryptoRng` trait.
+    let mut rng = CsRng::from_entropy();
+
+    // Generate fresh Findex key. In practice only one user is in charge of
+    // generating the key (the administrator?): all users *must* share the same
+    // key in order to make the index inter-operable.
+    let key = Secret::random(&mut rng);
+
+    // Generating the random index.
+    let index = gen_index(&mut rng);
+
+    // For this example, we use the `RedisMemory` implementation of the `MemoryADT`
+    // trait. It connects to a Redis instance and uses it as a key-value store
+    // for our Findex data structures, which is suitable for production applications.
+    let memory = RedisMemory::<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>::connect(DB_PATH)
+        .await
+        .unwrap();
+
+    let encrypted_memory = MemoryEncryptionLayer::new(&key, memory);
+
+    // Instantiating Findex requires passing the key, the memory used and the
+    // encoder and decoder. Quite simple, after all :)
+    let findex = Findex::<
+        WORD_LENGTH, // size of a word
+        u64,         // type of a value
+        String,      // type of an encoding error
+        _,           // type of the memory
+    >::new(encrypted_memory, encoder, decoder);
+
+    // Here we insert all bindings one by one, blocking on each call. A better
+    // way would be to performed all such calls in parallel using tasks.
+    index
+        .clone()
+        .into_iter()
+        .for_each(|(kw, vs)| block_on(findex.insert(kw, vs)).expect("insert failed"));
+
+    // In order to verify insertion was correctly performed, we search for all
+    // the indexed keywords...
+    let res = index
+        .keys()
+        .cloned()
+        .map(|kw| (kw, block_on(findex.search(&kw)).expect("search failed")))
+        .collect::<HashMap<_, _>>();
+
+    // ... and verify we get the whole index back!
+    assert_eq!(res, index);
+
+    println!("All good !");
+}

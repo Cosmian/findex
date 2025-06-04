@@ -21,7 +21,7 @@ cosmian_crypto_core.workspace = true
 aes = "0.8"
 xts-mode = "0.5"
 
-# Optional dependencies for test-utils
+# Optional dependencies for testing and benchmarking
 tokio = { workspace = true, features = [
     "rt-multi-thread",
     "macros",
@@ -29,7 +29,6 @@ tokio = { workspace = true, features = [
 criterion = { workspace = true, optional = true }
 rand = { workspace = true, optional = true }
 rand_distr = { workspace = true, optional = true }
-
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }

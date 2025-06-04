@@ -84,13 +84,13 @@ impl<Address: Sync, Word: Sync> RedisMemory<Address, Word> {
         Self::connect_with_manager(manager).await
     }
 
-    // #[cfg(feature = "test-utils")]
-    // pub async fn clear(&self) -> Result<(), RedisMemoryError> {
-    //     redis::cmd("FLUSHDB")
-    //         .query_async(&mut self.manager.clone())
-    //         .await
-    //         .map_err(RedisMemoryError::RedisError)
-    // }
+    #[cfg(feature = "test-utils")]
+    pub async fn clear(&self) -> Result<(), RedisMemoryError> {
+        redis::cmd("FLUSHDB")
+            .query_async(&mut self.manager.clone())
+            .await
+            .map_err(RedisMemoryError::RedisError)
+    }
 }
 
 impl<const ADDRESS_LENGTH: usize, const WORD_LENGTH: usize> MemoryADT
@@ -146,8 +146,8 @@ mod tests {
 
     use super::*;
     use cosmian_findex::{
-        gen_seed, test_guarded_write_concurrent, test_rw_same_address, test_single_write_and_read,
-        test_wrong_guard, WORD_LENGTH,
+        WORD_LENGTH, gen_seed, test_guarded_write_concurrent, test_rw_same_address,
+        test_single_write_and_read, test_wrong_guard,
     };
 
     fn get_redis_url() -> String {

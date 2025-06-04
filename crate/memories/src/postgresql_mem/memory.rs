@@ -3,8 +3,8 @@ use cosmian_findex::{Address, MemoryADT};
 use deadpool_postgres::Pool;
 use std::marker::PhantomData;
 use tokio_postgres::{
-    tls::{MakeTlsConnect, TlsConnect},
     Socket,
+    tls::{MakeTlsConnect, TlsConnect},
 };
 
 #[derive(Clone, Debug)]
@@ -75,16 +75,16 @@ impl<const ADDRESS_LENGTH: usize, const WORD_LENGTH: usize>
         })
     }
 
-    // /// Deletes all rows from the findex memory table
-    // #[cfg(feature = "test-utils")]
-    // pub async fn clear(&self) -> Result<(), PostgresMemoryError> {
-    //     self.pool
-    //         .get()
-    //         .await?
-    //         .execute(&format!("TRUNCATE TABLE {};", self.table_name), &[])
-    //         .await?;
-    //     Ok(())
-    // }
+    /// Deletes all rows from the findex memory table
+    #[cfg(feature = "test-utils")]
+    pub async fn clear(&self) -> Result<(), PostgresMemoryError> {
+        self.pool
+            .get()
+            .await?
+            .execute(&format!("TRUNCATE TABLE {};", self.table_name), &[])
+            .await?;
+        Ok(())
+    }
 }
 
 impl<const ADDRESS_LENGTH: usize, const WORD_LENGTH: usize> MemoryADT
@@ -243,8 +243,8 @@ mod tests {
 
     use super::*;
     use cosmian_findex::{
-        gen_seed, test_guarded_write_concurrent, test_rw_same_address, test_single_write_and_read,
-        test_wrong_guard, ADDRESS_LENGTH, WORD_LENGTH,
+        ADDRESS_LENGTH, WORD_LENGTH, gen_seed, test_guarded_write_concurrent, test_rw_same_address,
+        test_single_write_and_read, test_wrong_guard,
     };
 
     const DB_URL: &str = "postgres://cosmian:cosmian@localhost/cosmian";

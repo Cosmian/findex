@@ -17,6 +17,7 @@ path = "src/lib.rs"
 redis-mem = ["redis"]
 sqlite-mem = ["async-sqlite"]
 postgres-mem = ["tokio-postgres", "tokio", "deadpool-postgres"]
+test-utils = ["cosmian_findex/test-utils"]
 
 [dependencies]
 cosmian_crypto_core.workspace = true
@@ -28,11 +29,10 @@ redis = { version = "0.31", features = [
     "connection-manager",
     "tokio-comp",
 ], optional = true }
+tokio = { workspace = true, features = ["rt-multi-thread"], optional = true }
 tokio-postgres = { version = "0.7.9", optional = true, features = [
     "array-impls",
 ] }
-tokio = { workspace = true, features = ["rt-multi-thread"], optional = true }
-
 
 [dev-dependencies]
 cosmian_findex = { path = "../findex", features = ["test-utils"] }

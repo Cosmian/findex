@@ -2,23 +2,23 @@
 // activated.
 #![allow(unused_imports, unused_variables, unused_mut, dead_code)]
 
-use cosmian_crypto_core::{CsRng, reexport::rand_core::SeedableRng};
+use cosmian_crypto_core::{
+    CsRng,
+    reexport::rand_core::{RngCore, SeedableRng},
+};
 use cosmian_findex::{
     bench_memory_contention, bench_memory_insert_multiple_bindings, bench_memory_one_to_many,
     bench_memory_search_multiple_bindings, bench_memory_search_multiple_keywords,
 };
 use criterion::{Criterion, criterion_group, criterion_main};
 
-#[cfg(feature = "rust-mem")]
-use cosmian_findex::InMemory;
-
 #[cfg(feature = "sqlite-mem")]
-use cosmian_findex::SqliteMemory;
+use cosmian_findex_memories::SqliteMemory;
 #[cfg(feature = "sqlite-mem")]
 const SQLITE_PATH: &str = "./target/benches.sqlite";
 
 #[cfg(feature = "redis-mem")]
-use cosmian_findex::RedisMemory;
+use cosmian_findex_memories::RedisMemory;
 
 #[cfg(feature = "redis-mem")]
 fn get_redis_url() -> String {
@@ -30,7 +30,7 @@ fn get_redis_url() -> String {
 
 /// Refer to `src/memory/postgresql_store/memory.rs` for local setup instructions
 #[cfg(feature = "postgres-mem")]
-use cosmian_findex::{PostgresMemory, PostgresMemoryError};
+use cosmian_findex_memories::{PostgresMemory, PostgresMemoryError};
 
 #[cfg(feature = "postgres-mem")]
 fn get_postgresql_url() -> String {
@@ -70,15 +70,6 @@ const N_PTS: usize = 9;
 fn bench_search_multiple_bindings(c: &mut Criterion) {
     let mut rng = CsRng::from_entropy();
 
-    #[cfg(feature = "rust-mem")]
-    bench_memory_search_multiple_bindings(
-        "in-memory",
-        N_PTS,
-        async || InMemory::default(),
-        c,
-        &mut rng,
-    );
-
     #[cfg(feature = "redis-mem")]
     bench_memory_search_multiple_bindings(
         "Redis",
@@ -117,15 +108,6 @@ fn bench_search_multiple_bindings(c: &mut Criterion) {
 fn bench_search_multiple_keywords(c: &mut Criterion) {
     let mut rng = CsRng::from_entropy();
 
-    #[cfg(feature = "rust-mem")]
-    bench_memory_search_multiple_keywords(
-        "in-memory",
-        N_PTS,
-        async || InMemory::default(),
-        c,
-        &mut rng,
-    );
-
     #[cfg(feature = "redis-mem")]
     bench_memory_search_multiple_keywords(
         "Redis",
@@ -163,19 +145,6 @@ fn bench_search_multiple_keywords(c: &mut Criterion) {
 
 fn bench_insert_multiple_bindings(c: &mut Criterion) {
     let mut rng = CsRng::from_entropy();
-
-    #[cfg(feature = "rust-mem")]
-    bench_memory_insert_multiple_bindings(
-        "in-memory",
-        N_PTS,
-        async || InMemory::default(),
-        c,
-        async |m: &InMemory<_, _>| -> Result<(), String> {
-            m.clear();
-            Ok(())
-        },
-        &mut rng,
-    );
 
     #[cfg(feature = "redis-mem")]
     bench_memory_insert_multiple_bindings(
@@ -220,19 +189,6 @@ fn bench_insert_multiple_bindings(c: &mut Criterion) {
 fn bench_contention(c: &mut Criterion) {
     let mut rng = CsRng::from_entropy();
 
-    #[cfg(feature = "rust-mem")]
-    bench_memory_contention(
-        "in-memory",
-        N_PTS,
-        async || InMemory::default(),
-        c,
-        async |m: &InMemory<_, _>| -> Result<(), String> {
-            m.clear();
-            Ok(())
-        },
-        &mut rng,
-    );
-
     #[cfg(feature = "redis-mem")]
     bench_memory_contention(
         "Redis",
@@ -272,8 +228,9 @@ fn bench_contention(c: &mut Criterion) {
 
 #[cfg(any(feature = "redis-mem", feature = "postgres-mem"))]
 mod delayed_memory {
-    use cosmian_findex::{
-        Address, MemoryADT, PostgresMemory, PostgresMemoryError, RedisMemory, RedisMemoryError,
+    use cosmian_findex::{Address, MemoryADT};
+    use cosmian_findex_memories::{
+        PostgresMemory, PostgresMemoryError, RedisMemory, RedisMemoryError,
     };
     use rand::Rng;
     use rand_distr::StandardNormal;
