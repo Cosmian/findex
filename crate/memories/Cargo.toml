@@ -22,9 +22,7 @@ test-utils = ["cosmian_findex/test-utils"]
 
 [dependencies]
 cosmian_crypto_core.workspace = true
-cosmian_findex = { path = "../findex", version = "7.2", features = [
-    "test-utils",
-] }
+cosmian_findex = { path = "../findex", version = "7.2" }
 async-sqlite = { version = "0.4", optional = true } # `async-sqlite` dependency is pinned at v0.4 due to dependency tree issues with sqlx requiring a lower version of `libsqlite3-sys`
 deadpool-postgres = { version = "0.14.1", optional = true }
 redis = { version = "0.31", features = [
@@ -38,7 +36,9 @@ tokio-postgres = { version = "0.7.9", optional = true, features = [
 ] }
 
 [dev-dependencies]
-cosmian_findex = { path = "../findex", features = ["test-utils"] }
+cosmian_findex = { path = "../findex", version = "7.2", features = [
+    "test-utils",
+] }
 futures = { version = "0.3" }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
 criterion = { workspace = true }
