@@ -8,6 +8,7 @@ jobs:
     uses: Cosmian/reusable_workflows/.github/workflows/cargo-nursery.yml@feat/publish_workspace_fix
     with:
       toolchain: 1.85.0
+      workspace: true
   cargo-publish:
     needs:
       - cargo-lint
