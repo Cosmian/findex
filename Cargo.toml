@@ -3,7 +3,7 @@ members = ["crate/findex", "crate/memories"]
 resolver = "2"
 
 [workspace.package]
-version = "1.0.1"
+version = "7.2.0"
 authors = [
     "Bruno Grieder <bruno.grieder@cosmian.com>",
     "Célia Corsin <celia.corsin@cosmian.com>",
