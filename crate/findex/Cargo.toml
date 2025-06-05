@@ -1,6 +1,6 @@
 [package]
 name = "cosmian_findex"
-version.workspace = true
+version = "7.2.0"
 authors.workspace = true
 categories.workspace = true
 edition.workspace = true
@@ -8,7 +8,7 @@ keywords.workspace = true
 license.workspace = true
 repository.workspace = true
 description.workspace = true
-readme = "README.md"
+readme.workspace = true
 
 [lib]
 name = "cosmian_findex"
