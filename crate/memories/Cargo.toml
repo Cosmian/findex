@@ -22,7 +22,7 @@ test-utils = ["cosmian_findex/test-utils"]
 
 [dependencies]
 cosmian_crypto_core.workspace = true
-cosmian_findex = { path = "../findex", version = "7.1", features = [
+cosmian_findex = { path = "../findex", version = "7.2", features = [
     "test-utils",
 ] }
 async-sqlite = { version = "0.4", optional = true } # `async-sqlite` dependency is pinned at v0.4 due to dependency tree issues with sqlx requiring a lower version of `libsqlite3-sys`
