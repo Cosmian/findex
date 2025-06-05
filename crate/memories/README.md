@@ -59,12 +59,3 @@ assert_eq!(
 ```
 
 More detailed examples can be found under the [examples folder](examples).
-
-## Related Projects
-- [Findex](github.com/cosmian/findex) - The core Findex library
-- [Findex Server](github.com/cosmian/findex-server) - A production-ready Findex server implementation
-
-## License
-
-This project is licensed under the Business Source License 1.1 (BUSL-1.1).
-
