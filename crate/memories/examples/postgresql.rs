@@ -3,13 +3,17 @@
 mod shared_utils;
 
 use cosmian_crypto_core::{CsRng, Secret, reexport::rand_core::SeedableRng};
-use cosmian_findex::{ADDRESS_LENGTH, Address, Findex, IndexADT, MemoryEncryptionLayer};
-use cosmian_findex_memories::{PostgresMemory, PostgresMemoryError};
-use deadpool_postgres::{Config, Pool};
+use cosmian_findex_memories::{
+    PostgresMemory, PostgresMemoryError,
+    reexport::{
+        cosmian_findex::{ADDRESS_LENGTH, Address, Findex, IndexADT, MemoryEncryptionLayer},
+        deadpool_postgres::{Config, Pool},
+        tokio_postgres::NoTls,
+    },
+};
 use futures::executor::block_on;
 use shared_utils::{WORD_LENGTH, decoder, encoder, gen_index};
 use std::collections::HashMap;
-use tokio_postgres::NoTls;
 
 const DB_URL: &str = "postgres://cosmian:cosmian@localhost/cosmian";
 const TABLE_NAME: &str = "findex_example";

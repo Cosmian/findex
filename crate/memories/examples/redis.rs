@@ -3,8 +3,10 @@
 mod shared_utils;
 
 use cosmian_crypto_core::{CsRng, Secret, reexport::rand_core::SeedableRng};
-use cosmian_findex::{ADDRESS_LENGTH, Address, Findex, IndexADT, MemoryEncryptionLayer};
-use cosmian_findex_memories::RedisMemory;
+use cosmian_findex_memories::{
+    RedisMemory,
+    reexport::cosmian_findex::{ADDRESS_LENGTH, Address, Findex, IndexADT, MemoryEncryptionLayer},
+};
 use futures::executor::block_on;
 use shared_utils::{WORD_LENGTH, decoder, encoder, gen_index};
 use std::collections::HashMap;
