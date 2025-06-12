@@ -27,9 +27,7 @@ async fn main() {
     // Generating the random index.
     let index = gen_index(&mut rng);
 
-    // For this example, we use the `RedisMemory` implementation of the `MemoryADT`
-    // trait. It connects to a Redis instance and uses it as a key-value store
-    // for our Findex data structures, which is suitable for production applications.
+    // This example uses our Redis-based implementation of `MemoryADT`.
     let memory = RedisMemory::<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>::connect(DB_PATH)
         .await
         .unwrap();

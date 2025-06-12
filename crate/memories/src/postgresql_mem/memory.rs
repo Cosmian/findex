@@ -230,14 +230,14 @@ impl<const ADDRESS_LENGTH: usize, const WORD_LENGTH: usize> MemoryADT
 
 #[cfg(test)]
 mod tests {
-    //! To run the postgresql benchmarks locally, add the following service to your pg_service.conf file
-    //! (usually under ~/.pg_service.conf):
-    //!
-    //! [cosmian_service]
-    //! host=localhost
-    //! dbname=cosmian
-    //! user=cosmian
-    //! password=cosmian
+    // To run the postgresql tests locally, add the following service to your pg_service.conf file
+    // (usually under ~/.pg_service.conf):
+    //
+    // [cosmian_service]
+    // host=localhost
+    // dbname=cosmian
+    // user=cosmian
+    // password=cosmian
     use deadpool_postgres::Config;
     use tokio_postgres::NoTls;
 

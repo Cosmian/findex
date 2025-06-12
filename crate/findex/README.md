@@ -18,6 +18,6 @@ To launch the benchmarks, run:
 cargo bench --all-features
 ```
 
-Note that benches are quite involving and require *several hours* for a full
+Note that benches are quite involving and require _several hours_ for a full
 run. Once all benchmarks are run, you will find detailed reports under `target/criterion`.
 findex

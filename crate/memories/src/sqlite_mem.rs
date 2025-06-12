@@ -31,10 +31,10 @@ impl From<async_sqlite::Error> for SqliteMemoryError {
     }
 }
 
-pub const FINDEX_TABLE_NAME: &str = "findex_memory";
 #[derive(Clone)]
 pub struct SqliteMemory<Address, Word> {
     pool: Pool,
+    table_name: String,
     _marker: PhantomData<(Address, Word)>,
 }
 
@@ -72,16 +72,22 @@ impl<Address, Word> SqliteMemory<Address, Word> {
     /// # Arguments
     ///
     /// * `path` - The path to the sqlite3 database file.
-    pub async fn connect(path: &str) -> Result<Self, SqliteMemoryError> {
+    pub async fn connect<P: AsRef<std::path::Path>>(
+        path: P,
+        table_name: String,
+    ) -> Result<Self, SqliteMemoryError> {
         // The number of connections in this pools defaults to the number of
         // logical CPUs of the system.
         let pool = PoolBuilder::new().path(path).open().await?;
+        // The closure must satisfy 'static bounds, there is no escape from cloning the table name.
+        let table_name_clone = table_name.clone();
 
-        pool.conn(|conn| conn.execute_batch(&create_table_script(FINDEX_TABLE_NAME)))
+        pool.conn(move |conn| conn.execute_batch(&create_table_script(&table_name_clone)))
             .await?;
 
         Ok(Self {
             pool,
+            table_name,
             _marker: PhantomData,
         })
     }
@@ -97,10 +103,12 @@ impl<Address, Word> SqliteMemory<Address, Word> {
         pool: Pool,
         table_name: String,
     ) -> Result<Self, SqliteMemoryError> {
-        pool.conn(move |conn| conn.execute_batch(&create_table_script(&table_name)))
+        let table_name_clone = table_name.clone();
+        pool.conn(move |conn| conn.execute_batch(&create_table_script(&table_name_clone)))
             .await?;
         Ok(Self {
             pool,
+            table_name,
             _marker: PhantomData,
         })
     }
@@ -109,8 +117,9 @@ impl<Address, Word> SqliteMemory<Address, Word> {
 impl<Address: Send + Sync, Word: Send + Sync> SqliteMemory<Address, Word> {
     #[cfg(feature = "test-utils")]
     pub async fn clear(&self) -> Result<(), SqliteMemoryError> {
+        let findex_table_name = self.table_name.clone();
         self.pool
-            .conn(|cnx| cnx.execute(&format!("DELETE FROM {FINDEX_TABLE_NAME}"), []))
+            .conn(move |conn| conn.execute(&format!("DELETE FROM {findex_table_name}"), []))
             .await?;
         Ok(())
     }
@@ -127,12 +136,13 @@ impl<const ADDRESS_LENGTH: usize, const WORD_LENGTH: usize> MemoryADT
         &self,
         addresses: Vec<Self::Address>,
     ) -> Result<Vec<Option<Self::Word>>, Self::Error> {
+        let findex_table_name = self.table_name.clone();
         self.pool
             .conn(move |conn| {
                 let results = conn
                     .prepare(&format!(
                         "SELECT a, w FROM {} WHERE a IN ({})",
-                        FINDEX_TABLE_NAME,
+                        findex_table_name,
                         vec!["?"; addresses.len()].join(",")
                     ))?
                     .query_map(
@@ -164,6 +174,7 @@ impl<const ADDRESS_LENGTH: usize, const WORD_LENGTH: usize> MemoryADT
         guard: (Self::Address, Option<Self::Word>),
         bindings: Vec<(Self::Address, Self::Word)>,
     ) -> Result<Option<Self::Word>, Self::Error> {
+        let findex_table_name = self.table_name.clone();
         let (ag, wg) = guard;
 
         self.pool
@@ -174,7 +185,7 @@ impl<const ADDRESS_LENGTH: usize, const WORD_LENGTH: usize> MemoryADT
 
                 let current_word = tx
                     .query_row(
-                        &format!("SELECT w FROM {} WHERE a = ?", FINDEX_TABLE_NAME),
+                        &format!("SELECT w FROM {} WHERE a = ?", findex_table_name),
                         [&*ag],
                         |row| row.get(0),
                     )
@@ -184,7 +195,7 @@ impl<const ADDRESS_LENGTH: usize, const WORD_LENGTH: usize> MemoryADT
                     tx.execute(
                         &format!(
                             "INSERT OR REPLACE INTO {} (a, w) VALUES {}",
-                            FINDEX_TABLE_NAME,
+                            findex_table_name,
                             vec!["(?,?)"; bindings.len()].join(",")
                         ),
                         params_from_iter(
@@ -214,10 +225,11 @@ mod tests {
     };
 
     const DB_PATH: &str = "../../target/debug/sqlite-test.sqlite.db";
+    const TABLE_NAME: &str = "findex_memory";
 
     #[tokio::test]
     async fn test_rw_seq() {
-        let m = SqliteMemory::<_, [u8; WORD_LENGTH]>::connect(DB_PATH)
+        let m = SqliteMemory::<_, [u8; WORD_LENGTH]>::connect(DB_PATH, TABLE_NAME.to_owned())
             .await
             .unwrap();
         test_single_write_and_read(&m, gen_seed()).await
@@ -225,7 +237,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_guard_seq() {
-        let m = SqliteMemory::<_, [u8; WORD_LENGTH]>::connect(DB_PATH)
+        let m = SqliteMemory::<_, [u8; WORD_LENGTH]>::connect(DB_PATH, TABLE_NAME.to_owned())
             .await
             .unwrap();
         test_wrong_guard(&m, gen_seed()).await
@@ -233,7 +245,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_collision_seq() {
-        let m = SqliteMemory::<_, [u8; WORD_LENGTH]>::connect(DB_PATH)
+        let m = SqliteMemory::<_, [u8; WORD_LENGTH]>::connect(DB_PATH, TABLE_NAME.to_owned())
             .await
             .unwrap();
         test_rw_same_address(&m, gen_seed()).await
@@ -241,7 +253,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_rw_ccr() {
-        let m = SqliteMemory::<_, [u8; WORD_LENGTH]>::connect(DB_PATH)
+        let m = SqliteMemory::<_, [u8; WORD_LENGTH]>::connect(DB_PATH, TABLE_NAME.to_owned())
             .await
             .unwrap();
         test_guarded_write_concurrent(&m, gen_seed(), Some(100)).await

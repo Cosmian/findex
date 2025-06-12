@@ -1,4 +1,4 @@
-//! A simple RAM-based implementation of the MemoryADT trait that stores key-value pairs in a thread-safe in-memory HashMap.
+//! A thread-safe implementation of the `MemoryADT` trait based on a `HashMap`.  
 
 use std::{
     collections::HashMap,

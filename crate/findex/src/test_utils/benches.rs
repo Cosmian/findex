@@ -1,6 +1,8 @@
-//! This module provides a comprehensive benchmarking suite for testing the performance of Findex memory implementations.
-//! These benchmarks are designed to be generic and work with any memory backend that implements the MemoryADT trait.
-//! The [findex-memories](https://github.com/Cosmian/findex-memories) crate provides a set of memory backends that have been benched.
+//! This module provides a comprehensive benchmarking suite for testing the
+//! performance of Findex memory implementations.  These benchmarks are designed
+//! to be generic and work with any memory backend that implements the MemoryADT
+//! trait.
+
 use crate::{
     ADDRESS_LENGTH, Address, Findex, IndexADT, MemoryADT, MemoryEncryptionLayer, WORD_LENGTH,
     dummy_decode, dummy_encode,

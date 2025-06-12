@@ -1,6 +1,6 @@
 [package]
 name = "cosmian_findex"
-version = "7.2.0"
+version = "8.0.0"
 authors.workspace = true
 categories.workspace = true
 edition.workspace = true
@@ -15,7 +15,7 @@ name = "cosmian_findex"
 path = "src/lib.rs"
 
 [features]
-test-utils = ["tokio", "criterion", "rand", "rand_distr"]
+test-utils = ["tokio", "criterion"]
 
 [dependencies]
 cosmian_crypto_core.workspace = true
@@ -28,8 +28,6 @@ tokio = { workspace = true, features = [
     "macros",
 ], optional = true }
 criterion = { workspace = true, optional = true }
-rand = { workspace = true, optional = true }
-rand_distr = { workspace = true, optional = true }
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }

@@ -5,14 +5,33 @@ on: push
 
 jobs:
   cargo-lint:
-    uses: Cosmian/reusable_workflows/.github/workflows/cargo-nursery.yml@feat/publish_workspace_fix
+    uses: Cosmian/reusable_workflows/.github/workflows/cargo-nursery.yml@develop
     with:
       toolchain: 1.85.0
       workspace: true
+  cargo-machete:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: 1.85.0
+      - name: Install cargo-machete
+        run: cargo install cargo-machete
+      - name: Check unused dependencies in findex crate
+        run: |
+          cd crate/findex
+          cargo machete --with-metadata
+      - name: Check unused dependencies in memories crate
+        run: |
+          cd crate/memories
+          cargo machete --with-metadata
   cargo-publish:
     needs:
       - cargo-lint
-    uses: Cosmian/reusable_workflows/.github/workflows/cargo-publish.yml@feat/publish_workspace_fix
+    uses: Cosmian/reusable_workflows/.github/workflows/cargo-publish.yml@develop
     if: startsWith(github.ref, 'refs/tags/')
     with:
       toolchain: 1.85.0
@@ -20,5 +39,5 @@ jobs:
   cleanup:
     needs:
       - cargo-lint
-    uses: Cosmian/reusable_workflows/.github/workflows/cleanup_cache.yml@feat/publish_workspace_fix
+    uses: Cosmian/reusable_workflows/.github/workflows/cleanup_cache.yml@develop
     secrets: inherit

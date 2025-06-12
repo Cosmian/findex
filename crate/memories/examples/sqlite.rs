@@ -12,6 +12,7 @@ use shared_utils::{WORD_LENGTH, decoder, encoder, gen_index};
 use std::collections::HashMap;
 
 const DB_PATH: &str = "./target/debug/sqlite-test.db";
+const TABLE_NAME: &str = "findex_memory";
 
 #[tokio::main]
 async fn main() {
@@ -27,7 +28,7 @@ async fn main() {
     // Generating the random index.
     let index = gen_index(&mut rng);
 
-    let memory = SqliteMemory::<_, [u8; WORD_LENGTH]>::connect(DB_PATH)
+    let memory = SqliteMemory::<_, [u8; WORD_LENGTH]>::connect(DB_PATH, TABLE_NAME.to_owned())
         .await
         .unwrap();
 

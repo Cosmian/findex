@@ -28,10 +28,17 @@ fn get_redis_url() -> String {
     )
 }
 
-/// Refer to `src/memory/postgresql_store/memory.rs` for local setup instructions
 #[cfg(feature = "postgres-mem")]
 use cosmian_findex_memories::{PostgresMemory, PostgresMemoryError};
 
+// To run the postgresql benchmarks locally, add the following service to your pg_service.conf file
+// (usually under ~/.pg_service.conf):
+//
+// [cosmian_service]
+// host=localhost
+// dbname=cosmian
+// user=cosmian
+// password=cosmian
 #[cfg(feature = "postgres-mem")]
 fn get_postgresql_url() -> String {
     std::env::var("POSTGRES_HOST").map_or_else(
@@ -83,7 +90,14 @@ fn bench_search_multiple_bindings(c: &mut Criterion) {
     bench_memory_search_multiple_bindings(
         "SQLite",
         N_PTS,
-        async || SqliteMemory::connect(SQLITE_PATH).await.unwrap(),
+        async || {
+            SqliteMemory::connect(
+                SQLITE_PATH,
+                "bench_memory_search_multiple_bindings".to_string(),
+            )
+            .await
+            .unwrap()
+        },
         c,
         &mut rng,
     );
@@ -121,7 +135,14 @@ fn bench_search_multiple_keywords(c: &mut Criterion) {
     bench_memory_search_multiple_keywords(
         "SQLite",
         N_PTS,
-        async || SqliteMemory::connect(SQLITE_PATH).await.unwrap(),
+        async || {
+            SqliteMemory::connect(
+                SQLITE_PATH,
+                "bench_memory_search_multiple_keywords".to_string(),
+            )
+            .await
+            .unwrap()
+        },
         c,
         &mut rng,
     );
@@ -160,7 +181,14 @@ fn bench_insert_multiple_bindings(c: &mut Criterion) {
     bench_memory_insert_multiple_bindings(
         "SQLite",
         N_PTS,
-        async || SqliteMemory::connect(SQLITE_PATH).await.unwrap(),
+        async || {
+            SqliteMemory::connect(
+                SQLITE_PATH,
+                "bench_memory_insert_multiple_bindings".to_string(),
+            )
+            .await
+            .unwrap()
+        },
         c,
         SqliteMemory::clear,
         &mut rng,
@@ -203,7 +231,11 @@ fn bench_contention(c: &mut Criterion) {
     bench_memory_contention(
         "SQLite",
         N_PTS,
-        async || SqliteMemory::connect(SQLITE_PATH).await.unwrap(),
+        async || {
+            SqliteMemory::connect(SQLITE_PATH, "bench_memory_contention".to_string())
+                .await
+                .unwrap()
+        },
         c,
         SqliteMemory::clear,
         &mut rng,

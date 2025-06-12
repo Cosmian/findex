@@ -1,4 +1,5 @@
-//! This example show-cases the use of Findex to securely store a hash-map with postgresql.
+//! This example show-cases the use of Findex to securely store a hash-map with
+//! PostgreSQL.
 #[path = "shared_utils.rs"]
 mod shared_utils;
 
@@ -36,23 +37,8 @@ async fn main() {
     // key in order to make the index inter-operable.
     let key = Secret::random(&mut rng);
 
-    // Generating the random index.
+    // Generating a random index.
     let index = gen_index(&mut rng);
-
-    let pool = create_pool(DB_URL).await.unwrap();
-    let m = PostgresMemory::<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>::connect_with_pool(
-        pool.clone(),
-        TABLE_NAME.to_string(),
-    )
-    .await
-    .unwrap();
-
-    // Notice we chose to not enable Tls: it's not needed for this example as we are
-    // using the encryption layer in top of the memory interface - i.e. the data is
-    // already encrypted before being sent to the database and Tls would add unnecessary overhead.
-    m.initialize_table(DB_URL.to_string(), TABLE_NAME.to_string(), NoTls)
-        .await
-        .unwrap();
 
     // Addd the following service to your pg_service.conf file (usually under ~/.pg_service.conf):
     //
@@ -61,14 +47,23 @@ async fn main() {
     // dbname=cosmian
     // user=cosmian
     // password=cosmian
-    let memory = PostgresMemory::<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>::connect_with_pool(
+    let pool = create_pool(DB_URL).await.unwrap();
+    let m = PostgresMemory::<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>::connect_with_pool(
         pool.clone(),
         TABLE_NAME.to_string(),
     )
     .await
     .unwrap();
 
-    let encrypted_memory = MemoryEncryptionLayer::new(&key, memory);
+    // Notice we chose to not enable TLS: it's not needed for this example as we
+    // are using the encryption layer in top of the memory interface - i.e. the
+    // data is already encrypted before being sent to the database and TLS would
+    // add unnecessary overhead.
+    m.initialize_table(DB_URL.to_string(), TABLE_NAME.to_string(), NoTls)
+        .await
+        .unwrap();
+
+    let encrypted_memory = MemoryEncryptionLayer::new(&key, m);
 
     // Instantiating Findex requires passing the key, the memory used and the
     // encoder and decoder. Quite simple, after all :)
@@ -97,7 +92,7 @@ async fn main() {
     // ... and verify we get the whole index back!
     assert_eq!(res, index);
 
-    // Drop the table to avoid problems with subsequent runs
+    // Drop the table to avoid problems with subsequent runs.
     pool.get()
         .await
         .unwrap()

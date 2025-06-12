@@ -19,15 +19,15 @@ Add `cosmian_findex` to your Cargo.toml:
 
 ```toml
 [dependencies]
-cosmian_findex = "7.1.0"
+cosmian_findex = "8.0.0"
 # Optional - include backend implementations
-cosmian_findex_memories = { version = "7.1.0", features = ["redis-mem", "sqlite-mem", "postgres-mem"] }
+cosmian_findex_memories = { version = "8.0.0", features = ["redis-mem", "sqlite-mem", "postgres-mem"] }
 ```
 
 ## Related Projects
+
 [Findex Server](github.com/cosmian/findex-server) - A production-ready Findex server implementation
 
 ## License
 
 This project is licensed under the Business Source License 1.1 (BUSL-1.1).
-

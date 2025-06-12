@@ -6,7 +6,7 @@ pub use redis_mem::{RedisMemory, RedisMemoryError};
 #[cfg(feature = "sqlite-mem")]
 mod sqlite_mem;
 #[cfg(feature = "sqlite-mem")]
-pub use sqlite_mem::{FINDEX_TABLE_NAME, SqliteMemory, SqliteMemoryError};
+pub use sqlite_mem::{SqliteMemory, SqliteMemoryError};
 
 #[cfg(feature = "postgres-mem")]
 mod postgresql_mem;
