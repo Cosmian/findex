@@ -18,7 +18,7 @@ path = "src/lib.rs"
 redis-mem = ["redis"]
 sqlite-mem = ["async-sqlite"]
 postgres-mem = ["deadpool-postgres", "tokio", "tokio-postgres"]
-test-utils = ["cosmian_findex/test-utils", "redis/tokio-comp"]
+test-utils = ["cosmian_findex/test-utils"]
 
 [dependencies]
 async-sqlite = { version = "0.5", optional = true }
