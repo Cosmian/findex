@@ -129,7 +129,7 @@ impl<const ADDRESS_LENGTH: usize, const WORD_LENGTH: usize> MemoryADT
                     .transpose()
                     .map_err(PostgresMemoryError::TryFromSliceError)
             })
-            .collect::<Result<_, Self::Error>>()
+            .collect()
     }
 
     async fn guarded_write(
