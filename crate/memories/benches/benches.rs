@@ -61,14 +61,14 @@ async fn connect_and_init_table(
     pg_config.url = Some(db_url.to_string());
     let test_pool = pg_config.builder(NoTls)?.build()?;
 
-    let m = PostgresMemory::<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>::connect_with_pool(
+    let m = PostgresMemory::<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>::new_with_pool(
         test_pool,
         table_name.to_string(),
     )
-    .await?;
+    .await;
 
-    m.initialize_table(db_url.to_string(), table_name, NoTls)
-        .await?;
+    m.initialize().await?;
+
     Ok(m)
 }
 // Number of points in each graph.
@@ -91,12 +91,14 @@ fn bench_search_multiple_bindings(c: &mut Criterion) {
         "SQLite",
         N_PTS,
         async || {
-            SqliteMemory::connect(
+            let m = SqliteMemory::new(
                 SQLITE_PATH,
                 "bench_memory_search_multiple_bindings".to_string(),
             )
             .await
-            .unwrap()
+            .unwrap();
+            m.initialize().await.unwrap();
+            m
         },
         c,
         &mut rng,
@@ -107,12 +109,14 @@ fn bench_search_multiple_bindings(c: &mut Criterion) {
         "Postgres",
         N_PTS,
         async || {
-            connect_and_init_table(
+            let m = connect_and_init_table(
                 get_postgresql_url(),
                 "bench_memory_search_multiple_bindings".to_string(),
             )
             .await
-            .unwrap()
+            .unwrap();
+            m.initialize().await.unwrap();
+            m
         },
         c,
         &mut rng,
@@ -136,12 +140,14 @@ fn bench_search_multiple_keywords(c: &mut Criterion) {
         "SQLite",
         N_PTS,
         async || {
-            SqliteMemory::connect(
+            let m = SqliteMemory::new(
                 SQLITE_PATH,
                 "bench_memory_search_multiple_keywords".to_string(),
             )
             .await
-            .unwrap()
+            .unwrap();
+            m.initialize().await.unwrap();
+            m
         },
         c,
         &mut rng,
@@ -182,12 +188,14 @@ fn bench_insert_multiple_bindings(c: &mut Criterion) {
         "SQLite",
         N_PTS,
         async || {
-            SqliteMemory::connect(
+            let m = SqliteMemory::new(
                 SQLITE_PATH,
                 "bench_memory_insert_multiple_bindings".to_string(),
             )
             .await
-            .unwrap()
+            .unwrap();
+            m.initialize().await.unwrap();
+            m
         },
         c,
         SqliteMemory::clear,
@@ -232,9 +240,11 @@ fn bench_contention(c: &mut Criterion) {
         "SQLite",
         N_PTS,
         async || {
-            SqliteMemory::connect(SQLITE_PATH, "bench_memory_contention".to_string())
+            let m = SqliteMemory::new(SQLITE_PATH, "bench_memory_contention".to_string())
                 .await
-                .unwrap()
+                .unwrap();
+            m.initialize().await.unwrap();
+            m
         },
         c,
         SqliteMemory::clear,

@@ -17,33 +17,32 @@ path = "src/lib.rs"
 [features]
 redis-mem = ["redis"]
 sqlite-mem = ["async-sqlite"]
-postgres-mem = ["tokio-postgres", "tokio", "deadpool-postgres"]
-test-utils = ["cosmian_findex/test-utils"]
+postgres-mem = ["deadpool-postgres", "tokio", "tokio-postgres"]
+test-utils = ["cosmian_findex/test-utils", "redis/tokio-comp"]
 
 [dependencies]
-cosmian_crypto_core.workspace = true
+async-sqlite = { version = "0.5", optional = true }
 cosmian_findex = { path = "../findex", version = "8.0" }
-async-sqlite = { version = "0.4", optional = true } # `async-sqlite` dependency is pinned at v0.4 due to dependency tree issues with sqlx requiring a lower version of `libsqlite3-sys`
-deadpool-postgres = { version = "0.14.1", optional = true }
+deadpool-postgres = { version = "0.14", optional = true }
 redis = { version = "0.32", default-features = false, features = [
-    "aio",
     "connection-manager",
     "tokio-comp",
 ], optional = true }
 tokio = { workspace = true, features = ["rt-multi-thread"], optional = true }
-tokio-postgres = { version = "0.7.9", optional = true, features = [
+tokio-postgres = { version = "0.7", optional = true, features = [
     "array-impls",
 ] }
 
 [dev-dependencies]
+cosmian_crypto_core.workspace = true
 cosmian_findex = { path = "../findex", version = "8.0", features = [
     "test-utils",
 ] }
-futures = { version = "0.3" }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
 criterion = { workspace = true }
-rand = { version = "0.9.0" }
-rand_distr = { version = "0.5.1" }
+futures = { version = "0.3" }
+rand = "0.9"
+rand_distr = "0.5"
 
 [[bench]]
 name = "benches"

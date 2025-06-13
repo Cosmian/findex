@@ -47,43 +47,16 @@ impl<Address, Word> Debug for SqliteMemory<Address, Word> {
     }
 }
 
-// The following settings are used to improve performance:
-// - journal_mode = WAL : WAL journaling is faster than the default DELETE mode.
-// - synchronous = NORMAL: Reduces disk I/O by only calling fsync() at critical
-//   moments rather than after every transaction (FULL mode); this does not
-//   compromise data integrity.
-fn create_table_script(table_name: &str) -> String {
-    format!(
-        "
-PRAGMA synchronous = NORMAL;
-PRAGMA journal_mode = WAL;
-CREATE TABLE IF NOT EXISTS {} (
-    a BLOB PRIMARY KEY,
-    w BLOB NOT NULL
-);",
-        table_name
-    )
-}
-
 impl<Address, Word> SqliteMemory<Address, Word> {
-    /// Builds a pool connected to a known DB (using the given path) and creates
-    /// the `findex_memory` table.
-    ///
-    /// # Arguments
-    ///
-    /// * `path` - The path to the sqlite3 database file.
-    pub async fn connect<P: AsRef<std::path::Path>>(
-        path: P,
+    /// Returns a new memory instance using a pool of connections to the SQLite
+    /// database at the given path.
+    pub async fn new(
+        path: impl AsRef<std::path::Path>,
         table_name: String,
     ) -> Result<Self, SqliteMemoryError> {
         // The number of connections in this pools defaults to the number of
         // logical CPUs of the system.
         let pool = PoolBuilder::new().path(path).open().await?;
-        // The closure must satisfy 'static bounds, there is no escape from cloning the table name.
-        let table_name_clone = table_name.clone();
-
-        pool.conn(move |conn| conn.execute_batch(&create_table_script(&table_name_clone)))
-            .await?;
 
         Ok(Self {
             pool,
@@ -92,34 +65,45 @@ impl<Address, Word> SqliteMemory<Address, Word> {
         })
     }
 
-    /// Returns an `SqliteMemory` instance storing data in a table with the given name
-    /// and connecting to the DB using connections from the given pool.
-    ///
-    /// # Arguments
-    ///
-    /// * `pool` - The pool to use for the memory.
-    /// * `table_name` - The name of the table to create.
-    pub async fn connect_with_pool(
-        pool: Pool,
-        table_name: String,
-    ) -> Result<Self, SqliteMemoryError> {
-        let table_name_clone = table_name.clone();
-        pool.conn(move |conn| conn.execute_batch(&create_table_script(&table_name_clone)))
-            .await?;
-        Ok(Self {
+    /// Returns a new memory instance using a pool of connections to an SQLite
+    /// database.
+    pub async fn new_with_pool(pool: Pool, table_name: String) -> Self {
+        Self {
             pool,
             table_name,
             _marker: PhantomData,
-        })
+        }
     }
-}
 
-impl<Address: Send + Sync, Word: Send + Sync> SqliteMemory<Address, Word> {
+    /// Makes sure the correct table exist in the associated database.
+    pub async fn initialize(&self) -> Result<(), SqliteMemoryError> {
+        // The following settings are used to improve performance:
+        // - journal_mode = WAL : WAL journaling is faster than the default DELETE mode.
+        // - synchronous = NORMAL: Reduces disk I/O by only calling fsync() at critical
+        //   moments rather than after every transaction (FULL mode); this does not
+        //   compromise data integrity.
+        let table_name = format!(
+            "PRAGMA synchronous = NORMAL;
+             PRAGMA journal_mode = WAL;
+             CREATE TABLE IF NOT EXISTS {} (
+                 a BLOB PRIMARY KEY,
+                 w BLOB NOT NULL
+             );",
+            self.table_name
+        );
+
+        self.pool
+            .conn(move |conn| conn.execute_batch(&table_name))
+            .await?;
+        Ok(())
+    }
+
+    /// Clears all bindings from this memory.
     #[cfg(feature = "test-utils")]
     pub async fn clear(&self) -> Result<(), SqliteMemoryError> {
-        let findex_table_name = self.table_name.clone();
+        let script = format!("DELETE FROM {}", self.table_name);
         self.pool
-            .conn(move |conn| conn.execute(&format!("DELETE FROM {findex_table_name}"), []))
+            .conn(move |conn| conn.execute(&script, []))
             .await?;
         Ok(())
     }
@@ -160,7 +144,7 @@ impl<const ADDRESS_LENGTH: usize, const WORD_LENGTH: usize> MemoryADT
                 // generate a returned value complying to the batch-read spec.
                 Ok(addresses
                     .iter()
-                    // Copying is necessary here since the same word could be
+                    // Copying is necessary since the same word could be
                     // returned multiple times.
                     .map(|addr| results.get(addr).copied())
                     .collect())
@@ -229,33 +213,37 @@ mod tests {
 
     #[tokio::test]
     async fn test_rw_seq() {
-        let m = SqliteMemory::<_, [u8; WORD_LENGTH]>::connect(DB_PATH, TABLE_NAME.to_owned())
+        let m = SqliteMemory::<_, [u8; WORD_LENGTH]>::new(DB_PATH, TABLE_NAME.to_owned())
             .await
             .unwrap();
+        m.initialize().await.unwrap();
         test_single_write_and_read(&m, gen_seed()).await
     }
 
     #[tokio::test]
     async fn test_guard_seq() {
-        let m = SqliteMemory::<_, [u8; WORD_LENGTH]>::connect(DB_PATH, TABLE_NAME.to_owned())
+        let m = SqliteMemory::<_, [u8; WORD_LENGTH]>::new(DB_PATH, TABLE_NAME.to_owned())
             .await
             .unwrap();
+        m.initialize().await.unwrap();
         test_wrong_guard(&m, gen_seed()).await
     }
 
     #[tokio::test]
     async fn test_collision_seq() {
-        let m = SqliteMemory::<_, [u8; WORD_LENGTH]>::connect(DB_PATH, TABLE_NAME.to_owned())
+        let m = SqliteMemory::<_, [u8; WORD_LENGTH]>::new(DB_PATH, TABLE_NAME.to_owned())
             .await
             .unwrap();
+        m.initialize().await.unwrap();
         test_rw_same_address(&m, gen_seed()).await
     }
 
     #[tokio::test]
     async fn test_rw_ccr() {
-        let m = SqliteMemory::<_, [u8; WORD_LENGTH]>::connect(DB_PATH, TABLE_NAME.to_owned())
+        let m = SqliteMemory::<_, [u8; WORD_LENGTH]>::new(DB_PATH, TABLE_NAME.to_owned())
             .await
             .unwrap();
+        m.initialize().await.unwrap();
         test_guarded_write_concurrent(&m, gen_seed(), Some(100)).await
     }
 }

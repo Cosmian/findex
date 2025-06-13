@@ -40,7 +40,8 @@ async fn main() {
     // Generating a random index.
     let index = gen_index(&mut rng);
 
-    // Addd the following service to your pg_service.conf file (usually under ~/.pg_service.conf):
+    // Addd the following service to your pg_service.conf file (usually under
+    // `~/.pg_service.conf`):
     //
     // [cosmian_service]
     // host=localhost
@@ -48,20 +49,17 @@ async fn main() {
     // user=cosmian
     // password=cosmian
     let pool = create_pool(DB_URL).await.unwrap();
-    let m = PostgresMemory::<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>::connect_with_pool(
+    let m = PostgresMemory::<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>::new_with_pool(
         pool.clone(),
         TABLE_NAME.to_string(),
     )
-    .await
-    .unwrap();
+    .await;
 
     // Notice we chose to not enable TLS: it's not needed for this example as we
     // are using the encryption layer in top of the memory interface - i.e. the
     // data is already encrypted before being sent to the database and TLS would
     // add unnecessary overhead.
-    m.initialize_table(DB_URL.to_string(), TABLE_NAME.to_string(), NoTls)
-        .await
-        .unwrap();
+    m.initialize().await.unwrap();
 
     let encrypted_memory = MemoryEncryptionLayer::new(&key, m);
 

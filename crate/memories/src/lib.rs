@@ -22,7 +22,5 @@ pub mod reexport {
     #[cfg(feature = "redis-mem")]
     pub use redis;
     #[cfg(feature = "postgres-mem")]
-    pub use tokio;
-    #[cfg(feature = "postgres-mem")]
     pub use tokio_postgres;
 }
