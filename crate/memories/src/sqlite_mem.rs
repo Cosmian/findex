@@ -50,7 +50,7 @@ impl<Address, Word> Debug for SqliteMemory<Address, Word> {
 impl<Address, Word> SqliteMemory<Address, Word> {
     /// Returns a new memory instance using a pool of connections to the SQLite
     /// database at the given path.
-    pub async fn new(
+    pub async fn new_with_path(
         path: impl AsRef<std::path::Path>,
         table_name: String,
     ) -> Result<Self, SqliteMemoryError> {
@@ -213,7 +213,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_rw_seq() {
-        let m = SqliteMemory::<_, [u8; WORD_LENGTH]>::new(DB_PATH, TABLE_NAME.to_owned())
+        let m = SqliteMemory::<_, [u8; WORD_LENGTH]>::new_with_path(DB_PATH, TABLE_NAME.to_owned())
             .await
             .unwrap();
         m.initialize().await.unwrap();
@@ -222,7 +222,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_guard_seq() {
-        let m = SqliteMemory::<_, [u8; WORD_LENGTH]>::new(DB_PATH, TABLE_NAME.to_owned())
+        let m = SqliteMemory::<_, [u8; WORD_LENGTH]>::new_with_path(DB_PATH, TABLE_NAME.to_owned())
             .await
             .unwrap();
         m.initialize().await.unwrap();
@@ -231,7 +231,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_collision_seq() {
-        let m = SqliteMemory::<_, [u8; WORD_LENGTH]>::new(DB_PATH, TABLE_NAME.to_owned())
+        let m = SqliteMemory::<_, [u8; WORD_LENGTH]>::new_with_path(DB_PATH, TABLE_NAME.to_owned())
             .await
             .unwrap();
         m.initialize().await.unwrap();
@@ -240,7 +240,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_rw_ccr() {
-        let m = SqliteMemory::<_, [u8; WORD_LENGTH]>::new(DB_PATH, TABLE_NAME.to_owned())
+        let m = SqliteMemory::<_, [u8; WORD_LENGTH]>::new_with_path(DB_PATH, TABLE_NAME.to_owned())
             .await
             .unwrap();
         m.initialize().await.unwrap();

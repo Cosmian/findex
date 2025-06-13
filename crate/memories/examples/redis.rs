@@ -28,7 +28,7 @@ async fn main() {
     let index = gen_index(&mut rng);
 
     // This example uses our Redis-based implementation of `MemoryADT`.
-    let memory = RedisMemory::<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>::connect(DB_PATH)
+    let memory = RedisMemory::<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>::new_with_url(DB_PATH)
         .await
         .unwrap();
 

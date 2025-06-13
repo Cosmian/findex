@@ -60,8 +60,8 @@ impl<Address, Word> fmt::Debug for RedisMemory<Address, Word> {
 }
 
 impl<Address: Sync, Word: Sync> RedisMemory<Address, Word> {
-    /// Connects to a Redis server with a `ConnectionManager`.
-    pub async fn connect_with_manager(
+    /// Returns a new instance using this connection manager.
+    pub async fn new_with_manager(
         mut manager: ConnectionManager,
     ) -> Result<Self, RedisMemoryError> {
         let script_hash = redis::cmd("SCRIPT")
@@ -77,13 +77,14 @@ impl<Address: Sync, Word: Sync> RedisMemory<Address, Word> {
         })
     }
 
-    /// Connects to a Redis server using the given URL.
-    pub async fn connect(url: &str) -> Result<Self, RedisMemoryError> {
+    /// Returns a new instance using the Redis instance at the given URL.
+    pub async fn new_with_url(url: &str) -> Result<Self, RedisMemoryError> {
         let client = redis::Client::open(url)?;
         let manager = client.get_connection_manager().await?;
-        Self::connect_with_manager(manager).await
+        Self::new_with_manager(manager).await
     }
 
+    /// Clears all bindings from this memory.
     #[cfg(feature = "test-utils")]
     pub async fn clear(&self) -> Result<(), RedisMemoryError> {
         redis::cmd("FLUSHDB")
@@ -106,7 +107,6 @@ impl<const ADDRESS_LENGTH: usize, const WORD_LENGTH: usize> MemoryADT
     ) -> Result<Vec<Option<Self::Word>>, Self::Error> {
         let mut cmd = redis::cmd("MGET");
         let cmd = addresses.iter().fold(&mut cmd, |c, a| c.arg(&**a));
-        // Cloning the connection manager is cheap since it is an `Arc`.
         cmd.query_async(&mut self.manager.clone())
             .await
             .map_err(RedisMemoryError::RedisError)
@@ -118,6 +118,7 @@ impl<const ADDRESS_LENGTH: usize, const WORD_LENGTH: usize> MemoryADT
         bindings: Vec<(Self::Address, Self::Word)>,
     ) -> Result<Option<Self::Word>, Self::Error> {
         let (guard_address, guard_value) = guard;
+
         let mut cmd = redis::cmd("EVALSHA");
         let cmd = cmd
             .arg(self.script_hash.as_str())
@@ -129,12 +130,9 @@ impl<const ADDRESS_LENGTH: usize, const WORD_LENGTH: usize> MemoryADT
                     .map(|bytes| bytes.as_slice())
                     .unwrap_or(b"false".as_slice()),
             );
-
         let cmd = bindings
             .iter()
             .fold(cmd.arg(bindings.len()), |cmd, (a, w)| cmd.arg(&**a).arg(w));
-
-        // Cloning the connection manager is cheap since it is an `Arc`.
         cmd.query_async(&mut self.manager.clone())
             .await
             .map_err(RedisMemoryError::RedisError)
@@ -159,25 +157,25 @@ mod tests {
 
     #[tokio::test]
     async fn test_rw_seq() {
-        let m = RedisMemory::connect(&get_redis_url()).await.unwrap();
+        let m = RedisMemory::new_with_url(&get_redis_url()).await.unwrap();
         test_single_write_and_read::<WORD_LENGTH, _>(&m, gen_seed()).await
     }
 
     #[tokio::test]
     async fn test_guard_seq() {
-        let m = RedisMemory::connect(&get_redis_url()).await.unwrap();
+        let m = RedisMemory::new_with_url(&get_redis_url()).await.unwrap();
         test_wrong_guard::<WORD_LENGTH, _>(&m, gen_seed()).await
     }
 
     #[tokio::test]
     async fn test_collision_seq() {
-        let m = RedisMemory::connect(&get_redis_url()).await.unwrap();
+        let m = RedisMemory::new_with_url(&get_redis_url()).await.unwrap();
         test_rw_same_address::<WORD_LENGTH, _>(&m, gen_seed()).await
     }
 
     #[tokio::test]
     async fn test_rw_ccr() {
-        let m = RedisMemory::connect(&get_redis_url()).await.unwrap();
+        let m = RedisMemory::new_with_url(&get_redis_url()).await.unwrap();
         test_guarded_write_concurrent::<WORD_LENGTH, _>(&m, gen_seed(), None).await
     }
 }

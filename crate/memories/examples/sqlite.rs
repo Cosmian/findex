@@ -28,9 +28,10 @@ async fn main() {
     // Generating the random index.
     let index = gen_index(&mut rng);
 
-    let memory = SqliteMemory::<_, [u8; WORD_LENGTH]>::new(DB_PATH, TABLE_NAME.to_owned())
-        .await
-        .unwrap();
+    let memory =
+        SqliteMemory::<_, [u8; WORD_LENGTH]>::new_with_path(DB_PATH, TABLE_NAME.to_owned())
+            .await
+            .unwrap();
 
     let encrypted_memory = MemoryEncryptionLayer::new(&key, memory);
 
