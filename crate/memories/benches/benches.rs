@@ -81,7 +81,7 @@ fn bench_search_multiple_bindings(c: &mut Criterion) {
     bench_memory_search_multiple_bindings(
         "Redis",
         N_PTS,
-        async || RedisMemory::connect(&get_redis_url()).await.unwrap(),
+        async || RedisMemory::new_with_url(&get_redis_url()).await.unwrap(),
         c,
         &mut rng,
     );
@@ -91,7 +91,7 @@ fn bench_search_multiple_bindings(c: &mut Criterion) {
         "SQLite",
         N_PTS,
         async || {
-            let m = SqliteMemory::new(
+            let m = SqliteMemory::new_with_path(
                 SQLITE_PATH,
                 "bench_memory_search_multiple_bindings".to_string(),
             )
@@ -130,7 +130,7 @@ fn bench_search_multiple_keywords(c: &mut Criterion) {
     bench_memory_search_multiple_keywords(
         "Redis",
         N_PTS,
-        async || RedisMemory::connect(&get_redis_url()).await.unwrap(),
+        async || RedisMemory::new_with_url(&get_redis_url()).await.unwrap(),
         c,
         &mut rng,
     );
@@ -140,7 +140,7 @@ fn bench_search_multiple_keywords(c: &mut Criterion) {
         "SQLite",
         N_PTS,
         async || {
-            let m = SqliteMemory::new(
+            let m = SqliteMemory::new_with_path(
                 SQLITE_PATH,
                 "bench_memory_search_multiple_keywords".to_string(),
             )
@@ -177,7 +177,7 @@ fn bench_insert_multiple_bindings(c: &mut Criterion) {
     bench_memory_insert_multiple_bindings(
         "Redis",
         N_PTS,
-        async || RedisMemory::connect(&get_redis_url()).await.unwrap(),
+        async || RedisMemory::new_with_url(&get_redis_url()).await.unwrap(),
         c,
         RedisMemory::clear,
         &mut rng,
@@ -188,7 +188,7 @@ fn bench_insert_multiple_bindings(c: &mut Criterion) {
         "SQLite",
         N_PTS,
         async || {
-            let m = SqliteMemory::new(
+            let m = SqliteMemory::new_with_path(
                 SQLITE_PATH,
                 "bench_memory_insert_multiple_bindings".to_string(),
             )
@@ -229,7 +229,7 @@ fn bench_contention(c: &mut Criterion) {
     bench_memory_contention(
         "Redis",
         N_PTS,
-        async || RedisMemory::connect(&get_redis_url()).await.unwrap(),
+        async || RedisMemory::new_with_url(&get_redis_url()).await.unwrap(),
         c,
         RedisMemory::clear,
         &mut rng,
@@ -240,7 +240,7 @@ fn bench_contention(c: &mut Criterion) {
         "SQLite",
         N_PTS,
         async || {
-            let m = SqliteMemory::new(SQLITE_PATH, "bench_memory_contention".to_string())
+            let m = SqliteMemory::new_with_path(SQLITE_PATH, "bench_memory_contention".to_string())
                 .await
                 .unwrap();
             m.initialize().await.unwrap();
@@ -368,7 +368,7 @@ fn bench_one_to_many(c: &mut Criterion) {
             N_PTS,
             async || {
                 DelayedMemory::new(
-                    RedisMemory::connect(&get_redis_url()).await.unwrap(),
+                    RedisMemory::new_with_url(&get_redis_url()).await.unwrap(),
                     *mean,
                     *variance,
                 )
