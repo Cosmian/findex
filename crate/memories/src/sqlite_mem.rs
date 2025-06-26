@@ -75,13 +75,14 @@ impl<Address, Word> SqliteMemory<Address, Word> {
         }
     }
 
-    /// Makes sure the correct table exist in the associated database.
+    /// Creates the correct table in the associated database if it does not exist.
     pub async fn initialize(&self) -> Result<(), SqliteMemoryError> {
         // The following settings are used to improve performance:
-        // - journal_mode = WAL : WAL journaling is faster than the default DELETE mode.
-        // - synchronous = NORMAL: Reduces disk I/O by only calling fsync() at critical
-        //   moments rather than after every transaction (FULL mode); this does not
-        //   compromise data integrity.
+        // - journal_mode = WAL : WAL journaling is faster than the default
+        //   DELETE mode.
+        // - synchronous = NORMAL: Reduces disk I/O by only calling fsync() at
+        //   critical moments rather than after every transaction (FULL mode);
+        //   this does not compromise data integrity.
         let initialization_script = format!(
             "PRAGMA synchronous = NORMAL;
              PRAGMA journal_mode = WAL;
