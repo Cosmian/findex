@@ -82,7 +82,7 @@ impl<Address, Word> SqliteMemory<Address, Word> {
         // - synchronous = NORMAL: Reduces disk I/O by only calling fsync() at critical
         //   moments rather than after every transaction (FULL mode); this does not
         //   compromise data integrity.
-        let table_name = format!(
+        let initialization_script = format!(
             "PRAGMA synchronous = NORMAL;
              PRAGMA journal_mode = WAL;
              CREATE TABLE IF NOT EXISTS {} (
@@ -93,7 +93,7 @@ impl<Address, Word> SqliteMemory<Address, Word> {
         );
 
         self.pool
-            .conn(move |conn| conn.execute_batch(&table_name))
+            .conn(move |conn| conn.execute_batch(&initialization_script))
             .await?;
         Ok(())
     }
