@@ -1,6 +1,6 @@
 //! This module provides a comprehensive benchmarking suite for testing the
-//! performance of Findex memory implementations.  These benchmarks are designed
-//! to be generic and work with any memory backend that implements the MemoryADT
+//! performance of Findex memory implementations. These benchmarks are designed
+//! to be generic and work with any memory back end that implements the MemoryADT
 //! trait.
 
 use crate::{
@@ -61,9 +61,6 @@ pub fn bench_memory_search_multiple_bindings<
     c: &mut Criterion,
     rng: &mut impl CryptoRngCore,
 ) {
-    // Redis memory backend requires a tokio runtime, and all operations to
-    // happen in the same runtime, otherwise the connection returns a broken
-    // pipe error.
     let rt = Runtime::new().unwrap();
 
     let findex = Findex::new(
@@ -102,9 +99,6 @@ pub fn bench_memory_search_multiple_keywords<
     c: &mut Criterion,
     rng: &mut impl CryptoRngCore,
 ) {
-    // Redis memory backend requires a tokio runtime, and all operations to
-    // happen in the same runtime, otherwise the connection returns a broken
-    // pipe error.
     let rt = Runtime::new().unwrap();
 
     let findex = Arc::new(Findex::new(
@@ -171,9 +165,6 @@ pub fn bench_memory_insert_multiple_bindings<
     clear: impl AsyncFn(&Memory) -> Result<(), E>,
     rng: &mut impl CryptoRngCore,
 ) {
-    // Redis memory backend requires a tokio runtime, and all operations to
-    // happen in the same runtime, otherwise the connection returns a broken
-    // pipe error.
     let rt = Runtime::new().unwrap();
 
     let mut m = rt.block_on(m());
@@ -226,9 +217,6 @@ pub fn bench_memory_contention<
 ) {
     const N_CLIENTS: usize = 10;
 
-    // Redis memory backend requires a tokio runtime, and all operations to
-    // happen in the same runtime, otherwise the connection returns a broken
-    // pipe error.
     let rt = Builder::new_multi_thread().enable_all().build().unwrap();
 
     let m = rt.block_on(m());
@@ -336,9 +324,6 @@ pub fn bench_memory_one_to_many<
 ) {
     const MAX_VAL: usize = 100;
 
-    // Redis memory backend requires a tokio runtime, and all operations to
-    // happen in the same runtime, otherwise the connection returns a broken
-    // pipe error.
     let rt = Builder::new_multi_thread().enable_all().build().unwrap();
 
     let m = rt.block_on(m());

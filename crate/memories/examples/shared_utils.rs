@@ -1,4 +1,3 @@
-//! This example show-cases the use of Findex to securely store a hash-map.
 use cosmian_crypto_core::reexport::rand_core::CryptoRngCore;
 use cosmian_findex::Op;
 use std::collections::{HashMap, HashSet};

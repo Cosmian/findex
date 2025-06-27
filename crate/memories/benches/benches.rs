@@ -17,6 +17,9 @@ use cosmian_findex_memories::SqliteMemory;
 #[cfg(feature = "sqlite-mem")]
 const SQLITE_PATH: &str = "benches.sqlite.db";
 
+// Redis memory back-end requires a tokio runtime, and all operations to
+// happen in the same runtime, otherwise the connection returns a broken
+// pipe error.
 #[cfg(feature = "redis-mem")]
 use cosmian_findex_memories::RedisMemory;
 
@@ -91,12 +94,9 @@ fn bench_search_multiple_bindings(c: &mut Criterion) {
         "SQLite",
         N_PTS,
         async || {
-            let m = SqliteMemory::new_with_path(
-                SQLITE_PATH,
-                "bench_memory_search_multiple_bindings".to_string(),
-            )
-            .await
-            .unwrap();
+            let m = SqliteMemory::new_with_path(SQLITE_PATH, "bench_memory_smd".to_string())
+                .await
+                .unwrap();
             m.initialize().await.unwrap();
             m
         },
@@ -109,12 +109,9 @@ fn bench_search_multiple_bindings(c: &mut Criterion) {
         "Postgres",
         N_PTS,
         async || {
-            let m = connect_and_init_table(
-                get_postgresql_url(),
-                "bench_memory_search_multiple_bindings".to_string(),
-            )
-            .await
-            .unwrap();
+            let m = connect_and_init_table(get_postgresql_url(), "bench_memory_smd".to_string())
+                .await
+                .unwrap();
             m.initialize().await.unwrap();
             m
         },
@@ -140,12 +137,9 @@ fn bench_search_multiple_keywords(c: &mut Criterion) {
         "SQLite",
         N_PTS,
         async || {
-            let m = SqliteMemory::new_with_path(
-                SQLITE_PATH,
-                "bench_memory_search_multiple_keywords".to_string(),
-            )
-            .await
-            .unwrap();
+            let m = SqliteMemory::new_with_path(SQLITE_PATH, "bench_memory_smk".to_string())
+                .await
+                .unwrap();
             m.initialize().await.unwrap();
             m
         },
@@ -158,12 +152,9 @@ fn bench_search_multiple_keywords(c: &mut Criterion) {
         "Postgres",
         N_PTS,
         async || {
-            connect_and_init_table(
-                get_postgresql_url(),
-                "bench_memory_search_multiple_keywords".to_string(),
-            )
-            .await
-            .unwrap()
+            connect_and_init_table(get_postgresql_url(), "bench_memory_smk".to_string())
+                .await
+                .unwrap()
         },
         c,
         &mut rng,
@@ -188,12 +179,9 @@ fn bench_insert_multiple_bindings(c: &mut Criterion) {
         "SQLite",
         N_PTS,
         async || {
-            let m = SqliteMemory::new_with_path(
-                SQLITE_PATH,
-                "bench_memory_insert_multiple_bindings".to_string(),
-            )
-            .await
-            .unwrap();
+            let m = SqliteMemory::new_with_path(SQLITE_PATH, "bench_memory_imd".to_string())
+                .await
+                .unwrap();
             m.initialize().await.unwrap();
             m
         },
@@ -207,12 +195,9 @@ fn bench_insert_multiple_bindings(c: &mut Criterion) {
         "Postgres",
         N_PTS,
         async || {
-            connect_and_init_table(
-                get_postgresql_url(),
-                "bench_memory_insert_multiple_bindings".to_string(),
-            )
-            .await
-            .unwrap()
+            connect_and_init_table(get_postgresql_url(), "bench_memory_imd".to_string())
+                .await
+                .unwrap()
         },
         c,
         async |m: &PostgresMemory<_, _>| -> Result<(), String> {

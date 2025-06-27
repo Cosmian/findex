@@ -1,23 +1,14 @@
 # Findex
 
-To build Findex simply run:
+This crate provides the core functionality of Findex, defining the abstract data types, cryptographic operations, and encoding algorithms.
 
-```bash
-cargo build --release
+## Setup
+
+Add `cosmian_findex` as dependency to your project :
+
+```toml
+[dependencies]
+cosmian_findex = "8.0.0"
 ```
 
-To test, run:
-
-```bash
-cargo test --release --all-features
-```
-
-To launch the benchmarks, run:
-
-```bash
-cargo bench --all-features
-```
-
-Note that benches are quite involving and require _several hours_ for a full
-run. Once all benchmarks are run, you will find detailed reports under `target/criterion`.
-findex
+An usage example is available in the [examples folder](./examples).

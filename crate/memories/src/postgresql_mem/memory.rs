@@ -203,17 +203,6 @@ impl<const ADDRESS_LENGTH: usize, const WORD_LENGTH: usize> MemoryADT
 
 #[cfg(test)]
 mod tests {
-    //! To run the postgresql tests locally, add the following service to your
-    //! pg_service.conf file (usually under `~/.pg_service.conf`):
-    //!
-    //! ```
-    //! [cosmian_service]
-    //! host=localhost
-    //! dbname=cosmian
-    //! user=cosmian
-    //! password=cosmian
-    //! ```
-
     use super::*;
     use cosmian_findex::{
         ADDRESS_LENGTH, WORD_LENGTH, gen_seed, test_guarded_write_concurrent, test_rw_same_address,

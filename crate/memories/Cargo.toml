@@ -33,11 +33,6 @@ tokio-postgres = { version = "0.7", optional = true, features = [
     "array-impls",
 ] }
 
-# Needed for Redis memory.
-redis = { version = "0.32", default-features = false, features = [
-    "connection-manager",
-    "tokio-comp"
-], optional = true }
 
 [dev-dependencies]
 cosmian_crypto_core.workspace = true
@@ -56,13 +51,5 @@ harness = false
 required-features = ["redis-mem", "sqlite-mem", "postgres-mem", "test-utils"]
 
 [[example]]
-name = "redis"
-required-features = ["redis-mem"]
-
-[[example]]
-name = "sqlite"
-required-features = ["sqlite-mem"]
-
-[[example]]
-name = "postgresql"
-required-features = ["postgres-mem"]
+name = "example"
+required-features = ["redis-mem", "sqlite-mem", "postgres-mem"]

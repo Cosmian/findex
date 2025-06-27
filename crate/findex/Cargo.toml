@@ -22,7 +22,7 @@ cosmian_crypto_core.workspace = true
 aes = "0.8"
 xts-mode = "0.5"
 
-# Optional dependencies for testing and benchmarking
+# Optional dependencies for testing and benchmarking.
 tokio = { workspace = true, features = [
     "rt-multi-thread",
     "macros",
