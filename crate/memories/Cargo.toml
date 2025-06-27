@@ -33,6 +33,12 @@ tokio-postgres = { version = "0.7", optional = true, features = [
     "array-impls",
 ] }
 
+# Needed for Redis memory.
+redis = { version = "0.32", default-features = false, features = [
+    "connection-manager",
+    "tokio-comp"
+], optional = true }
+
 [dev-dependencies]
 cosmian_crypto_core.workspace = true
 cosmian_findex = { path = "../findex", version = "8.0", features = [
