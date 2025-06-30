@@ -34,9 +34,3 @@ dbname=cosmian
 user=cosmian
 password=cosmian
 ```
-
-You also need to set the adequate environment variables for the benches :
-
-```shell
-export POSTGRES_HOST=localhost REDIS_HOST=localhost && cargo bench --all-features
-```

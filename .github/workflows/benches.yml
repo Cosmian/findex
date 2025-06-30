@@ -4,6 +4,10 @@ run-name: Benchmark on ${{ github.ref_name }} - ${{ github.sha }}
 
 on: workflow_dispatch
 
+env:
+  REDIS_HOST: "redis"
+  POSTGRES_HOST: "postgres"
+
 jobs:
   bench:
     uses: Cosmian/reusable_workflows/.github/workflows/cargo-bench.yml@develop
