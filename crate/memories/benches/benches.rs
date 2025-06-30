@@ -26,7 +26,12 @@ use cosmian_findex_memories::RedisMemory;
 #[cfg(feature = "redis-mem")]
 fn get_redis_url() -> String {
     std::env::var("REDIS_HOST").map_or_else(
-        |_| "redis://localhost:6379".to_owned(),
+        |_| {
+            eprintln!(
+                "⚠️ WARNING: REDIS_HOST environment variable is not set, using default value, set it to localhost to run the benchmarks locally."
+            );
+            "redis://redis:6379".to_owned()
+        },
         |var_env| format!("redis://{var_env}:6379"),
     )
 }
@@ -34,18 +39,13 @@ fn get_redis_url() -> String {
 #[cfg(feature = "postgres-mem")]
 use cosmian_findex_memories::{PostgresMemory, PostgresMemoryError};
 
-// To run the postgresql benchmarks locally, add the following service to your pg_service.conf file
-// (usually under ~/.pg_service.conf):
-//
-// [cosmian_service]
-// host=localhost
-// dbname=cosmian
-// user=cosmian
-// password=cosmian
 #[cfg(feature = "postgres-mem")]
 fn get_postgresql_url() -> String {
     std::env::var("POSTGRES_HOST").map_or_else(
-        |_| "postgres://cosmian:cosmian@localhost/cosmian".to_string(),
+        |_| {
+            eprintln!("⚠️ WARNING: POSTGRES_HOST environment variable is not set, set it to localhost to run the benchmarks locally.");
+            "postgres://cosmian:cosmian@postgres/cosmian".to_string()
+        },
         |var_env| format!("postgres://cosmian:cosmian@{var_env}/cosmian"),
     )
 }
