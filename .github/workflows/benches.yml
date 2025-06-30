@@ -10,8 +10,10 @@ env:
 
 jobs:
   bench:
-    uses: Cosmian/reusable_workflows/.github/workflows/cargo-bench.yml@develop
+    uses: Cosmian/reusable_workflows/.github/workflows/cargo-bench.yml@fix/add_hosts_arguments
     with:
       toolchain: 1.87.0
       features: test-utils,redis-mem,sqlite-mem,postgres-mem
       force: true
+      redis-host: "redis"
+      postgres-host: "postgres"

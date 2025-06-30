@@ -32,11 +32,6 @@ criterion = { workspace = true, optional = true }
 [dev-dependencies]
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
 
-[[bench]]
-name = "benches"
-harness = false
-required-features = ["test-utils"]
-
 [[example]]
 name = "insert"
 required-features = ["test-utils"]
