@@ -1,11 +1,18 @@
-use std::{collections::HashSet, fmt::Debug, future::Future, hash::Hash, sync::Arc};
-
 use crate::{ADDRESS_LENGTH, Address, Decoder, Encoder, Findex, IndexADT, MemoryADT};
-
+use std::{
+    collections::{HashMap, HashSet},
+    fmt::Debug,
+    future::Future,
+    hash::Hash,
+    ops::Add,
+    sync::{Arc, Mutex},
+};
+// TODO : should all of these be sync ?
+use futures::channel::oneshot;
 pub trait BatcherSSEADT<Keyword: Send + Sync + Hash, Value: Send + Sync + Hash> {
     // TODO : maybe add the findex functions as trait
-    type Findex: IndexADT<Keyword, Value>; // need those ? + Send + Sync;
-    type BatcherMemory: BatchingLayerADT<Address = Keyword, Word = Value, Error = Self::Error>;
+    // type Findex: IndexADT<Keyword, Value> + Send + Sync; // need those ? + Send + Sync;
+    // type BatcherMemory: BatchingLayerADT<Address = Keyword, Word = Value, Error = Self::Error>;
     type Error: Send + Sync + std::error::Error;
 
     /// Search the index for the values bound to the given keywords.
@@ -40,38 +47,137 @@ pub trait BatchingLayerADT: MemoryADT {
             Vec<(Self::Address, Self::Word)>,
         )>,
     ) -> impl Send + Future<Output = Result<Vec<Option<Self::Word>>, Self::Error>>;
-
-    // This is the function that will create the N channel ... ?
 }
 
-impl<M: MemoryADT> MemoryADT for Arc<M> {
+struct BufferedMemory<M: BatchingLayerADT>
+where
+    M::Address: Clone,
+{
+    inner: M, // the actual memory layer that implements the actual network / memory call
+    buffer_size: usize,
+    pending_batches: Mutex<
+        Vec<(
+            Vec<M::Address>,
+            oneshot::Sender<Result<Vec<Option<M::Word>>, M::Error>>,
+        )>,
+    >,
+}
+
+impl<M: BatchingLayerADT + Send> BufferedMemory<M>
+where
+    <M as MemoryADT>::Address: Clone,
+{
+    fn new(inner: M, buffer_size: usize) -> Self {
+        Self {
+            inner,
+            buffer_size,
+            pending_batches: Mutex::new(Vec::new()),
+        }
+    }
+
+    async fn flush(&self) -> Result<(), M::Error> {
+        // maybe add a check that the capacities are correct
+        let batches: Vec<(
+            Vec<M::Address>,
+            oneshot::Sender<Result<Vec<Option<M::Word>>, M::Error>>,
+        )> = {
+            let mut pending = self.pending_batches.lock().unwrap();
+            if pending.is_empty() {
+                return Ok(());
+            }
+            std::mem::take(&mut *pending)
+        };
+
+        // Build combined address list while tracking which addresses belong to which batch
+        let mut all_addresses = Vec::new();
+        let mut batch_indices = Vec::new();
+
+        for (individual_address_batch, _) in &batches {
+            // Record the starting index for this batch
+            // will be of the form (start_index, batch_length)
+            batch_indices.push((all_addresses.len(), individual_address_batch.len()));
+            // Add this batch's addresses to the combined list
+            all_addresses.extend_from_slice(individual_address_batch);
+        }
+
+        // Execute the combined batch_read
+        let mut all_results = self.inner.batch_read(all_addresses).await?;
+
+        // Distribute results to each batch's sender
+        // TODO: this is the most readable approach but we could optimize it ig ?
+        for ((_, batch_len), (_, sender)) in batch_indices.into_iter().zip(batches) {
+            // Always drain from index 0
+            let batch_results = all_results.drain(0..batch_len).collect();
+            let _ = sender.send(Ok(batch_results));
+        }
+
+        Ok(())
+    }
+}
+
+impl<M: BatchingLayerADT + Send + Sync> MemoryADT for BufferedMemory<M>
+where
+    M::Address: Clone + Send,
+    M::Word: Send,
+{
     type Address = M::Address;
     type Word = M::Word;
     type Error = M::Error;
 
-    fn batch_read(
+    async fn batch_read(
         &self,
         addresses: Vec<Self::Address>,
-    ) -> impl Send + Future<Output = Result<Vec<Option<Self::Word>>, Self::Error>> {
-        (**self).batch_read(addresses)
+    ) -> Result<Vec<Option<Self::Word>>, Self::Error> {
+        if addresses.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        // Create a channel for this batch
+        let (sender, receiver) = oneshot::channel();
+        let should_flush;
+
+        // Add to pending batches
+        {
+            let mut pending = self.pending_batches.lock().unwrap();
+            pending.push((addresses, sender));
+
+            // Determine if we should flush
+            should_flush = pending.len() >= self.buffer_size;
+        }
+
+        // Flush if buffer is full
+        // only 1 thread will have this equal to true
+        if should_flush {
+            self.flush().await?;
+        }
+
+        // Wait for results
+        receiver.await.map_err(|_| {
+            // This is a placeholder that will need to be replaced later
+            panic!("Channel closed unexpectedly ?")
+        })?
     }
 
     fn guarded_write(
         &self,
-        guard: (Self::Address, Option<Self::Word>),
-        bindings: Vec<(Self::Address, Self::Word)>,
+        _guard: (Self::Address, Option<Self::Word>),
+        _bindings: Vec<(Self::Address, Self::Word)>,
     ) -> impl Send + Future<Output = Result<Option<Self::Word>, Self::Error>> {
-        (**self).guarded_write(guard, bindings)
+        // shuts down the compiler warning for now
+        async move { todo!("Implement guarded_write for BufferedMemory") }
     }
 }
-
 #[derive(Debug)]
 pub struct BatcherFindex<
     const WORD_LENGTH: usize,
     Value: Send + Sync + Hash + Eq,
     EncodingError: Send + Sync + Debug,
-    BatcherMemory: Send + Sync + BatchingLayerADT<Address = Address<ADDRESS_LENGTH>, Word = [u8; WORD_LENGTH]>,
+    BatcherMemory: Clone
+        + Send
+        + Sync
+        + BatchingLayerADT<Address = Address<ADDRESS_LENGTH>, Word = [u8; WORD_LENGTH]>,
 > {
+    memory: BatcherMemory,
     encode: Arc<Encoder<Value, BatcherMemory::Word, EncodingError>>,
     decode: Arc<Decoder<Value, BatcherMemory::Word, EncodingError>>,
 }
@@ -88,12 +194,90 @@ impl<
 > BatcherFindex<WORD_LENGTH, Value, EncodingError, BatcherMemory>
 {
     pub fn new(
+        memory: BatcherMemory,
         encode: Encoder<Value, BatcherMemory::Word, EncodingError>,
         decode: Decoder<Value, BatcherMemory::Word, EncodingError>,
     ) -> Self {
         Self {
+            memory,
             encode: Arc::new(encode),
             decode: Arc::new(decode),
         }
     }
 }
+
+// impl<
+//     const WORD_LENGTH: usize,
+//     Value: Send + Sync + Hash + Eq,
+//     EncodingError: Send + Sync + Debug + std::error::Error,
+//     BatcherMemory: Send
+//         + Sync
+//         + Clone
+//         + BatchingLayerADT<Address = Address<ADDRESS_LENGTH>, Word = [u8; WORD_LENGTH]>,
+// > BatcherSSEADT<Address<ADDRESS_LENGTH>, Value>
+//     for BatcherFindex<WORD_LENGTH, Value, EncodingError, BatcherMemory>
+// {
+//     // type Findex = Findex<WORD_LENGTH, Value, EncodingError, BatcherMemory>;
+//     // type BatcherMemory = BatcherMemory;
+//     type Error = EncodingError;
+
+//     async fn batch_search(
+//         &self,
+//         keywords: Vec<&Address<ADDRESS_LENGTH>>,
+//     ) -> Result<Vec<HashSet<Value>>, Self::Error> {
+//         let mut results = Vec::<HashSet<Value>>::with_capacity(keywords.len());
+//         let search_futures = Vec::with_capacity(keywords.len());
+//         let batching_layer = self.memory.clone();
+
+//         for keyword in keywords {
+//             // Create a future that executes the search for this keyword
+//             let future = async move {
+//                 // Create a temporary Findex instance using the shared batching layer
+//                 let findex = Findex::<WORD_LENGTH, Value, EncodingError, Arc<BatcherMemory>>::new(
+//                     batching_layer,
+//                     // arc clones, no worries
+//                     self.encode.clone(),
+//                     self.decode.clone(),
+//                 );
+
+//                 // Execute the search
+//                 findex.search(keyword).await
+//             };
+
+//             search_futures.push(future);
+//         }
+//         // at this point nothing is polled yet
+
+//         // Execute all futures concurrently and collect results
+//         let results = futures::future::join_all(search_futures).await;
+
+//         // Process results
+//         let mut output = Vec::with_capacity(results.len());
+//         for result in results {
+//             output.push(result?);
+//         }
+
+//         Ok(output)
+//         todo!("Implement batch_search for BatcherFindex");
+//     }
+
+//     async fn batch_insert(
+//         &self,
+//         entries: Vec<(
+//             Address<ADDRESS_LENGTH>,
+//             impl Sync + Send + IntoIterator<Item = Value>,
+//         )>,
+//     ) -> Result<(), Self::Error> {
+//         todo!()
+//     }
+
+//     async fn batch_delete(
+//         &self,
+//         entries: Vec<(
+//             Address<ADDRESS_LENGTH>,
+//             impl Sync + Send + IntoIterator<Item = Value>,
+//         )>,
+//     ) -> Result<(), Self::Error> {
+//         todo!()
+//     }
+// }
