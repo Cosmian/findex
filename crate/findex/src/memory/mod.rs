@@ -5,3 +5,5 @@ pub use encryption_layer::{KEY_LENGTH, MemoryEncryptionLayer};
 mod in_memory;
 #[cfg(any(test, feature = "test-utils"))]
 pub use in_memory::InMemory;
+
+pub mod batching_layer;

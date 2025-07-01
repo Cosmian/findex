@@ -42,3 +42,6 @@ pub use memory::InMemory;
 /// 16-byte addresses ensure a high collision resistance that poses virtually no
 /// limitation on the index.
 pub const ADDRESS_LENGTH: usize = 16;
+
+// TODO: clean this later
+mod batcher_findex;
