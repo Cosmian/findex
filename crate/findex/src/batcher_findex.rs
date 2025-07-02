@@ -1,6 +1,7 @@
 use crate::{
     ADDRESS_LENGTH, Address, Decoder, Encoder, Findex, InMemory, IndexADT, MemoryADT, memory,
 };
+use std::fmt::Display;
 use std::{
     collections::{HashMap, HashSet},
     fmt::Debug,
@@ -194,26 +195,27 @@ where
     }
 }
 
-// neded for findex constraints
-impl<M: BatchingLayerADT + Send + Sync + Clone> Clone for BufferedMemory<M>
-where
-    M::Address: Clone + Send + Sync,
-    M::Word: Send + Sync,
-{
-    fn clone(&self) -> Self {
-        Self {
-            inner: self.inner.clone(),
-            buffer_size: self.buffer_size,
-            pending_batches: Mutex::new(Vec::new()),
-        }
-    }
-}
+// // neded for findex constraints
+// update lol no it's not needed
+// impl<M: BatchingLayerADT + Send + Sync + Clone> Clone for BufferedMemory<M>
+// where
+//     M::Address: Clone + Send + Sync,
+//     M::Word: Send + Sync,
+// {
+//     fn clone(&self) -> Self {
+//         Self {
+//             inner: self.inner.clone(),
+//             buffer_size: self.buffer_size,
+//             pending_batches: Mutex::new(Vec::new()),
+//         }
+//     }
+// }
 
 // This simply forward the BR/GW calls to the inner memory
 // when findex instances (below) call the batcher's operations
-impl<M: MemoryADT + Sync + Send> MemoryADT for Arc<M>
+impl<M: BatchingLayerADT + Sync + Send> MemoryADT for Arc<BufferedMemory<M>>
 where
-    M::Address: Send,
+    M::Address: Send + Clone,
     M::Word: Send,
 {
     type Address = M::Address;
@@ -264,7 +266,7 @@ impl<
         + Sync
         + Clone
         + BatchingLayerADT<Address = Address<ADDRESS_LENGTH>, Word = [u8; WORD_LENGTH]>,
-    EncodingError: Send + Sync + Debug,
+    EncodingError: Send + Sync + Debug + std::error::Error,
 > BatcherFindex<WORD_LENGTH, Value, EncodingError, BatcherMemory>
 {
     pub fn new(
@@ -280,11 +282,28 @@ impl<
     }
 }
 
+// err type
+
+#[derive(Debug)]
+pub enum TemporaryError {
+    DefaultGenericErrorForBatcher(String),
+}
+
+impl Display for TemporaryError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{self:?}")
+    }
+}
+
+impl std::error::Error for TemporaryError {}
+
+// the new error type
+
 impl<
     const WORD_LENGTH: usize,
     Keyword: Send + Sync + Hash + Eq,
     Value: Send + Sync + Hash + Eq,
-    EncodingError: Send + Sync + Debug + std::error::Error,
+    EncodingError: Send + Sync + Debug,
     BatcherMemory: Send
         + Sync
         + Clone
@@ -294,7 +313,7 @@ impl<
 {
     // type Findex = Findex<WORD_LENGTH, Value, EncodingError, BatcherMemory>;
     // type BatcherMemory = BatcherMemory;
-    type Error = EncodingError;
+    type Error = TemporaryError;
 
     async fn batch_search(
         &self,
@@ -341,21 +360,113 @@ impl<
 
     async fn batch_insert(
         &self,
-        entries: Vec<(
-            Address<ADDRESS_LENGTH>,
-            impl Sync + Send + IntoIterator<Item = Value>,
-        )>,
+        _entries: Vec<(Keyword, impl Sync + Send + IntoIterator<Item = Value>)>,
     ) -> Result<(), Self::Error> {
-        todo!()
+        todo!("hello do not call me pls");
     }
 
     async fn batch_delete(
         &self,
-        entries: Vec<(
-            Address<ADDRESS_LENGTH>,
-            impl Sync + Send + IntoIterator<Item = Value>,
-        )>,
+        _entries: Vec<(Keyword, impl Sync + Send + IntoIterator<Item = Value>)>,
     ) -> Result<(), Self::Error> {
-        todo!()
+        todo!("I eat cement");
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{
+        ADDRESS_LENGTH, Findex, InMemory, IndexADT, address::Address, dummy_decode, dummy_encode,
+    };
+    use cosmian_crypto_core::{CsRng, Secret, define_byte_type, reexport::rand_core::SeedableRng};
+    use std::collections::HashSet;
+
+    impl BatchingLayerADT for InMemory<Address<ADDRESS_LENGTH>, [u8; 16]> {
+        fn batch_guarded_write(
+            &self,
+            _operations: Vec<(
+                (Address<ADDRESS_LENGTH>, Option<[u8; 16]>),
+                Vec<(Address<ADDRESS_LENGTH>, [u8; 16])>,
+            )>,
+        ) -> impl Send + Future<Output = Result<Vec<Option<[u8; 16]>>, Self::Error>> {
+            async move { todo!("call me and you will regret it") }
+        }
+    }
+
+    #[tokio::test]
+    async fn test_insert_search_delete_search() {
+        // Define a byte type, and use `Value` as an alias for 8-bytes values of
+        // that type.
+        type Value = Bytes<8>;
+
+        define_byte_type!(Bytes);
+
+        impl<const LENGTH: usize> TryFrom<usize> for Bytes<LENGTH> {
+            type Error = String;
+            fn try_from(value: usize) -> Result<Self, Self::Error> {
+                Self::try_from(value.to_be_bytes().as_slice()).map_err(|e| e.to_string())
+            }
+        }
+
+        const WORD_LENGTH: usize = 16;
+
+        let mut rng = CsRng::from_entropy();
+        let garbage_memory = InMemory::<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>::default();
+
+        let findex = Findex::new(
+            garbage_memory.clone(),
+            dummy_encode::<WORD_LENGTH, Value>,
+            dummy_decode,
+        );
+        let cat_bindings = [
+            Value::try_from(1).unwrap(),
+            Value::try_from(3).unwrap(),
+            Value::try_from(5).unwrap(),
+        ];
+        let dog_bindings = [
+            Value::try_from(0).unwrap(),
+            Value::try_from(2).unwrap(),
+            Value::try_from(4).unwrap(),
+        ];
+        findex
+            .insert("cat".to_string(), cat_bindings.clone())
+            .await
+            .unwrap();
+        findex
+            .insert("dog".to_string(), dog_bindings.clone())
+            .await
+            .unwrap();
+        let cat_res = findex.search(&"cat".to_string()).await.unwrap();
+        let dog_res = findex.search(&"dog".to_string()).await.unwrap();
+        assert_eq!(
+            cat_bindings.iter().cloned().collect::<HashSet<_>>(),
+            cat_res
+        );
+        assert_eq!(
+            dog_bindings.iter().cloned().collect::<HashSet<_>>(),
+            dog_res
+        );
+
+        // all of the previous garbage is the classic findex tests, now we will try to retrieve the same values using butcher findex
+        let key1 = "cat".to_string();
+        let key2 = "dog".to_string();
+        let cat_dog_input = vec![&key1, &key2];
+
+        let batcher_findex = BatcherFindex::<WORD_LENGTH, Value, _, _>::new(
+            garbage_memory,
+            |op, values| {
+                dummy_encode::<WORD_LENGTH, Value>(op, values)
+                    .map_err(|e| TemporaryError::DefaultGenericErrorForBatcher(e))
+            },
+            |words| {
+                dummy_decode(words).map_err(|e| TemporaryError::DefaultGenericErrorForBatcher(e))
+            },
+        );
+
+        let res = batcher_findex.batch_search(cat_dog_input).await.unwrap();
+        println!("cat bindings: {cat_res:?}\n");
+        println!("dog bindings: {dog_res:?}\n");
+        println!("results of a batch_search performed on the vector Vec![cat, dog]: \n {res:?}\n");
     }
 }
