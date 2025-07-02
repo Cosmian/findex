@@ -1,65 +1,22 @@
-use crate::{
-    ADDRESS_LENGTH, Address, Decoder, Encoder, Findex, InMemory, IndexADT, MemoryADT, memory,
-};
+use crate::{ADDRESS_LENGTH, Address, Decoder, Encoder, Findex, IndexADT, MemoryADT};
 use std::fmt::Display;
 use std::{
-    collections::{HashMap, HashSet},
+    collections::HashSet,
     fmt::Debug,
     future::Future,
     hash::Hash,
-    ops::Add,
     sync::{Arc, Mutex},
 };
-
-// ---------------------------- THE NEW ADT TYPES -----------------------------
-
 // TODO : should all of these be sync ?
 use futures::channel::oneshot;
-pub trait BatcherSSEADT<Keyword: Send + Sync + Hash, Value: Send + Sync + Hash> {
-    // TODO : maybe add the findex functions as trait
-    // type Findex: IndexADT<Keyword, Value> + Send + Sync; // need those ? + Send + Sync;
-    // type BatcherMemory: BatchingLayerADT<Address = Keyword, Word = Value, Error = Self::Error>;
-    type Error: Send + Sync + std::error::Error;
 
-    /// Search the index for the values bound to the given keywords.
-    fn batch_search(
-        &self,
-        keywords: Vec<&Keyword>,
-    ) -> impl Future<Output = Result<Vec<HashSet<Value>>, Self::Error>>;
-
-    /// Adds the given values to the index.
-    fn batch_insert(
-        &self,
-        entries: Vec<(Keyword, impl Sync + Send + IntoIterator<Item = Value>)>,
-    ) -> impl Send + Future<Output = Result<(), Self::Error>>;
-
-    /// Removes the given values from the index.
-    fn batch_delete(
-        &self,
-        entries: Vec<(Keyword, impl Sync + Send + IntoIterator<Item = Value>)>,
-    ) -> impl Send + Future<Output = Result<(), Self::Error>>;
-}
-
-// Define BatchingLayerADT as a supertrait of MemoryADT
-pub trait BatchingLayerADT: MemoryADT {
-    // You only need to declare the NEW methods here
-    // The associated types and existing methods from MemoryADT are inherited
-
-    /// Writes a batch of guarded write operations with bindings.
-    fn batch_guarded_write(
-        &self,
-        operations: Vec<(
-            (Self::Address, Option<Self::Word>),
-            Vec<(Self::Address, Self::Word)>,
-        )>,
-    ) -> impl Send + Future<Output = Result<Vec<Option<Self::Word>>, Self::Error>>;
-}
+// ---------------------------- THE NEW ADT TYPES -----------------------------
 
 // ---------------------------------- BufferedMemory Structure ----------------------------------
 // It takes as inner memory any memory that implements the batcher ADT
 // which is basically, having MemoryADT + The function batch_guarded_write
 
-struct BufferedMemory<M: BatchingLayerADT>
+struct BufferedMemory<M: BatchingLayerADT + MemoryADT>
 where
     M::Address: Clone,
 {

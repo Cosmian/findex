@@ -33,6 +33,37 @@ pub trait IndexADT<Keyword: Send + Sync + Hash, Value: Send + Sync + Hash> {
     ) -> impl Send + Future<Output = Result<(), Self::Error>>;
 }
 
+/// BatcherSSEADT (Batched Searchable Symmetric Encryption Abstract Data Type)
+///
+/// This trait defines batch operations for encrypted searchable indices. It extends
+/// the functionality of the standard `IndexADT` by providing methods that operate on
+/// multiple keywords or entries simultaneously to cut network's overhead and improve performance.
+pub trait BatcherSSEADT<Keyword: Send + Sync + Hash, Value: Send + Sync + Hash>:
+    IndexADT<Keyword, Value>
+{
+    // TODO : maybe add the findex functions as trait
+    // type Findex: IndexADT<Keyword, Value> + Send + Sync; // need those ? + Send + Sync;
+    // type BatcherMemory: BatchingLayerADT<Address = Keyword, Word = Value, Error = Self::Error>;
+
+    /// Search the index for the values bound to the given keywords.
+    fn batch_search(
+        &self,
+        keywords: Vec<&Keyword>,
+    ) -> impl Future<Output = Result<Vec<HashSet<Value>>, Self::Error>>;
+
+    /// Adds the given values to the index.
+    fn batch_insert(
+        &self,
+        entries: Vec<(Keyword, impl Sync + Send + IntoIterator<Item = Value>)>,
+    ) -> impl Send + Future<Output = Result<(), Self::Error>>;
+
+    /// Removes the given values from the index.
+    fn batch_delete(
+        &self,
+        entries: Vec<(Keyword, impl Sync + Send + IntoIterator<Item = Value>)>,
+    ) -> impl Send + Future<Output = Result<(), Self::Error>>;
+}
+
 pub trait VectorADT: Send + Sync {
     /// Vectors are homogeneous.
     type Value: Send + Sync;
@@ -74,6 +105,21 @@ pub trait MemoryADT {
         guard: (Self::Address, Option<Self::Word>),
         bindings: Vec<(Self::Address, Self::Word)>,
     ) -> impl Send + Future<Output = Result<Option<Self::Word>, Self::Error>>;
+}
+
+// Same as MemoryADT but also batches writes
+pub trait BatchingMemoryADT: MemoryADT {
+    // You only need to declare the NEW methods here
+    // The associated types and existing methods from MemoryADT are inherited
+
+    /// Writes a batch of guarded write operations with bindings.
+    fn batch_guarded_write(
+        &self,
+        operations: Vec<(
+            (Self::Address, Option<Self::Word>),
+            Vec<(Self::Address, Self::Word)>,
+        )>,
+    ) -> impl Send + Future<Output = Result<Vec<Option<Self::Word>>, Self::Error>>;
 }
 
 #[cfg(test)]
