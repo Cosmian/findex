@@ -1,4 +1,6 @@
-use crate::{ADDRESS_LENGTH, Address, Decoder, Encoder, Findex, IndexADT, MemoryADT};
+use crate::{
+    ADDRESS_LENGTH, Address, Decoder, Encoder, Findex, InMemory, IndexADT, MemoryADT, memory,
+};
 use std::{
     collections::{HashMap, HashSet},
     fmt::Debug,
@@ -7,6 +9,9 @@ use std::{
     ops::Add,
     sync::{Arc, Mutex},
 };
+
+// ---------------------------- THE NEW ADT TYPES -----------------------------
+
 // TODO : should all of these be sync ?
 use futures::channel::oneshot;
 pub trait BatcherSSEADT<Keyword: Send + Sync + Hash, Value: Send + Sync + Hash> {
@@ -48,6 +53,10 @@ pub trait BatchingLayerADT: MemoryADT {
         )>,
     ) -> impl Send + Future<Output = Result<Vec<Option<Self::Word>>, Self::Error>>;
 }
+
+// ---------------------------------- BufferedMemory Structure ----------------------------------
+// It takes as inner memory any memory that implements the batcher ADT
+// which is basically, having MemoryADT + The function batch_guarded_write
 
 struct BufferedMemory<M: BatchingLayerADT>
 where
@@ -167,6 +176,71 @@ where
         async move { todo!("Implement guarded_write for BufferedMemory") }
     }
 }
+
+// Also implement BatchingLayerADT for BufferedMemory
+impl<M: BatchingLayerADT + Send + Sync> BatchingLayerADT for BufferedMemory<M>
+where
+    M::Address: Clone + Send + Sync,
+    M::Word: Send + Sync,
+{
+    fn batch_guarded_write(
+        &self,
+        _operations: Vec<(
+            (Self::Address, Option<Self::Word>),
+            Vec<(Self::Address, Self::Word)>,
+        )>,
+    ) -> impl Send + Future<Output = Result<Vec<Option<Self::Word>>, Self::Error>> {
+        async move { todo!("Implement batch_guarded_write for BufferedMemory") }
+    }
+}
+
+// neded for findex constraints
+impl<M: BatchingLayerADT + Send + Sync + Clone> Clone for BufferedMemory<M>
+where
+    M::Address: Clone + Send + Sync,
+    M::Word: Send + Sync,
+{
+    fn clone(&self) -> Self {
+        Self {
+            inner: self.inner.clone(),
+            buffer_size: self.buffer_size,
+            pending_batches: Mutex::new(Vec::new()),
+        }
+    }
+}
+
+// This simply forward the BR/GW calls to the inner memory
+// when findex instances (below) call the batcher's operations
+impl<M: MemoryADT + Sync + Send> MemoryADT for Arc<M>
+where
+    M::Address: Send,
+    M::Word: Send,
+{
+    type Address = M::Address;
+    type Word = M::Word;
+    type Error = M::Error;
+
+    async fn batch_read(
+        &self,
+        addresses: Vec<Self::Address>,
+    ) -> Result<Vec<Option<Self::Word>>, Self::Error> {
+        (**self).batch_read(addresses).await
+    }
+
+    async fn guarded_write(
+        &self,
+        guard: (Self::Address, Option<Self::Word>),
+        bindings: Vec<(Self::Address, Self::Word)>,
+    ) -> Result<Option<Self::Word>, Self::Error> {
+        (**self).guarded_write(guard, bindings).await
+    }
+
+    // Implement other required methods similarly
+}
+
+// ---------------------------- BatcherFindex Structure -----------------------------
+// He is a bigger findex that does findex operations but in batches lol
+
 #[derive(Debug)]
 pub struct BatcherFindex<
     const WORD_LENGTH: usize,
@@ -206,78 +280,82 @@ impl<
     }
 }
 
-// impl<
-//     const WORD_LENGTH: usize,
-//     Value: Send + Sync + Hash + Eq,
-//     EncodingError: Send + Sync + Debug + std::error::Error,
-//     BatcherMemory: Send
-//         + Sync
-//         + Clone
-//         + BatchingLayerADT<Address = Address<ADDRESS_LENGTH>, Word = [u8; WORD_LENGTH]>,
-// > BatcherSSEADT<Address<ADDRESS_LENGTH>, Value>
-//     for BatcherFindex<WORD_LENGTH, Value, EncodingError, BatcherMemory>
-// {
-//     // type Findex = Findex<WORD_LENGTH, Value, EncodingError, BatcherMemory>;
-//     // type BatcherMemory = BatcherMemory;
-//     type Error = EncodingError;
+impl<
+    const WORD_LENGTH: usize,
+    Keyword: Send + Sync + Hash + Eq,
+    Value: Send + Sync + Hash + Eq,
+    EncodingError: Send + Sync + Debug + std::error::Error,
+    BatcherMemory: Send
+        + Sync
+        + Clone
+        + BatchingLayerADT<Address = Address<ADDRESS_LENGTH>, Word = [u8; WORD_LENGTH]>,
+> BatcherSSEADT<Keyword, Value>
+    for BatcherFindex<WORD_LENGTH, Value, EncodingError, BatcherMemory>
+{
+    // type Findex = Findex<WORD_LENGTH, Value, EncodingError, BatcherMemory>;
+    // type BatcherMemory = BatcherMemory;
+    type Error = EncodingError;
 
-//     async fn batch_search(
-//         &self,
-//         keywords: Vec<&Address<ADDRESS_LENGTH>>,
-//     ) -> Result<Vec<HashSet<Value>>, Self::Error> {
-//         let mut results = Vec::<HashSet<Value>>::with_capacity(keywords.len());
-//         let search_futures = Vec::with_capacity(keywords.len());
-//         let batching_layer = self.memory.clone();
+    async fn batch_search(
+        &self,
+        keywords: Vec<&Keyword>,
+    ) -> Result<Vec<HashSet<Value>>, Self::Error> {
+        let mut search_futures = Vec::new();
+        let n = keywords.len();
+        let buffered_memory = Arc::new(BufferedMemory::new(self.memory.clone(), n));
 
-//         for keyword in keywords {
-//             // Create a future that executes the search for this keyword
-//             let future = async move {
-//                 // Create a temporary Findex instance using the shared batching layer
-//                 let findex = Findex::<WORD_LENGTH, Value, EncodingError, Arc<BatcherMemory>>::new(
-//                     batching_layer,
-//                     // arc clones, no worries
-//                     self.encode.clone(),
-//                     self.decode.clone(),
-//                 );
+        for keyword in keywords {
+            let buffered_memory_clone = buffered_memory.clone();
+            let future = async move {
+                // Create a temporary Findex instance using the shared batching layer
+                let findex: Findex<
+                    WORD_LENGTH,
+                    Value,
+                    EncodingError,
+                    Arc<BufferedMemory<BatcherMemory>>,
+                > = Findex::<WORD_LENGTH, Value, EncodingError, _>::new(
+                    buffered_memory_clone,
+                    *self.encode,
+                    *self.decode,
+                );
 
-//                 // Execute the search
-//                 findex.search(keyword).await
-//             };
+                // Execute the search
+                findex.search(keyword).await
+            };
 
-//             search_futures.push(future);
-//         }
-//         // at this point nothing is polled yet
+            search_futures.push(future);
+        }
+        // at this point nothing is polled yet
 
-//         // Execute all futures concurrently and collect results
-//         let results = futures::future::join_all(search_futures).await;
+        // Execute all futures concurrently and collect results
+        let results = futures::future::join_all(search_futures).await;
 
-//         // Process results
-//         let mut output = Vec::with_capacity(results.len());
-//         for result in results {
-//             output.push(result?);
-//         }
+        // Process results
+        let mut output = Vec::with_capacity(results.len());
+        for result in results {
+            output.push(result.unwrap());
+        }
 
-//         Ok(output)
-//         todo!("Implement batch_search for BatcherFindex");
-//     }
+        Ok(output)
+    }
 
-//     async fn batch_insert(
-//         &self,
-//         entries: Vec<(
-//             Address<ADDRESS_LENGTH>,
-//             impl Sync + Send + IntoIterator<Item = Value>,
-//         )>,
-//     ) -> Result<(), Self::Error> {
-//         todo!()
-//     }
+    async fn batch_insert(
+        &self,
+        entries: Vec<(
+            Address<ADDRESS_LENGTH>,
+            impl Sync + Send + IntoIterator<Item = Value>,
+        )>,
+    ) -> Result<(), Self::Error> {
+        todo!()
+    }
 
-//     async fn batch_delete(
-//         &self,
-//         entries: Vec<(
-//             Address<ADDRESS_LENGTH>,
-//             impl Sync + Send + IntoIterator<Item = Value>,
-//         )>,
-//     ) -> Result<(), Self::Error> {
-//         todo!()
-//     }
-// }
+    async fn batch_delete(
+        &self,
+        entries: Vec<(
+            Address<ADDRESS_LENGTH>,
+            impl Sync + Send + IntoIterator<Item = Value>,
+        )>,
+    ) -> Result<(), Self::Error> {
+        todo!()
+    }
+}
