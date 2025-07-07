@@ -7,6 +7,7 @@ pub enum Error<Address> {
     Conversion(String),
     MissingValue(Address, usize),
     CorruptedMemoryCache,
+    DefaultGenericErrorForBatcher(String), // TODO: redirect batcher errors to this for now
 }
 
 impl<Address: Debug> Display for Error<Address> {

@@ -7,3 +7,4 @@ mod in_memory;
 pub use in_memory::InMemory;
 
 pub mod batching_layer;
+pub use batching_layer::*;

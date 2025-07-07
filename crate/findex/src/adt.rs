@@ -38,17 +38,16 @@ pub trait IndexADT<Keyword: Send + Sync + Hash, Value: Send + Sync + Hash> {
 /// This trait defines batch operations for encrypted searchable indices. It extends
 /// the functionality of the standard `IndexADT` by providing methods that operate on
 /// multiple keywords or entries simultaneously to cut network's overhead and improve performance.
-pub trait BatcherSSEADT<Keyword: Send + Sync + Hash, Value: Send + Sync + Hash>:
-    IndexADT<Keyword, Value>
-{
+pub trait BatcherSSEADT<Keyword: Send + Sync + Hash, Value: Send + Sync + Hash> {
     // TODO : maybe add the findex functions as trait
     // type Findex: IndexADT<Keyword, Value> + Send + Sync; // need those ? + Send + Sync;
-    // type BatcherMemory: BatchingLayerADT<Address = Keyword, Word = Value, Error = Self::Error>;
+    // type BatcherMemory: BatchingMemoryADT<Address = Keyword, Word = Value, Error = Self::Error>;
+    type Error: Send + Sync + std::error::Error;
 
     /// Search the index for the values bound to the given keywords.
     fn batch_search(
         &self,
-        keywords: Vec<&Keyword>,
+        keywords: Vec<&Keyword>, // n  --> n fois barch read --> n+1
     ) -> impl Future<Output = Result<Vec<HashSet<Value>>, Self::Error>>;
 
     /// Adds the given values to the index.
