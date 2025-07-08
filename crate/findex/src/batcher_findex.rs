@@ -27,7 +27,8 @@ pub struct BatcherFindex<
 impl<
     const WORD_LENGTH: usize,
     Value: Send + Sync + Hash + Eq,
-    BatcherMemory: Send
+    BatcherMemory: Debug
+        + Send
         + Sync
         + Clone
         + BatchingMemoryADT<Address = Address<ADDRESS_LENGTH>, Word = [u8; WORD_LENGTH]>,
@@ -103,7 +104,8 @@ impl<
     Keyword: Send + Sync + Hash + Eq,
     Value: Send + Sync + Hash + Eq,
     EncodingError: Send + Sync + Debug + std::error::Error,
-    BatcherMemory: Send
+    BatcherMemory: Debug
+        + Send
         + Sync
         + Clone
         + BatchingMemoryADT<Address = Address<ADDRESS_LENGTH>, Word = [u8; WORD_LENGTH]>,
@@ -175,6 +177,9 @@ impl<
     }
 }
 
+// The underlying tests assume the existence of a `Findex` implementation that is correct
+// The testing strategy for each function is to use the `Findex` implementation to perform the same operations
+// and compare the results with the `BatcherFindex` implementation.
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -185,24 +190,24 @@ mod tests {
     use cosmian_crypto_core::define_byte_type;
     use std::collections::HashSet;
 
+    type Value = Bytes<8>;
+    define_byte_type!(Bytes);
+
+    impl<const LENGTH: usize> TryFrom<usize> for Bytes<LENGTH> {
+        type Error = String;
+        fn try_from(value: usize) -> Result<Self, Self::Error> {
+            Self::try_from(value.to_be_bytes().as_slice()).map_err(|e| e.to_string())
+        }
+    }
+
+    const WORD_LENGTH: usize = 16;
+
     #[tokio::test]
     async fn test_batch_insert() {
-        type Value = Bytes<8>;
-        define_byte_type!(Bytes);
-
-        impl<const LENGTH: usize> TryFrom<usize> for Bytes<LENGTH> {
-            type Error = String;
-            fn try_from(value: usize) -> Result<Self, Self::Error> {
-                Self::try_from(value.to_be_bytes().as_slice()).map_err(|e| e.to_string())
-            }
-        }
-
-        const WORD_LENGTH: usize = 16;
-
-        let garbage_memory = InMemory::<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>::default();
+        let trivial_memory = InMemory::<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>::default();
 
         let batcher_findex = BatcherFindex::<WORD_LENGTH, Value, _, _>::new(
-            garbage_memory.clone(),
+            trivial_memory.clone(),
             |op, values| {
                 dummy_encode::<WORD_LENGTH, Value>(op, values)
                     .map_err(|e| Error::<Address<ADDRESS_LENGTH>>::DefaultGenericErrorForBatcher(e))
@@ -213,85 +218,50 @@ mod tests {
             },
         );
 
-        // Prepare test data
         let cat_bindings = vec![
             Value::try_from(1).unwrap(),
+            Value::try_from(2).unwrap(),
             Value::try_from(3).unwrap(),
-            Value::try_from(5).unwrap(),
         ];
         let dog_bindings = vec![
-            Value::try_from(0).unwrap(),
-            Value::try_from(2).unwrap(),
             Value::try_from(4).unwrap(),
+            Value::try_from(5).unwrap(),
+            Value::try_from(6).unwrap(),
         ];
-        let fish_bindings = vec![Value::try_from(7).unwrap(), Value::try_from(9).unwrap()];
 
         // Batch insert multiple entries
         let entries = vec![
             ("cat".to_string(), cat_bindings.clone()),
             ("dog".to_string(), dog_bindings.clone()),
-            ("fish".to_string(), fish_bindings.clone()),
         ];
 
         batcher_findex.batch_insert(entries).await.unwrap();
 
-        // Verify insertions by searching
-        let key1 = "cat".to_string();
-        let key2 = "dog".to_string();
-        let key3 = "fish".to_string();
+        // instantiate a (non batched) Findex to verify the results
         let findex = Findex::new(
-            garbage_memory.clone(),
+            trivial_memory.clone(),
             dummy_encode::<WORD_LENGTH, Value>,
             dummy_decode,
         );
 
         let cat_result = findex.search(&"cat".to_string()).await.unwrap();
+        assert_eq!(cat_result, cat_bindings.into_iter().collect::<HashSet<_>>());
+
         let dog_result = findex.search(&"dog".to_string()).await.unwrap();
-        let fish_result = findex.search(&"fish".to_string()).await.unwrap();
-
-        // assert_eq!(cat_result, cat_bindings.into_iter().collect::<HashSet<_>>());
-        // assert_eq!(dog_result, dog_bindings.into_iter().collect::<HashSet<_>>());
-        // assert_eq!(
-        //     fish_result,
-        //     fish_bindings.into_iter().collect::<HashSet<_>>()
-        // );
-
-        println!("Cat result: {:?}", cat_result);
-        println!("Dog result: {:?}", dog_result);
-        println!("Fish result: {:?}", fish_result);
-        // assert_eq!(results[0], cat_bindings.into_iter().collect::<HashSet<_>>());
-        // assert_eq!(results[1], dog_bindings.into_iter().collect::<HashSet<_>>());
-        // assert_eq!(
-        //     results[2],
-        //     fish_bindings.into_iter().collect::<HashSet<_>>()
-        // );
+        assert_eq!(dog_result, dog_bindings.into_iter().collect::<HashSet<_>>());
     }
 
     #[tokio::test]
-    // TODO!: I didn't write this one test it's autogen - to not delete this comment before rewriting it !!!
     async fn test_batch_delete() {
-        type Value = Bytes<8>;
-        define_byte_type!(Bytes);
-
-        impl<const LENGTH: usize> TryFrom<usize> for Bytes<LENGTH> {
-            type Error = String;
-            fn try_from(value: usize) -> Result<Self, Self::Error> {
-                Self::try_from(value.to_be_bytes().as_slice()).map_err(|e| e.to_string())
-            }
-        }
-
-        const WORD_LENGTH: usize = 16;
-
-        let garbage_memory = InMemory::<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>::default();
+        let trivial_memory = InMemory::<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>::default();
 
         // First, populate the memory with initial data using regular Findex
         let findex = Findex::new(
-            garbage_memory.clone(),
+            trivial_memory.clone(),
             dummy_encode::<WORD_LENGTH, Value>,
             dummy_decode,
         );
 
-        // Prepare initial test data
         let cat_bindings = vec![
             Value::try_from(1).unwrap(),
             Value::try_from(3).unwrap(),
@@ -304,13 +274,7 @@ mod tests {
             Value::try_from(4).unwrap(),
             Value::try_from(6).unwrap(),
         ];
-        let fish_bindings = vec![
-            Value::try_from(8).unwrap(),
-            Value::try_from(9).unwrap(),
-            Value::try_from(10).unwrap(),
-        ];
 
-        // Insert initial data
         findex
             .insert("cat".to_string(), cat_bindings.clone())
             .await
@@ -319,14 +283,10 @@ mod tests {
             .insert("dog".to_string(), dog_bindings.clone())
             .await
             .unwrap();
-        findex
-            .insert("fish".to_string(), fish_bindings.clone())
-            .await
-            .unwrap();
 
         // Create BatcherFindex for deletion operations
         let batcher_findex = BatcherFindex::<WORD_LENGTH, Value, _, _>::new(
-            garbage_memory.clone(),
+            trivial_memory.clone(),
             |op, values| {
                 dummy_encode::<WORD_LENGTH, Value>(op, values)
                     .map_err(|e| Error::<Address<ADDRESS_LENGTH>>::DefaultGenericErrorForBatcher(e))
@@ -337,115 +297,39 @@ mod tests {
             },
         );
 
-        // Verify initial state
-        let initial_cat = findex.search(&"cat".to_string()).await.unwrap();
-        let initial_dog = findex.search(&"dog".to_string()).await.unwrap();
-        let initial_fish = findex.search(&"fish".to_string()).await.unwrap();
-
-        println!("Initial cat result: {:?}", initial_cat);
-        println!("Initial dog result: {:?}", initial_dog);
-        println!("Initial fish result: {:?}", initial_fish);
-
-        // Prepare deletion entries - delete some values from each keyword
         let delete_entries = vec![
             (
                 "cat".to_string(),
-                vec![
-                    Value::try_from(1).unwrap(), // Remove 1
-                    Value::try_from(5).unwrap(), // Remove 5
-                ],
+                vec![Value::try_from(1).unwrap(), Value::try_from(5).unwrap()],
             ),
-            (
-                "dog".to_string(),
-                vec![
-                    Value::try_from(0).unwrap(), // Remove 0
-                    Value::try_from(4).unwrap(), // Remove 4
-                ],
-            ),
-            (
-                "fish".to_string(),
-                vec![
-                    Value::try_from(9).unwrap(), // Remove 9
-                ],
-            ),
+            ("dog".to_string(), dog_bindings), // Remove all dog bindings
         ];
 
         // Perform batch delete
         batcher_findex.batch_delete(delete_entries).await.unwrap();
 
-        // Verify deletions by searching with fresh Findex instance
-        let verification_findex = Findex::new(
-            garbage_memory.clone(),
-            dummy_encode::<WORD_LENGTH, Value>,
-            dummy_decode,
-        );
+        // Verify deletions were performed using a regular findex instance
+        let cat_result = findex.search(&"cat".to_string()).await.unwrap();
+        let dog_result = findex.search(&"dog".to_string()).await.unwrap();
 
-        let cat_after_delete = verification_findex
-            .search(&"cat".to_string())
-            .await
-            .unwrap();
-        let dog_after_delete = verification_findex
-            .search(&"dog".to_string())
-            .await
-            .unwrap();
-        let fish_after_delete = verification_findex
-            .search(&"fish".to_string())
-            .await
-            .unwrap();
-
-        println!("Cat after delete: {:?}", cat_after_delete);
-        println!("Dog after delete: {:?}", dog_after_delete);
-        println!("Fish after delete: {:?}", fish_after_delete);
-
-        // Expected results after deletion
         let expected_cat = vec![
             Value::try_from(3).unwrap(), // 1 and 5 removed, 3 and 7 remain
             Value::try_from(7).unwrap(),
         ]
         .into_iter()
         .collect::<HashSet<_>>();
+        let expected_dog = HashSet::new(); // all of the dog bindings are removed
 
-        let expected_dog = vec![
-            Value::try_from(2).unwrap(), // 0 and 4 removed, 2 and 6 remain
-            Value::try_from(6).unwrap(),
-        ]
-        .into_iter()
-        .collect::<HashSet<_>>();
-
-        let expected_fish = vec![
-            Value::try_from(8).unwrap(), // 9 removed, 8 and 10 remain
-            Value::try_from(10).unwrap(),
-        ]
-        .into_iter()
-        .collect::<HashSet<_>>();
-
-        // Verify the deletions worked correctly
-        assert_eq!(cat_after_delete, expected_cat);
-        assert_eq!(dog_after_delete, expected_dog);
-        assert_eq!(fish_after_delete, expected_fish);
+        assert_eq!(cat_result, expected_cat);
+        assert_eq!(dog_result, expected_dog);
     }
 
     #[tokio::test]
-    async fn test_search_lol() {
-        // Define a byte type, and use `Value` as an alias for 8-bytes values of
-        // that type.
-        type Value = Bytes<8>;
-
-        define_byte_type!(Bytes);
-
-        impl<const LENGTH: usize> TryFrom<usize> for Bytes<LENGTH> {
-            type Error = String;
-            fn try_from(value: usize) -> Result<Self, Self::Error> {
-                Self::try_from(value.to_be_bytes().as_slice()).map_err(|e| e.to_string())
-            }
-        }
-
-        const WORD_LENGTH: usize = 16;
-
-        let garbage_memory = InMemory::<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>::default();
+    async fn test_batch_search() {
+        let trivial_memory = InMemory::<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>::default();
 
         let findex = Findex::new(
-            garbage_memory.clone(),
+            trivial_memory.clone(),
             dummy_encode::<WORD_LENGTH, Value>,
             dummy_decode,
         );
@@ -467,24 +351,9 @@ mod tests {
             .insert("dog".to_string(), dog_bindings.clone())
             .await
             .unwrap();
-        let cat_res = findex.search(&"cat".to_string()).await.unwrap();
-        let dog_res = findex.search(&"dog".to_string()).await.unwrap();
-        assert_eq!(
-            cat_bindings.iter().cloned().collect::<HashSet<_>>(),
-            cat_res
-        );
-        assert_eq!(
-            dog_bindings.iter().cloned().collect::<HashSet<_>>(),
-            dog_res
-        );
-
-        // all of the previous garbage is the classic findex tests, now we will try to retrieve the same values using butcher findex
-        let key1 = "cat".to_string();
-        let key2 = "dog".to_string();
-        let cat_dog_input = vec![&key1, &key2];
 
         let batcher_findex = BatcherFindex::<WORD_LENGTH, Value, _, _>::new(
-            garbage_memory,
+            trivial_memory,
             |op, values| {
                 dummy_encode::<WORD_LENGTH, Value>(op, values)
                     .map_err(|e| Error::<Address<ADDRESS_LENGTH>>::DefaultGenericErrorForBatcher(e))
@@ -495,9 +364,20 @@ mod tests {
             },
         );
 
-        let res = batcher_findex.batch_search(cat_dog_input).await.unwrap();
-        println!("cat bindings: {cat_res:?}\n");
-        println!("dog bindings: {dog_res:?}\n");
-        println!("results of a batch_search performed on the vector Vec![cat, dog]: \n {res:?}\n");
+        let key1 = "cat".to_string();
+        let key2 = "dog".to_string();
+        // Perform batch search
+        let batch_search_results = batcher_findex
+            .batch_search(vec![&key1, &key2])
+            .await
+            .unwrap();
+
+        assert_eq!(
+            batch_search_results,
+            vec![
+                cat_bindings.iter().cloned().collect::<HashSet<_>>(),
+                dog_bindings.iter().cloned().collect::<HashSet<_>>()
+            ]
+        );
     }
 }

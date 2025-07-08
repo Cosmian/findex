@@ -256,8 +256,9 @@ where
                 }
 
                 // Wait for results
-                let a = receiver.await??;
-                a
+                receiver
+                    .await?
+                    .map_err(|e| BatchingLayerError::<M>::MemoryError(e))
             }
         }
     }
@@ -295,10 +296,10 @@ where
                 }
 
                 // Wait for results
-                receiver.await.map_err(|_| {
-                    // TODO This is a placeholder that will need to be replaced later
-                    panic!("Channel closed unexpectedly ?")
-                })?
+                // Wait for results
+                receiver
+                    .await?
+                    .map_err(|e| BatchingLayerError::<M>::MemoryError(e))
             }
         }
     }
