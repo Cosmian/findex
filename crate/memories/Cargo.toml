@@ -15,6 +15,7 @@ name = "cosmian_findex_memories"
 path = "src/lib.rs"
 
 [features]
+batcher = ["tokio"]
 redis-mem = ["redis"]
 sqlite-mem = ["async-sqlite"]
 postgres-mem = ["deadpool-postgres", "tokio", "tokio-postgres"]
@@ -24,11 +25,12 @@ test-utils = ["cosmian_findex/test-utils"]
 async-sqlite = { version = "0.5", optional = true }
 cosmian_findex = { path = "../findex", version = "8.0" }
 deadpool-postgres = { version = "0.14", optional = true }
+futures = "0.3"
 redis = { version = "0.32", default-features = false, features = [
     "connection-manager",
     "tokio-comp",
 ], optional = true }
-tokio = { workspace = true, features = ["rt-multi-thread"], optional = true }
+tokio = { workspace = true, features = ["rt-multi-thread", "sync"], optional = true }
 tokio-postgres = { version = "0.7", optional = true, features = [
     "array-impls",
 ] }
@@ -39,7 +41,7 @@ cosmian_crypto_core.workspace = true
 cosmian_findex = { path = "../findex", version = "8.0", features = [
     "test-utils",
 ] }
-tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread", "sync"] }
 criterion = { workspace = true }
 futures = { version = "0.3" }
 rand = "0.9"

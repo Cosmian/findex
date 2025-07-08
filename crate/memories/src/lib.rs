@@ -13,6 +13,9 @@ mod postgresql_mem;
 #[cfg(feature = "postgres-mem")]
 pub use postgresql_mem::{PostgresMemory, PostgresMemoryError};
 
+#[cfg(feature = "batcher")]
+mod memory_batcher;
+
 pub mod reexport {
     #[cfg(feature = "sqlite-mem")]
     pub use async_sqlite;
