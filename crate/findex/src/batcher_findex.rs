@@ -1,7 +1,6 @@
 use crate::adt::{BatcherSSEADT, BatchingMemoryADT};
 use crate::memory::MemoryBatcher;
 use crate::{ADDRESS_LENGTH, Address, Decoder, Encoder, Error, Findex, IndexADT};
-use std::fmt::Display;
 use std::sync::atomic::AtomicUsize;
 use std::{collections::HashSet, fmt::Debug, hash::Hash, sync::Arc};
 // TODO : should all of these be sync ?

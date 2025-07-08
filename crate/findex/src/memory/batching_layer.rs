@@ -2,16 +2,14 @@
 // It takes as inner memory any memory that implements the batcher ADT
 // which is basically, having MemoryADT + The function batch_guarded_write
 
+use crate::{MemoryADT, adt::BatchingMemoryADT};
+use futures::channel::oneshot;
 use std::sync::{
     Arc, Mutex,
     atomic::{AtomicUsize, Ordering},
 };
 
-use futures::channel::{mpsc, oneshot};
-
-use crate::{MemoryADT, adt::BatchingMemoryADT};
-
-enum PendingBatchOps<M: BatchingMemoryADT + MemoryADT>
+enum PendingOperations<M: BatchingMemoryADT + MemoryADT>
 where
     M::Address: Clone,
 {
@@ -34,44 +32,85 @@ where
 }
 
 pub struct MemoryBatcher<M: BatchingMemoryADT>
-// memory batcher
 where
     M::Address: Clone,
 {
     inner: M, // the actual memory layer that implements the actual network / memory call
-    capacity: AtomicUsize, // n
-    pending_ops: PendingBatchOps<M>, // ceci doit etre appelé buffer
+    capacity: AtomicUsize, // capacity at which the operation should be executed
+    buffer: PendingOperations<M>,
+}
+
+#[derive(Debug)]
+pub enum BatchingLayerError<MemError> {
+    MemoryError(MemError),
+    ChannelClosed,
+}
+
+impl<MemError: std::fmt::Display> std::fmt::Display for BatchingLayerError<MemError> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            BatchingLayerError::MemoryError(err) => write!(f, "Memory error: {}", err),
+            BatchingLayerError::ChannelClosed => write!(f, "Channel closed unexpectedly"),
+        }
+    }
+}
+
+impl<MemError: std::error::Error + 'static> std::error::Error for BatchingLayerError<MemError> {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            BatchingLayerError::MemoryError(err) => Some(err),
+            BatchingLayerError::ChannelClosed => None,
+        }
+    }
+}
+
+impl<MemError> From<MemError> for BatchingLayerError<MemError> {
+    fn from(err: MemError) -> Self {
+        BatchingLayerError::MemoryError(err)
+    }
 }
 
 impl<M: BatchingMemoryADT + Send> MemoryBatcher<M>
 where
     <M as MemoryADT>::Address: Clone,
 {
-    pub fn new_reader(inner: M, buffer_size: AtomicUsize) -> Self {
+    pub fn new_reader(inner: M, capacity: AtomicUsize) -> Self {
         Self {
             inner,
-            capacity: buffer_size,
-            pending_ops: PendingBatchOps::PendingReads(Mutex::new(Vec::new())),
+            capacity,
+            buffer: PendingOperations::PendingReads(Mutex::new(Vec::new())),
         }
     }
 
-    pub fn new_writer(inner: M, buffer_size: AtomicUsize) -> Self {
+    pub fn new_writer(inner: M, capacity: AtomicUsize) -> Self {
         Self {
             inner,
-            capacity: buffer_size,
-            pending_ops: PendingBatchOps::PendingWrites(Mutex::new(Vec::new())),
+            capacity,
+            buffer: PendingOperations::PendingWrites(Mutex::new(Vec::new())),
         }
     }
 
     // atomically decrement the buffer size, needed on inserts/deletes
     pub(crate) fn decrement_capacity(&self) -> () {
         // `fetch_sub` returns the previous value, so if it was 1, it means the buffer's job is done
-        let _ = self.capacity.fetch_sub(1, Ordering::SeqCst);
+        let previous = self.capacity.fetch_sub(1, Ordering::SeqCst);
+        match &self.buffer {
+            PendingOperations::PendingReads(read_ops) => {
+                if previous <= read_ops.lock().unwrap().len() {
+                    let _ = self.flush();
+                }
+            }
+            PendingOperations::PendingWrites(write_ops) => {
+                if previous <= write_ops.lock().unwrap().len() {
+                    let _ = self.flush();
+                }
+            }
+        }
     }
 
-    async fn flush(&self) -> Result<(), M::Error> {
-        match &self.pending_ops {
-            PendingBatchOps::PendingReads(read_ops) => {
+    async fn flush(&self) -> Result<(), BatchingLayerError<M::Error>> {
+        match &self.buffer {
+            PendingOperations::PendingReads(read_ops) => {
                 // maybe add a check that the capacities are correct
                 let batches: Vec<(
                     Vec<M::Address>,
@@ -85,27 +124,27 @@ where
                 };
 
                 // Build combined address list while tracking which addresses belong to which batch
-                let mut all_addresses = Vec::new();
-
-                for (individual_address_batch, _) in &batches {
-                    // Add this batch's addresses to the combined list
-                    all_addresses.extend_from_slice(individual_address_batch);
-                }
+                let all_addresses: Vec<_> = batches
+                    .iter()
+                    .flat_map(|(addresses, _)| addresses.iter())
+                    .cloned()
+                    .collect();
 
                 // Execute the combined batch_read
                 let mut all_results = self.inner.batch_read(all_addresses).await?;
 
                 // Distribute results to each batch's sender
-                // TODO: this is the most readable approach but we could optimize it ig ?
-                for (input, sender) in batches {
-                    // Always drain from index 0
-                    let batch_results = all_results.drain(0..input.len()).collect();
-                    let _ = sender.send(Ok(batch_results));
+                for (input, sender) in batches.into_iter().rev() {
+                    let split_point = all_results.len() - input.len();
+                    // After this call, all_results will be left containing the elements [0, split_point)
+                    // that's why we need to reverse the batches
+                    let batch_results = all_results.split_off(split_point);
+                    sender.send(Ok(batch_results))?;
                 }
 
                 Ok(())
             }
-            PendingBatchOps::PendingWrites(write_ops) => {
+            PendingOperations::PendingWrites(write_ops) => {
                 // maybe add a check that the capacities are correct
                 let batches = {
                     let mut pending = write_ops.lock().unwrap();
@@ -142,11 +181,11 @@ where
         &self,
         addresses: Vec<Self::Address>,
     ) -> Result<Vec<Option<Self::Word>>, Self::Error> {
-        match &self.pending_ops {
-            PendingBatchOps::PendingWrites(_) => panic!(
+        match &self.buffer {
+            PendingOperations::PendingWrites(_) => panic!(
                 "`batch_read` is called on a writer MemoryBatcher, make sure to use `new_reader` during initialization."
             ),
-            PendingBatchOps::PendingReads(read_ops) => {
+            PendingOperations::PendingReads(read_ops) => {
                 // Create a channel for this batch
                 let (sender, receiver) = oneshot::channel();
                 let should_flush;
@@ -185,9 +224,9 @@ where
         guard: (Self::Address, Option<Self::Word>),
         bindings: Vec<(Self::Address, Self::Word)>,
     ) -> Result<Option<Self::Word>, Self::Error> {
-        match &self.pending_ops {
-            PendingBatchOps::PendingReads(_) => panic!("what's happenning ?"),
-            PendingBatchOps::PendingWrites(write_ops) => {
+        match &self.buffer {
+            PendingOperations::PendingReads(_) => panic!("what's happenning ?"),
+            PendingOperations::PendingWrites(write_ops) => {
                 let (sender, receiver) = oneshot::channel();
                 let should_flush;
 
