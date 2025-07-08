@@ -86,12 +86,8 @@ where
 
                 // Build combined address list while tracking which addresses belong to which batch
                 let mut all_addresses = Vec::new();
-                let mut batch_indices = Vec::new();
 
                 for (individual_address_batch, _) in &batches {
-                    // Record the starting index for this batch
-                    // will be of the form (start_index, batch_length)
-                    batch_indices.push((all_addresses.len(), individual_address_batch.len()));
                     // Add this batch's addresses to the combined list
                     all_addresses.extend_from_slice(individual_address_batch);
                 }
@@ -101,9 +97,9 @@ where
 
                 // Distribute results to each batch's sender
                 // TODO: this is the most readable approach but we could optimize it ig ?
-                for ((_, batch_len), (_, sender)) in batch_indices.into_iter().zip(batches) {
+                for (input, sender) in batches {
                     // Always drain from index 0
-                    let batch_results = all_results.drain(0..batch_len).collect();
+                    let batch_results = all_results.drain(0..input.len()).collect();
                     let _ = sender.send(Ok(batch_results));
                 }
 
