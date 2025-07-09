@@ -96,12 +96,9 @@ impl<Address: Hash + Eq + Debug + Clone, Value: Clone + Eq + Debug> IntoIterator
 mod tests {
 
     use super::InMemory;
-    use crate::{
-        test_utils::gen_seed,
-        test_utils::{
-            test_guarded_write_concurrent, test_rw_same_address, test_single_write_and_read,
-            test_wrong_guard,
-        },
+    use crate::test_utils::{
+        gen_seed, test_guarded_write_concurrent, test_rw_same_address, test_single_write_and_read,
+        test_wrong_guard,
     };
 
     #[tokio::test]

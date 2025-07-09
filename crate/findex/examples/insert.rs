@@ -4,7 +4,8 @@ use cosmian_crypto_core::{
     CsRng, Secret,
     reexport::rand_core::{CryptoRngCore, SeedableRng},
 };
-use cosmian_findex::{Findex, InMemory, IndexADT, MemoryEncryptionLayer, Op};
+use cosmian_findex::{Findex, IndexADT, MemoryEncryptionLayer, Op};
+use cosmian_findex_memories::InMemory;
 use std::collections::{HashMap, HashSet};
 
 /// This function generates a random set of (key, values) couples. Since Findex

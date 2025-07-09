@@ -16,8 +16,12 @@ path = "src/lib.rs"
 
 [features]
 test-utils = ["tokio", "criterion"]
+redis-mem = ["cosmian_findex_memories/redis-mem"]
+sqlite-mem = ["cosmian_findex_memories/sqlite-mem"]
+postgres-mem = ["cosmian_findex_memories/postgres-mem"]
 
 [dependencies]
+cosmian_findex_memories = { path = "../memories", version = "8.0" }
 cosmian_crypto_core.workspace = true
 aes = "0.8"
 xts-mode = "0.5"
@@ -31,7 +35,20 @@ criterion = { workspace = true, optional = true }
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
+cosmian_findex_memories = { path = "../memories", version = "8.0", features = [
+    "redis-mem",
+    "sqlite-mem",
+    "postgres-mem",
+    "test-utils",
+] }
+rand = "0.9"
+rand_distr = "0.5"
 
 [[example]]
 name = "insert"
+required-features = ["test-utils"]
+
+[[bench]]
+name = "benches"
+harness = false
 required-features = ["test-utils"]
