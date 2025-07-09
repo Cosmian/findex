@@ -1,8 +1,8 @@
+use crate::{Address, MemoryADT};
 use async_sqlite::{
     Pool, PoolBuilder,
     rusqlite::{OptionalExtension, params_from_iter},
 };
-use cosmian_findex::{Address, MemoryADT};
 use std::{
     collections::HashMap,
     fmt::{self, Debug},
@@ -203,11 +203,13 @@ impl<const ADDRESS_LENGTH: usize, const WORD_LENGTH: usize> MemoryADT
 #[cfg(test)]
 mod tests {
 
-    use super::*;
-    use cosmian_findex::{
-        WORD_LENGTH, gen_seed, test_guarded_write_concurrent, test_rw_same_address,
-        test_single_write_and_read, test_wrong_guard,
+    use crate::test_utils::{
+        gen_seed, test_guarded_write_concurrent, test_rw_same_address, test_single_write_and_read,
+        test_wrong_guard,
     };
+
+    use super::*;
+    use cosmian_findex::WORD_LENGTH;
 
     const DB_PATH: &str = "../../target/debug/sqlite-test.sqlite.db";
     const TABLE_NAME: &str = "findex_memory";

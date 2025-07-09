@@ -1,5 +1,5 @@
 use super::PostgresMemoryError;
-use cosmian_findex::{Address, MemoryADT};
+use crate::{Address, MemoryADT};
 use deadpool_postgres::Pool;
 use std::marker::PhantomData;
 
@@ -203,11 +203,16 @@ impl<const ADDRESS_LENGTH: usize, const WORD_LENGTH: usize> MemoryADT
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use cosmian_findex::{
-        ADDRESS_LENGTH, WORD_LENGTH, gen_seed, test_guarded_write_concurrent, test_rw_same_address,
-        test_single_write_and_read, test_wrong_guard,
+    use crate::{
+        ADDRESS_LENGTH,
+        test_utils::{
+            gen_seed, test_guarded_write_concurrent, test_rw_same_address,
+            test_single_write_and_read, test_wrong_guard,
+        },
     };
+
+    use super::*;
+    use cosmian_findex::WORD_LENGTH;
     use deadpool_postgres::Config;
     use tokio_postgres::NoTls;
 

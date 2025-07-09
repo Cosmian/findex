@@ -18,11 +18,11 @@ path = "src/lib.rs"
 redis-mem = ["redis"]
 sqlite-mem = ["async-sqlite"]
 postgres-mem = ["deadpool-postgres", "tokio", "tokio-postgres"]
-test-utils = ["cosmian_findex/test-utils"]
+test-utils = ["tokio"]
 
 [dependencies]
 async-sqlite = { version = "0.5", optional = true }
-cosmian_findex = { path = "../findex", version = "8.0" }
+cosmian_crypto_core.workspace = true
 deadpool-postgres = { version = "0.14", optional = true }
 redis = { version = "0.32", default-features = false, features = [
     "connection-manager",
@@ -33,7 +33,6 @@ tokio-postgres = { version = "0.7", optional = true, features = [
     "array-impls",
 ] }
 
-
 [dev-dependencies]
 cosmian_crypto_core.workspace = true
 cosmian_findex = { path = "../findex", version = "8.0", features = [
@@ -42,14 +41,3 @@ cosmian_findex = { path = "../findex", version = "8.0", features = [
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
 criterion = { workspace = true }
 futures = { version = "0.3" }
-rand = "0.9"
-rand_distr = "0.5"
-
-[[bench]]
-name = "benches"
-harness = false
-required-features = ["redis-mem", "sqlite-mem", "postgres-mem", "test-utils"]
-
-[[example]]
-name = "example"
-required-features = ["redis-mem", "sqlite-mem", "postgres-mem"]

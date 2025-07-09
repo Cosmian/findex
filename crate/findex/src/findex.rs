@@ -7,8 +7,10 @@ use std::{
     sync::Arc,
 };
 
+use cosmian_findex_memories::{ADDRESS_LENGTH, Address, MemoryADT};
+
 use crate::{
-    ADDRESS_LENGTH, Address, IndexADT, MemoryADT,
+    IndexADT,
     adt::VectorADT,
     encoding::{Decoder, Encoder},
     error::Error,
@@ -136,11 +138,9 @@ impl<
 
 #[cfg(test)]
 mod tests {
-    use crate::{
-        ADDRESS_LENGTH, Findex, InMemory, IndexADT, address::Address, dummy_decode, dummy_encode,
-        memory::MemoryEncryptionLayer,
-    };
+    use crate::{Findex, IndexADT, dummy_decode, dummy_encode, memory::MemoryEncryptionLayer};
     use cosmian_crypto_core::{CsRng, Secret, define_byte_type, reexport::rand_core::SeedableRng};
+    use cosmian_findex_memories::{ADDRESS_LENGTH, Address, InMemory};
     use std::collections::HashSet;
 
     #[tokio::test]

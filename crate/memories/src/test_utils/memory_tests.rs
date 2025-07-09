@@ -8,12 +8,13 @@
 //!
 //! Both addresses and words are 16-byte long.
 
-use crate::{ADDRESS_LENGTH, MemoryADT};
 use cosmian_crypto_core::{
     CsRng,
     reexport::rand_core::{RngCore, SeedableRng},
 };
 use std::fmt::Debug;
+
+use crate::{ADDRESS_LENGTH, MemoryADT};
 
 pub const SEED_LENGTH: usize = 32;
 

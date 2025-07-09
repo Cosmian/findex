@@ -1,9 +1,9 @@
-use crate::{ADDRESS_LENGTH, MemoryADT, address::Address};
 use aes::{
     Aes256,
     cipher::{BlockEncrypt, KeyInit, generic_array::GenericArray},
 };
 use cosmian_crypto_core::{Secret, SymmetricKey};
+use cosmian_findex_memories::{ADDRESS_LENGTH, Address, MemoryADT};
 use std::{fmt::Debug, ops::Deref, sync::Arc};
 use xts_mode::Xts128;
 
@@ -136,15 +136,15 @@ mod tests {
         CsRng, Sampling, Secret,
         reexport::rand_core::{CryptoRngCore, SeedableRng},
     };
-
-    use crate::{
-        ADDRESS_LENGTH,
-        address::Address,
-        memory::{MemoryEncryptionLayer, in_memory::InMemory},
+    use cosmian_findex_memories::{
+        Address,
         test_utils::{
             gen_seed, test_guarded_write_concurrent, test_single_write_and_read, test_wrong_guard,
         },
     };
+
+    use crate::memory::MemoryEncryptionLayer;
+    use cosmian_findex_memories::{ADDRESS_LENGTH, InMemory};
 
     const WORD_LENGTH: usize = 128;
 
