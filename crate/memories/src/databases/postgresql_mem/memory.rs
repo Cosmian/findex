@@ -212,11 +212,11 @@ mod tests {
     };
 
     use super::*;
-    use cosmian_findex::WORD_LENGTH;
     use deadpool_postgres::Config;
     use tokio_postgres::NoTls;
 
     const DB_URL: &str = "postgres://cosmian:cosmian@localhost/cosmian";
+    const WORD_LENGTH: usize = 129; // same length used for findex's encoding
 
     // Template function for pool creation
     pub async fn create_testing_pool(db_url: &str) -> Result<Pool, PostgresMemoryError> {

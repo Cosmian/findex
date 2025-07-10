@@ -149,7 +149,7 @@ mod tests {
     };
 
     use super::*;
-    use cosmian_findex::WORD_LENGTH;
+    const WORD_LENGTH: usize = 129; // same length used for findex's encoding
 
     fn get_redis_url() -> String {
         std::env::var("REDIS_HOST").map_or_else(

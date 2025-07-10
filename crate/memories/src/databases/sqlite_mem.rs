@@ -209,10 +209,10 @@ mod tests {
     };
 
     use super::*;
-    use cosmian_findex::WORD_LENGTH;
 
     const DB_PATH: &str = "../../target/debug/sqlite-test.sqlite.db";
     const TABLE_NAME: &str = "findex_memory";
+    const WORD_LENGTH: usize = 129; // same length used for findex's encoding
 
     #[tokio::test]
     async fn test_rw_seq() {
