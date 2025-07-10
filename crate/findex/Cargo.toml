@@ -21,9 +21,9 @@ sqlite-mem = ["cosmian_findex_memories/sqlite-mem"]
 postgres-mem = ["cosmian_findex_memories/postgres-mem"]
 
 [dependencies]
-cosmian_findex_memories = { path = "../memories", version = "8.0" }
-cosmian_crypto_core.workspace = true
 aes = "0.8"
+cosmian_crypto_core.workspace = true
+cosmian_findex_memories = { path = "../memories", version = "8.0" }
 xts-mode = "0.5"
 
 # Optional dependencies for testing and benchmarking.
@@ -45,8 +45,12 @@ rand = "0.9"
 rand_distr = "0.5"
 
 [[example]]
-name = "insert"
+name = "in_memory"
 required-features = ["test-utils"]
+
+[[example]]
+name = "databases"
+required-features = ["test-utils", "redis-mem", "sqlite-mem", "postgres-mem"]
 
 [[bench]]
 name = "benches"
