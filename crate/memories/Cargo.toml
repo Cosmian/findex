@@ -35,7 +35,4 @@ tokio-postgres = { version = "0.7", optional = true, features = [
 
 [dev-dependencies]
 cosmian_crypto_core.workspace = true
-cosmian_findex = { path = "../findex", version = "8.0", features = [
-    "test-utils",
-] }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
