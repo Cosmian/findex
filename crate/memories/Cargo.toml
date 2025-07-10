@@ -40,4 +40,3 @@ cosmian_findex = { path = "../findex", version = "8.0", features = [
 ] }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
 criterion = { workspace = true }
-futures = { version = "0.3" }

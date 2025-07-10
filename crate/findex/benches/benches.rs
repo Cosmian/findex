@@ -50,8 +50,8 @@ async fn connect_and_init_table(
     db_url: String,
     table_name: String,
 ) -> Result<PostgresMemory<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>, PostgresMemoryError> {
-    use deadpool_postgres::Config;
-    use tokio_postgres::NoTls;
+    use cosmian_findex_memories::reexport::deadpool_postgres::Config;
+    use cosmian_findex_memories::reexport::tokio_postgres::NoTls;
 
     let mut pg_config = Config::new();
     pg_config.url = Some(db_url.to_string());
@@ -289,9 +289,8 @@ fn bench_contention(c: &mut Criterion) {
 #[cfg(any(feature = "redis-mem", feature = "postgres-mem"))]
 mod delayed_memory {
     #[cfg(feature = "postgres-mem")]
-    use cosmian_findex_memories::Address;
     use cosmian_findex_memories::{
-        MemoryADT, PostgresMemory, PostgresMemoryError, RedisMemory, RedisMemoryError,
+        Address, MemoryADT, PostgresMemory, PostgresMemoryError, RedisMemory, RedisMemoryError,
     };
     use rand::Rng;
     use rand_distr::StandardNormal;
@@ -378,7 +377,7 @@ fn bench_one_to_many(c: &mut Criterion) {
     #[cfg(any(feature = "redis-mem", feature = "postgres-mem"))]
     use delayed_memory::*;
 
-    let delay_params = vec![(1, 1), (10, 1), (10, 5)]; // tuples of (mean, variance)
+    let delay_params = [(1, 1), (10, 1), (10, 5)]; // tuples of (mean, variance)
 
     #[cfg(feature = "redis-mem")]
     for (mean, variance) in &delay_params {

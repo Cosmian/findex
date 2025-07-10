@@ -1,5 +1,4 @@
 //! This example show-cases the use of Findex to securely store a hash-map.
-
 use cosmian_crypto_core::{
     CsRng, Secret,
     reexport::rand_core::{CryptoRngCore, SeedableRng},
