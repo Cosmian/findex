@@ -7,7 +7,7 @@ use cosmian_crypto_core::{
     reexport::rand_core::{RngCore, SeedableRng},
 };
 use cosmian_findex::WORD_LENGTH;
-use cosmian_findex::{
+use cosmian_findex::benches::{
     bench_memory_contention, bench_memory_insert_multiple_bindings, bench_memory_one_to_many,
     bench_memory_search_multiple_bindings, bench_memory_search_multiple_keywords,
 };

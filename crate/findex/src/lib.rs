@@ -7,26 +7,25 @@
 
 mod adt;
 mod encoding;
+mod encryption_layer;
 mod error;
 mod findex;
-mod memory;
 mod ovec;
 
-#[cfg(any(test, feature = "test-utils"))]
-mod test_utils;
+#[cfg(feature = "test-utils")]
+mod benches;
+#[cfg(feature = "test-utils")]
+pub use benches::*;
 
 pub use adt::IndexADT;
 pub use encoding::{
     Decoder, Encoder,
     generic_encoding::{generic_decode, generic_encode},
 };
+pub use encryption_layer::{KEY_LENGTH, MemoryEncryptionLayer};
 pub use error::Error;
 pub use findex::Findex;
 pub use findex::Op;
-pub use memory::{KEY_LENGTH, MemoryEncryptionLayer};
-
-#[cfg(any(test, feature = "test-utils"))]
-pub use test_utils::*;
 
 #[cfg(any(test, feature = "test-utils"))]
 pub use encoding::{

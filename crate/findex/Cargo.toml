@@ -46,13 +46,12 @@ rand_distr = "0.5"
 
 [[example]]
 name = "in_memory"
-required-features = ["test-utils"]
 
 [[example]]
 name = "databases"
-required-features = ["test-utils", "redis-mem", "sqlite-mem", "postgres-mem"]
+required-features = ["redis-mem", "sqlite-mem", "postgres-mem"]
 
 [[bench]]
 name = "benches"
 harness = false
-required-features = ["test-utils"]
+required-features = ["test-utils", "redis-mem", "sqlite-mem", "postgres-mem"]
