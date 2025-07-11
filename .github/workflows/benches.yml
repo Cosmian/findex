@@ -2,7 +2,13 @@
 name: Benches
 run-name: Benchmark on ${{ github.ref_name }} - ${{ github.sha }}
 
-on: workflow_dispatch
+on:
+  push:
+    branches: # it's useful to have an automated benchmark after each successful update
+      - main
+      - master
+      - develop
+  workflow_dispatch:
 
 env:
   REDIS_HOST: "redis"
