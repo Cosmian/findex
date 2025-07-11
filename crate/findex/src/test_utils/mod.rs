@@ -1,5 +1,0 @@
-#[cfg(feature = "test-utils")]
-mod benches;
-
-#[cfg(feature = "test-utils")]
-pub use benches::*;

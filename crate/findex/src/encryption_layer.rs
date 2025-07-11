@@ -143,8 +143,9 @@ mod tests {
         },
     };
 
-    use crate::memory::MemoryEncryptionLayer;
     use cosmian_findex_memories::{ADDRESS_LENGTH, InMemory};
+
+    use crate::MemoryEncryptionLayer;
 
     const WORD_LENGTH: usize = 128;
 
