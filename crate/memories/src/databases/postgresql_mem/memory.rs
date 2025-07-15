@@ -216,7 +216,6 @@ mod tests {
     use tokio_postgres::NoTls;
 
     const DB_URL: &str = "postgres://cosmian:cosmian@localhost/cosmian";
-    const WORD_LENGTH: usize = 129; // same length used for findex's encoding
 
     // Template function for pool creation
     pub async fn create_testing_pool(db_url: &str) -> Result<Pool, PostgresMemoryError> {
@@ -233,7 +232,7 @@ mod tests {
         test_fn: F,
     ) -> Result<(), PostgresMemoryError>
     where
-        F: FnOnce(PostgresMemory<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>) -> Fut + Send,
+        F: FnOnce(PostgresMemory<Address<ADDRESS_LENGTH>, [u8; 129]>) -> Fut + Send,
         Fut: std::future::Future<Output = ()> + Send,
     {
         let test_pool = create_testing_pool(DB_URL).await.unwrap();
@@ -257,7 +256,7 @@ mod tests {
     async fn test_initialization() -> Result<(), PostgresMemoryError> {
         let table_name: &str = "test_initialization";
         let test_pool = create_testing_pool(DB_URL).await.unwrap();
-        let m = PostgresMemory::<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>::new_with_pool(
+        let m = PostgresMemory::<Address<ADDRESS_LENGTH>, [u8; 785]>::new_with_pool(
             test_pool.clone(),
             table_name.to_string(),
         )
