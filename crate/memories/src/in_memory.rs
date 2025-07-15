@@ -1,4 +1,4 @@
-//! A thread-safe implementation of the `MemoryADT` trait based on a `HashMap`.  
+//! A thread-safe implementation of the `MemoryADT` trait based on a `HashMap`.
 
 use std::{
     collections::HashMap,
@@ -45,7 +45,7 @@ impl<Address: Hash + Eq + Debug, Value: Clone + Eq + Debug> InMemory<Address, Va
     }
 }
 
-impl<Address: Send + Sync + Hash + Eq + Debug, Value: Send + Sync + Clone + Eq + Debug> MemoryADT
+impl<Address: Send + Hash + Eq + Debug, Value: Send + Clone + Eq + Debug> MemoryADT
     for InMemory<Address, Value>
 {
     type Address = Address;

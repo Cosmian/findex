@@ -8,8 +8,8 @@ use std::{collections::HashSet, future::Future, hash::Hash};
 
 /// An index stores *values*, that associate a keyword with a value. All values
 /// bound to the same keyword are said to be *indexed under* this keyword.
-pub trait IndexADT<Keyword: Send + Sync + Hash, Value: Send + Sync + Hash> {
-    type Error: Send + Sync + std::error::Error;
+pub trait IndexADT<Keyword: Send + Hash, Value: Send + Hash> {
+    type Error: Send + std::error::Error;
 
     /// Search the index for the values bound to the given keywords.
     fn search(
@@ -21,23 +21,23 @@ pub trait IndexADT<Keyword: Send + Sync + Hash, Value: Send + Sync + Hash> {
     fn insert(
         &self,
         keyword: Keyword,
-        values: impl Sync + Send + IntoIterator<Item = Value>,
+        values: impl Send + IntoIterator<Item = Value>,
     ) -> impl Send + Future<Output = Result<(), Self::Error>>;
 
     /// Removes the given values from the index.
     fn delete(
         &self,
         keyword: Keyword,
-        values: impl Sync + Send + IntoIterator<Item = Value>,
+        values: impl Send + IntoIterator<Item = Value>,
     ) -> impl Send + Future<Output = Result<(), Self::Error>>;
 }
 
-pub trait VectorADT: Send + Sync {
+pub trait VectorADT: Send {
     /// Vectors are homogeneous.
-    type Value: Send + Sync;
+    type Value: Send;
 
     /// Vector error.
-    type Error: Send + Sync + std::error::Error;
+    type Error: Send + std::error::Error;
 
     /// Pushes the given values at the end of this vector.
     fn push(
@@ -55,14 +55,15 @@ pub mod tests {
     pub use vector::*;
 
     mod vector {
-        //! This module defines tests any implementation of the VectorADT interface must pass.
+        //! This module defines tests any implementation of the `VectorADT`
+        //! interface must pass.
 
         use crate::adt::VectorADT;
 
-        /// Adding information from different copies of the same vector should be visible by all
-        /// copies.
+        /// Adding information from different copies of the same vector should
+        /// be visible by all copies.
         pub async fn test_vector_sequential<const LENGTH: usize>(
-            v: &(impl Clone + VectorADT<Value = [u8; LENGTH]>),
+            v: &(impl Clone + Sync + VectorADT<Value = [u8; LENGTH]>),
         ) {
             let mut v1 = v.clone();
             let mut v2 = v.clone();
@@ -77,10 +78,11 @@ pub mod tests {
             );
         }
 
-        /// Concurrently adding data to instances of the same vector should not introduce data loss.
+        /// Concurrently adding data to instances of the same vector should not
+        /// introduce data loss.
         pub async fn test_vector_concurrent<
             const LENGTH: usize,
-            V: 'static + Clone + VectorADT<Value = [u8; LENGTH]>,
+            V: 'static + Clone + Sync + VectorADT<Value = [u8; LENGTH]>,
         >(
             v: &V,
         ) {

@@ -60,7 +60,7 @@ impl<Address, Word> fmt::Debug for RedisMemory<Address, Word> {
     }
 }
 
-impl<Address: Sync, Word: Sync> RedisMemory<Address, Word> {
+impl<Address, Word> RedisMemory<Address, Word> {
     /// Returns a new instance using this connection manager.
     pub async fn new_with_manager(
         mut manager: ConnectionManager,

@@ -45,7 +45,7 @@ pub struct MemoryEncryptionLayer<
 
 impl<
     const WORD_LENGTH: usize,
-    Memory: Send + Sync + MemoryADT<Address = Address<ADDRESS_LENGTH>, Word = [u8; WORD_LENGTH]>,
+    Memory: Send + MemoryADT<Address = Address<ADDRESS_LENGTH>, Word = [u8; WORD_LENGTH]>,
 > MemoryEncryptionLayer<WORD_LENGTH, Memory>
 {
     /// Instantiates a new memory encryption layer.
