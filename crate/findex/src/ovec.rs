@@ -106,7 +106,7 @@ impl<
     Memory: Send + Sync + Clone + MemoryADT<Address = Address, Word = [u8; WORD_LENGTH]>,
 > VectorADT for IVec<WORD_LENGTH, Memory>
 where
-    Memory::Error: Send + Sync,
+    Memory::Error: Send,
 {
     type Value = Memory::Word;
 

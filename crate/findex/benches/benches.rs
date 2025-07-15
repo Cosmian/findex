@@ -319,12 +319,7 @@ mod delayed_memory {
         }
     }
 
-    impl<Memory> MemoryADT for DelayedMemory<Memory>
-    where
-        Memory: Send + Sync + MemoryADT,
-        Memory::Address: Send + Sync,
-        Memory::Word: Send + Sync,
-    {
+    impl<Memory: Send + Sync + MemoryADT> MemoryADT for DelayedMemory<Memory> {
         type Address = Memory::Address;
 
         type Word = Memory::Word;
@@ -352,8 +347,8 @@ mod delayed_memory {
     #[cfg(feature = "redis-mem")]
     impl<Address, Word> DelayedMemory<RedisMemory<Address, Word>>
     where
-        Address: Send + Sync,
-        Word: Send + Sync,
+        Address: Send,
+        Word: Send,
     {
         pub async fn clear(&self) -> Result<(), RedisMemoryError> {
             self.m.clear().await
