@@ -149,7 +149,6 @@ mod tests {
     };
 
     use super::*;
-    const WORD_LENGTH: usize = 129; // same length used for findex's encoding
 
     fn get_redis_url() -> String {
         std::env::var("REDIS_HOST").map_or_else(
@@ -161,24 +160,24 @@ mod tests {
     #[tokio::test]
     async fn test_rw_seq() {
         let m = RedisMemory::new_with_url(&get_redis_url()).await.unwrap();
-        test_single_write_and_read::<WORD_LENGTH, _>(&m, gen_seed()).await
+        test_single_write_and_read::<75, _>(&m, gen_seed()).await
     }
 
     #[tokio::test]
     async fn test_guard_seq() {
         let m = RedisMemory::new_with_url(&get_redis_url()).await.unwrap();
-        test_wrong_guard::<WORD_LENGTH, _>(&m, gen_seed()).await
+        test_wrong_guard::<255, _>(&m, gen_seed()).await
     }
 
     #[tokio::test]
     async fn test_collision_seq() {
         let m = RedisMemory::new_with_url(&get_redis_url()).await.unwrap();
-        test_rw_same_address::<WORD_LENGTH, _>(&m, gen_seed()).await
+        test_rw_same_address::<1, _>(&m, gen_seed()).await
     }
 
     #[tokio::test]
     async fn test_rw_ccr() {
         let m = RedisMemory::new_with_url(&get_redis_url()).await.unwrap();
-        test_guarded_write_concurrent::<WORD_LENGTH, _>(&m, gen_seed(), None).await
+        test_guarded_write_concurrent::<129, _>(&m, gen_seed(), None).await
     }
 }

@@ -28,11 +28,11 @@ redis = { version = "0.32", default-features = false, features = [
     "connection-manager",
     "tokio-comp",
 ], optional = true }
-tokio = { workspace = true, features = ["rt-multi-thread"], optional = true }
+tokio = { workspace = true, default-features = false, optional = true }
 tokio-postgres = { version = "0.7", optional = true, features = [
     "array-impls",
 ] }
 
 [dev-dependencies]
 cosmian_crypto_core.workspace = true
-tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
+tokio = { workspace = true }

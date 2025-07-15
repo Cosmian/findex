@@ -212,11 +212,10 @@ mod tests {
 
     const DB_PATH: &str = "../../target/debug/sqlite-test.sqlite.db";
     const TABLE_NAME: &str = "findex_memory";
-    const WORD_LENGTH: usize = 129; // same length used for findex's encoding
 
     #[tokio::test]
     async fn test_rw_seq() {
-        let m = SqliteMemory::<_, [u8; WORD_LENGTH]>::new_with_path(DB_PATH, TABLE_NAME.to_owned())
+        let m = SqliteMemory::<_, [u8; 52]>::new_with_path(DB_PATH, TABLE_NAME.to_owned())
             .await
             .unwrap();
         m.initialize().await.unwrap();
@@ -225,7 +224,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_guard_seq() {
-        let m = SqliteMemory::<_, [u8; WORD_LENGTH]>::new_with_path(DB_PATH, TABLE_NAME.to_owned())
+        let m = SqliteMemory::<_, [u8; 999]>::new_with_path(DB_PATH, TABLE_NAME.to_owned())
             .await
             .unwrap();
         m.initialize().await.unwrap();
@@ -234,7 +233,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_collision_seq() {
-        let m = SqliteMemory::<_, [u8; WORD_LENGTH]>::new_with_path(DB_PATH, TABLE_NAME.to_owned())
+        let m = SqliteMemory::<_, [u8; 87]>::new_with_path(DB_PATH, TABLE_NAME.to_owned())
             .await
             .unwrap();
         m.initialize().await.unwrap();
@@ -243,7 +242,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_rw_ccr() {
-        let m = SqliteMemory::<_, [u8; WORD_LENGTH]>::new_with_path(DB_PATH, TABLE_NAME.to_owned())
+        let m = SqliteMemory::<_, [u8; 129]>::new_with_path(DB_PATH, TABLE_NAME.to_owned())
             .await
             .unwrap();
         m.initialize().await.unwrap();

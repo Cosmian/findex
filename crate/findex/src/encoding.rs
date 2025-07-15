@@ -264,6 +264,7 @@ pub mod generic_encoding {
         }
     }
 }
+
 #[cfg(any(test, feature = "test-utils"))]
 pub mod tests {
     use cosmian_crypto_core::{
