@@ -1,7 +1,6 @@
 //! We define here the main Abstract Data Types (ADTs) used in this crate, namely:
 //! - the index ADT;
 //! - the vector ADT;
-//! - the memory ADT.
 //!
 //! Each of them strive for simplicity and consistency with the classical CS notions.
 
