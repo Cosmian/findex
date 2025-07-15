@@ -14,9 +14,9 @@ use cosmian_findex_memories::{
 use shared_utils::{WORD_LENGTH, decoder, encoder, gen_index};
 use std::collections::HashMap;
 
-const DB_URL: &str = "postgres://cosmian:cosmian@localhost/cosmian";
-const DB_PATH: &str = "redis://localhost:6379";
-const DB_PATH2: &str = "./target/debug/sqlite-test.db";
+const REDIS_URL: &str = "redis://localhost:6379";
+const SQLITE_DB_PATH: &str = "./target/debug/sqlite-test.db";
+const PGSQL_URL: &str = "postgres://cosmian:cosmian@localhost/cosmian";
 const TABLE_NAME: &str = "findex_memory";
 
 async fn create_pool(db_url: &str) -> Result<Pool, PostgresMemoryError> {
@@ -42,13 +42,13 @@ async fn main() {
 
     // This example uses our Redis-based implementation of `MemoryADT`.
     let redis_memory =
-        RedisMemory::<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>::new_with_url(DB_PATH)
+        RedisMemory::<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>::new_with_url(REDIS_URL)
             .await
             .unwrap();
 
     // You can also use our Sqlite-based implementation of `MemoryADT`.
     let _sqlite_memory = SqliteMemory::<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>::new_with_path(
-        DB_PATH2,
+        SQLITE_DB_PATH,
         TABLE_NAME.to_owned(),
     )
     .await
@@ -56,7 +56,7 @@ async fn main() {
 
     // Or else, the Postgres-based implementation of `MemoryADT`. Refer to README.md for details on how to setup
     // the database to use this example.
-    let pool = create_pool(DB_URL).await.unwrap();
+    let pool = create_pool(PGSQL_URL).await.unwrap();
     let _postgres_memory =
         PostgresMemory::<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>::new_with_pool(
             pool.clone(),
