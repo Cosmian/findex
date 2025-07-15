@@ -26,8 +26,8 @@ pub enum Op {
 #[derive(Debug)]
 pub struct Findex<
     const WORD_LENGTH: usize,
-    Value: Send + Sync + Hash + Eq,
-    EncodingError: Send + Sync + Debug,
+    Value: Send + Hash + Eq,
+    EncodingError: Send + Debug,
     Memory: Send + Sync + MemoryADT<Address = Address<ADDRESS_LENGTH>, Word = [u8; WORD_LENGTH]>,
 > {
     el: Memory,
@@ -37,8 +37,8 @@ pub struct Findex<
 
 impl<
     const WORD_LENGTH: usize,
-    Value: Send + Sync + Hash + Eq,
-    EncodingError: Send + Sync + Debug,
+    Value: Send + Hash + Eq,
+    EncodingError: Send + Debug,
     Memory: Send + Sync + Clone + MemoryADT<Address = Address<ADDRESS_LENGTH>, Word = [u8; WORD_LENGTH]>,
 > Clone for Findex<WORD_LENGTH, Value, EncodingError, Memory>
 {
@@ -53,8 +53,8 @@ impl<
 
 impl<
     const WORD_LENGTH: usize,
-    Value: Send + Sync + Hash + Eq,
-    EncodingError: Send + Sync + Debug,
+    Value: Send + Hash + Eq,
+    EncodingError: Send + Debug,
     Memory: Send + Sync + Clone + MemoryADT<Address = Address<ADDRESS_LENGTH>, Word = [u8; WORD_LENGTH]>,
 > Findex<WORD_LENGTH, Value, EncodingError, Memory>
 {
@@ -104,8 +104,8 @@ impl<
 impl<
     const WORD_LENGTH: usize,
     Keyword: Send + Sync + Hash + Eq,
-    Value: Send + Sync + Hash + Eq,
-    EncodingError: Send + Sync + Debug,
+    Value: Send + Hash + Eq,
+    EncodingError: Send + Debug,
     Memory: Send + Sync + Clone + MemoryADT<Address = Address<ADDRESS_LENGTH>, Word = [u8; WORD_LENGTH]>,
 > IndexADT<Keyword, Value> for Findex<WORD_LENGTH, Value, EncodingError, Memory>
 {
@@ -120,7 +120,7 @@ impl<
     async fn insert(
         &self,
         keyword: Keyword,
-        values: impl Sync + Send + IntoIterator<Item = Value>,
+        values: impl Send + IntoIterator<Item = Value>,
     ) -> Result<(), Self::Error> {
         self.push(Op::Insert, keyword, values.into_iter().collect())
             .await
@@ -129,7 +129,7 @@ impl<
     async fn delete(
         &self,
         keyword: Keyword,
-        values: impl Sync + Send + IntoIterator<Item = Value>,
+        values: impl Send + IntoIterator<Item = Value>,
     ) -> Result<(), Self::Error> {
         self.push(Op::Delete, keyword, values.into_iter().collect())
             .await

@@ -54,7 +54,7 @@ pub async fn test_single_write_and_read<const WORD_LENGTH: usize, Memory>(
     memory: &Memory,
     seed: [u8; SEED_LENGTH],
 ) where
-    Memory: Send + Sync + MemoryADT,
+    Memory: Send + MemoryADT,
     Memory::Address: Send + Clone + From<[u8; ADDRESS_LENGTH]>,
     Memory::Word: Send + Debug + Clone + PartialEq + From<[u8; WORD_LENGTH]>,
     Memory::Error: std::error::Error,
@@ -101,7 +101,7 @@ pub async fn test_wrong_guard<const WORD_LENGTH: usize, Memory>(
     memory: &Memory,
     seed: [u8; SEED_LENGTH],
 ) where
-    Memory: Send + Sync + MemoryADT,
+    Memory: Send + MemoryADT,
     Memory::Address: Send + Clone + From<[u8; ADDRESS_LENGTH]>,
     Memory::Word: Send + Debug + Clone + PartialEq + From<[u8; WORD_LENGTH]>,
     Memory::Error: Send + std::error::Error,
@@ -155,7 +155,7 @@ pub async fn test_rw_same_address<const WORD_LENGTH: usize, Memory>(
     memory: &Memory,
     seed: [u8; SEED_LENGTH],
 ) where
-    Memory: Send + Sync + MemoryADT,
+    Memory: Send + MemoryADT,
     Memory::Address: Send + Clone + From<[u8; ADDRESS_LENGTH]>,
     Memory::Word: Send + Debug + Clone + PartialEq + From<[u8; WORD_LENGTH]>,
     Memory::Error: Send + std::error::Error,
@@ -236,7 +236,7 @@ pub async fn test_guarded_write_concurrent<const WORD_LENGTH: usize, Memory>(
     seed: [u8; SEED_LENGTH],
     n_threads: Option<usize>,
 ) where
-    Memory: 'static + Send + Sync + MemoryADT + Clone,
+    Memory: 'static + Send + MemoryADT + Clone,
     Memory::Address: Send + From<[u8; ADDRESS_LENGTH]>,
     Memory::Word:
         Send + Debug + PartialEq + From<[u8; WORD_LENGTH]> + Into<[u8; WORD_LENGTH]> + Clone,
@@ -248,7 +248,7 @@ pub async fn test_guarded_write_concurrent<const WORD_LENGTH: usize, Memory>(
         a: [u8; ADDRESS_LENGTH],
     ) -> Result<(), Memory::Error>
     where
-        Memory: 'static + Send + Sync + MemoryADT + Clone,
+        Memory: 'static + Send + MemoryADT + Clone,
         Memory::Address: Send + From<[u8; ADDRESS_LENGTH]>,
         Memory::Word:
             Send + Debug + PartialEq + From<[u8; WORD_LENGTH]> + Into<[u8; WORD_LENGTH]> + Clone,
