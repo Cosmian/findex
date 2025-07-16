@@ -6,7 +6,6 @@ on:
   push:
     branches: # it's useful to have an automated benchmark after each successful update
       - main
-      - master
       - develop
   workflow_dispatch:
 
