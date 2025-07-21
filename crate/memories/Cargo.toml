@@ -1,5 +1,9 @@
 [package]
+<<<<<<< HEAD
 name = "cosmian_memories"
+=======
+name = "cosmian_findex_memories"
+>>>>>>> ba65f62 (feat: start the new branch)
 version.workspace = true
 authors.workspace = true
 license.workspace = true
@@ -34,5 +38,36 @@ tokio-postgres = { version = "0.7", optional = true, features = [
 ] }
 
 [dev-dependencies]
+<<<<<<< HEAD
 cosmian_crypto_core.workspace = true
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
+=======
+cosmian_findex = { path = "../findex", version = "8.0", features = [
+    "test-utils",
+] }
+futures = { version = "0.3" } # TODO delete ?
+tokio = { workspace = true, features = [
+    "macros",
+    "rt-multi-thread",
+] } # TODO delete ?
+criterion = { workspace = true }
+rand = { version = "0.9.0" }
+rand_distr = { version = "0.5.1" }
+
+[[bench]]
+name = "benches"
+harness = false
+required-features = ["redis-mem", "sqlite-mem", "postgres-mem", "test-utils"]
+
+[[example]]
+name = "redis"
+required-features = ["redis-mem"]
+
+[[example]]
+name = "sqlite"
+required-features = ["sqlite-mem"]
+
+[[example]]
+name = "postgresql"
+required-features = ["postgres-mem"]
+>>>>>>> ba65f62 (feat: start the new branch)
