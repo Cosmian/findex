@@ -13,6 +13,7 @@ use cosmian_findex::{
 };
 use cosmian_memories::InMemory;
 use criterion::{Criterion, criterion_group, criterion_main};
+use tokio::runtime::{Builder, Runtime};
 
 #[cfg(feature = "sqlite-mem")]
 use cosmian_memories::SqliteMemory;
@@ -72,8 +73,10 @@ const N_PTS: usize = 9;
 
 fn bench_search_multiple_bindings(c: &mut Criterion) {
     let mut rng = CsRng::from_entropy();
+    let rt = Runtime::new().expect("Failed to create Tokio runtime");
+    let _guard = rt.enter();
 
-    bench_memory_search_multiple_bindings(
+    bench_memory_search_multiple_bindings::<_, cosmian_findex::reexport::tokio::TokioRuntime>(
         "in-memory",
         N_PTS,
         async || InMemory::default(),
@@ -123,8 +126,10 @@ fn bench_search_multiple_bindings(c: &mut Criterion) {
 
 fn bench_search_multiple_keywords(c: &mut Criterion) {
     let mut rng = CsRng::from_entropy();
+    let rt = Runtime::new().expect("Failed to create Tokio runtime");
+    let _guard = rt.enter();
 
-    bench_memory_search_multiple_keywords(
+    bench_memory_search_multiple_keywords::<_, cosmian_findex::reexport::tokio::TokioRuntime>(
         "in-memory",
         N_PTS,
         async || InMemory::default(),
@@ -172,8 +177,10 @@ fn bench_search_multiple_keywords(c: &mut Criterion) {
 
 fn bench_insert_multiple_bindings(c: &mut Criterion) {
     let mut rng = CsRng::from_entropy();
+    let rt = Runtime::new().expect("Failed to create Tokio runtime");
+    let _guard = rt.enter();
 
-    bench_memory_insert_multiple_bindings(
+    bench_memory_insert_multiple_bindings::<_, _, cosmian_findex::reexport::tokio::TokioRuntime>(
         "in-memory",
         N_PTS,
         async || InMemory::default(),
@@ -230,8 +237,10 @@ fn bench_insert_multiple_bindings(c: &mut Criterion) {
 
 fn bench_contention(c: &mut Criterion) {
     let mut rng = CsRng::from_entropy();
+    let rt = Builder::new_multi_thread().enable_all().build().unwrap();
+    let _guard = rt.enter();
 
-    bench_memory_contention(
+    bench_memory_contention::<_, _, cosmian_findex::reexport::tokio::TokioRuntime>(
         "in-memory",
         N_PTS,
         async || InMemory::default(),

@@ -8,6 +8,8 @@
 //!
 //! Both addresses and words are 16-byte long.
 
+use crate::{ADDRESS_LENGTH, MemoryADT};
+use agnostic_lite::AsyncSpawner;
 use cosmian_crypto_core::{
     CsRng,
     reexport::rand_core::{RngCore, SeedableRng},
@@ -231,7 +233,7 @@ pub async fn test_rw_same_address<const WORD_LENGTH: usize, Memory>(
 /// * `memory` - The Memory ADT implementation to test.
 /// * `seed` - The seed used to initialize the random number generator.
 /// * `n_threads` - The number of threads to spawn. If None, defaults to 100.
-pub async fn test_guarded_write_concurrent<const WORD_LENGTH: usize, Memory>(
+pub async fn test_guarded_write_concurrent<const WORD_LENGTH: usize, Memory, Spawner>(
     memory: &Memory,
     seed: [u8; SEED_LENGTH],
     n_threads: Option<usize>,
@@ -241,6 +243,7 @@ pub async fn test_guarded_write_concurrent<const WORD_LENGTH: usize, Memory>(
     Memory::Word:
         Send + Debug + PartialEq + From<[u8; WORD_LENGTH]> + Into<[u8; WORD_LENGTH]> + Clone,
     Memory::Error: Send + std::error::Error,
+    Spawner: AsyncSpawner,
 {
     // A worker increment N times the counter m[a].
     async fn worker<const WORD_LENGTH: usize, Memory>(
@@ -291,7 +294,7 @@ pub async fn test_guarded_write_concurrent<const WORD_LENGTH: usize, Memory>(
     let handles = (0..n)
         .map(|_| {
             let m = memory.clone();
-            tokio::spawn(worker(m, a))
+            Spawner::spawn(worker(m, a))
         })
         .collect::<Vec<_>>();
 

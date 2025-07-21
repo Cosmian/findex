@@ -15,10 +15,10 @@ name = "cosmian_findex"
 path = "src/lib.rs"
 
 [features]
-test-utils = ["tokio", "criterion"]
 redis-mem = ["cosmian_memories/redis-mem"]
 sqlite-mem = ["cosmian_memories/sqlite-mem"]
 postgres-mem = ["cosmian_memories/postgres-mem"]
+test-utils = ["agnostic-lite", "criterion"]
 
 [dependencies]
 aes = "0.8"
@@ -27,11 +27,17 @@ cosmian_memories = { path = "../memories", version = "8.0" }
 xts-mode = "0.5"
 
 # Optional dependencies for testing and benchmarking.
-tokio = { workspace = true, optional = true }
 criterion = { workspace = true, optional = true }
+agnostic-lite = { version = "0.5.6", optional = true, features = [
+    "tokio",
+    "smol",
+    "wasm",
+] }
 
 [dev-dependencies]
-tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
+agnostic-lite = { version = "0.5.6", features = ["tokio", "smol", "wasm"] }
+tokio = { version = "1.44", features = ["macros", "rt-multi-thread"] }
+smol-macros = "0.1.1"
 cosmian_memories = { path = "../memories", version = "8.0", features = [
     "redis-mem",
     "sqlite-mem",

@@ -245,7 +245,11 @@ mod tests {
         let m = SqliteMemory::<_, [u8; 129]>::new_with_path(DB_PATH, TABLE_NAME.to_owned())
             .await
             .unwrap();
-        m.initialize().await.unwrap();
-        test_guarded_write_concurrent(&m, gen_seed(), Some(100)).await
+        test_guarded_write_concurrent::<
+            WORD_LENGTH,
+            _,
+            cosmian_findex::reexport::tokio::TokioSpawner,
+        >(&m, gen_seed(), Some(100))
+        .await
     }
 }

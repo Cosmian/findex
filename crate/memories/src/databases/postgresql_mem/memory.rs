@@ -315,7 +315,13 @@ mod tests {
     #[tokio::test]
     async fn test_rw_ccr() -> Result<(), PostgresMemoryError> {
         setup_and_run_test("findex_test_rw_ccr", |m| async move {
-            test_guarded_write_concurrent(&m, gen_seed(), Some(100)).await;
+                _,
+            test_guarded_write_concurrent::<
+                _,
+                _,
+                cosmian_findex::reexport::tokio::TokioSpawner,
+            >(&m, gen_seed(), Some(100))
+            .await;
         })
         .await
     }
