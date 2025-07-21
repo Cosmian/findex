@@ -11,7 +11,7 @@ Findex is a Symmetric Searchable Encryption (SSE) library that enables encrypted
 This repository is organized as a Rust workspace with two crates:
 
 - `cosmian_findex`: Core library implementing the SSE algorithms
-- `cosmian_findex_memories`: Storage back-end implementations for different databases
+- `cosmian_memories`: Storage back-end implementations for different databases
 
 ## Related Projects
 

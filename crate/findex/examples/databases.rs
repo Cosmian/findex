@@ -4,7 +4,7 @@ mod shared_utils;
 
 use cosmian_crypto_core::{CsRng, Secret, reexport::rand_core::SeedableRng};
 use cosmian_findex::{Findex, IndexADT, MemoryEncryptionLayer};
-use cosmian_findex_memories::{
+use cosmian_memories::{
     ADDRESS_LENGTH, Address, PostgresMemory, PostgresMemoryError, RedisMemory, SqliteMemory,
     reexport::{
         deadpool_postgres::{Config, Pool},

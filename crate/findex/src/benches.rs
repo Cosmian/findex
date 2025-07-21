@@ -5,7 +5,7 @@
 
 use crate::{Findex, IndexADT, MemoryEncryptionLayer, WORD_LENGTH, dummy_decode, dummy_encode};
 use cosmian_crypto_core::{Secret, reexport::rand_core::CryptoRngCore};
-use cosmian_findex_memories::{ADDRESS_LENGTH, Address, MemoryADT};
+use cosmian_memories::{ADDRESS_LENGTH, Address, MemoryADT};
 use criterion::{BenchmarkId, Criterion};
 use std::{collections::HashSet, fmt::Debug, sync::Arc};
 use tokio::runtime::{Builder, Runtime};
