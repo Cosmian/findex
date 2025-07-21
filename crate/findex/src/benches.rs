@@ -3,10 +3,7 @@
 //! to be generic and work with any memory back end that implements the MemoryADT
 //! trait.
 
-use crate::{
-    ADDRESS_LENGTH, Address, Findex, IndexADT, MemoryADT, MemoryEncryptionLayer, WORD_LENGTH,
-    dummy_decode, dummy_encode,
-};
+use crate::{Findex, IndexADT, MemoryEncryptionLayer, WORD_LENGTH, dummy_decode, dummy_encode};
 use agnostic_lite::{JoinHandle, RuntimeLite};
 use cosmian_crypto_core::{Secret, reexport::rand_core::CryptoRngCore};
 use cosmian_memories::{ADDRESS_LENGTH, Address, MemoryADT};
