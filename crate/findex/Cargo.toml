@@ -27,11 +27,11 @@ cosmian_findex_memories = { path = "../memories", version = "8.0" }
 xts-mode = "0.5"
 
 # Optional dependencies for testing and benchmarking.
-tokio = { workspace = true, default-features = false, optional = true }
+tokio = { workspace = true, optional = true }
 criterion = { workspace = true, optional = true }
 
 [dev-dependencies]
-tokio = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
 cosmian_findex_memories = { path = "../memories", version = "8.0", features = [
     "redis-mem",
     "sqlite-mem",
