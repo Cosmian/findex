@@ -32,24 +32,22 @@ pub mod test_utils;
 /// limitation on the index.
 pub const ADDRESS_LENGTH: usize = 16;
 
-use std::future::Future;
-
 /// A Software Transactional Memory: all operations exposed are atomic.
 pub trait MemoryADT {
     /// Address space.
-    type Address;
+    type Address: Send;
 
     /// Word space.
-    type Word;
+    type Word: Send;
 
     /// Memory error.
-    type Error: Send + Sync + std::error::Error;
+    type Error: Send + std::error::Error;
 
     /// Reads the words from the given addresses.
     fn batch_read(
         &self,
         addresses: Vec<Self::Address>,
-    ) -> impl Send + Future<Output = Result<Vec<Option<Self::Word>>, Self::Error>>;
+    ) -> impl Send + std::future::Future<Output = Result<Vec<Option<Self::Word>>, Self::Error>>;
 
     /// Write the given bindings if the word currently stored at the guard
     /// address is the guard word, and returns this word.
@@ -57,5 +55,5 @@ pub trait MemoryADT {
         &self,
         guard: (Self::Address, Option<Self::Word>),
         bindings: Vec<(Self::Address, Self::Word)>,
-    ) -> impl Send + Future<Output = Result<Option<Self::Word>, Self::Error>>;
+    ) -> impl Send + std::future::Future<Output = Result<Option<Self::Word>, Self::Error>>;
 }
