@@ -5,10 +5,10 @@ Findex memories provide compatibility with concrete databases, allowing the core
 
 ## Setup
 
-First, add `cosmian_findex_memories` as dependency to your project :
+First, add `cosmian_memories` as dependency to your project :
 
 ```bash
-cargo add cosmian_findex_memories # do not forget to enable the adequate feature for the back end you want to use !
+cargo add cosmian_memories # do not forget to enable the adequate feature for the back end you want to use !
 ```
 
 If you don't have a running `Redis` or `Postgres` instance running, you can use the [`docker-compose.yml`](./docker-compose.yml) file provided with this repository by running `docker-compose up`.

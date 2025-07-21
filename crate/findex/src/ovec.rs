@@ -14,7 +14,7 @@
 //!      a         a+1   ...  a+n+1
 //! ```
 
-use cosmian_findex_memories::MemoryADT;
+use cosmian_memories::MemoryADT;
 
 use crate::{adt::VectorADT, error::Error};
 use std::{fmt::Debug, hash::Hash, ops::Add};
@@ -213,7 +213,7 @@ where
 #[cfg(test)]
 mod tests {
     use cosmian_crypto_core::{CsRng, Sampling, Secret, reexport::rand_core::SeedableRng};
-    use cosmian_findex_memories::{ADDRESS_LENGTH, Address, InMemory};
+    use cosmian_memories::{ADDRESS_LENGTH, Address, InMemory};
 
     use crate::{
         MemoryEncryptionLayer,
