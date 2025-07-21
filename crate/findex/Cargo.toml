@@ -28,16 +28,16 @@ xts-mode = "0.5"
 
 # Optional dependencies for testing and benchmarking.
 criterion = { workspace = true, optional = true }
-agnostic-lite = { version = "0.5.6", optional = true, features = [
+agnostic-lite = { workspace = true, optional = true, features = [
     "tokio",
     "smol",
     "wasm",
-] }
+] } # TODO: delete this later
 
 [dev-dependencies]
-agnostic-lite = { version = "0.5.6", features = ["tokio", "smol", "wasm"] }
+agnostic-lite = { workspace = true, features = ["tokio", "smol", "wasm"] }
 tokio = { version = "1.44", features = ["macros", "rt-multi-thread"] }
-smol-macros = "0.1.1"
+smol-macros = { workspace = true }
 cosmian_memories = { path = "../memories", version = "8.0", features = [
     "redis-mem",
     "sqlite-mem",

@@ -16,8 +16,6 @@ use cosmian_crypto_core::{
 };
 use std::fmt::Debug;
 
-use crate::{ADDRESS_LENGTH, MemoryADT};
-
 pub const SEED_LENGTH: usize = 32;
 
 pub fn gen_seed() -> [u8; SEED_LENGTH] {

@@ -242,14 +242,14 @@ mod tests {
 
     #[tokio::test]
     async fn test_rw_ccr() {
-        let m = SqliteMemory::<_, [u8; 129]>::new_with_path(DB_PATH, TABLE_NAME.to_owned())
+        let m = SqliteMemory::new_with_path(DB_PATH, TABLE_NAME.to_owned())
             .await
             .unwrap();
-        test_guarded_write_concurrent::<
-            WORD_LENGTH,
-            _,
-            cosmian_findex::reexport::tokio::TokioSpawner,
-        >(&m, gen_seed(), Some(100))
+        test_guarded_write_concurrent::<129, _, agnostic_lite::tokio::TokioSpawner>(
+            &m,
+            gen_seed(),
+            Some(100),
+        )
         .await
     }
 }
