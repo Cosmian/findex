@@ -220,15 +220,15 @@ mod tests {
             let findex = Findex::new(memory, dummy_encode::<WORD_LENGTH, Value>, dummy_decode);
 
             // Test concurrent inserts to the same keyword
-            let values1 = Arc::new( [
+            let values1 = Arc::new([
                 Value::try_from(1).unwrap(),
                 Value::try_from(2).unwrap(),
             ]);
-            let values2 = Arc::new( [
+            let values2 = Arc::new([
                 Value::try_from(3).unwrap(),
                 Value::try_from(4).unwrap(),
             ]);
-            let values3 =Arc::new(  [
+            let values3 = Arc::new([
                 Value::try_from(5).unwrap(),
                 Value::try_from(6).unwrap(),
             ]);

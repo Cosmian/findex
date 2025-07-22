@@ -35,7 +35,7 @@ agnostic-lite = { workspace = true, optional = true, features = [
 criterion = { workspace = true, optional = true }
 
 [dev-dependencies]
-agnostic-lite = { workspace = true }
+agnostic-lite = { workspace = true, features = ["tokio"] }
 cosmian_memories = { path = "../memories", version = "8.0", features = [
     "redis-mem",
     "sqlite-mem",
