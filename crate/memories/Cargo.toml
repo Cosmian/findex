@@ -35,7 +35,7 @@ tokio-postgres = { version = "0.7", optional = true, features = [
 ] }
 
 [dev-dependencies]
-cosmian_crypto_core.workspace = true
-tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
-smol-macros = { workspace = true }
 agnostic-lite = { workspace = true, features = ["tokio", "smol"] }
+cosmian_crypto_core.workspace = true
+smol-macros = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }

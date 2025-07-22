@@ -27,17 +27,15 @@ cosmian_memories = { path = "../memories", version = "8.0" }
 xts-mode = "0.5"
 
 # Optional dependencies for testing and benchmarking.
-criterion = { workspace = true, optional = true }
 agnostic-lite = { workspace = true, optional = true, features = [
     "tokio",
     "smol",
     "wasm",
-] } # TODO: delete this later
+] }
+criterion = { workspace = true, optional = true }
 
 [dev-dependencies]
-agnostic-lite = { workspace = true, features = ["tokio", "smol", "wasm"] }
-tokio = { version = "1.44", features = ["macros", "rt-multi-thread"] }
-smol-macros = { workspace = true }
+agnostic-lite = { workspace = true }
 cosmian_memories = { path = "../memories", version = "8.0", features = [
     "redis-mem",
     "sqlite-mem",
@@ -46,6 +44,8 @@ cosmian_memories = { path = "../memories", version = "8.0", features = [
 ] }
 rand = "0.9"
 rand_distr = "0.5"
+smol-macros = { workspace = true }
+tokio = { version = "1.44", features = ["macros", "rt-multi-thread"] }
 
 [[example]]
 name = "in_memory"

@@ -33,7 +33,7 @@ pub use encoding::{
     tests::test_encoding,
 };
 
-#[cfg(any(test, feature = "test-utils"))]
+#[cfg(feature = "test-utils")]
 pub mod reexport {
     // Re-exporting the most commonly used runtime interfaces for convenience.
     pub use agnostic_lite::{smol, tokio, wasm};
