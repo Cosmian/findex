@@ -123,9 +123,7 @@ mod tests {
         test_rw_same_address(&memory, gen_seed()).await;
     }
 
-    /**
-     * Below, the same asynchronous test is ran using different runtimes.
-     */
+    // Below, the same asynchronous test is ran using different runtimes.
 
     #[tokio::test]
     async fn test_concurrent_read_write_tokio() {
