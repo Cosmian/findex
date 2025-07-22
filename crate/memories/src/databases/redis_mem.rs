@@ -175,15 +175,14 @@ mod tests {
         test_rw_same_address::<1, _>(&m, gen_seed()).await
     }
 
-    // TODO: fix this
-    // #[tokio::test]
-    // async fn test_rw_ccr() {
-    //     let m = RedisMemory::connect(&get_redis_url()).await.unwrap();
-    //     test_guarded_write_concurrent::<129, _, agnostic_lite::tokio::TokioSpawner>(
-    //         &m,
-    //         gen_seed(),
-    //         None,
-    //     )
-    //     .await
-    // }
+    #[tokio::test]
+    async fn test_rw_ccr() {
+        let m = RedisMemory::new_with_url(&get_redis_url()).await.unwrap();
+        test_guarded_write_concurrent::<129, _, agnostic_lite::tokio::TokioSpawner>(
+            &m,
+            gen_seed(),
+            None,
+        )
+        .await
+    }
 }
