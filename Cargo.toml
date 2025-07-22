@@ -22,11 +22,11 @@ readme = "README.md"
 
 
 [workspace.dependencies]
-agnostic-lite = { version = "0.5.6" }
+agnostic-lite = { version = ">=0.5.6" }
 cosmian_crypto_core = { version = "10.2", default-features = false, features = [
     "macro",
     "sha3",
 ] }
 criterion = { version = "0.6" }
-smol-macros = { version = "0.1.1" }
+smol-macros = { version = "0.1" }
 tokio = { version = "1.46" }
