@@ -1,0 +1,25 @@
+---
+services:
+  redis:
+    image: redis:latest
+    ports:
+      - 6379:6379
+    healthcheck:
+      test: [CMD, redis-cli, ping]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+  postgres:
+    image: postgres
+    ports:
+      - 5432:5432
+    environment:
+      - POSTGRES_USER=cosmian
+      - POSTGRES_DB=cosmian
+      - POSTGRES_PASSWORD=cosmian
+      - PGDATA=/tmp/postgres3
+    healthcheck:
+      test: [CMD, pg_isready, -U, cosmian]
+      interval: 10s
+      timeout: 5s
+      retries: 5

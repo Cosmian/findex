@@ -1,0 +1,59 @@
+[package]
+name = "cosmian_findex"
+version.workspace = true
+authors.workspace = true
+categories.workspace = true
+edition.workspace = true
+keywords.workspace = true
+license.workspace = true
+repository.workspace = true
+description.workspace = true
+readme = "README.md"
+
+[lib]
+name = "cosmian_findex"
+path = "src/lib.rs"
+
+[features]
+redis-mem = ["cosmian_memories/redis-mem"]
+sqlite-mem = ["cosmian_memories/sqlite-mem"]
+postgres-mem = ["cosmian_memories/postgres-mem"]
+test-utils = ["agnostic-lite", "criterion"]
+
+[dependencies]
+aes = "0.8"
+cosmian_crypto_core.workspace = true
+cosmian_memories = { path = "../memories", version = "8.0" }
+xts-mode = "0.5"
+
+# Optional dependencies for testing and benchmarking.
+agnostic-lite = { workspace = true, optional = true, features = [
+    "tokio",
+    "smol",
+    "wasm",
+] }
+criterion = { workspace = true, optional = true }
+
+[dev-dependencies]
+agnostic-lite = { workspace = true, features = ["tokio"] }
+cosmian_memories = { path = "../memories", version = "8.0", features = [
+    "redis-mem",
+    "sqlite-mem",
+    "postgres-mem",
+    "test-utils",
+] }
+rand = "0.9"
+rand_distr = "0.5"
+smol-macros = { workspace = true }
+tokio = { version = "1.44", features = ["macros", "rt-multi-thread"] }
+
+[[example]]
+name = "in_memory"
+
+[[example]]
+name = "databases"
+
+[[bench]]
+name = "benches"
+harness = false
+required-features = ["test-utils"]

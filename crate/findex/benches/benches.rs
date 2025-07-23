@@ -2,23 +2,29 @@
 // activated.
 #![allow(unused_imports, unused_variables, unused_mut, dead_code)]
 
-use cosmian_crypto_core::{CsRng, reexport::rand_core::SeedableRng};
-use cosmian_findex::{
-    bench_memory_contention, bench_memory_insert_multiple_bindings, bench_memory_one_to_many,
-    bench_memory_search_multiple_bindings, bench_memory_search_multiple_keywords,
+use cosmian_crypto_core::{
+    CsRng,
+    reexport::rand_core::{RngCore, SeedableRng},
 };
+use cosmian_findex::{
+    WORD_LENGTH, bench_memory_contention, bench_memory_insert_multiple_bindings,
+    bench_memory_one_to_many, bench_memory_search_multiple_bindings,
+    bench_memory_search_multiple_keywords, reexport::tokio::TokioRuntime,
+};
+use cosmian_memories::InMemory;
 use criterion::{Criterion, criterion_group, criterion_main};
-
-#[cfg(feature = "rust-mem")]
-use cosmian_findex::InMemory;
+use tokio::runtime::{Builder, Runtime};
 
 #[cfg(feature = "sqlite-mem")]
-use cosmian_findex::SqliteMemory;
+use cosmian_memories::SqliteMemory;
 #[cfg(feature = "sqlite-mem")]
-const SQLITE_PATH: &str = "./target/benches.sqlite";
+const SQLITE_PATH: &str = "benches.sqlite.db";
 
+// Redis memory back-end requires a tokio runtime, and all operations to
+// happen in the same runtime, otherwise the connection returns a broken
+// pipe error.
 #[cfg(feature = "redis-mem")]
-use cosmian_findex::RedisMemory;
+use cosmian_memories::RedisMemory;
 
 #[cfg(feature = "redis-mem")]
 fn get_redis_url() -> String {
@@ -28,9 +34,8 @@ fn get_redis_url() -> String {
     )
 }
 
-/// Refer to `src/memory/postgresql_store/memory.rs` for local setup instructions
 #[cfg(feature = "postgres-mem")]
-use cosmian_findex::{PostgresMemory, PostgresMemoryError};
+use cosmian_memories::{ADDRESS_LENGTH, Address, PostgresMemory, PostgresMemoryError};
 
 #[cfg(feature = "postgres-mem")]
 fn get_postgresql_url() -> String {
@@ -40,38 +45,37 @@ fn get_postgresql_url() -> String {
     )
 }
 
-use cosmian_findex::{ADDRESS_LENGTH, Address, WORD_LENGTH};
 // Utility function used to initialize the PostgresMemory table
 #[cfg(feature = "postgres-mem")]
 async fn connect_and_init_table(
     db_url: String,
     table_name: String,
 ) -> Result<PostgresMemory<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>, PostgresMemoryError> {
-    use deadpool_postgres::Config;
-    use tokio_postgres::NoTls;
+    use cosmian_memories::reexport::deadpool_postgres::Config;
+    use cosmian_memories::reexport::tokio_postgres::NoTls;
 
     let mut pg_config = Config::new();
     pg_config.url = Some(db_url.to_string());
     let test_pool = pg_config.builder(NoTls)?.build()?;
 
-    let m = PostgresMemory::<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>::connect_with_pool(
+    let m = PostgresMemory::<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>::new_with_pool(
         test_pool,
         table_name.to_string(),
     )
-    .await?;
+    .await;
 
-    m.initialize_table(db_url.to_string(), table_name, NoTls)
-        .await?;
+    m.initialize().await?;
+
     Ok(m)
 }
 // Number of points in each graph.
 const N_PTS: usize = 9;
-
 fn bench_search_multiple_bindings(c: &mut Criterion) {
     let mut rng = CsRng::from_entropy();
+    let rt = Builder::new_multi_thread().enable_all().build().unwrap();
+    let _guard = rt.enter();
 
-    #[cfg(feature = "rust-mem")]
-    bench_memory_search_multiple_bindings(
+    bench_memory_search_multiple_bindings::<_, TokioRuntime>(
         "in-memory",
         N_PTS,
         async || InMemory::default(),
@@ -80,45 +84,50 @@ fn bench_search_multiple_bindings(c: &mut Criterion) {
     );
 
     #[cfg(feature = "redis-mem")]
-    bench_memory_search_multiple_bindings(
+    bench_memory_search_multiple_bindings::<_, TokioRuntime>(
         "Redis",
         N_PTS,
-        async || RedisMemory::connect(&get_redis_url()).await.unwrap(),
+        async || RedisMemory::new_with_url(&get_redis_url()).await.unwrap(),
         c,
         &mut rng,
     );
 
     #[cfg(feature = "sqlite-mem")]
-    bench_memory_search_multiple_bindings(
+    bench_memory_search_multiple_bindings::<_, TokioRuntime>(
         "SQLite",
         N_PTS,
-        async || SqliteMemory::connect(SQLITE_PATH).await.unwrap(),
+        async || {
+            let m = SqliteMemory::new_with_path(SQLITE_PATH, "bench_memory_smd".to_string())
+                .await
+                .unwrap();
+            m.initialize().await.unwrap();
+            m
+        },
         c,
         &mut rng,
     );
 
     #[cfg(feature = "postgres-mem")]
-    bench_memory_search_multiple_bindings(
+    bench_memory_search_multiple_bindings::<_, TokioRuntime>(
         "Postgres",
         N_PTS,
         async || {
-            connect_and_init_table(
-                get_postgresql_url(),
-                "bench_memory_search_multiple_bindings".to_string(),
-            )
-            .await
-            .unwrap()
+            let m = connect_and_init_table(get_postgresql_url(), "bench_memory_smd".to_string())
+                .await
+                .unwrap();
+            m.initialize().await.unwrap();
+            m
         },
         c,
         &mut rng,
     );
 }
-
 fn bench_search_multiple_keywords(c: &mut Criterion) {
     let mut rng = CsRng::from_entropy();
+    let rt = Builder::new_multi_thread().enable_all().build().unwrap();
+    let _guard = rt.enter();
 
-    #[cfg(feature = "rust-mem")]
-    bench_memory_search_multiple_keywords(
+    bench_memory_search_multiple_keywords::<_, TokioRuntime>(
         "in-memory",
         N_PTS,
         async || InMemory::default(),
@@ -127,45 +136,48 @@ fn bench_search_multiple_keywords(c: &mut Criterion) {
     );
 
     #[cfg(feature = "redis-mem")]
-    bench_memory_search_multiple_keywords(
+    bench_memory_search_multiple_keywords::<_, TokioRuntime>(
         "Redis",
         N_PTS,
-        async || RedisMemory::connect(&get_redis_url()).await.unwrap(),
+        async || RedisMemory::new_with_url(&get_redis_url()).await.unwrap(),
         c,
         &mut rng,
     );
 
     #[cfg(feature = "sqlite-mem")]
-    bench_memory_search_multiple_keywords(
+    bench_memory_search_multiple_keywords::<_, TokioRuntime>(
         "SQLite",
         N_PTS,
-        async || SqliteMemory::connect(SQLITE_PATH).await.unwrap(),
+        async || {
+            let m = SqliteMemory::new_with_path(SQLITE_PATH, "bench_memory_smk".to_string())
+                .await
+                .unwrap();
+            m.initialize().await.unwrap();
+            m
+        },
         c,
         &mut rng,
     );
 
     #[cfg(feature = "postgres-mem")]
-    bench_memory_search_multiple_keywords(
+    bench_memory_search_multiple_keywords::<_, TokioRuntime>(
         "Postgres",
         N_PTS,
         async || {
-            connect_and_init_table(
-                get_postgresql_url(),
-                "bench_memory_search_multiple_keywords".to_string(),
-            )
-            .await
-            .unwrap()
+            connect_and_init_table(get_postgresql_url(), "bench_memory_smk".to_string())
+                .await
+                .unwrap()
         },
         c,
         &mut rng,
     );
 }
-
 fn bench_insert_multiple_bindings(c: &mut Criterion) {
     let mut rng = CsRng::from_entropy();
+    let rt = Builder::new_multi_thread().enable_all().build().unwrap();
+    let _guard = rt.enter();
 
-    #[cfg(feature = "rust-mem")]
-    bench_memory_insert_multiple_bindings(
+    bench_memory_insert_multiple_bindings::<_, _, TokioRuntime>(
         "in-memory",
         N_PTS,
         async || InMemory::default(),
@@ -178,36 +190,39 @@ fn bench_insert_multiple_bindings(c: &mut Criterion) {
     );
 
     #[cfg(feature = "redis-mem")]
-    bench_memory_insert_multiple_bindings(
+    bench_memory_insert_multiple_bindings::<_, _, TokioRuntime>(
         "Redis",
         N_PTS,
-        async || RedisMemory::connect(&get_redis_url()).await.unwrap(),
+        async || RedisMemory::new_with_url(&get_redis_url()).await.unwrap(),
         c,
         RedisMemory::clear,
         &mut rng,
     );
 
     #[cfg(feature = "sqlite-mem")]
-    bench_memory_insert_multiple_bindings(
+    bench_memory_insert_multiple_bindings::<_, _, TokioRuntime>(
         "SQLite",
         N_PTS,
-        async || SqliteMemory::connect(SQLITE_PATH).await.unwrap(),
+        async || {
+            let m = SqliteMemory::new_with_path(SQLITE_PATH, "bench_memory_imd".to_string())
+                .await
+                .unwrap();
+            m.initialize().await.unwrap();
+            m
+        },
         c,
         SqliteMemory::clear,
         &mut rng,
     );
 
     #[cfg(feature = "postgres-mem")]
-    bench_memory_insert_multiple_bindings(
+    bench_memory_insert_multiple_bindings::<_, _, TokioRuntime>(
         "Postgres",
         N_PTS,
         async || {
-            connect_and_init_table(
-                get_postgresql_url(),
-                "bench_memory_insert_multiple_bindings".to_string(),
-            )
-            .await
-            .unwrap()
+            connect_and_init_table(get_postgresql_url(), "bench_memory_imd".to_string())
+                .await
+                .unwrap()
         },
         c,
         async |m: &PostgresMemory<_, _>| -> Result<(), String> {
@@ -219,9 +234,10 @@ fn bench_insert_multiple_bindings(c: &mut Criterion) {
 
 fn bench_contention(c: &mut Criterion) {
     let mut rng = CsRng::from_entropy();
+    let rt = Builder::new_multi_thread().enable_all().build().unwrap();
+    let _guard = rt.enter();
 
-    #[cfg(feature = "rust-mem")]
-    bench_memory_contention(
+    bench_memory_contention::<_, _, TokioRuntime>(
         "in-memory",
         N_PTS,
         async || InMemory::default(),
@@ -234,27 +250,33 @@ fn bench_contention(c: &mut Criterion) {
     );
 
     #[cfg(feature = "redis-mem")]
-    bench_memory_contention(
+    bench_memory_contention::<_, _, TokioRuntime>(
         "Redis",
         N_PTS,
-        async || RedisMemory::connect(&get_redis_url()).await.unwrap(),
+        async || RedisMemory::new_with_url(&get_redis_url()).await.unwrap(),
         c,
         RedisMemory::clear,
         &mut rng,
     );
 
     #[cfg(feature = "sqlite-mem")]
-    bench_memory_contention(
+    bench_memory_contention::<_, _, TokioRuntime>(
         "SQLite",
         N_PTS,
-        async || SqliteMemory::connect(SQLITE_PATH).await.unwrap(),
+        async || {
+            let m = SqliteMemory::new_with_path(SQLITE_PATH, "bench_memory_contention".to_string())
+                .await
+                .unwrap();
+            m.initialize().await.unwrap();
+            m
+        },
         c,
         SqliteMemory::clear,
         &mut rng,
     );
 
     #[cfg(feature = "postgres-mem")]
-    bench_memory_contention(
+    bench_memory_contention::<_, _, TokioRuntime>(
         "Postgres",
         N_PTS,
         async || {
@@ -272,7 +294,8 @@ fn bench_contention(c: &mut Criterion) {
 
 #[cfg(any(feature = "redis-mem", feature = "postgres-mem"))]
 mod delayed_memory {
-    use cosmian_findex::{
+    #[cfg(feature = "postgres-mem")]
+    use cosmian_memories::{
         Address, MemoryADT, PostgresMemory, PostgresMemoryError, RedisMemory, RedisMemoryError,
     };
     use rand::Rng;
@@ -302,12 +325,7 @@ mod delayed_memory {
         }
     }
 
-    impl<Memory> MemoryADT for DelayedMemory<Memory>
-    where
-        Memory: Send + Sync + MemoryADT,
-        Memory::Address: Send + Sync,
-        Memory::Word: Send + Sync,
-    {
+    impl<Memory: Send + Sync + MemoryADT> MemoryADT for DelayedMemory<Memory> {
         type Address = Memory::Address;
 
         type Word = Memory::Word;
@@ -335,8 +353,8 @@ mod delayed_memory {
     #[cfg(feature = "redis-mem")]
     impl<Address, Word> DelayedMemory<RedisMemory<Address, Word>>
     where
-        Address: Send + Sync,
-        Word: Send + Sync,
+        Address: Send,
+        Word: Send,
     {
         pub async fn clear(&self) -> Result<(), RedisMemoryError> {
             self.m.clear().await
@@ -353,23 +371,24 @@ mod delayed_memory {
     }
 }
 
+#[cfg(any(feature = "redis-mem", feature = "postgres-mem"))]
 fn bench_one_to_many(c: &mut Criterion) {
-    #[cfg(feature = "redis-mem")]
+    use delayed_memory::DelayedMemory;
+
     let mut rng = CsRng::from_entropy();
+    let delay_params = [(1, 1), (10, 1), (10, 5)]; // tuples of (mean, variance)
 
-    #[cfg(any(feature = "redis-mem", feature = "postgres-mem"))]
-    use delayed_memory::*;
-
-    let delay_params = vec![(1, 1), (10, 1), (10, 5)]; // tuples of (mean, variance)
+    let rt = Builder::new_multi_thread().enable_all().build().unwrap();
+    let _guard = rt.enter();
 
     #[cfg(feature = "redis-mem")]
     for (mean, variance) in &delay_params {
-        bench_memory_one_to_many(
+        bench_memory_one_to_many::<_, _, TokioRuntime>(
             "Redis",
             N_PTS,
             async || {
                 DelayedMemory::new(
-                    RedisMemory::connect(&get_redis_url()).await.unwrap(),
+                    RedisMemory::new_with_url(&get_redis_url()).await.unwrap(),
                     *mean,
                     *variance,
                 )
@@ -382,7 +401,7 @@ fn bench_one_to_many(c: &mut Criterion) {
 
     #[cfg(feature = "postgres-mem")]
     for (mean, variance) in &delay_params {
-        bench_memory_one_to_many(
+        bench_memory_one_to_many::<_, _, TokioRuntime>(
             "Postgres",
             N_PTS,
             async || {

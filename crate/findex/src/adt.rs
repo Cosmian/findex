@@ -1,7 +1,6 @@
 //! We define here the main Abstract Data Types (ADTs) used in this crate, namely:
 //! - the index ADT;
 //! - the vector ADT;
-//! - the memory ADT.
 //!
 //! Each of them strive for simplicity and consistency with the classical CS notions.
 
@@ -9,8 +8,8 @@ use std::{collections::HashSet, future::Future, hash::Hash};
 
 /// An index stores *values*, that associate a keyword with a value. All values
 /// bound to the same keyword are said to be *indexed under* this keyword.
-pub trait IndexADT<Keyword: Send + Sync + Hash, Value: Send + Sync + Hash> {
-    type Error: Send + Sync + std::error::Error;
+pub trait IndexADT<Keyword: Send + Hash, Value: Send + Hash> {
+    type Error: Send + std::error::Error;
 
     /// Search the index for the values bound to the given keywords.
     fn search(
@@ -22,23 +21,23 @@ pub trait IndexADT<Keyword: Send + Sync + Hash, Value: Send + Sync + Hash> {
     fn insert(
         &self,
         keyword: Keyword,
-        values: impl Sync + Send + IntoIterator<Item = Value>,
+        values: impl Send + IntoIterator<Item = Value>,
     ) -> impl Send + Future<Output = Result<(), Self::Error>>;
 
     /// Removes the given values from the index.
     fn delete(
         &self,
         keyword: Keyword,
-        values: impl Sync + Send + IntoIterator<Item = Value>,
+        values: impl Send + IntoIterator<Item = Value>,
     ) -> impl Send + Future<Output = Result<(), Self::Error>>;
 }
 
-pub trait VectorADT: Send + Sync {
+pub trait VectorADT: Send {
     /// Vectors are homogeneous.
-    type Value: Send + Sync;
+    type Value: Send;
 
     /// Vector error.
-    type Error: Send + Sync + std::error::Error;
+    type Error: Send + std::error::Error;
 
     /// Pushes the given values at the end of this vector.
     fn push(
@@ -50,47 +49,21 @@ pub trait VectorADT: Send + Sync {
     fn read(&self) -> impl Send + Future<Output = Result<Vec<Self::Value>, Self::Error>>;
 }
 
-/// A Software Transactional Memory: all operations exposed are atomic.
-pub trait MemoryADT {
-    /// Address space.
-    type Address;
-
-    /// Word space.
-    type Word;
-
-    /// Memory error.
-    type Error: Send + Sync + std::error::Error;
-
-    /// Reads the words from the given addresses.
-    fn batch_read(
-        &self,
-        addresses: Vec<Self::Address>,
-    ) -> impl Send + Future<Output = Result<Vec<Option<Self::Word>>, Self::Error>>;
-
-    /// Write the given bindings if the word currently stored at the guard
-    /// address is the guard word, and returns this word.
-    fn guarded_write(
-        &self,
-        guard: (Self::Address, Option<Self::Word>),
-        bindings: Vec<(Self::Address, Self::Word)>,
-    ) -> impl Send + Future<Output = Result<Option<Self::Word>, Self::Error>>;
-}
-
 #[cfg(test)]
 pub mod tests {
 
     pub use vector::*;
 
     mod vector {
-        //! This module defines tests any implementation of the VectorADT interface must pass.
+        //! This module defines tests any implementation of the `VectorADT`
+        //! interface must pass.
 
         use crate::adt::VectorADT;
-        use futures::{executor::block_on, future::join_all};
 
-        /// Adding information from different copies of the same vector should be visible by all
-        /// copies.
+        /// Adding information from different copies of the same vector should
+        /// be visible by all copies.
         pub async fn test_vector_sequential<const LENGTH: usize>(
-            v: &(impl Clone + VectorADT<Value = [u8; LENGTH]>),
+            v: &(impl Clone + Sync + VectorADT<Value = [u8; LENGTH]>),
         ) {
             let mut v1 = v.clone();
             let mut v2 = v.clone();
@@ -105,10 +78,11 @@ pub mod tests {
             );
         }
 
-        /// Concurrently adding data to instances of the same vector should not introduce data loss.
+        /// Concurrently adding data to instances of the same vector should not
+        /// introduce data loss.
         pub async fn test_vector_concurrent<
             const LENGTH: usize,
-            V: 'static + Clone + VectorADT<Value = [u8; LENGTH]>,
+            V: 'static + Clone + Sync + VectorADT<Value = [u8; LENGTH]>,
         >(
             v: &V,
         ) {
@@ -127,10 +101,11 @@ pub mod tests {
                     })
                 })
                 .collect::<Vec<_>>();
-            for h in join_all(handles).await {
-                h.unwrap();
+            for h in handles {
+                h.await
+                    .expect("Join handle failed during test_vector_concurrent");
             }
-            let mut res = block_on(v.read()).unwrap();
+            let mut res = v.read().await.unwrap();
             let old = res.clone();
             res.sort();
             assert_ne!(old, res);

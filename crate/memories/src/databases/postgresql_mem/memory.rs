@@ -2,10 +2,6 @@ use super::PostgresMemoryError;
 use crate::{Address, MemoryADT};
 use deadpool_postgres::Pool;
 use std::marker::PhantomData;
-use tokio_postgres::{
-    Socket,
-    tls::{MakeTlsConnect, TlsConnect},
-};
 
 #[derive(Clone, Debug)]
 pub struct PostgresMemory<Address, Word> {
@@ -17,65 +13,38 @@ pub struct PostgresMemory<Address, Word> {
 impl<const ADDRESS_LENGTH: usize, const WORD_LENGTH: usize>
     PostgresMemory<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>
 {
-    /// Connect to a Postgres database and create a table if it doesn't exist
-    pub async fn initialize_table<T>(
-        &self,
-        db_url: String,
-        table_name: String,
-        tls: T,
-    ) -> Result<(), PostgresMemoryError>
-    where
-        T: MakeTlsConnect<Socket> + Send,
-        T::Stream: Send + 'static,
-        T::TlsConnect: Send,
-        <T::TlsConnect as TlsConnect<Socket>>::Future: Send,
-    {
-        let (client, connection) = tokio_postgres::connect(&db_url, tls).await?;
+    /// Returns a new memory instance from the given connection pool to a
+    /// PostgreSQL database.
+    pub async fn new_with_pool(pool: Pool, table_name: String) -> Self {
+        Self {
+            pool,
+            table_name,
+            _marker: PhantomData,
+        }
+    }
 
-        // The connection object performs the actual communication with the database
-        // `Connection` only resolves when the connection is closed, either because a fatal error has
-        // occurred, or because its associated `Client` has dropped and all outstanding work has completed.
-        let conn_handle = tokio::spawn(async move {
-            if let Err(e) = connection.await {
-                eprintln!("connection error: {}", e);
-            }
-        });
-
-        let returned = client
+    /// Connects to a PostgreSQL database and creates a table if it doesn't
+    /// exist.
+    pub async fn initialize(&self) -> Result<(), PostgresMemoryError> {
+        self.pool
+            .get()
+            .await?
             .execute(
                 &format!(
-                    "
-                    CREATE TABLE IF NOT EXISTS {} (
+                    "CREATE TABLE IF NOT EXISTS {} (
                         a BYTEA PRIMARY KEY CHECK (octet_length(a) = {}),
                         w BYTEA NOT NULL CHECK (octet_length(w) = {})
                     );",
-                    table_name, ADDRESS_LENGTH, WORD_LENGTH
+                    self.table_name, ADDRESS_LENGTH, WORD_LENGTH
                 ),
                 &[],
             )
             .await?;
-        if returned != 0 {
-            return Err(PostgresMemoryError::TableCreationError(returned));
-        }
 
-        drop(client);
-        let _ = conn_handle.await; // ensures that the connection is closed
         Ok(())
     }
 
-    /// Connect to a Postgres database and create a table if it doesn't exist
-    pub async fn connect_with_pool(
-        pool: Pool,
-        table_name: String,
-    ) -> Result<Self, PostgresMemoryError> {
-        Ok(Self {
-            pool,
-            table_name,
-            _marker: PhantomData,
-        })
-    }
-
-    /// Deletes all rows from the findex memory table
+    /// Clears all bindings from this memory.
     #[cfg(feature = "test-utils")]
     pub async fn clear(&self) -> Result<(), PostgresMemoryError> {
         self.pool
@@ -83,66 +52,12 @@ impl<const ADDRESS_LENGTH: usize, const WORD_LENGTH: usize>
             .await?
             .execute(&format!("TRUNCATE TABLE {};", self.table_name), &[])
             .await?;
+
         Ok(())
     }
-}
 
-impl<const ADDRESS_LENGTH: usize, const WORD_LENGTH: usize> MemoryADT
-    for PostgresMemory<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>
-{
-    type Address = Address<ADDRESS_LENGTH>;
-    type Word = [u8; WORD_LENGTH];
-    type Error = PostgresMemoryError;
-
-    async fn batch_read(
-        &self,
-        addresses: Vec<Self::Address>,
-    ) -> Result<Vec<Option<Self::Word>>, Self::Error> {
-        let client = self.pool.get().await?;
-        // statements are cached per connection and not per pool
-        let stmt = client
-            .prepare_cached(
-                format!(
-                    "SELECT f.w
-                        FROM UNNEST($1::bytea[]) WITH ORDINALITY AS params(addr, idx)
-                        LEFT JOIN {} f ON params.addr = f.a
-                        ORDER BY params.idx;",
-                    self.table_name
-                )
-                .as_str(),
-            )
-            .await?;
-
-        client
-            // the left join is necessary to ensure that the order of the addresses is preserved
-            // as well as to return None for addresses that don't exist
-            .query(
-                &stmt,
-                &[&addresses
-                    .iter()
-                    .map(|addr| addr.as_slice())
-                    .collect::<Vec<_>>()],
-            )
-            .await?
-            .iter()
-            .map(|row| {
-                let bytes_slice: Option<&[u8]> = row.try_get("w")?; // `row.get(0)` can panic
-                bytes_slice.map_or(Ok(None), |slice| {
-                    slice
-                        .try_into()
-                        .map(Some)
-                        .map_err(|_| PostgresMemoryError::InvalidDataLength(slice.len()))
-                })
-            })
-            .collect()
-    }
-
-    async fn guarded_write(
-        &self,
-        guard: (Self::Address, Option<Self::Word>),
-        bindings: Vec<(Self::Address, Self::Word)>,
-    ) -> Result<Option<Self::Word>, Self::Error> {
-        let g_write_script = format!(
+    fn gwrite_script(&self) -> String {
+        format!(
             "
         WITH
         guard_check AS (
@@ -167,20 +82,74 @@ impl<const ADDRESS_LENGTH: usize, const WORD_LENGTH: usize> MemoryADT
         )
         SELECT COALESCE((SELECT w FROM guard_check)) AS original_guard_value;",
             self.table_name
-        );
+        )
+    }
+}
 
+impl<const ADDRESS_LENGTH: usize, const WORD_LENGTH: usize> MemoryADT
+    for PostgresMemory<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>
+{
+    type Address = Address<ADDRESS_LENGTH>;
+    type Word = [u8; WORD_LENGTH];
+    type Error = PostgresMemoryError;
+
+    async fn batch_read(
+        &self,
+        addresses: Vec<Self::Address>,
+    ) -> Result<Vec<Option<Self::Word>>, Self::Error> {
+        let client = self.pool.get().await?;
+
+        // Statements are cached per connection and not per pool.
+        let stmt = client
+            .prepare_cached(&format!(
+                // The left join is necessary to ensure that the order of the
+                // addresses is preserved as well as to return None for addresses
+                // that don't exist.
+                "SELECT f.w
+                        FROM UNNEST($1::bytea[]) WITH ORDINALITY AS params(addr, idx)
+                        LEFT JOIN {} f ON params.addr = f.a
+                        ORDER BY params.idx;",
+                self.table_name
+            ))
+            .await?;
+
+        client
+            .query(
+                &stmt,
+                &[&addresses
+                    .iter()
+                    .map(|addr| addr.as_slice())
+                    .collect::<Vec<_>>()],
+            )
+            .await?
+            .iter()
+            .map(|row| {
+                row.try_get::<_, Option<&[u8]>>("w")?
+                    .map(Self::Word::try_from)
+                    .transpose()
+                    .map_err(PostgresMemoryError::TryFromSliceError)
+            })
+            .collect()
+    }
+
+    async fn guarded_write(
+        &self,
+        guard: (Self::Address, Option<Self::Word>),
+        bindings: Vec<(Self::Address, Self::Word)>,
+    ) -> Result<Option<Self::Word>, Self::Error> {
         let (addresses, words): (Vec<[u8; ADDRESS_LENGTH]>, Vec<Self::Word>) =
             bindings.into_iter().map(|(a, w)| (*a, w)).unzip();
-        const MAX_RETRIES: usize = 10;
 
-        for _ in 0..MAX_RETRIES {
-            // while counterintuitive, getting a new client on each retry is a better approach
-            // than trying to reuse the same client since it allows other operations to use the
-            // connection between retries.
+        // Since a guarded write operation is lock-free, this loop is guaranteed
+        // to terminate.
+        loop {
+            // Do not lock a resource for a potentially long loop, instead
+            // request a new one at each iteration.
             let mut client = self.pool.get().await?;
-            let stmt = client.prepare_cached(g_write_script.as_str()).await?;
 
-            let result = async {
+            let stmt = client.prepare_cached(&self.gwrite_script()).await?;
+
+            let res = async {
                 let tx = client
                     .build_transaction()
                     .isolation_level(
@@ -200,21 +169,26 @@ impl<const ADDRESS_LENGTH: usize, const WORD_LENGTH: usize> MemoryADT
                         ],
                     )
                     .await?
-                    .map_or(
-                        Ok::<Option<[u8; WORD_LENGTH]>, PostgresMemoryError>(None),
-                        |row| {
-                            row.try_get::<_, Option<&[u8]>>(0)?
-                                .map_or(Ok(None), |r| Ok(Some(r.try_into()?)))
-                        },
-                    )?;
+                    .map(|row| {
+                        row.try_get::<_, Option<&[u8]>>(0)?
+                            .map(Self::Word::try_from)
+                            .transpose()
+                            .map_err(PostgresMemoryError::TryFromSliceError)
+                    })
+                    .transpose()?
+                    .flatten();
+
                 tx.commit().await?;
+
                 Ok(res)
             }
             .await;
-            match result {
+
+            match res {
                 Ok(value) => return Ok(value),
                 Err(err) => {
-                    // Retry on serialization failures (error code 40001), otherwise fail and return the error
+                    // Retry on serialization failures (error code 40001),
+                    // otherwise fail and return the error
                     if let PostgresMemoryError::TokioPostgresError(pg_err) = &err {
                         if pg_err.code().is_some_and(|code| code.code() == "40001") {
                             continue;
@@ -224,30 +198,22 @@ impl<const ADDRESS_LENGTH: usize, const WORD_LENGTH: usize> MemoryADT
                 }
             }
         }
-        Err(PostgresMemoryError::RetryExhaustedError(MAX_RETRIES))
     }
 }
+
 #[cfg(test)]
 mod tests {
-    //! To run the postgresql benchmarks locally, add the following service to your pg_service.conf file
-    //! (usually under ~/.pg_service.conf):
-    //!
-    //! [cosmian_service]
-    //! host=localhost
-    //! dbname=cosmian
-    //! user=cosmian
-    //! password=cosmian
-    use deadpool_postgres::Config;
-    use tokio_postgres::NoTls;
-
-    use super::*;
     use crate::{
-        ADDRESS_LENGTH, Address, WORD_LENGTH,
+        ADDRESS_LENGTH,
         test_utils::{
             gen_seed, test_guarded_write_concurrent, test_rw_same_address,
             test_single_write_and_read, test_wrong_guard,
         },
     };
+
+    use super::*;
+    use deadpool_postgres::Config;
+    use tokio_postgres::NoTls;
 
     const DB_URL: &str = "postgres://cosmian:cosmian@localhost/cosmian";
 
@@ -259,24 +225,20 @@ mod tests {
         Ok(pool)
     }
 
-    // Setup function that handles pool creation, memory initialization, test execution, and cleanup
+    // Setup function that handles pool creation, memory initialization, test
+    // execution, and cleanup
     async fn setup_and_run_test<F, Fut>(
         table_name: &str,
         test_fn: F,
     ) -> Result<(), PostgresMemoryError>
     where
-        F: FnOnce(PostgresMemory<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>) -> Fut + Send,
+        F: FnOnce(PostgresMemory<Address<ADDRESS_LENGTH>, [u8; 129]>) -> Fut + Send,
         Fut: std::future::Future<Output = ()> + Send,
     {
         let test_pool = create_testing_pool(DB_URL).await.unwrap();
-        let m = PostgresMemory::<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>::connect_with_pool(
-            test_pool.clone(),
-            table_name.to_string(),
-        )
-        .await?;
+        let m = PostgresMemory::new_with_pool(test_pool.clone(), table_name.to_string()).await;
 
-        m.initialize_table(DB_URL.to_string(), table_name.to_string(), NoTls)
-            .await?;
+        m.initialize().await?;
 
         test_fn(m).await;
 
@@ -294,14 +256,13 @@ mod tests {
     async fn test_initialization() -> Result<(), PostgresMemoryError> {
         let table_name: &str = "test_initialization";
         let test_pool = create_testing_pool(DB_URL).await.unwrap();
-        let m = PostgresMemory::<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>::connect_with_pool(
+        let m = PostgresMemory::<Address<ADDRESS_LENGTH>, [u8; 785]>::new_with_pool(
             test_pool.clone(),
             table_name.to_string(),
         )
-        .await?;
+        .await;
 
-        m.initialize_table(DB_URL.to_string(), table_name.to_string(), NoTls)
-            .await?;
+        m.initialize().await?;
 
         // check that the table actually exists
         let client = test_pool.get().await?;
@@ -330,7 +291,7 @@ mod tests {
     #[tokio::test]
     async fn test_rw_seq() -> Result<(), PostgresMemoryError> {
         setup_and_run_test("findex_test_rw_seq", |m| async move {
-            test_single_write_and_read::<WORD_LENGTH, _>(&m, gen_seed()).await;
+            test_single_write_and_read(&m, gen_seed()).await;
         })
         .await
     }
@@ -338,7 +299,7 @@ mod tests {
     #[tokio::test]
     async fn test_guard_seq() -> Result<(), PostgresMemoryError> {
         setup_and_run_test("findex_test_guard_seq", |m| async move {
-            test_wrong_guard::<WORD_LENGTH, _>(&m, gen_seed()).await;
+            test_wrong_guard(&m, gen_seed()).await;
         })
         .await
     }
@@ -346,7 +307,7 @@ mod tests {
     #[tokio::test]
     async fn test_rw_same_address_seq() -> Result<(), PostgresMemoryError> {
         setup_and_run_test("findex_test_rw_same_address_seq", |m| async move {
-            test_rw_same_address::<WORD_LENGTH, _>(&m, gen_seed()).await;
+            test_rw_same_address(&m, gen_seed()).await;
         })
         .await
     }
@@ -354,7 +315,12 @@ mod tests {
     #[tokio::test]
     async fn test_rw_ccr() -> Result<(), PostgresMemoryError> {
         setup_and_run_test("findex_test_rw_ccr", |m| async move {
-            test_guarded_write_concurrent::<WORD_LENGTH, _>(&m, gen_seed(), Some(100)).await;
+            test_guarded_write_concurrent::<129, _, agnostic_lite::tokio::TokioSpawner>(
+                &m,
+                gen_seed(),
+                Some(100),
+            )
+            .await;
         })
         .await
     }

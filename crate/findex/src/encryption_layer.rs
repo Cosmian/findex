@@ -1,9 +1,9 @@
-use crate::{ADDRESS_LENGTH, MemoryADT, address::Address};
 use aes::{
     Aes256,
     cipher::{BlockEncrypt, KeyInit, generic_array::GenericArray},
 };
 use cosmian_crypto_core::{Secret, SymmetricKey};
+use cosmian_memories::{ADDRESS_LENGTH, Address, MemoryADT};
 use std::{fmt::Debug, ops::Deref, sync::Arc};
 use xts_mode::Xts128;
 
@@ -45,7 +45,7 @@ pub struct MemoryEncryptionLayer<
 
 impl<
     const WORD_LENGTH: usize,
-    Memory: Send + Sync + MemoryADT<Address = Address<ADDRESS_LENGTH>, Word = [u8; WORD_LENGTH]>,
+    Memory: Send + MemoryADT<Address = Address<ADDRESS_LENGTH>, Word = [u8; WORD_LENGTH]>,
 > MemoryEncryptionLayer<WORD_LENGTH, Memory>
 {
     /// Instantiates a new memory encryption layer.
@@ -132,15 +132,13 @@ impl<
 
 #[cfg(test)]
 mod tests {
+    use crate::MemoryEncryptionLayer;
     use cosmian_crypto_core::{
         CsRng, Sampling, Secret,
         reexport::rand_core::{CryptoRngCore, SeedableRng},
     };
-
-    use crate::{
-        ADDRESS_LENGTH,
-        address::Address,
-        memory::{MemoryEncryptionLayer, in_memory_store::InMemory},
+    use cosmian_memories::{
+        ADDRESS_LENGTH, Address, InMemory,
         test_utils::{
             gen_seed, test_guarded_write_concurrent, test_single_write_and_read, test_wrong_guard,
         },
@@ -184,6 +182,11 @@ mod tests {
     #[tokio::test]
     async fn test_concurrent_read_write() {
         let mem = create_memory(&mut CsRng::from_entropy());
-        test_guarded_write_concurrent::<WORD_LENGTH, _>(&mem, gen_seed(), None).await;
+        test_guarded_write_concurrent::<16, _, agnostic_lite::tokio::TokioSpawner>(
+            &mem,
+            gen_seed(),
+            None,
+        )
+        .await;
     }
 }

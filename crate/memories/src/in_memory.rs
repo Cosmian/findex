@@ -1,3 +1,5 @@
+//! A thread-safe implementation of the `MemoryADT` trait based on a `HashMap`.
+
 use std::{
     collections::HashMap,
     fmt::{Debug, Display},
@@ -43,7 +45,7 @@ impl<Address: Hash + Eq + Debug, Value: Clone + Eq + Debug> InMemory<Address, Va
     }
 }
 
-impl<Address: Send + Sync + Hash + Eq + Debug, Value: Send + Sync + Clone + Eq + Debug> MemoryADT
+impl<Address: Send + Hash + Eq + Debug, Value: Send + Clone + Eq + Debug> MemoryADT
     for InMemory<Address, Value>
 {
     type Address = Address;
@@ -94,26 +96,58 @@ impl<Address: Hash + Eq + Debug + Clone, Value: Clone + Eq + Debug> IntoIterator
 mod tests {
 
     use super::InMemory;
-    use crate::{
-        test_utils::gen_seed,
-        test_utils::{test_guarded_write_concurrent, test_single_write_and_read, test_wrong_guard},
+    use crate::test_utils::{
+        gen_seed, test_guarded_write_concurrent, test_rw_same_address, test_single_write_and_read,
+        test_wrong_guard,
     };
+    use smol_macros::{Executor, test};
+
+    const TEST_ADDRESS_LENGTH: usize = 16;
+    const TEST_WORD_LENGTH: usize = 16;
 
     #[tokio::test]
     async fn test_sequential_read_write() {
-        let memory = InMemory::<[u8; 16], [u8; 16]>::default();
+        let memory = InMemory::<[u8; TEST_ADDRESS_LENGTH], [u8; TEST_ADDRESS_LENGTH]>::default();
         test_single_write_and_read(&memory, gen_seed()).await;
     }
 
     #[tokio::test]
     async fn test_sequential_wrong_guard() {
-        let memory = InMemory::<[u8; 16], [u8; 16]>::default();
+        let memory = InMemory::<[u8; TEST_ADDRESS_LENGTH], [u8; TEST_WORD_LENGTH]>::default();
         test_wrong_guard(&memory, gen_seed()).await;
     }
 
     #[tokio::test]
-    async fn test_concurrent_read_write() {
-        let memory = InMemory::<[u8; 16], [u8; 16]>::default();
-        test_guarded_write_concurrent(&memory, gen_seed(), None).await;
+    async fn test_sequential_rw_same_address() {
+        let memory = InMemory::<[u8; TEST_ADDRESS_LENGTH], [u8; TEST_WORD_LENGTH]>::default();
+        test_rw_same_address(&memory, gen_seed()).await;
+    }
+
+    // Below, the same asynchronous test is ran using different runtimes.
+
+    #[tokio::test]
+    async fn test_concurrent_read_write_tokio() {
+        let memory = InMemory::<[u8; TEST_ADDRESS_LENGTH], [u8; TEST_WORD_LENGTH]>::default();
+        test_guarded_write_concurrent::<TEST_WORD_LENGTH, _, agnostic_lite::tokio::TokioSpawner>(
+            &memory,
+            gen_seed(),
+            None,
+        )
+        .await;
+    }
+
+    test! {
+        async fn test_concurrent_read_write_smol(executor: &Executor<'_>) {
+            executor.spawn(async {
+                let memory = InMemory::<[u8; TEST_ADDRESS_LENGTH], [u8; TEST_WORD_LENGTH]>::default();
+                test_guarded_write_concurrent::<TEST_WORD_LENGTH, _, agnostic_lite::smol::SmolSpawner>(
+                    &memory,
+                    gen_seed(),
+                    None,
+                )
+                .await;
+            })
+            .await;
+        }
     }
 }
