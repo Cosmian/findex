@@ -11,12 +11,12 @@ use cosmian_findex::{
     bench_memory_one_to_many, bench_memory_search_multiple_bindings,
     bench_memory_search_multiple_keywords, reexport::tokio::TokioRuntime,
 };
-use cosmian_memories::InMemory;
+use cosmian_sse_memories::InMemory;
 use criterion::{Criterion, criterion_group, criterion_main};
 use tokio::runtime::{Builder, Runtime};
 
 #[cfg(feature = "sqlite-mem")]
-use cosmian_memories::SqliteMemory;
+use cosmian_sse_memories::SqliteMemory;
 #[cfg(feature = "sqlite-mem")]
 const SQLITE_PATH: &str = "benches.sqlite.db";
 
@@ -24,7 +24,7 @@ const SQLITE_PATH: &str = "benches.sqlite.db";
 // happen in the same runtime, otherwise the connection returns a broken
 // pipe error.
 #[cfg(feature = "redis-mem")]
-use cosmian_memories::RedisMemory;
+use cosmian_sse_memories::RedisMemory;
 
 #[cfg(feature = "redis-mem")]
 fn get_redis_url() -> String {
@@ -35,7 +35,7 @@ fn get_redis_url() -> String {
 }
 
 #[cfg(feature = "postgres-mem")]
-use cosmian_memories::{ADDRESS_LENGTH, Address, PostgresMemory, PostgresMemoryError};
+use cosmian_sse_memories::{ADDRESS_LENGTH, Address, PostgresMemory, PostgresMemoryError};
 
 #[cfg(feature = "postgres-mem")]
 fn get_postgresql_url() -> String {
@@ -51,8 +51,8 @@ async fn connect_and_init_table(
     db_url: String,
     table_name: String,
 ) -> Result<PostgresMemory<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>, PostgresMemoryError> {
-    use cosmian_memories::reexport::deadpool_postgres::Config;
-    use cosmian_memories::reexport::tokio_postgres::NoTls;
+    use cosmian_sse_memories::reexport::deadpool_postgres::Config;
+    use cosmian_sse_memories::reexport::tokio_postgres::NoTls;
 
     let mut pg_config = Config::new();
     pg_config.url = Some(db_url.to_string());
@@ -295,7 +295,7 @@ fn bench_contention(c: &mut Criterion) {
 #[cfg(any(feature = "redis-mem", feature = "postgres-mem"))]
 mod delayed_memory {
     #[cfg(feature = "postgres-mem")]
-    use cosmian_memories::{
+    use cosmian_sse_memories::{
         Address, MemoryADT, PostgresMemory, PostgresMemoryError, RedisMemory, RedisMemoryError,
     };
     use rand::Rng;

@@ -1,5 +1,5 @@
 [package]
-name = "cosmian_memories"
+name = "cosmian_sse_memories"
 version.workspace = true
 authors.workspace = true
 license.workspace = true
@@ -11,7 +11,7 @@ description.workspace = true
 readme = "README.md"
 
 [lib]
-name = "cosmian_memories"
+name = "cosmian_sse_memories"
 path = "src/lib.rs"
 
 [features]

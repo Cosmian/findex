@@ -15,15 +15,15 @@ name = "cosmian_findex"
 path = "src/lib.rs"
 
 [features]
-redis-mem = ["cosmian_memories/redis-mem"]
-sqlite-mem = ["cosmian_memories/sqlite-mem"]
-postgres-mem = ["cosmian_memories/postgres-mem"]
+redis-mem = ["cosmian_sse_memories/redis-mem"]
+sqlite-mem = ["cosmian_sse_memories/sqlite-mem"]
+postgres-mem = ["cosmian_sse_memories/postgres-mem"]
 test-utils = ["agnostic-lite", "criterion"]
 
 [dependencies]
 aes = "0.8"
 cosmian_crypto_core.workspace = true
-cosmian_memories = { path = "../memories", version = "8.0" }
+cosmian_sse_memories = { path = "../memories", version = "8.0" }
 xts-mode = "0.5"
 
 # Optional dependencies for testing and benchmarking.
@@ -36,7 +36,7 @@ criterion = { workspace = true, optional = true }
 
 [dev-dependencies]
 agnostic-lite = { workspace = true, features = ["tokio"] }
-cosmian_memories = { path = "../memories", version = "8.0", features = [
+cosmian_sse_memories = { path = "../memories", version = "8.0", features = [
     "redis-mem",
     "sqlite-mem",
     "postgres-mem",

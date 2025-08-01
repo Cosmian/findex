@@ -6,7 +6,7 @@
 use crate::{Findex, IndexADT, MemoryEncryptionLayer, WORD_LENGTH, dummy_decode, dummy_encode};
 use agnostic_lite::{JoinHandle, RuntimeLite};
 use cosmian_crypto_core::{Secret, reexport::rand_core::CryptoRngCore};
-use cosmian_memories::{ADDRESS_LENGTH, Address, MemoryADT};
+use cosmian_sse_memories::{ADDRESS_LENGTH, Address, MemoryADT};
 use criterion::{BenchmarkId, Criterion};
 use std::{collections::HashSet, fmt::Debug, sync::Arc};
 
