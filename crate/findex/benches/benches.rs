@@ -15,18 +15,42 @@ use cosmian_sse_memories::InMemory;
 use criterion::{Criterion, criterion_group, criterion_main};
 use tokio::runtime::{Builder, Runtime};
 
-#[cfg(feature = "sqlite-mem")]
+fn get_database_args() -> (bool, bool, bool) {
+    let args: Vec<String> = std::env::args().collect();
+
+    let redis_enabled = check_arg(&args, "redis");
+    let postgres_enabled = check_arg(&args, "postgres");
+    let sqlite_enabled = check_arg(&args, "sqlite");
+
+    (redis_enabled, postgres_enabled, sqlite_enabled)
+}
+
+fn check_arg(args: &[String], arg_name: &str) -> bool {
+    if let Ok(env_val) = std::env::var(format!("{}_HOST", arg_name.to_uppercase())) {
+        return true;
+    }
+
+    let arg = format!("--{}", arg_name);
+
+    if let Some(pos) = args.iter().position(|a| a == &arg) {
+        if let Some(value) = args.get(pos + 1) {
+            if !value.starts_with("--") {
+                return !matches!(value.as_str(), "0" | "false" | "False" | "FALSE");
+            }
+        }
+    }
+    // Default to enabled if arg is not explicitly disabled
+    true
+}
+
 use cosmian_sse_memories::SqliteMemory;
-#[cfg(feature = "sqlite-mem")]
 const SQLITE_PATH: &str = "benches.sqlite.db";
 
 // Redis memory back-end requires a tokio runtime, and all operations to
 // happen in the same runtime, otherwise the connection returns a broken
 // pipe error.
-#[cfg(feature = "redis-mem")]
 use cosmian_sse_memories::RedisMemory;
 
-#[cfg(feature = "redis-mem")]
 fn get_redis_url() -> String {
     std::env::var("REDIS_HOST").map_or_else(
         |_| "redis://localhost:6379".to_owned(),
@@ -34,10 +58,8 @@ fn get_redis_url() -> String {
     )
 }
 
-#[cfg(feature = "postgres-mem")]
 use cosmian_sse_memories::{ADDRESS_LENGTH, Address, PostgresMemory, PostgresMemoryError};
 
-#[cfg(feature = "postgres-mem")]
 fn get_postgresql_url() -> String {
     std::env::var("POSTGRES_HOST").map_or_else(
         |_| "postgres://cosmian:cosmian@localhost/cosmian".to_string(),
@@ -46,7 +68,6 @@ fn get_postgresql_url() -> String {
 }
 
 // Utility function used to initialize the PostgresMemory table
-#[cfg(feature = "postgres-mem")]
 async fn connect_and_init_table(
     db_url: String,
     table_name: String,
@@ -68,10 +89,12 @@ async fn connect_and_init_table(
 
     Ok(m)
 }
+
 // Number of points in each graph.
 const N_PTS: usize = 9;
 fn bench_search_multiple_bindings(c: &mut Criterion) {
     let mut rng = CsRng::from_entropy();
+    let (redis_enabled, postgres_enabled, sqlite_enabled) = get_database_args();
     let rt = Builder::new_multi_thread().enable_all().build().unwrap();
     let _guard = rt.enter();
 
@@ -83,44 +106,48 @@ fn bench_search_multiple_bindings(c: &mut Criterion) {
         &mut rng,
     );
 
-    #[cfg(feature = "redis-mem")]
-    bench_memory_search_multiple_bindings::<_, TokioRuntime>(
-        "Redis",
-        N_PTS,
-        async || RedisMemory::new_with_url(&get_redis_url()).await.unwrap(),
-        c,
-        &mut rng,
-    );
+    if redis_enabled {
+        bench_memory_search_multiple_bindings::<_, TokioRuntime>(
+            "Redis",
+            N_PTS,
+            async || RedisMemory::new_with_url(&get_redis_url()).await.unwrap(),
+            c,
+            &mut rng,
+        );
+    }
 
-    #[cfg(feature = "sqlite-mem")]
-    bench_memory_search_multiple_bindings::<_, TokioRuntime>(
-        "SQLite",
-        N_PTS,
-        async || {
-            let m = SqliteMemory::new_with_path(SQLITE_PATH, "bench_memory_smd".to_string())
-                .await
-                .unwrap();
-            m.initialize().await.unwrap();
-            m
-        },
-        c,
-        &mut rng,
-    );
+    if sqlite_enabled {
+        bench_memory_search_multiple_bindings::<_, TokioRuntime>(
+            "SQLite",
+            N_PTS,
+            async || {
+                let m = SqliteMemory::new_with_path(SQLITE_PATH, "bench_memory_smd".to_string())
+                    .await
+                    .unwrap();
+                m.initialize().await.unwrap();
+                m
+            },
+            c,
+            &mut rng,
+        );
+    }
 
-    #[cfg(feature = "postgres-mem")]
-    bench_memory_search_multiple_bindings::<_, TokioRuntime>(
-        "Postgres",
-        N_PTS,
-        async || {
-            let m = connect_and_init_table(get_postgresql_url(), "bench_memory_smd".to_string())
-                .await
-                .unwrap();
-            m.initialize().await.unwrap();
-            m
-        },
-        c,
-        &mut rng,
-    );
+    if postgres_enabled {
+        bench_memory_search_multiple_bindings::<_, TokioRuntime>(
+            "Postgres",
+            N_PTS,
+            async || {
+                let m =
+                    connect_and_init_table(get_postgresql_url(), "bench_memory_smd".to_string())
+                        .await
+                        .unwrap();
+                m.initialize().await.unwrap();
+                m
+            },
+            c,
+            &mut rng,
+        );
+    }
 }
 fn bench_search_multiple_keywords(c: &mut Criterion) {
     let mut rng = CsRng::from_entropy();

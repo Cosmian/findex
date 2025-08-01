@@ -15,9 +15,6 @@ name = "cosmian_findex"
 path = "src/lib.rs"
 
 [features]
-redis-mem = ["cosmian_sse_memories/redis-mem"]
-sqlite-mem = ["cosmian_sse_memories/sqlite-mem"]
-postgres-mem = ["cosmian_sse_memories/postgres-mem"]
 test-utils = ["agnostic-lite", "criterion"]
 
 [dependencies]
