@@ -17,13 +17,13 @@ use tokio::runtime::{Builder, Runtime};
 
 // All back-end benches will run unless one is explicitly disabled.
 fn check_enabled_backends() -> (bool, bool, bool) {
-    let redis_enabled = if let Ok(_) = std::env::var("REDIS_HOST") {
+    let redis_enabled = if std::env::var("REDIS_HOST").is_ok() {
         true
     } else {
         std::env::var("REDIS").unwrap_or_default() != "0"
     };
 
-    let postgres_enabled = if let Ok(_) = std::env::var("POSTGRES_HOST") {
+    let postgres_enabled = if std::env::var("POSTGRES_HOST").is_ok() {
         true
     } else {
         std::env::var("POSTGRES").unwrap_or_default() != "0"
