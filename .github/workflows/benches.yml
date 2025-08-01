@@ -18,7 +18,7 @@ jobs:
     uses: Cosmian/reusable_workflows/.github/workflows/cargo-bench.yml@develop
     with:
       toolchain: 1.87.0
-      features: test-utils,redis-mem,sqlite-mem,postgres-mem
+      features: test-utils
       force: true
       redis-host: "redis"
       postgres-host: "postgres"
