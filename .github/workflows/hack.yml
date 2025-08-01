@@ -32,7 +32,7 @@ jobs:
     steps:
       - name: Check storage
         run: df -h
-      - uses: actions/checkout@v1
+      - uses: actions/checkout@v4
       - uses: actions-rs/toolchain@v1
         with:
           toolchain: 1.87.0
