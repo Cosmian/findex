@@ -15,7 +15,7 @@ env:
 
 jobs:
   bench:
-    uses: Cosmian/reusable_workflows/.github/workflows/cargo-bench.yml@fix/add_hosts_arguments
+    uses: Cosmian/reusable_workflows/.github/workflows/cargo-bench.yml@develop
     with:
       toolchain: 1.87.0
       features: test-utils,redis-mem,sqlite-mem,postgres-mem
