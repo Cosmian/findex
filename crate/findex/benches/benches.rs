@@ -17,17 +17,12 @@ use tokio::runtime::{Builder, Runtime};
 
 // All back-end benches will run unless one is explicitly disabled.
 fn check_enabled_backends() -> (bool, bool, bool) {
-    let redis_enabled = if std::env::var("REDIS_HOST").is_ok() {
-        true
-    } else {
-        std::env::var("REDIS").unwrap_or_default() != "0"
-    };
+    let redis_enabled =
+        std::env::var("REDIS_HOST").is_ok() || std::env::var("REDIS").unwrap_or_default() != "0";
 
-    let postgres_enabled = if std::env::var("POSTGRES_HOST").is_ok() {
-        true
-    } else {
-        std::env::var("POSTGRES").unwrap_or_default() != "0"
-    };
+    let postgres_enabled = std::env::var("POSTGRES_HOST").is_ok()
+        || std::env::var("POSTGRES").unwrap_or_default() != "0";
+
     let sqlite_enabled = std::env::var("SQLITE").unwrap_or_default() != "0";
 
     (redis_enabled, postgres_enabled, sqlite_enabled)
@@ -163,7 +158,7 @@ fn bench_search_multiple_keywords(c: &mut Criterion) {
         );
     }
 
-    if postgres_enabled {
+    if sqlite_enabled {
         bench_memory_search_multiple_keywords::<_, TokioRuntime>(
             "SQLite",
             N_PTS,
@@ -179,7 +174,7 @@ fn bench_search_multiple_keywords(c: &mut Criterion) {
         );
     }
 
-    if sqlite_enabled {
+    if postgres_enabled {
         bench_memory_search_multiple_keywords::<_, TokioRuntime>(
             "Postgres",
             N_PTS,
@@ -455,11 +450,11 @@ criterion_group!(
     name    = benches;
     config  = Criterion::default();
     targets =
-    bench_contention,
     bench_one_to_many,
     bench_search_multiple_bindings,
     bench_search_multiple_keywords,
     bench_insert_multiple_bindings,
+    bench_contention,
 );
 
 criterion_main!(benches);
