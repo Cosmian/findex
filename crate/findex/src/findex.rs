@@ -7,7 +7,7 @@ use std::{
     sync::Arc,
 };
 
-use cosmian_memories::{ADDRESS_LENGTH, Address, MemoryADT};
+use cosmian_sse_memories::{ADDRESS_LENGTH, Address, MemoryADT};
 
 use crate::{
     IndexADT,
@@ -140,7 +140,7 @@ impl<
 mod tests {
     use crate::{Findex, IndexADT, MemoryEncryptionLayer, dummy_decode, dummy_encode};
     use cosmian_crypto_core::{CsRng, Secret, define_byte_type, reexport::rand_core::SeedableRng};
-    use cosmian_memories::{ADDRESS_LENGTH, Address, InMemory};
+    use cosmian_sse_memories::{ADDRESS_LENGTH, Address, InMemory};
     use smol_macros::Executor;
     use std::{collections::HashSet, sync::Arc};
 
