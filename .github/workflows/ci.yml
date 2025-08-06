@@ -9,6 +9,7 @@ jobs:
     with:
       toolchain: 1.87.0
       workspace: true
+    secrets: inherit
   cargo-machete:
     runs-on: ubuntu-latest
     steps:
@@ -28,13 +29,6 @@ jobs:
         run: |
           cd crate/memories
           cargo machete --with-metadata
-  cargo-publish:
-    needs:
-      - cargo-lint
-    uses: Cosmian/reusable_workflows/.github/workflows/cargo-publish-workspace.yml@develop
-    with:
-      toolchain: 1.87.0
-    secrets: inherit
   cleanup:
     needs:
       - cargo-lint
