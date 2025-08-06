@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [8.0.0] - 2025-08-06
+
+### 🚀 Features
+
+- Split memory implementations of Findex (#140)
+
 ## [7.1.0] - 2025-05-06
 
 ### 🚀 Features

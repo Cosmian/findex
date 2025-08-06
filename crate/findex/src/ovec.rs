@@ -14,9 +14,10 @@
 //!      a         a+1   ...  a+n+1
 //! ```
 
-use std::{fmt::Debug, hash::Hash, ops::Add};
+use cosmian_sse_memories::MemoryADT;
 
-use crate::{MemoryADT, adt::VectorADT, error::Error};
+use crate::{adt::VectorADT, error::Error};
+use std::{fmt::Debug, hash::Hash, ops::Add};
 
 /// Headers contain a counter of the number of values stored in the vector.
 // TODO: header could store metadata (e.g. sparsity budget)
@@ -105,7 +106,7 @@ impl<
     Memory: Send + Sync + Clone + MemoryADT<Address = Address, Word = [u8; WORD_LENGTH]>,
 > VectorADT for IVec<WORD_LENGTH, Memory>
 where
-    Memory::Error: Send + Sync,
+    Memory::Error: Send,
 {
     type Value = Memory::Word;
 
@@ -212,12 +213,11 @@ where
 #[cfg(test)]
 mod tests {
     use cosmian_crypto_core::{CsRng, Sampling, Secret, reexport::rand_core::SeedableRng};
+    use cosmian_sse_memories::{ADDRESS_LENGTH, Address, InMemory};
 
     use crate::{
-        ADDRESS_LENGTH, InMemory,
-        address::Address,
+        MemoryEncryptionLayer,
         adt::tests::{test_vector_concurrent, test_vector_sequential},
-        memory::MemoryEncryptionLayer,
         ovec::IVec,
     };
 
@@ -228,8 +228,8 @@ mod tests {
         let mut rng = CsRng::from_entropy();
         let seed = Secret::random(&mut rng);
         let memory = InMemory::<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>::default();
-        let obf = MemoryEncryptionLayer::new(&seed, memory.clone());
         let address = Address::random(&mut rng);
+        let obf = MemoryEncryptionLayer::new(&seed, memory.clone());
         let v = IVec::<WORD_LENGTH, _>::new(address, obf);
         test_vector_sequential(&v).await;
         memory.clear();

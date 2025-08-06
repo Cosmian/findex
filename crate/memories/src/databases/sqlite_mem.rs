@@ -34,6 +34,7 @@ impl From<async_sqlite::Error> for SqliteMemoryError {
 #[derive(Clone)]
 pub struct SqliteMemory<Address, Word> {
     pool: Pool,
+    table_name: String,
     _marker: PhantomData<(Address, Word)>,
 }
 
@@ -46,44 +47,64 @@ impl<Address, Word> Debug for SqliteMemory<Address, Word> {
     }
 }
 
-// The following settings are used to improve performance:
-// - journal_mode = WAL : WAL journaling is faster than the default DELETE mode.
-// - synchronous = NORMAL: Reduces disk I/O by only calling fsync() at critical moments rather
-//   than after every transaction (FULL mode); this does not compromise data integrity.
-const CREATE_TABLE_SCRIPT: &str = "
-PRAGMA synchronous = NORMAL;
-PRAGMA journal_mode = WAL;
-CREATE TABLE IF NOT EXISTS memory (
-    a BLOB PRIMARY KEY,
-    w BLOB NOT NULL
-);";
-
 impl<Address, Word> SqliteMemory<Address, Word> {
-    /// Connects to a known DB using the given path.
-    ///
-    /// # Arguments
-    ///
-    /// * `path` - The path to the sqlite3 database file.
-    pub async fn connect(path: &str) -> Result<Self, SqliteMemoryError> {
-        // This pool connections number defaults to the number of logical CPUs
-        // of the current system.
+    /// Returns a new memory instance using a pool of connections to the SQLite
+    /// database at the given path.
+    pub async fn new_with_path(
+        path: impl AsRef<std::path::Path>,
+        table_name: String,
+    ) -> Result<Self, SqliteMemoryError> {
+        // The number of connections in this pools defaults to the number of
+        // logical CPUs of the system.
         let pool = PoolBuilder::new().path(path).open().await?;
-
-        pool.conn(move |conn| conn.execute_batch(CREATE_TABLE_SCRIPT))
-            .await?;
 
         Ok(Self {
             pool,
+            table_name,
             _marker: PhantomData,
         })
     }
-}
 
-impl<Address: Send + Sync, Word: Send + Sync> SqliteMemory<Address, Word> {
+    /// Returns a new memory instance using a pool of connections to an SQLite
+    /// database.
+    pub async fn new_with_pool(pool: Pool, table_name: String) -> Self {
+        Self {
+            pool,
+            table_name,
+            _marker: PhantomData,
+        }
+    }
+
+    /// Creates the correct table in the associated database if it does not exist.
+    pub async fn initialize(&self) -> Result<(), SqliteMemoryError> {
+        // The following settings are used to improve performance:
+        // - journal_mode = WAL : WAL journaling is faster than the default
+        //   DELETE mode.
+        // - synchronous = NORMAL: Reduces disk I/O by only calling fsync() at
+        //   critical moments rather than after every transaction (FULL mode);
+        //   this does not compromise data integrity.
+        let initialization_script = format!(
+            "PRAGMA synchronous = NORMAL;
+             PRAGMA journal_mode = WAL;
+             CREATE TABLE IF NOT EXISTS {} (
+                 a BLOB PRIMARY KEY,
+                 w BLOB NOT NULL
+             );",
+            self.table_name
+        );
+
+        self.pool
+            .conn(move |conn| conn.execute_batch(&initialization_script))
+            .await?;
+        Ok(())
+    }
+
+    /// Clears all bindings from this memory.
     #[cfg(feature = "test-utils")]
     pub async fn clear(&self) -> Result<(), SqliteMemoryError> {
+        let script = format!("DELETE FROM {}", self.table_name);
         self.pool
-            .conn(|cnx| cnx.execute("DELETE FROM memory", []))
+            .conn(move |conn| conn.execute(&script, []))
             .await?;
         Ok(())
     }
@@ -100,11 +121,13 @@ impl<const ADDRESS_LENGTH: usize, const WORD_LENGTH: usize> MemoryADT
         &self,
         addresses: Vec<Self::Address>,
     ) -> Result<Vec<Option<Self::Word>>, Self::Error> {
+        let findex_table_name = self.table_name.clone();
         self.pool
             .conn(move |conn| {
                 let results = conn
                     .prepare(&format!(
-                        "SELECT a, w FROM memory WHERE a IN ({})",
+                        "SELECT a, w FROM {} WHERE a IN ({})",
+                        findex_table_name,
                         vec!["?"; addresses.len()].join(",")
                     ))?
                     .query_map(
@@ -122,7 +145,7 @@ impl<const ADDRESS_LENGTH: usize, const WORD_LENGTH: usize> MemoryADT
                 // generate a returned value complying to the batch-read spec.
                 Ok(addresses
                     .iter()
-                    // Copying is necessary here since the same word could be
+                    // Copying is necessary since the same word could be
                     // returned multiple times.
                     .map(|addr| results.get(addr).copied())
                     .collect())
@@ -136,6 +159,7 @@ impl<const ADDRESS_LENGTH: usize, const WORD_LENGTH: usize> MemoryADT
         guard: (Self::Address, Option<Self::Word>),
         bindings: Vec<(Self::Address, Self::Word)>,
     ) -> Result<Option<Self::Word>, Self::Error> {
+        let findex_table_name = self.table_name.clone();
         let (ag, wg) = guard;
 
         self.pool
@@ -145,13 +169,18 @@ impl<const ADDRESS_LENGTH: usize, const WORD_LENGTH: usize> MemoryADT
                 )?;
 
                 let current_word = tx
-                    .query_row("SELECT w FROM memory WHERE a = ?", [&*ag], |row| row.get(0))
+                    .query_row(
+                        &format!("SELECT w FROM {} WHERE a = ?", findex_table_name),
+                        [&*ag],
+                        |row| row.get(0),
+                    )
                     .optional()?;
 
                 if current_word == wg {
                     tx.execute(
                         &format!(
-                            "INSERT OR REPLACE INTO memory (a, w) VALUES {}",
+                            "INSERT OR REPLACE INTO {} (a, w) VALUES {}",
+                            findex_table_name,
                             vec!["(?,?)"; bindings.len()].join(",")
                         ),
                         params_from_iter(
@@ -174,43 +203,53 @@ impl<const ADDRESS_LENGTH: usize, const WORD_LENGTH: usize> MemoryADT
 #[cfg(test)]
 mod tests {
 
-    use super::*;
-    use crate::{
-        WORD_LENGTH, gen_seed, test_guarded_write_concurrent, test_rw_same_address,
-        test_single_write_and_read, test_wrong_guard,
+    use crate::test_utils::{
+        gen_seed, test_guarded_write_concurrent, test_rw_same_address, test_single_write_and_read,
+        test_wrong_guard,
     };
 
-    const DB_PATH: &str = "./target/debug/sqlite-test.db";
+    use super::*;
+
+    const DB_PATH: &str = "../../target/debug/sqlite-test.sqlite.db";
+    const TABLE_NAME: &str = "findex_memory";
 
     #[tokio::test]
     async fn test_rw_seq() {
-        let m = SqliteMemory::<_, [u8; WORD_LENGTH]>::connect(DB_PATH)
+        let m = SqliteMemory::<_, [u8; 52]>::new_with_path(DB_PATH, TABLE_NAME.to_owned())
             .await
             .unwrap();
+        m.initialize().await.unwrap();
         test_single_write_and_read(&m, gen_seed()).await
     }
 
     #[tokio::test]
     async fn test_guard_seq() {
-        let m = SqliteMemory::<_, [u8; WORD_LENGTH]>::connect(DB_PATH)
+        let m = SqliteMemory::<_, [u8; 999]>::new_with_path(DB_PATH, TABLE_NAME.to_owned())
             .await
             .unwrap();
+        m.initialize().await.unwrap();
         test_wrong_guard(&m, gen_seed()).await
     }
 
     #[tokio::test]
     async fn test_collision_seq() {
-        let m = SqliteMemory::<_, [u8; WORD_LENGTH]>::connect(DB_PATH)
+        let m = SqliteMemory::<_, [u8; 87]>::new_with_path(DB_PATH, TABLE_NAME.to_owned())
             .await
             .unwrap();
+        m.initialize().await.unwrap();
         test_rw_same_address(&m, gen_seed()).await
     }
 
     #[tokio::test]
     async fn test_rw_ccr() {
-        let m = SqliteMemory::<_, [u8; WORD_LENGTH]>::connect(DB_PATH)
+        let m = SqliteMemory::new_with_path(DB_PATH, TABLE_NAME.to_owned())
             .await
             .unwrap();
-        test_guarded_write_concurrent(&m, gen_seed(), Some(100)).await
+        test_guarded_write_concurrent::<129, _, agnostic_lite::tokio::TokioSpawner>(
+            &m,
+            gen_seed(),
+            Some(100),
+        )
+        .await
     }
 }

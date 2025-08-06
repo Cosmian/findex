@@ -2,12 +2,23 @@
 name: Benches
 run-name: Benchmark on ${{ github.ref_name }} - ${{ github.sha }}
 
-on: workflow_dispatch
+on:
+  push:
+    branches: # it's useful to have an automated benchmark after each successful update
+      - main
+      - develop
+  workflow_dispatch:
+
+env:
+  REDIS_HOST: "redis"
+  POSTGRES_HOST: "postgres"
 
 jobs:
   bench:
     uses: Cosmian/reusable_workflows/.github/workflows/cargo-bench.yml@develop
     with:
-      toolchain: stable
-      features: test-utils,redis-mem,sqlite-mem,rust-mem,postgres-mem
+      toolchain: 1.87.0
+      features: test-utils
       force: true
+      redis-host: "redis"
+      postgres-host: "postgres"

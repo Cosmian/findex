@@ -5,38 +5,27 @@
 // on a newer version of getrandom (0.3.2).
 #![allow(clippy::multiple_crate_versions)]
 
-mod address;
 mod adt;
 mod encoding;
+mod encryption_layer;
 mod error;
 mod findex;
-mod memory;
 mod ovec;
-#[cfg(any(test, feature = "test-utils"))]
-mod test_utils;
 
-pub use address::Address;
-pub use adt::{IndexADT, MemoryADT};
+#[cfg(feature = "test-utils")]
+mod benches;
+#[cfg(feature = "test-utils")]
+pub use benches::*;
+
+pub use adt::IndexADT;
 pub use encoding::{
     Decoder, Encoder,
     generic_encoding::{generic_decode, generic_encode},
 };
+pub use encryption_layer::{KEY_LENGTH, MemoryEncryptionLayer};
 pub use error::Error;
 pub use findex::Findex;
 pub use findex::Op;
-pub use memory::{KEY_LENGTH, MemoryEncryptionLayer};
-
-#[cfg(any(test, feature = "test-utils"))]
-pub use test_utils::*;
-
-#[cfg(feature = "redis-mem")]
-pub use memory::{RedisMemory, RedisMemoryError};
-
-#[cfg(feature = "sqlite-mem")]
-pub use memory::{SqliteMemory, SqliteMemoryError};
-
-#[cfg(feature = "postgres-mem")]
-pub use memory::{PostgresMemory, PostgresMemoryError};
 
 #[cfg(any(test, feature = "test-utils"))]
 pub use encoding::{
@@ -44,9 +33,8 @@ pub use encoding::{
     tests::test_encoding,
 };
 
-#[cfg(any(test, feature = "test-utils"))]
-pub use memory::InMemory;
-
-/// 16-byte addresses ensure a high collision resistance that poses virtually no
-/// limitation on the index.
-pub const ADDRESS_LENGTH: usize = 16;
+#[cfg(feature = "test-utils")]
+pub mod reexport {
+    // Re-exporting the most commonly used runtime interfaces for convenience.
+    pub use agnostic_lite::{smol, tokio, wasm};
+}
