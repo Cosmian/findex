@@ -35,7 +35,7 @@ jobs:
     uses: Cosmian/reusable_workflows/.github/workflows/cargo-publish-workspace.yml@publish_crates
     with:
       toolchain: 1.87.0
-    secrets:
+    secrets: # no way
       token: ${{ secrets.CRATES_IO }}
   cleanup:
     needs:
