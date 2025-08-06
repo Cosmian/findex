@@ -31,10 +31,12 @@ jobs:
   cargo-publish:
     needs:
       - cargo-lint
-    uses: Cosmian/reusable_workflows/.github/workflows/cargo-publish-workspace.yml@develop
+      - cargo-machete
+    uses: Cosmian/reusable_workflows/.github/workflows/cargo-publish-workspace.yml@publish_crates
     with:
       toolchain: 1.87.0
-    secrets: inherit
+    secrets:
+      token: ${{ secrets.CRATES_IO }}
   cleanup:
     needs:
       - cargo-lint
