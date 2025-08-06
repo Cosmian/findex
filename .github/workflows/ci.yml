@@ -31,8 +31,7 @@ jobs:
   cargo-publish:
     needs:
       - cargo-lint
-    uses: Cosmian/reusable_workflows/.github/workflows/cargo-publish.yml@develop
-    if: startsWith(github.ref, 'refs/tags/')
+    uses: Cosmian/reusable_workflows/.github/workflows/cargo-publish-workspace.yml@develop
     with:
       toolchain: 1.87.0
     secrets: inherit
