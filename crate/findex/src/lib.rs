@@ -38,3 +38,4 @@ pub mod reexport {
     // Re-exporting the most commonly used runtime interfaces for convenience.
     pub use agnostic_lite::{smol, tokio, wasm};
 }
+mod batcher_findex; // TODO
