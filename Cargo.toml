@@ -3,7 +3,7 @@ members = ["crate/findex", "crate/memories"]
 resolver = "2"
 
 [workspace.package]
-version = "8.0.1"
+version = "8.0.2"
 authors = [
     "Bruno Grieder <bruno.grieder@cosmian.com>",
     "Célia Corsin <celia.corsin@cosmian.com>",
@@ -30,3 +30,4 @@ cosmian_crypto_core = { version = "10.2", default-features = false, features = [
 criterion = { version = "0.6" }
 smol-macros = { version = "0.1" }
 tokio = { version = "1.46" }
+futures = "0.3.31" # Todo: this is a temporary approach

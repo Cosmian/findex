@@ -3,8 +3,10 @@
 //! to be generic and work with any memory back end that implements the
 //! MemoryADT trait.
 
-use std::{collections::HashSet, fmt::Debug, sync::Arc};
-
+use crate::{
+    Findex, IndexADT, WORD_LENGTH, dummy_decode, dummy_encode,
+    encryption_layer::MemoryEncryptionLayer,
+};
 use agnostic_lite::{JoinHandle, RuntimeLite};
 use cosmian_crypto_core::{Secret, reexport::rand_core::CryptoRngCore};
 use cosmian_sse_memories::{ADDRESS_LENGTH, Address, MemoryADT};

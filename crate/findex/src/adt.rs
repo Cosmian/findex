@@ -51,6 +51,30 @@ pub trait VectorADT: Send {
     fn read(&self) -> impl Send + Future<Output = Result<Vec<Self::Value>, Self::Error>>;
 }
 
+/// This trait  extends the functionality of the standard `IndexADT` by providing methods that operate
+/// on multiple keywords or entries simultaneously to cut network's overhead and improve performance.
+pub trait IndexBatcher<Keyword, Value> {
+    type Error: std::error::Error;
+
+    /// Search the index for the values bound to the given keywords.
+    fn batch_search(
+        &self,
+        keywords: Vec<&Keyword>,
+    ) -> impl Future<Output = Result<Vec<HashSet<Value>>, Self::Error>>;
+
+    /// Binds each value to their associated keyword in this index.
+    fn batch_insert(
+        &self,
+        entries: Vec<(Keyword, impl Sync + Send + IntoIterator<Item = Value>)>,
+    ) -> impl Send + Future<Output = Result<(), Self::Error>>;
+
+    /// Removes the given values from the index.
+    fn batch_delete(
+        &self,
+        entries: Vec<(Keyword, impl Sync + Send + IntoIterator<Item = Value>)>,
+    ) -> impl Send + Future<Output = Result<(), Self::Error>>;
+}
+
 #[cfg(test)]
 pub mod tests {
 
