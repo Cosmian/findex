@@ -1,5 +1,9 @@
 use std::fmt::{Debug, Display};
 
+use cosmian_sse_memories::MemoryADT;
+
+use crate::memory_layers::batching_layer::BatchingLayerError;
+
 #[derive(Debug)]
 pub enum Error<Address> {
     Parsing(String),
@@ -21,6 +25,7 @@ impl<Address: Debug> std::error::Error for Error<Address> {}
 pub enum BatchFindexError<M: MemoryADT> {
     BatchingLayerError(BatchingLayerError<M>),
     FindexError(Error<M::Address>),
+    EncodingError(String), // TODO: not sure this is the right place for this
 }
 
 impl<M: MemoryADT + Debug> Display for BatchFindexError<M>
@@ -31,6 +36,7 @@ where
         match self {
             BatchFindexError::BatchingLayerError(e) => write!(f, "Batching layer error: {e}"),
             BatchFindexError::FindexError(error) => write!(f, "Findex error: {error:?}"),
+            BatchFindexError::EncodingError(msg) => write!(f, "Encoding error: {msg}"),
         }
     }
 }

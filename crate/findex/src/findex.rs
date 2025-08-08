@@ -138,7 +138,9 @@ impl<
 
 #[cfg(test)]
 mod tests {
-    use crate::{Findex, IndexADT, MemoryEncryptionLayer, dummy_decode, dummy_encode};
+    use crate::{
+        Findex, IndexADT, dummy_decode, dummy_encode, encryption_layer::MemoryEncryptionLayer,
+    };
     use cosmian_crypto_core::{CsRng, Secret, define_byte_type, reexport::rand_core::SeedableRng};
     use cosmian_sse_memories::{ADDRESS_LENGTH, Address, InMemory};
     use smol_macros::Executor;

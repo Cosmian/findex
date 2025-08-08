@@ -3,7 +3,7 @@ use cosmian_crypto_core::{
     CsRng, Secret,
     reexport::rand_core::{CryptoRngCore, SeedableRng},
 };
-use cosmian_findex::{Findex, IndexADT, MemoryEncryptionLayer, Op};
+use cosmian_findex::{Findex, IndexADT, Op, encryption_layer::MemoryEncryptionLayer};
 use cosmian_sse_memories::InMemory;
 use std::collections::{HashMap, HashSet};
 

@@ -6,6 +6,8 @@
 
 use std::{collections::HashSet, future::Future, hash::Hash};
 
+use cosmian_sse_memories::MemoryADT;
+
 /// An index stores *values*, that associate a keyword with a value. All values
 /// bound to the same keyword are said to be *indexed under* this keyword.
 pub trait IndexADT<Keyword: Send + Hash, Value: Send + Hash> {
