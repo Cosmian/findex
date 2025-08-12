@@ -1,13 +1,14 @@
-use std::fmt::{Debug, Display};
-
 use cosmian_sse_memories::MemoryADT;
 use futures::channel::oneshot::Canceled;
+use std::fmt::{Debug, Display};
 
 #[derive(Debug)]
 pub enum BatchingLayerError<M: MemoryADT> {
-    Memory(M::Error),
+    Memory(M::Error), // // the from<M::Error> will not be implemented due to conflicting implementations with Rust's `core` library.  Use `map_err` instead of `?`.
     Mutex(String),
     Channel(String),
+    BufferOverflow(String),
+    WrongOperation(String),
 }
 
 impl<M: MemoryADT> Display for BatchingLayerError<M> {
@@ -17,6 +18,12 @@ impl<M: MemoryADT> Display for BatchingLayerError<M> {
             Self::Mutex(msg) => write!(f, "Mutex error: {}", msg),
             Self::Channel(msg) => {
                 write!(f, "Channel closed unexpectedly: {}", msg)
+            }
+            Self::BufferOverflow(msg) => {
+                write!(f, "Buffer overflow: {}", msg)
+            }
+            Self::WrongOperation(msg) => {
+                write!(f, "Wrong operation: {}", msg)
             }
         }
     }

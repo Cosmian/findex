@@ -28,7 +28,7 @@ pub mod batch_findex_error {
     pub enum BatchFindexError<M: MemoryADT> {
         BatchingLayer(BatchingLayerError<M>),
         Findex(Error<M::Address>),
-        Encoding(String), // TODO: not sure this is the right place for this
+        Encoding(String),
     }
 
     impl<M: MemoryADT + Debug> Display for BatchFindexError<M>

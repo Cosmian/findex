@@ -1,5 +1,5 @@
-mod batching_layer;
 mod error;
+mod memory;
 
-pub use batching_layer::{BatcherArc, MemoryBatcher};
 pub use error::BatchingLayerError;
+pub use memory::{BatcherArc, MemoryBatcher};

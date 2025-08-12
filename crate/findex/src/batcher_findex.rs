@@ -155,7 +155,7 @@ where
         // Process results
         let mut output = Vec::with_capacity(results.len());
         for result in results {
-            output.push(result.unwrap());
+            output.push(result?);
         }
 
         Ok(output)
@@ -208,7 +208,7 @@ mod tests {
             |op, values| {
                 dummy_encode::<WORD_LENGTH, Value>(op, values).map_err(BatchFindexError::<
                     InMemory<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>,
-                >::Encoding) // todo : verbose
+                >::Encoding)
             },
             |words| {
                 dummy_decode(words).map_err(BatchFindexError::<
@@ -289,12 +289,12 @@ mod tests {
             |op, values| {
                 dummy_encode::<WORD_LENGTH, Value>(op, values).map_err(BatchFindexError::<
                     InMemory<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>,
-                >::Encoding) // todo : verbose
+                >::Encoding)
             },
             |words| {
                 dummy_decode(words).map_err(BatchFindexError::<
                     InMemory<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>,
-                >::Encoding) // todo : verbose
+                >::Encoding)
             },
         );
 
@@ -359,12 +359,12 @@ mod tests {
                 dummy_encode::<WORD_LENGTH, Value>(op, values)
                     .map_err(BatchFindexError::<
                         InMemory<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>,
-                    >::Encoding) // todo : verbose
+                    >::Encoding)
             },
             |words| {
                 dummy_decode(words).map_err(BatchFindexError::<
                     InMemory<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>,
-                >::Encoding) // todo : verbose
+                >::Encoding)
             },
         );
 

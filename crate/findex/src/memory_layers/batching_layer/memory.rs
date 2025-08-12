@@ -13,27 +13,39 @@ use std::sync::{
 
 use crate::BatchingLayerError;
 
+type ReadOperation<M> = (
+    Vec<<M as MemoryADT>::Address>,
+    oneshot::Sender<Result<Vec<Option<<M as MemoryADT>::Word>>, <M as MemoryADT>::Error>>,
+);
+
+type WriteOperation<M> = (
+    (
+        (<M as MemoryADT>::Address, Option<<M as MemoryADT>::Word>),
+        Vec<(<M as MemoryADT>::Address, <M as MemoryADT>::Word)>,
+    ),
+    oneshot::Sender<Result<Option<<M as MemoryADT>::Word>, <M as MemoryADT>::Error>>,
+);
+
 #[allow(clippy::type_complexity)] // refactoring this type will make the code unnecessarily more difficult to read without any actual benefit
 enum PendingOperations<M: BatchingMemoryADT + MemoryADT>
 where
     M::Address: Clone,
 {
-    PendingReads(
-        Mutex<
-            Vec<(
-                Vec<M::Address>,
-                oneshot::Sender<Result<Vec<Option<M::Word>>, M::Error>>,
-            )>,
-        >,
-    ),
-    PendingWrites(
-        Mutex<
-            Vec<(
-                ((M::Address, Option<M::Word>), Vec<(M::Address, M::Word)>),
-                oneshot::Sender<Result<Option<M::Word>, M::Error>>,
-            )>,
-        >,
-    ),
+    PendingReads(Mutex<Vec<ReadOperation<M>>>),
+    PendingWrites(Mutex<Vec<WriteOperation<M>>>),
+}
+
+impl<M: BatchingMemoryADT + MemoryADT> PendingOperations<M>
+where
+    M::Address: Clone,
+{
+    // Gets the lock of the buffer and returns its length; hence the name.
+    pub fn lock_and_get_len(&self) -> Result<usize, BatchingLayerError<M>> {
+        Ok(match self {
+            Self::PendingReads(read_ops) => read_ops.lock()?.len(), // TODO no unwrap
+            Self::PendingWrites(write_ops) => write_ops.lock()?.len(),
+        })
+    }
 }
 
 pub struct MemoryBatcher<M: BatchingMemoryADT>
@@ -85,74 +97,67 @@ where
     }
 
     async fn flush(&self) -> Result<(), BatchingLayerError<M>> {
-        match &self.buffer {
-            PendingOperations::PendingReads(read_ops) => {
-                // maybe add a check that the capacities are correct
-                let batches = {
-                    let mut pending = read_ops.lock().unwrap();
-                    if pending.is_empty() {
-                        return Ok(());
-                    }
-                    std::mem::take(&mut *pending)
-                };
+        if self.buffer.lock_and_get_len()? > self.capacity.load(Ordering::SeqCst) {
+            return Err(BatchingLayerError::BufferOverflow(
+                "The buffer vector's length is greater than the capacity, this should not happen."
+                    .to_owned(),
+            ));
+        }
+        // check if the buffer is full
+        if self.buffer.lock_and_get_len()? == self.capacity.load(Ordering::SeqCst) {
+            match &self.buffer {
+                PendingOperations::PendingReads(read_ops) => {
+                    let batches = std::mem::take(&mut *read_ops.lock()?);
 
-                // Build combined address list while tracking which addresses belong to which batch
-                let all_addresses: Vec<_> = batches
-                    .iter()
-                    .flat_map(|(addresses, _)| addresses.iter())
-                    .cloned()
-                    .collect();
+                    // Build combined address list while tracking which addresses belong to which batch
+                    let all_addresses = batches
+                        .iter()
+                        .flat_map(|(addresses, _)| addresses.iter())
+                        .cloned()
+                        .collect();
 
-                let mut all_results = self
-                    .inner
-                    .batch_read(all_addresses)
-                    .await
-                    // Implementing the adequate from trait for this error seems impossible due to
-                    // conflicting implementation in crate `core`
-                    .map_err(BatchingLayerError::<M>::Memory)?;
+                    let mut aggregated_reads_results = self
+                        .inner
+                        .batch_read(all_addresses)
+                        .await
+                        .map_err(BatchingLayerError::<M>::Memory)?;
 
-                // Distribute results to each batch's sender
-                for (input, sender) in batches.into_iter().rev() {
-                    let split_point = all_results.len() - input.len();
-                    // After this call, all_results will be left containing the elements [0, split_point)
-                    // that's why we need to reverse the batches
-                    let batch_results = all_results.split_off(split_point);
-                    sender.send(Ok(batch_results)).map_err(|_| {
+                    // Distribute results to each batch's sender
+                    for (input_addresses, sender) in batches.into_iter().rev() {
+                        let split_point = aggregated_reads_results.len() - input_addresses.len(); // This is the point where the last batch's results start
+                        let batch_results = aggregated_reads_results.split_off(split_point); // After this call, all_results will be left containing the elements [0, split_point)
+                        sender.send(Ok(batch_results)).map_err(|_| {
+                        // Upon failure, the vector we tried to send is returned in the Err varient, but it's explicitly ignored here to not extract information.
                         BatchingLayerError::<M>::Channel(
                             "The receiver end of this read operation was dropped before the `send` function could be called."
                                 .to_owned(),
                         )
                     })?;
-                }
-            }
-            PendingOperations::PendingWrites(write_ops) => {
-                // maybe add a check that the capacities are correct
-                let batches = {
-                    let mut pending = write_ops.lock().unwrap();
-                    if pending.is_empty() {
-                        return Ok(());
                     }
-                    std::mem::take(&mut *pending)
-                };
+                }
+                PendingOperations::PendingWrites(write_ops) => {
+                    let batches = std::mem::take(&mut *write_ops.lock()?);
 
-                let (bindings, senders): (Vec<_>, Vec<_>) = batches.into_iter().unzip();
+                    let (bindings, senders): (Vec<_>, Vec<_>) = batches.into_iter().unzip();
 
-                let res = self
-                    .inner
-                    .batch_guarded_write(bindings)
-                    .await
-                    .map_err(BatchingLayerError::<M>::Memory)?;
-                // Distribute results to each batch's sender
-                for (res, sender) in res.into_iter().zip(senders) {
-                    sender.send(Ok(res)).map_err(|_| {
+                    let agregated_writes_results = self
+                        .inner
+                        .batch_guarded_write(bindings)
+                        .await
+                        .map_err(BatchingLayerError::<M>::Memory)?;
+
+                    // Distribute results to each batch's sender
+                    for (res, sender) in agregated_writes_results.into_iter().zip(senders) {
+                        sender.send(Ok(res)).map_err(|_| {
                         BatchingLayerError::<M>::Channel(
                             "The receiver end of this write operation was dropped before the `send` function could be called."
                                 .to_owned(),
                         )
                     })?;
+                    }
                 }
-            }
-        };
+            };
+        }
         Ok(())
     }
 }
@@ -171,33 +176,23 @@ where
         addresses: Vec<Self::Address>,
     ) -> Result<Vec<Option<Self::Word>>, Self::Error> {
         match &self.buffer {
-            PendingOperations::PendingWrites(_) => panic!(
-                "`batch_read` is called on a writer MemoryBatcher, make sure to use `new_reader` during initialization."
-            ),
+            PendingOperations::PendingWrites(_) => Err(BatchingLayerError::WrongOperation(
+                "`batch_read` is called on a writer MemoryBatcher, make sure to use `new_reader` during initialization.".to_owned()
+            )),
             PendingOperations::PendingReads(read_ops) => {
                 // Create a channel for this batch
                 let (sender, receiver) = oneshot::channel();
-                let should_flush;
 
                 // Add to pending batches
                 {
-                    let mut pending = read_ops.lock().unwrap();
+                    let mut pending = read_ops.lock()?;
                     pending.push((addresses, sender));
 
                     // Determine if we should flush
+                }
 
-                    should_flush = pending.len() == self.capacity.load(Ordering::SeqCst);
-                    if pending.len() > self.capacity.load(Ordering::SeqCst) {
-                        panic!(
-                            "this isn't supposed to happen, by design, change this to an error case later"
-                        )
-                    }
-                }
-                // Flush if buffer is full
-                // only 1 thread will have this equal to true
-                if should_flush {
-                    self.flush().await?;
-                }
+                // each thread tries to flush but only one will succeed and empty the buffer
+                self.flush().await?;
 
                 // Wait for results
                 receiver
@@ -213,34 +208,19 @@ where
         bindings: Vec<(Self::Address, Self::Word)>,
     ) -> Result<Option<Self::Word>, Self::Error> {
         match &self.buffer {
-            PendingOperations::PendingReads(_) => panic!("what's happenning ?"),
+            PendingOperations::PendingReads(_) => Err(BatchingLayerError::WrongOperation(
+                "`guarded_write` is called on a reader MemoryBatcher, make sure to use `new_writer` during initialization.".to_owned()
+            )),
             PendingOperations::PendingWrites(write_ops) => {
                 let (sender, receiver) = oneshot::channel();
-                let should_flush;
 
-                // Add to pending batches
                 {
-                    let mut pending = write_ops.lock().unwrap();
+                    let mut pending = write_ops.lock()?;
                     pending.push(((guard, bindings), sender));
-
-                    let capacity = self.capacity.load(Ordering::SeqCst);
-                    if pending.len() > capacity {
-                        // TODO: determin if this should be kept
-                        panic!(
-                            "this isn't supposed to happen, by design, change this to an error case later"
-                        )
-                    }
-                    should_flush = pending.len() == capacity;
                 }
 
-                // Flush if buffer is full
-                // only caller thread will have this equal to true
-                if should_flush {
-                    self.flush().await?;
-                }
+                self.flush().await?;
 
-                // Wait for results
-                // Wait for results
                 receiver
                     .await?
                     .map_err(|e| BatchingLayerError::<M>::Memory(e))
