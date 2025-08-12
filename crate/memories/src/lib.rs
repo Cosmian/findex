@@ -61,6 +61,7 @@ pub trait MemoryADT {
 }
 
 // Super trait for MemoryADT that allows doing write operations in batches.
+#[cfg(feature = "batch")]
 pub trait BatchingMemoryADT: MemoryADT {
     #[allow(clippy::type_complexity)] // refactoring this type will make the code unnecessarily more difficult to read without any actual benefit
     fn batch_guarded_write(

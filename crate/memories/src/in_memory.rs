@@ -7,7 +7,9 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use crate::{BatchingMemoryADT, MemoryADT};
+#[cfg(feature = "batch")]
+use crate::BatchingMemoryADT;
+use crate::MemoryADT;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MemoryError;
@@ -76,6 +78,7 @@ impl<Address: Send + Hash + Eq + Debug, Value: Send + Clone + Eq + Debug> Memory
     }
 }
 
+#[cfg(feature = "batch")]
 impl<Address: Send + Sync + Hash + Eq + Debug, Value: Send + Sync + Clone + Eq + Debug>
     BatchingMemoryADT for InMemory<Address, Value>
 {

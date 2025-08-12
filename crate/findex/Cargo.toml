@@ -15,6 +15,7 @@ name = "cosmian_findex"
 path = "src/lib.rs"
 
 [features]
+batch = ["cosmian_sse_memories/batch"]
 test-utils = ["agnostic-lite", "criterion"]
 
 [dependencies]

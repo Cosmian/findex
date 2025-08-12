@@ -1,9 +1,8 @@
-use cosmian_sse_memories::{ADDRESS_LENGTH, Address, BatchingMemoryADT, MemoryADT};
-
 use crate::adt::BatchedIndexADT;
 use crate::error::BatchFindexError;
 use crate::memory_layers::batching_layer::{BatcherArc, MemoryBatcher};
 use crate::{Decoder, Encoder, Findex, IndexADT};
+use cosmian_sse_memories::{ADDRESS_LENGTH, Address, BatchingMemoryADT, MemoryADT};
 use std::sync::atomic::AtomicUsize;
 use std::{collections::HashSet, fmt::Debug, hash::Hash, sync::Arc};
 // TODO : should all of these be sync ?

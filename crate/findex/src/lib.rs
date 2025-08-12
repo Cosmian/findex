@@ -6,7 +6,6 @@
 #![allow(clippy::multiple_crate_versions)]
 
 mod adt;
-mod batcher_findex;
 mod encoding;
 mod error;
 mod findex;
@@ -18,18 +17,23 @@ mod benches;
 #[cfg(feature = "test-utils")]
 pub use benches::*;
 
-pub use adt::{BatchedIndexADT, IndexADT};
+#[cfg(feature = "batch")]
+mod batcher_findex;
+#[cfg(feature = "batch")]
 pub use batcher_findex::BatcherFindex;
+
+#[cfg(feature = "batch")]
+pub use memory_layers::batching_layer::{BatcherArc, BatchingLayerError, MemoryBatcher};
+
+pub use adt::{BatchedIndexADT, IndexADT};
 pub use encoding::{
     Decoder, Encoder,
     generic_encoding::{generic_decode, generic_encode},
 };
 pub use error::Error;
 pub use findex::{Findex, Op};
-pub use memory_layers::{
-    batching_layer::{BatcherArc, BatchingLayerError, MemoryBatcher},
-    encryption_layer,
-};
+
+pub use memory_layers::encryption_layer;
 
 #[cfg(any(test, feature = "test-utils"))]
 pub use encoding::{

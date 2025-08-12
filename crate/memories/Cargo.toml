@@ -19,6 +19,7 @@ redis-mem = ["redis"]
 sqlite-mem = ["async-sqlite"]
 postgres-mem = ["deadpool-postgres", "tokio", "tokio-postgres"]
 test-utils = ["tokio"]
+batch = []
 
 [dependencies]
 agnostic-lite = { workspace = true }
