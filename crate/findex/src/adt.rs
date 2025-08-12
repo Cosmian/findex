@@ -39,7 +39,7 @@ pub trait IndexADT<Keyword: Send + Hash, Value: Send + Hash> {
 /// This trait defines batch operations for encrypted searchable indices. It extends
 /// the functionality of the standard `IndexADT` by providing methods that operate on
 /// multiple keywords or entries simultaneously to cut network's overhead and improve performance.
-pub trait BatcherSSEADT<Keyword: Send + Sync + Hash, Value: Send + Sync + Hash> {
+pub trait BatchedIndexADT<Keyword: Send + Sync + Hash, Value: Send + Sync + Hash> {
     // TODO : maybe add the findex functions as trait
     // type Findex: IndexADT<Keyword, Value> + Send + Sync; // need those ? + Send + Sync;
     // type BatcherMemory: BatchingMemoryADT<Address = Keyword, Word = Value, Error = Self::Error>;
@@ -65,6 +65,7 @@ pub trait BatcherSSEADT<Keyword: Send + Sync + Hash, Value: Send + Sync + Hash> 
 }
 
 // Same as MemoryADT but also batches writes
+#[allow(clippy::type_complexity)] // refactoring this type will make the code unnecessarily more difficult to read without any actual benefit
 pub trait BatchingMemoryADT: MemoryADT {
     // You only need to declare the NEW methods here
     // The associated types and existing methods from MemoryADT are inherited

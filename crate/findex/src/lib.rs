@@ -6,6 +6,7 @@
 #![allow(clippy::multiple_crate_versions)]
 
 mod adt;
+mod batcher_findex;
 mod encoding;
 mod error;
 mod findex;
@@ -17,14 +18,14 @@ mod benches;
 #[cfg(feature = "test-utils")]
 pub use benches::*;
 
-pub use adt::IndexADT;
+pub use adt::{BatchedIndexADT, BatchingMemoryADT, IndexADT};
+pub use batcher_findex::BatcherFindex;
 pub use encoding::{
     Decoder, Encoder,
     generic_encoding::{generic_decode, generic_encode},
 };
 pub use error::Error;
-pub use findex::Findex;
-pub use findex::Op;
+pub use findex::{Findex, Op};
 pub use memory_layers::encryption_layer;
 
 #[cfg(any(test, feature = "test-utils"))]
@@ -38,4 +39,3 @@ pub mod reexport {
     // Re-exporting the most commonly used runtime interfaces for convenience.
     pub use agnostic_lite::{smol, tokio, wasm};
 }
-mod batcher_findex; // TODO

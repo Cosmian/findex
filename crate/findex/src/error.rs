@@ -23,9 +23,9 @@ impl<Address: Debug> std::error::Error for Error<Address> {}
 
 #[derive(Debug)]
 pub enum BatchFindexError<M: MemoryADT> {
-    BatchingLayerError(BatchingLayerError<M>),
-    FindexError(Error<M::Address>),
-    EncodingError(String), // TODO: not sure this is the right place for this
+    BatchingLayer(BatchingLayerError<M>),
+    Findex(Error<M::Address>),
+    Encoding(String), // TODO: not sure this is the right place for this
 }
 
 impl<M: MemoryADT + Debug> Display for BatchFindexError<M>
@@ -34,22 +34,22 @@ where
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            BatchFindexError::BatchingLayerError(e) => write!(f, "Batching layer error: {e}"),
-            BatchFindexError::FindexError(error) => write!(f, "Findex error: {error:?}"),
-            BatchFindexError::EncodingError(msg) => write!(f, "Encoding error: {msg}"),
+            Self::BatchingLayer(e) => write!(f, "Batching layer error: {e}"),
+            Self::Findex(error) => write!(f, "Findex error: {error:?}"),
+            Self::Encoding(msg) => write!(f, "Encoding error: {msg}"),
         }
     }
 }
 
 impl<M: MemoryADT + Debug> From<Error<M::Address>> for BatchFindexError<M> {
     fn from(e: Error<M::Address>) -> Self {
-        BatchFindexError::FindexError(e)
+        Self::Findex(e)
     }
 }
 
 impl<M: MemoryADT + Debug> From<BatchingLayerError<M>> for BatchFindexError<M> {
     fn from(e: BatchingLayerError<M>) -> Self {
-        BatchFindexError::BatchingLayerError(e)
+        Self::BatchingLayer(e)
     }
 }
 

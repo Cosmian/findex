@@ -1,9 +1,9 @@
 use cosmian_sse_memories::{ADDRESS_LENGTH, Address, MemoryADT};
 
-use crate::adt::{BatcherSSEADT, BatchingMemoryADT};
+use crate::adt::{BatchedIndexADT, BatchingMemoryADT};
 use crate::error::BatchFindexError;
 use crate::memory_layers::batching_layer::{BatcherArc, MemoryBatcher};
-use crate::{Decoder, Encoder, Error, Findex, IndexADT};
+use crate::{Decoder, Encoder, Findex, IndexADT};
 use std::sync::atomic::AtomicUsize;
 use std::{collections::HashSet, fmt::Debug, hash::Hash, sync::Arc};
 // TODO : should all of these be sync ?
@@ -57,10 +57,10 @@ impl<
     {
         let mut search_futures = Vec::new();
         let n = entries.len();
-        let buffered_memory = BatcherArc::from_arc(Arc::new(MemoryBatcher::new_writer(
+        let buffered_memory = BatcherArc::new(MemoryBatcher::new_writer(
             self.memory.clone(),
             AtomicUsize::new(n),
-        )));
+        ));
 
         for (guard_keyword, bindings) in entries {
             let memory_arc = buffered_memory.clone();
@@ -83,10 +83,10 @@ impl<
 
                 // Convert Findex error to BatchingLayerError manually if needed
                 if let Err(findex_err) = result {
-                    return Err(BatchFindexError::FindexError(findex_err));
+                    return Err(BatchFindexError::Findex(findex_err));
                 }
                 // once one of the operations succeeds, we should make the buffer smaller
-                memory_arc.decrement_capacity()?;
+                memory_arc.decrement_capacity().await?;
                 Ok(())
             };
 
@@ -110,7 +110,8 @@ impl<
         + Sync
         + Clone
         + BatchingMemoryADT<Address = Address<ADDRESS_LENGTH>, Word = [u8; WORD_LENGTH]>,
-> BatcherSSEADT<Keyword, Value> for BatcherFindex<WORD_LENGTH, Value, EncodingError, BatcherMemory>
+> BatchedIndexADT<Keyword, Value>
+    for BatcherFindex<WORD_LENGTH, Value, EncodingError, BatcherMemory>
 where
     <BatcherMemory as MemoryADT>::Error: Sync,
 {
@@ -125,10 +126,10 @@ where
         let mut search_futures = Vec::new();
         let n = keywords.len();
 
-        let buffered_memory = BatcherArc::from_arc(Arc::new(MemoryBatcher::new_reader(
+        let buffered_memory = BatcherArc::new(MemoryBatcher::new_reader(
             self.memory.clone(),
             AtomicUsize::new(n),
-        ))); // todo
+        )); // todo
 
         for keyword in keywords {
             let buffered_memory_clone = buffered_memory.clone();
@@ -182,9 +183,9 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{Error, Findex, IndexADT, dummy_decode, dummy_encode};
+    use crate::{Findex, IndexADT, dummy_decode, dummy_encode};
     use cosmian_crypto_core::define_byte_type;
-    use cosmian_sse_memories::{ADDRESS_LENGTH, InMemory, MemoryADT};
+    use cosmian_sse_memories::{ADDRESS_LENGTH, InMemory};
     use std::collections::HashSet;
 
     type Value = Bytes<8>;
@@ -229,11 +230,14 @@ mod tests {
         let batcher_findex = BatcherFindex::<WORD_LENGTH, Value, _, _>::new(
             trivial_memory.clone(),
             |op, values| {
-                dummy_encode::<WORD_LENGTH, Value>(op, values)
-                    .map_err(|e| BatchFindexError::<InMemory<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>>::EncodingError(e)) // todo : verbose
+                dummy_encode::<WORD_LENGTH, Value>(op, values).map_err(BatchFindexError::<
+                    InMemory<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>,
+                >::Encoding) // todo : verbose
             },
             |words| {
-                dummy_decode(words).map_err(|e| BatchFindexError::<InMemory<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>>::EncodingError(e))
+                dummy_decode(words).map_err(BatchFindexError::<
+                    InMemory<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>,
+                >::Encoding)
             },
         );
 
@@ -307,12 +311,14 @@ mod tests {
         let batcher_findex = BatcherFindex::<WORD_LENGTH, Value, _, _>::new(
             trivial_memory.clone(),
             |op, values| {
-                dummy_encode::<WORD_LENGTH, Value>(op, values)
-                    .map_err(|e| BatchFindexError::<InMemory<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>>::EncodingError(e)) // todo : verbose
+                dummy_encode::<WORD_LENGTH, Value>(op, values).map_err(BatchFindexError::<
+                    InMemory<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>,
+                >::Encoding) // todo : verbose
             },
             |words| {
-                dummy_decode(words)
-                    .map_err(|e| BatchFindexError::<InMemory<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>>::EncodingError(e)) // todo : verbose
+                dummy_decode(words).map_err(BatchFindexError::<
+                    InMemory<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>,
+                >::Encoding) // todo : verbose
             },
         );
 
@@ -375,11 +381,14 @@ mod tests {
             trivial_memory,
             |op, values| {
                 dummy_encode::<WORD_LENGTH, Value>(op, values)
-                    .map_err(|e| BatchFindexError::<InMemory<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>>::EncodingError(e)) // todo : verbose
+                    .map_err(BatchFindexError::<
+                        InMemory<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>,
+                    >::Encoding) // todo : verbose
             },
             |words| {
-                dummy_decode(words)
-                    .map_err(|e| BatchFindexError::<InMemory<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>>::EncodingError(e)) // todo : verbose
+                dummy_decode(words).map_err(BatchFindexError::<
+                    InMemory<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>,
+                >::Encoding) // todo : verbose
             },
         );
 

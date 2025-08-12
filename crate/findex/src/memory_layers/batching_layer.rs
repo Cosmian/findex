@@ -8,7 +8,6 @@ use std::fmt::Debug;
 use std::ops::Deref;
 use std::{
     fmt::Display,
-    marker::PhantomData,
     sync::{
         Arc, Mutex,
         atomic::{AtomicUsize, Ordering},
@@ -16,6 +15,8 @@ use std::{
 };
 
 use crate::adt::BatchingMemoryADT;
+
+#[allow(clippy::type_complexity)] // refactoring this type will make the code unnecessarily more difficult to read without any actual benefit
 enum PendingOperations<M: BatchingMemoryADT + MemoryADT>
 where
     M::Address: Clone,
@@ -48,64 +49,45 @@ where
 }
 
 #[derive(Debug)]
-pub enum BatchingLayerError<M: MemoryADT>
-where
-    M::Error: Debug,
-{
-    MemoryError(M::Error),
-    MutexError(String),
-    ChannelError(String),
-    _Phantom(PhantomData<M>),
+pub enum BatchingLayerError<M: MemoryADT> {
+    Memory(M::Error),
+    Mutex(String),
+    Channel(String),
 }
 
-impl<M: MemoryADT> Display for BatchingLayerError<M>
-where
-    M::Error: Debug,
-{
+impl<M: MemoryADT> Display for BatchingLayerError<M> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            BatchingLayerError::MemoryError(err) => write!(f, "Memory error: {:?}", err),
-            BatchingLayerError::MutexError(msg) => write!(f, "Mutex error: {}", msg),
-            BatchingLayerError::ChannelError(_) => {
-                write!(f, "Channel closed unexpectedly.")
+            Self::Memory(err) => write!(f, "Memory error: {:?}", err),
+            Self::Mutex(msg) => write!(f, "Mutex error: {}", msg),
+            Self::Channel(msg) => {
+                write!(f, "Channel closed unexpectedly: {}", msg)
             }
-            BatchingLayerError::_Phantom(_) => panic!("This variant should never be constructed"),
         }
     }
 }
-impl<M: MemoryADT> From<Canceled> for BatchingLayerError<M>
-where
-    M::Error: Debug,
-{
+impl<M: MemoryADT> From<Canceled> for BatchingLayerError<M> {
     fn from(_: Canceled) -> Self {
-        BatchingLayerError::ChannelError(
+        Self::Channel(
             "The sender was dropped before sending its results with the `send` function."
                 .to_string(),
         )
     }
 }
 
-impl<M: MemoryADT, T> From<std::sync::PoisonError<T>> for BatchingLayerError<M>
-where
-    M::Error: Debug,
-{
+impl<M: MemoryADT, T> From<std::sync::PoisonError<T>> for BatchingLayerError<M> {
     fn from(e: std::sync::PoisonError<T>) -> Self {
-        BatchingLayerError::MutexError(format!("Mutex lock poisoned: {e}"))
+        Self::Mutex(format!("Mutex lock poisoned: {e}"))
     }
 }
 
-impl<M: MemoryADT> std::error::Error for BatchingLayerError<M>
-where
-    M: Debug,
-    M::Error: Debug,
-{
-}
+impl<M: MemoryADT + Debug> std::error::Error for BatchingLayerError<M> {}
 
-impl<M: BatchingMemoryADT + Send> MemoryBatcher<M>
+impl<M: BatchingMemoryADT + Send + Sync> MemoryBatcher<M>
 where
     <M as MemoryADT>::Address: Clone,
 {
-    pub fn new_reader(inner: M, capacity: AtomicUsize) -> Self {
+    pub const fn new_reader(inner: M, capacity: AtomicUsize) -> Self {
         Self {
             inner,
             capacity,
@@ -113,7 +95,7 @@ where
         }
     }
 
-    pub fn new_writer(inner: M, capacity: AtomicUsize) -> Self {
+    pub const fn new_writer(inner: M, capacity: AtomicUsize) -> Self {
         Self {
             inner,
             capacity,
@@ -122,18 +104,18 @@ where
     }
 
     // atomically decrement the buffer size, needed on inserts/deletes
-    pub(crate) fn decrement_capacity(&self) -> Result<(), BatchingLayerError<M>> {
+    pub(crate) async fn decrement_capacity(&self) -> Result<(), BatchingLayerError<M>> {
         // `fetch_sub` returns the previous value, so if it was 1, it means the buffer's job is done
         let previous = self.capacity.fetch_sub(1, Ordering::SeqCst);
         match &self.buffer {
             PendingOperations::PendingReads(read_ops) => {
                 if previous <= read_ops.lock()?.len() {
-                    let _ = self.flush();
+                    let _ = self.flush().await;
                 }
             }
             PendingOperations::PendingWrites(write_ops) => {
                 if previous <= write_ops.lock()?.len() {
-                    let _ = self.flush();
+                    let _ = self.flush().await;
                 }
             }
         }
@@ -144,10 +126,7 @@ where
         match &self.buffer {
             PendingOperations::PendingReads(read_ops) => {
                 // maybe add a check that the capacities are correct
-                let batches: Vec<(
-                    Vec<M::Address>,
-                    oneshot::Sender<Result<Vec<Option<M::Word>>, M::Error>>,
-                )> = {
+                let batches = {
                     let mut pending = read_ops.lock().unwrap();
                     if pending.is_empty() {
                         return Ok(());
@@ -168,7 +147,7 @@ where
                     .await
                     // Implementing the adequate from trait for this error seems impossible due to
                     // conflicting implementation in crate `core`
-                    .map_err(BatchingLayerError::<M>::MemoryError)?;
+                    .map_err(BatchingLayerError::<M>::Memory)?;
 
                 // Distribute results to each batch's sender
                 for (input, sender) in batches.into_iter().rev() {
@@ -177,7 +156,7 @@ where
                     // that's why we need to reverse the batches
                     let batch_results = all_results.split_off(split_point);
                     sender.send(Ok(batch_results)).map_err(|_| {
-                        BatchingLayerError::<M>::ChannelError(
+                        BatchingLayerError::<M>::Channel(
                             "The receiver end of this read operation was dropped before the `send` function could be called."
                                 .to_owned(),
                         )
@@ -200,11 +179,11 @@ where
                     .inner
                     .batch_guarded_write(bindings)
                     .await
-                    .map_err(BatchingLayerError::<M>::MemoryError)?;
+                    .map_err(BatchingLayerError::<M>::Memory)?;
                 // Distribute results to each batch's sender
                 for (res, sender) in res.into_iter().zip(senders) {
                     sender.send(Ok(res)).map_err(|_| {
-                        BatchingLayerError::<M>::ChannelError(
+                        BatchingLayerError::<M>::Channel(
                             "The receiver end of this write operation was dropped before the `send` function could be called."
                                 .to_owned(),
                         )
@@ -261,7 +240,7 @@ where
                 // Wait for results
                 receiver
                     .await?
-                    .map_err(|e| BatchingLayerError::<M>::MemoryError(e))
+                    .map_err(|e| BatchingLayerError::<M>::Memory(e))
             }
         }
     }
@@ -302,13 +281,13 @@ where
                 // Wait for results
                 receiver
                     .await?
-                    .map_err(|e| BatchingLayerError::<M>::MemoryError(e))
+                    .map_err(|e| BatchingLayerError::<M>::Memory(e))
             }
         }
     }
 }
 
-// written to workaround the orphan rule - TODO later maybe change it idk
+// written to workaround the orphan rule - TODO later maybe change
 #[derive(Clone)]
 pub struct BatcherArc<M: BatchingMemoryADT>(Arc<MemoryBatcher<M>>)
 where
@@ -332,10 +311,6 @@ where
 {
     pub fn new(batcher: MemoryBatcher<M>) -> Self {
         Self(Arc::new(batcher))
-    }
-
-    pub fn from_arc(arc: Arc<MemoryBatcher<M>>) -> Self {
-        Self(arc)
     }
 }
 
