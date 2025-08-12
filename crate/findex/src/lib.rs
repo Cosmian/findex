@@ -18,7 +18,7 @@ mod benches;
 #[cfg(feature = "test-utils")]
 pub use benches::*;
 
-pub use adt::{BatchedIndexADT, BatchingMemoryADT, IndexADT};
+pub use adt::{BatchedIndexADT, IndexADT};
 pub use batcher_findex::BatcherFindex;
 pub use encoding::{
     Decoder, Encoder,
@@ -26,7 +26,10 @@ pub use encoding::{
 };
 pub use error::Error;
 pub use findex::{Findex, Op};
-pub use memory_layers::encryption_layer;
+pub use memory_layers::{
+    batching_layer::{BatcherArc, BatchingLayerError, MemoryBatcher},
+    encryption_layer,
+};
 
 #[cfg(any(test, feature = "test-utils"))]
 pub use encoding::{

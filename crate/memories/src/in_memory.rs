@@ -7,7 +7,7 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use crate::MemoryADT;
+use crate::{BatchingMemoryADT, MemoryADT};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MemoryError;
@@ -22,7 +22,7 @@ impl std::error::Error for MemoryError {}
 
 #[derive(Clone, Debug)]
 pub struct InMemory<Address: Hash + Eq, Value> {
-    pub inner: Arc<Mutex<HashMap<Address, Value>>>, // todo: revert later
+    inner: Arc<Mutex<HashMap<Address, Value>>>,
 }
 
 impl<Address: Hash + Eq + Debug, Value: Clone + Eq + Debug> Default for InMemory<Address, Value> {
@@ -73,6 +73,29 @@ impl<Address: Send + Hash + Eq + Debug, Value: Send + Clone + Eq + Debug> Memory
             }
         }
         Ok(cur)
+    }
+}
+
+impl<Address: Send + Sync + Hash + Eq + Debug, Value: Send + Sync + Clone + Eq + Debug>
+    BatchingMemoryADT for InMemory<Address, Value>
+{
+    async fn batch_guarded_write(
+        &self,
+        operations: Vec<((Address, Option<Value>), Vec<(Address, Value)>)>,
+    ) -> Result<Vec<Option<Value>>, Self::Error> {
+        let store = &mut *self.inner.lock().expect("poisoned lock");
+        let mut res = Vec::with_capacity(operations.len());
+        for (guard, bindings) in operations {
+            let (a, old) = guard;
+            let cur = store.get(&a).cloned();
+            if old == cur {
+                for (k, v) in bindings {
+                    store.insert(k, v);
+                }
+            }
+            res.push(cur);
+        }
+        Ok(res)
     }
 }
 

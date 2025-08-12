@@ -1,6 +1,6 @@
-use cosmian_sse_memories::{ADDRESS_LENGTH, Address, MemoryADT};
+use cosmian_sse_memories::{ADDRESS_LENGTH, Address, BatchingMemoryADT, MemoryADT};
 
-use crate::adt::{BatchedIndexADT, BatchingMemoryADT};
+use crate::adt::BatchedIndexADT;
 use crate::error::BatchFindexError;
 use crate::memory_layers::batching_layer::{BatcherArc, MemoryBatcher};
 use crate::{Decoder, Encoder, Findex, IndexADT};
@@ -199,29 +199,6 @@ mod tests {
     }
 
     const WORD_LENGTH: usize = 16;
-
-    impl<Address: Send + Sync + Hash + Eq + Debug, Value: Send + Sync + Clone + Eq + Debug>
-        BatchingMemoryADT for InMemory<Address, Value>
-    {
-        async fn batch_guarded_write(
-            &self,
-            operations: Vec<((Address, Option<Value>), Vec<(Address, Value)>)>,
-        ) -> Result<Vec<Option<Value>>, Self::Error> {
-            let store = &mut *self.inner.lock().expect("poisoned lock");
-            let mut res = Vec::with_capacity(operations.len());
-            for (guard, bindings) in operations {
-                let (a, old) = guard;
-                let cur = store.get(&a).cloned();
-                if old == cur {
-                    for (k, v) in bindings {
-                        store.insert(k, v);
-                    }
-                }
-                res.push(cur);
-            }
-            Ok(res)
-        }
-    }
 
     #[tokio::test]
     async fn test_batch_insert() {

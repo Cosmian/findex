@@ -2,6 +2,8 @@ mod address;
 mod databases;
 mod in_memory;
 
+use std::future::Future;
+
 pub use address::Address;
 pub use in_memory::InMemory;
 
@@ -56,4 +58,16 @@ pub trait MemoryADT {
         guard: (Self::Address, Option<Self::Word>),
         bindings: Vec<(Self::Address, Self::Word)>,
     ) -> impl Send + std::future::Future<Output = Result<Option<Self::Word>, Self::Error>>;
+}
+
+// Super trait for MemoryADT that allows doing write operations in batches.
+pub trait BatchingMemoryADT: MemoryADT {
+    #[allow(clippy::type_complexity)] // refactoring this type will make the code unnecessarily more difficult to read without any actual benefit
+    fn batch_guarded_write(
+        &self,
+        write_operations: Vec<(
+            (Self::Address, Option<Self::Word>),
+            Vec<(Self::Address, Self::Word)>,
+        )>,
+    ) -> impl Send + Future<Output = Result<Vec<Option<Self::Word>>, Self::Error>>;
 }

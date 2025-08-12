@@ -1,12 +1,28 @@
 //! We define here the main Abstract Data Types (ADTs) used in this crate, namely:
-//! - the index ADT;
 //! - the vector ADT;
+//! - the index ADT;
+//! - the batched index ADT;
 //!
 //! Each of them strive for simplicity and consistency with the classical CS notions.
 
 use std::{collections::HashSet, future::Future, hash::Hash};
 
-use cosmian_sse_memories::MemoryADT;
+pub trait VectorADT: Send {
+    /// Vectors are homogeneous.
+    type Value: Send;
+
+    /// Vector error.
+    type Error: Send + std::error::Error;
+
+    /// Pushes the given values at the end of this vector.
+    fn push(
+        &mut self,
+        values: Vec<Self::Value>,
+    ) -> impl Send + Future<Output = Result<(), Self::Error>>;
+
+    /// Reads all values stored in this vector.
+    fn read(&self) -> impl Send + Future<Output = Result<Vec<Self::Value>, Self::Error>>;
+}
 
 /// An index stores *values*, that associate a keyword with a value. All values
 /// bound to the same keyword are said to be *indexed under* this keyword.
@@ -39,11 +55,8 @@ pub trait IndexADT<Keyword: Send + Hash, Value: Send + Hash> {
 /// This trait defines batch operations for encrypted searchable indices. It extends
 /// the functionality of the standard `IndexADT` by providing methods that operate on
 /// multiple keywords or entries simultaneously to cut network's overhead and improve performance.
-pub trait BatchedIndexADT<Keyword: Send + Sync + Hash, Value: Send + Sync + Hash> {
-    // TODO : maybe add the findex functions as trait
-    // type Findex: IndexADT<Keyword, Value> + Send + Sync; // need those ? + Send + Sync;
-    // type BatcherMemory: BatchingMemoryADT<Address = Keyword, Word = Value, Error = Self::Error>;
-    type Error: Send + Sync + std::error::Error;
+pub trait BatchedIndexADT<Keyword, Value> {
+    type Error: std::error::Error;
 
     /// Search the index for the values bound to the given keywords.
     fn batch_search(
@@ -62,39 +75,6 @@ pub trait BatchedIndexADT<Keyword: Send + Sync + Hash, Value: Send + Sync + Hash
         &self,
         entries: Vec<(Keyword, impl Sync + Send + IntoIterator<Item = Value>)>,
     ) -> impl Send + Future<Output = Result<(), Self::Error>>;
-}
-
-// Same as MemoryADT but also batches writes
-#[allow(clippy::type_complexity)] // refactoring this type will make the code unnecessarily more difficult to read without any actual benefit
-pub trait BatchingMemoryADT: MemoryADT {
-    // You only need to declare the NEW methods here
-    // The associated types and existing methods from MemoryADT are inherited
-
-    /// Writes a batch of guarded write operations with bindings.
-    fn batch_guarded_write(
-        &self,
-        operations: Vec<(
-            (Self::Address, Option<Self::Word>),
-            Vec<(Self::Address, Self::Word)>,
-        )>,
-    ) -> impl Send + Future<Output = Result<Vec<Option<Self::Word>>, Self::Error>>;
-}
-
-pub trait VectorADT: Send {
-    /// Vectors are homogeneous.
-    type Value: Send;
-
-    /// Vector error.
-    type Error: Send + std::error::Error;
-
-    /// Pushes the given values at the end of this vector.
-    fn push(
-        &mut self,
-        values: Vec<Self::Value>,
-    ) -> impl Send + Future<Output = Result<(), Self::Error>>;
-
-    /// Reads all values stored in this vector.
-    fn read(&self) -> impl Send + Future<Output = Result<Vec<Self::Value>, Self::Error>>;
 }
 
 #[cfg(test)]

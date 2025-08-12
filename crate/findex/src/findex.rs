@@ -1,5 +1,3 @@
-#![allow(clippy::type_complexity)]
-
 use std::{
     collections::HashSet,
     fmt::Debug,
