@@ -17,7 +17,7 @@ impl<Address: Debug> Display for Error<Address> {
 
 impl<Address: Debug> std::error::Error for Error<Address> {}
 
-#[cfg(feature = "batch")] // the module below is directly used. It's simply a "hack" to avoid copy pasting the gating line.
+#[cfg(feature = "batch")]
 pub mod batch_findex_error {
     use super::*;
     use cosmian_sse_memories::MemoryADT;
@@ -62,4 +62,5 @@ pub mod batch_findex_error {
     }
 }
 
+#[cfg(feature = "batch")]
 pub use batch_findex_error::*;
