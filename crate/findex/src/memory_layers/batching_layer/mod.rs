@@ -1,11 +1,6 @@
-#[cfg(feature = "batch")]
-pub mod batching_layer {
-    mod error;
-    mod memory;
 
-    pub use error::BatchingLayerError;
-    pub use memory::{BatcherArc, MemoryBatcher};
-}
+mod error;
+mod memory;
 
-#[cfg(feature = "batch")]
-pub use batching_layer::*;
+pub use error::BatchingLayerError;
+pub use memory::{BatcherArc, MemoryBatcher};

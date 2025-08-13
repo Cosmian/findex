@@ -2,8 +2,6 @@ mod address;
 mod databases;
 mod in_memory;
 
-use std::future::Future;
-
 pub use address::Address;
 pub use in_memory::InMemory;
 
@@ -70,5 +68,5 @@ pub trait BatchingMemoryADT: MemoryADT {
             (Self::Address, Option<Self::Word>),
             Vec<(Self::Address, Self::Word)>,
         )>,
-    ) -> impl Send + Future<Output = Result<Vec<Option<Self::Word>>, Self::Error>>;
+    ) -> impl Send + std::future::Future<Output = Result<Vec<Option<Self::Word>>, Self::Error>>;
 }

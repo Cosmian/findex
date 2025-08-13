@@ -21,7 +21,7 @@ test-utils = ["agnostic-lite", "criterion"]
 [dependencies]
 aes = "0.8"
 cosmian_crypto_core.workspace = true
-cosmian_sse_memories = { path = "../memories", version = "8.0" }
+cosmian_sse_memories = { path = "../memories", version = "8.1" }
 xts-mode = "0.5"
 futures = "0.3.31"                                               # todo: does this violate the no runtime rule?
 
@@ -35,7 +35,7 @@ criterion = { workspace = true, optional = true }
 
 [dev-dependencies]
 agnostic-lite = { workspace = true, features = ["tokio"] }
-cosmian_sse_memories = { path = "../memories", version = "8.0", features = [
+cosmian_sse_memories = { path = "../memories", version = "8.1", features = [
     "redis-mem",
     "sqlite-mem",
     "postgres-mem",
