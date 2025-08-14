@@ -1,4 +1,4 @@
-use crate::adt::BatchedIndexADT;
+use crate::adt::IndexBatcher;
 use crate::error::BatchFindexError;
 use crate::memory_layers::batching_layer::{BatcherArc, MemoryBatcher};
 use crate::{Decoder, Encoder, Findex, IndexADT};
@@ -7,7 +7,7 @@ use std::sync::atomic::AtomicUsize;
 use std::{collections::HashSet, fmt::Debug, hash::Hash, sync::Arc};
 
 #[derive(Debug)]
-pub struct BatcherFindex<
+pub struct FindexBatcher<
     const WORD_LENGTH: usize,
     Value: Send + Hash + Eq,
     EncodingError: Send + Debug,
@@ -27,7 +27,7 @@ impl<
         + Clone
         + BatchingMemoryADT<Address = Address<ADDRESS_LENGTH>, Word = [u8; WORD_LENGTH]>,
     EncodingError: Send + Debug + std::error::Error,
-> BatcherFindex<WORD_LENGTH, Value, EncodingError, BatcherMemory>
+> FindexBatcher<WORD_LENGTH, Value, EncodingError, BatcherMemory>
 {
     pub fn new(
         memory: BatcherMemory,
@@ -50,26 +50,25 @@ impl<
     where
         Keyword: Send + Sync + Hash + Eq,
     {
-        let mut search_futures = Vec::new();
-        let n = entries.len();
+        let mut futures = Vec::new();
         let buffered_memory = BatcherArc::new(MemoryBatcher::new_writer(
             self.memory.clone(),
-            AtomicUsize::new(n),
+            AtomicUsize::new(entries.len()),
         ));
 
         for (guard_keyword, bindings) in entries {
             let memory_arc = buffered_memory.clone();
-            let future = async move {
-                // Create a temporary Findex instance using the shared batching layer
-                let findex: Findex<WORD_LENGTH, Value, EncodingError, BatcherArc<BatcherMemory>> =
-                    Findex::<WORD_LENGTH, Value, EncodingError, _>::new(
-                        // this (cheap) Arc cline is necessary because `decrement_capacity` is called
-                        // below and needs to be able to access the Arc
-                        memory_arc.clone(),
-                        *self.encode,
-                        *self.decode,
-                    );
+            // Create a temporary Findex instance using the shared batching layer
+            let findex: Findex<WORD_LENGTH, Value, EncodingError, BatcherArc<BatcherMemory>> =
+                Findex::<WORD_LENGTH, Value, EncodingError, _>::new(
+                    // this (cheap) Arc clone is necessary because `decrement_capacity` is called
+                    // below and needs to be able to access the Arc
+                    memory_arc.clone(),
+                    *self.encode,
+                    *self.decode,
+                );
 
+            let future = async move {
                 let result = if is_insert {
                     findex.insert(guard_keyword, bindings).await
                 } else {
@@ -85,11 +84,11 @@ impl<
                 Ok(())
             };
 
-            search_futures.push(future);
+            futures.push(future);
         }
 
         // Execute all futures concurrently and collect results
-        futures::future::try_join_all(search_futures).await?;
+        futures::future::try_join_all(futures).await?;
 
         Ok(())
     }
@@ -105,24 +104,21 @@ impl<
         + Sync
         + Clone
         + BatchingMemoryADT<Address = Address<ADDRESS_LENGTH>, Word = [u8; WORD_LENGTH]>,
-> BatchedIndexADT<Keyword, Value>
-    for BatcherFindex<WORD_LENGTH, Value, EncodingError, BatcherMemory>
+> IndexBatcher<Keyword, Value> for FindexBatcher<WORD_LENGTH, Value, EncodingError, BatcherMemory>
 {
-    // type Findex = Findex<WORD_LENGTH, Value, EncodingError, BatcherMemory>;
-    // type BatcherMemory = BatcherMemory;
     type Error = BatchFindexError<BatcherMemory>;
 
     async fn batch_search(
         &self,
         keywords: Vec<&Keyword>,
     ) -> Result<Vec<HashSet<Value>>, Self::Error> {
-        let mut search_futures = Vec::new();
+        let mut futures = Vec::new();
         let n = keywords.len();
 
         let buffered_memory = BatcherArc::new(MemoryBatcher::new_reader(
             self.memory.clone(),
             AtomicUsize::new(n),
-        )); // todo
+        ));
 
         for keyword in keywords {
             let buffered_memory_clone = buffered_memory.clone();
@@ -139,12 +135,12 @@ impl<
                 findex.search(keyword).await
             };
 
-            search_futures.push(future);
+            futures.push(future);
         }
         // at this point nothing is polled yet
 
         // Execute all futures concurrently and collect results
-        let results = futures::future::join_all(search_futures).await;
+        let results = futures::future::join_all(futures).await;
 
         // Process results
         let mut output = Vec::with_capacity(results.len());
@@ -197,7 +193,7 @@ mod tests {
     async fn test_batch_insert() {
         let trivial_memory = InMemory::<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>::default();
 
-        let batcher_findex = BatcherFindex::<WORD_LENGTH, Value, _, _>::new(
+        let batcher_findex = FindexBatcher::<WORD_LENGTH, Value, _, _>::new(
             trivial_memory.clone(),
             |op, values| {
                 dummy_encode::<WORD_LENGTH, Value>(op, values).map_err(BatchFindexError::<
@@ -278,7 +274,7 @@ mod tests {
             .unwrap();
 
         // Create BatcherFindex for deletion operations
-        let batcher_findex = BatcherFindex::<WORD_LENGTH, Value, _, _>::new(
+        let batcher_findex = FindexBatcher::<WORD_LENGTH, Value, _, _>::new(
             trivial_memory.clone(),
             |op, values| {
                 dummy_encode::<WORD_LENGTH, Value>(op, values).map_err(BatchFindexError::<
@@ -347,7 +343,7 @@ mod tests {
             .await
             .unwrap();
 
-        let batcher_findex = BatcherFindex::<WORD_LENGTH, Value, _, _>::new(
+        let batcher_findex = FindexBatcher::<WORD_LENGTH, Value, _, _>::new(
             trivial_memory,
             |op, values| {
                 dummy_encode::<WORD_LENGTH, Value>(op, values)

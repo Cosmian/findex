@@ -1,3 +1,6 @@
+#[cfg(feature = "batch")]
+pub use batch_findex_error::*;
+
 use std::fmt::{Debug, Display};
 
 #[derive(Debug)]
@@ -61,6 +64,3 @@ pub mod batch_findex_error {
     {
     }
 }
-
-#[cfg(feature = "batch")]
-pub use batch_findex_error::*;

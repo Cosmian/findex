@@ -20,18 +20,19 @@ pub use benches::*;
 #[cfg(feature = "batch")]
 mod batcher_findex;
 #[cfg(feature = "batch")]
-pub use batcher_findex::BatcherFindex;
+pub use batcher_findex::FindexBatcher;
 
 #[cfg(feature = "batch")]
 pub use memory_layers::batching_layer::{BatcherArc, BatchingLayerError, MemoryBatcher};
 
-pub use adt::{BatchedIndexADT, IndexADT};
+pub use adt::{IndexADT, IndexBatcher};
 pub use encoding::{
     Decoder, Encoder,
     generic_encoding::{generic_decode, generic_encode},
 };
 pub use error::Error;
-pub use findex::{Findex, Op};
+pub use findex::Findex;
+pub use findex::Op;
 
 pub use memory_layers::encryption_layer;
 

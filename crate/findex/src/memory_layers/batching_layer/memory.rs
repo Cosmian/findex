@@ -57,7 +57,7 @@ where
     buffer: PendingOperations<M>,
 }
 
-impl<M: BatchingMemoryADT + Send> MemoryBatcher<M>
+impl<M: BatchingMemoryADT + Send + Sync> MemoryBatcher<M>
 where
     <M as MemoryADT>::Address: Clone,
 {

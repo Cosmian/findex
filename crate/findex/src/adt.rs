@@ -50,21 +50,18 @@ pub trait IndexADT<Keyword: Send + Hash, Value: Send + Hash> {
     ) -> impl Send + Future<Output = Result<(), Self::Error>>;
 }
 
-/// BatcherSSEADT (Batched Searchable Symmetric Encryption Abstract Data Type)
-///
-/// This trait defines batch operations for encrypted searchable indices. It extends
-/// the functionality of the standard `IndexADT` by providing methods that operate on
-/// multiple keywords or entries simultaneously to cut network's overhead and improve performance.
-pub trait BatchedIndexADT<Keyword, Value> {
+/// This trait  extends the functionality of the standard `IndexADT` by providing methods that operate
+/// on multiple keywords or entries simultaneously to cut network's overhead and improve performance.
+pub trait IndexBatcher<Keyword, Value> {
     type Error: std::error::Error;
 
     /// Search the index for the values bound to the given keywords.
     fn batch_search(
         &self,
-        keywords: Vec<&Keyword>, // n  --> n fois barch read --> n+1
+        keywords: Vec<&Keyword>,
     ) -> impl Future<Output = Result<Vec<HashSet<Value>>, Self::Error>>;
 
-    /// Adds the given values to the index.
+    /// Binds each value to their associated keyword in this index.
     fn batch_insert(
         &self,
         entries: Vec<(Keyword, impl Sync + Send + IntoIterator<Item = Value>)>,
