@@ -131,8 +131,6 @@ impl<
 
             futures.push(future);
         }
-        // at this point nothing is polled yet
-
         // Execute all futures concurrently and collect results
         let results = futures::future::join_all(futures).await;
 
