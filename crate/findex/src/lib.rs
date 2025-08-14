@@ -14,24 +14,21 @@ mod ovec;
 
 #[cfg(feature = "test-utils")]
 mod benches;
+pub use adt::IndexADT;
 #[cfg(feature = "test-utils")]
 pub use benches::*;
-
-pub use adt::IndexADT;
 pub use encoding::{
     Decoder, Encoder,
     generic_encoding::{generic_decode, generic_encode},
 };
-pub use encryption_layer::{KEY_LENGTH, MemoryEncryptionLayer};
-pub use error::Error;
-pub use findex::Findex;
-pub use findex::Op;
-
 #[cfg(any(test, feature = "test-utils"))]
 pub use encoding::{
     dummy_encoding::{WORD_LENGTH, dummy_decode, dummy_encode},
     tests::test_encoding,
 };
+pub use encryption_layer::{KEY_LENGTH, MemoryEncryptionLayer};
+pub use error::Error;
+pub use findex::{Findex, Op};
 
 #[cfg(feature = "test-utils")]
 pub mod reexport {
