@@ -58,6 +58,12 @@ pub trait MemoryADT {
     ) -> impl Send + std::future::Future<Output = Result<Option<Self::Word>, Self::Error>>;
 }
 
+#[cfg(feature = "batch")]
+mod batching_layer;
+
+#[cfg(feature = "batch")]
+pub use batching_layer::{BatcherArc, BatchingLayerError, MemoryBatcher};
+
 // Super trait for MemoryADT that allows doing write operations in batches.
 #[cfg(feature = "batch")]
 pub trait BatchingMemoryADT: MemoryADT {

@@ -7,9 +7,9 @@
 
 mod adt;
 mod encoding;
+mod encryption_layer;
 mod error;
 mod findex;
-mod memory_layers;
 mod ovec;
 
 #[cfg(feature = "test-utils")]
@@ -22,19 +22,15 @@ mod batcher_findex;
 #[cfg(feature = "batch")]
 pub use batcher_findex::FindexBatcher;
 
-#[cfg(feature = "batch")]
-pub use memory_layers::batching_layer::{BatcherArc, BatchingLayerError, MemoryBatcher};
-
 pub use adt::{IndexADT, IndexBatcher};
 pub use encoding::{
     Decoder, Encoder,
     generic_encoding::{generic_decode, generic_encode},
 };
+pub use encryption_layer::{KEY_LENGTH, MemoryEncryptionLayer};
 pub use error::Error;
 pub use findex::Findex;
 pub use findex::Op;
-
-pub use memory_layers::encryption_layer;
 
 #[cfg(any(test, feature = "test-utils"))]
 pub use encoding::{

@@ -1,8 +1,7 @@
 use crate::adt::IndexBatcher;
 use crate::error::BatchFindexError;
-use crate::memory_layers::batching_layer::{BatcherArc, MemoryBatcher};
 use crate::{Decoder, Encoder, Findex, IndexADT};
-use cosmian_sse_memories::{ADDRESS_LENGTH, Address, BatchingMemoryADT};
+use cosmian_sse_memories::{ADDRESS_LENGTH, Address, BatcherArc, BatchingMemoryADT, MemoryBatcher};
 use std::sync::atomic::AtomicUsize;
 use std::{collections::HashSet, fmt::Debug, hash::Hash, sync::Arc};
 
@@ -69,19 +68,14 @@ impl<
                 );
 
             let future = async move {
-                let result = if is_insert {
+                if is_insert {
                     findex.insert(guard_keyword, bindings).await
                 } else {
                     findex.delete(guard_keyword, bindings).await
-                };
-
-                // Convert Findex error to BatchingLayerError manually if needed
-                if let Err(findex_err) = result {
-                    return Err(BatchFindexError::Findex(findex_err));
-                }
+                }?;
                 // once one of the operations succeeds, we should make the buffer smaller
                 memory_arc.decrement_capacity().await?;
-                Ok(())
+                Ok::<_, BatchFindexError<_>>(())
             };
 
             futures.push(future);

@@ -2,7 +2,6 @@
 // It takes as inner memory any memory that implements the batcher ADT
 // which is basically, having MemoryADT + The function batch_guarded_write
 
-use cosmian_sse_memories::{BatchingMemoryADT, MemoryADT};
 use futures::channel::oneshot;
 use std::fmt::Debug;
 use std::ops::Deref;
@@ -11,7 +10,8 @@ use std::sync::{
     atomic::{AtomicUsize, Ordering},
 };
 
-use crate::BatchingLayerError;
+use crate::batching_layer::BatchingLayerError;
+use crate::{BatchingMemoryADT, MemoryADT};
 
 type ReadOperation<M> = (
     Vec<<M as MemoryADT>::Address>,
@@ -78,7 +78,7 @@ where
     }
 
     // atomically decrement the buffer size, needed on inserts/deletes
-    pub(crate) async fn decrement_capacity(&self) -> Result<(), BatchingLayerError<M>> {
+    pub async fn decrement_capacity(&self) -> Result<(), BatchingLayerError<M>> {
         // `fetch_sub` returns the previous value, so if it was 1, it means the buffer's job is done
         let previous = self.capacity.fetch_sub(1, Ordering::SeqCst);
         match &self.buffer {

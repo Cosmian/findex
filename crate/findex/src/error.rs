@@ -23,9 +23,7 @@ impl<Address: Debug> std::error::Error for Error<Address> {}
 #[cfg(feature = "batch")]
 pub mod batch_findex_error {
     use super::*;
-    use cosmian_sse_memories::MemoryADT;
-
-    use crate::BatchingLayerError;
+    use cosmian_sse_memories::{BatchingLayerError, MemoryADT};
 
     #[derive(Debug)]
     pub enum BatchFindexError<M: MemoryADT> {

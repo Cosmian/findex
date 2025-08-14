@@ -23,8 +23,7 @@ aes = "0.8"
 cosmian_crypto_core.workspace = true
 cosmian_sse_memories = { path = "../memories", version = "8.1" }
 xts-mode = "0.5"
-futures = "0.3.31"                                               # todo: does this violate the no runtime rule?
-
+futures.workspace = true
 # Optional dependencies for testing and benchmarking.
 agnostic-lite = { workspace = true, optional = true, features = [
     "tokio",

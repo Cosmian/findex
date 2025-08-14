@@ -1,10 +1,11 @@
-use cosmian_sse_memories::MemoryADT;
 use futures::channel::oneshot::Canceled;
 use std::fmt::{Debug, Display};
 
+use crate::MemoryADT;
+
 #[derive(Debug)]
 pub enum BatchingLayerError<M: MemoryADT> {
-    Memory(M::Error), // // the from<M::Error> will not be implemented due to conflicting implementations with Rust's `core` library.  Use `map_err` instead of `?`.
+    Memory(M::Error), // the from<M::Error> will not be implemented due to conflicting implementations with Rust's `core` library.  Use `map_err` instead of `?`.
     Mutex(String),
     Channel(String),
     BufferOverflow(String),
@@ -28,6 +29,7 @@ impl<M: MemoryADT> Display for BatchingLayerError<M> {
         }
     }
 }
+
 impl<M: MemoryADT> From<Canceled> for BatchingLayerError<M> {
     fn from(_: Canceled) -> Self {
         Self::Channel(

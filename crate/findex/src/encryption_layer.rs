@@ -143,7 +143,7 @@ mod tests {
         },
     };
 
-    use crate::memory_layers::encryption_layer::MemoryEncryptionLayer;
+    use crate::MemoryEncryptionLayer;
 
     const WORD_LENGTH: usize = 128;
 
