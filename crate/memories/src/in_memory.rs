@@ -79,8 +79,8 @@ impl<Address: Send + Hash + Eq + Debug, Value: Send + Clone + Eq + Debug> Memory
 }
 
 #[cfg(feature = "batch")]
-impl<Address: Send + Sync + Hash + Eq + Debug, Value: Send + Sync + Clone + Eq + Debug>
-    BatchingMemoryADT for InMemory<Address, Value>
+impl<Address: Send + Hash + Eq + Debug, Value: Send + Clone + Eq + Debug> BatchingMemoryADT
+    for InMemory<Address, Value>
 {
     async fn batch_guarded_write(
         &self,

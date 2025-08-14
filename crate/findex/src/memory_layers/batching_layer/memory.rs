@@ -42,7 +42,7 @@ where
     // Gets the lock of the buffer and returns its length; hence the name.
     pub fn lock_and_get_len(&self) -> Result<usize, BatchingLayerError<M>> {
         Ok(match self {
-            Self::PendingReads(read_ops) => read_ops.lock()?.len(), // TODO no unwrap
+            Self::PendingReads(read_ops) => read_ops.lock()?.len(),
             Self::PendingWrites(write_ops) => write_ops.lock()?.len(),
         })
     }
@@ -57,7 +57,7 @@ where
     buffer: PendingOperations<M>,
 }
 
-impl<M: BatchingMemoryADT + Send + Sync> MemoryBatcher<M>
+impl<M: BatchingMemoryADT + Send> MemoryBatcher<M>
 where
     <M as MemoryADT>::Address: Clone,
 {
@@ -140,14 +140,14 @@ where
 
                     let (bindings, senders): (Vec<_>, Vec<_>) = batches.into_iter().unzip();
 
-                    let agregated_writes_results = self
+                    let aggregated_writes_results = self
                         .inner
                         .batch_guarded_write(bindings)
                         .await
                         .map_err(BatchingLayerError::<M>::Memory)?;
 
                     // Distribute results to each batch's sender
-                    for (res, sender) in agregated_writes_results.into_iter().zip(senders) {
+                    for (res, sender) in aggregated_writes_results.into_iter().zip(senders) {
                         sender.send(Ok(res)).map_err(|_| {
                         BatchingLayerError::<M>::Channel(
                             "The receiver end of this write operation was dropped before the `send` function could be called."
@@ -237,7 +237,7 @@ where
 
 impl<M> Deref for BatcherArc<M>
 where
-    M: BatchingMemoryADT + Send + Sync + Debug,
+    M: BatchingMemoryADT + Send + Debug,
     M::Address: Clone,
 {
     type Target = MemoryBatcher<M>;

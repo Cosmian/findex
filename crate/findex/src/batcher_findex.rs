@@ -2,20 +2,16 @@ use crate::adt::BatchedIndexADT;
 use crate::error::BatchFindexError;
 use crate::memory_layers::batching_layer::{BatcherArc, MemoryBatcher};
 use crate::{Decoder, Encoder, Findex, IndexADT};
-use cosmian_sse_memories::{ADDRESS_LENGTH, Address, BatchingMemoryADT, MemoryADT};
+use cosmian_sse_memories::{ADDRESS_LENGTH, Address, BatchingMemoryADT};
 use std::sync::atomic::AtomicUsize;
 use std::{collections::HashSet, fmt::Debug, hash::Hash, sync::Arc};
-// TODO : should all of these be sync ?
 
 #[derive(Debug)]
 pub struct BatcherFindex<
     const WORD_LENGTH: usize,
-    Value: Send + Sync + Hash + Eq,
-    EncodingError: Send + Sync + Debug,
-    BatcherMemory: Clone
-        + Send
-        + Sync
-        + BatchingMemoryADT<Address = Address<ADDRESS_LENGTH>, Word = [u8; WORD_LENGTH]>,
+    Value: Send + Hash + Eq,
+    EncodingError: Send + Debug,
+    BatcherMemory: Clone + Send + BatchingMemoryADT<Address = Address<ADDRESS_LENGTH>, Word = [u8; WORD_LENGTH]>,
 > {
     memory: BatcherMemory,
     encode: Arc<Encoder<Value, BatcherMemory::Word, EncodingError>>,
@@ -24,13 +20,13 @@ pub struct BatcherFindex<
 
 impl<
     const WORD_LENGTH: usize,
-    Value: Send + Sync + Hash + Eq,
+    Value: Send + Hash + Eq,
     BatcherMemory: Debug
         + Send
         + Sync
         + Clone
         + BatchingMemoryADT<Address = Address<ADDRESS_LENGTH>, Word = [u8; WORD_LENGTH]>,
-    EncodingError: Send + Sync + Debug + std::error::Error,
+    EncodingError: Send + Debug + std::error::Error,
 > BatcherFindex<WORD_LENGTH, Value, EncodingError, BatcherMemory>
 {
     pub fn new(
@@ -48,7 +44,7 @@ impl<
     // Insert or delete are both an unbounded number of calls to `guarded_write` on the memory layer.
     async fn batch_insert_or_delete<Keyword>(
         &self,
-        entries: Vec<(Keyword, impl Sync + Send + IntoIterator<Item = Value>)>,
+        entries: Vec<(Keyword, impl Send + IntoIterator<Item = Value>)>,
         is_insert: bool,
     ) -> Result<(), BatchFindexError<BatcherMemory>>
     where
@@ -102,8 +98,8 @@ impl<
 impl<
     const WORD_LENGTH: usize,
     Keyword: Send + Sync + Hash + Eq,
-    Value: Send + Sync + Hash + Eq,
-    EncodingError: Send + Sync + Debug + std::error::Error,
+    Value: Send + Hash + Eq,
+    EncodingError: Send + Debug + std::error::Error,
     BatcherMemory: Debug
         + Send
         + Sync
@@ -111,8 +107,6 @@ impl<
         + BatchingMemoryADT<Address = Address<ADDRESS_LENGTH>, Word = [u8; WORD_LENGTH]>,
 > BatchedIndexADT<Keyword, Value>
     for BatcherFindex<WORD_LENGTH, Value, EncodingError, BatcherMemory>
-where
-    <BatcherMemory as MemoryADT>::Error: Sync,
 {
     // type Findex = Findex<WORD_LENGTH, Value, EncodingError, BatcherMemory>;
     // type BatcherMemory = BatcherMemory;

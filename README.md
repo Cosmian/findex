@@ -20,5 +20,3 @@ This repository is organized as a Rust workspace with two crates:
 ## License
 
 This project is licensed under the Business Source License 1.1 (BUSL-1.1).
-
-// TODO: document

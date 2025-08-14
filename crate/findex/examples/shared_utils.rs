@@ -81,5 +81,5 @@ pub fn decoder(words: Vec<[u8; WORD_LENGTH]>) -> Result<HashSet<u64>, String> {
 
 #[allow(dead_code)]
 fn main() {
-    unreachable!("This is a utility module and should not be run directly.");
+    panic!("This is a utility module and should not be run directly.");
 }
