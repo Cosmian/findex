@@ -17,7 +17,12 @@ mod benches;
 #[cfg(feature = "test-utils")]
 pub use benches::*;
 
-pub use adt::IndexADT;
+#[cfg(feature = "batch")]
+mod batcher_findex;
+#[cfg(feature = "batch")]
+pub use batcher_findex::FindexBatcher;
+
+pub use adt::{IndexADT, IndexBatcher};
 pub use encoding::{
     Decoder, Encoder,
     generic_encoding::{generic_decode, generic_encode},

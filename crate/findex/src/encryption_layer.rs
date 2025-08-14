@@ -132,7 +132,6 @@ impl<
 
 #[cfg(test)]
 mod tests {
-    use crate::MemoryEncryptionLayer;
     use cosmian_crypto_core::{
         CsRng, Sampling, Secret,
         reexport::rand_core::{CryptoRngCore, SeedableRng},
@@ -143,6 +142,8 @@ mod tests {
             gen_seed, test_guarded_write_concurrent, test_single_write_and_read, test_wrong_guard,
         },
     };
+
+    use crate::MemoryEncryptionLayer;
 
     const WORD_LENGTH: usize = 128;
 
