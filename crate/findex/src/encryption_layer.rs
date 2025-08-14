@@ -1,10 +1,11 @@
+use std::{fmt::Debug, ops::Deref, sync::Arc};
+
 use aes::{
     Aes256,
     cipher::{BlockEncrypt, KeyInit, generic_array::GenericArray},
 };
 use cosmian_crypto_core::{Secret, SymmetricKey};
 use cosmian_sse_memories::{ADDRESS_LENGTH, Address, MemoryADT};
-use std::{fmt::Debug, ops::Deref, sync::Arc};
 use xts_mode::Xts128;
 
 /// Using 32-byte cryptographic keys allows achieving post-quantum resistance
@@ -90,10 +91,8 @@ impl<
 > MemoryADT for MemoryEncryptionLayer<WORD_LENGTH, Memory>
 {
     type Address = Address<ADDRESS_LENGTH>;
-
-    type Word = [u8; WORD_LENGTH];
-
     type Error = Memory::Error;
+    type Word = [u8; WORD_LENGTH];
 
     async fn batch_read(
         &self,
@@ -132,7 +131,6 @@ impl<
 
 #[cfg(test)]
 mod tests {
-    use crate::MemoryEncryptionLayer;
     use cosmian_crypto_core::{
         CsRng, Sampling, Secret,
         reexport::rand_core::{CryptoRngCore, SeedableRng},
@@ -143,6 +141,8 @@ mod tests {
             gen_seed, test_guarded_write_concurrent, test_single_write_and_read, test_wrong_guard,
         },
     };
+
+    use crate::MemoryEncryptionLayer;
 
     const WORD_LENGTH: usize = 128;
 

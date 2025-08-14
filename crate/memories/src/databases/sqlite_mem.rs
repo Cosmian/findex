@@ -1,14 +1,16 @@
-use crate::{Address, MemoryADT};
-use async_sqlite::{
-    Pool, PoolBuilder,
-    rusqlite::{OptionalExtension, params_from_iter},
-};
 use std::{
     collections::HashMap,
     fmt::{self, Debug},
     marker::PhantomData,
     ops::Deref,
 };
+
+use async_sqlite::{
+    Pool, PoolBuilder,
+    rusqlite::{OptionalExtension, params_from_iter},
+};
+
+use crate::{Address, MemoryADT};
 
 #[derive(Debug)]
 pub enum SqliteMemoryError {
@@ -75,14 +77,14 @@ impl<Address, Word> SqliteMemory<Address, Word> {
         }
     }
 
-    /// Creates the correct table in the associated database if it does not exist.
+    /// Creates the correct table in the associated database if it does not
+    /// exist.
     pub async fn initialize(&self) -> Result<(), SqliteMemoryError> {
         // The following settings are used to improve performance:
-        // - journal_mode = WAL : WAL journaling is faster than the default
-        //   DELETE mode.
-        // - synchronous = NORMAL: Reduces disk I/O by only calling fsync() at
-        //   critical moments rather than after every transaction (FULL mode);
-        //   this does not compromise data integrity.
+        // - journal_mode = WAL : WAL journaling is faster than the default DELETE mode.
+        // - synchronous = NORMAL: Reduces disk I/O by only calling fsync() at critical
+        //   moments rather than after every transaction (FULL mode); this does not
+        //   compromise data integrity.
         let initialization_script = format!(
             "PRAGMA synchronous = NORMAL;
              PRAGMA journal_mode = WAL;
@@ -203,12 +205,11 @@ impl<const ADDRESS_LENGTH: usize, const WORD_LENGTH: usize> MemoryADT
 #[cfg(test)]
 mod tests {
 
+    use super::*;
     use crate::test_utils::{
         gen_seed, test_guarded_write_concurrent, test_rw_same_address, test_single_write_and_read,
         test_wrong_guard,
     };
-
-    use super::*;
 
     const DB_PATH: &str = "../../target/debug/sqlite-test.sqlite.db";
     const TABLE_NAME: &str = "findex_memory";

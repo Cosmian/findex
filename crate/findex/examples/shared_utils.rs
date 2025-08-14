@@ -1,6 +1,7 @@
+use std::collections::{HashMap, HashSet};
+
 use cosmian_crypto_core::reexport::rand_core::CryptoRngCore;
 use cosmian_findex::Op;
-use std::collections::{HashMap, HashSet};
 
 /// This function generates a random set of (key, values) couples. Since Findex
 /// API is those of an Index which only returns the *set* of values associated

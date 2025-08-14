@@ -1,8 +1,10 @@
-//! We define here the main Abstract Data Types (ADTs) used in this crate, namely:
+//! We define here the main Abstract Data Types (ADTs) used in this crate,
+//! namely:
 //! - the index ADT;
 //! - the vector ADT;
 //!
-//! Each of them strive for simplicity and consistency with the classical CS notions.
+//! Each of them strive for simplicity and consistency with the classical CS
+//! notions.
 
 use std::{collections::HashSet, future::Future, hash::Hash};
 

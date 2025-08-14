@@ -8,7 +8,7 @@ Add `cosmian_findex` as dependency to your project :
 
 ```toml
 [dependencies]
-cosmian_findex = "8.0.0"
+cosmian_findex = "8.0.1"
 ```
 
 An usage example is available in the [examples folder](./examples).

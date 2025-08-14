@@ -3,8 +3,9 @@
 //! deletion, but there is no theoretical restriction on the kind of operation
 //! that can be used.
 
-use crate::Op;
 use std::collections::HashSet;
+
+use crate::Op;
 
 /// The encoder is used to serialize an operation, along with the set of values
 /// it operates on, into a sequence of memory words.
@@ -20,8 +21,8 @@ pub mod dummy_encoding {
 
     use super::*;
 
-    /// Blocks are the smallest unit size in block mode, 16 bytes is optimized to
-    /// store UUIDs.
+    /// Blocks are the smallest unit size in block mode, 16 bytes is optimized
+    /// to store UUIDs.
     const BLOCK_LENGTH: usize = 16;
 
     /// The chunk length is the size of the available space in a word.
@@ -267,16 +268,15 @@ pub mod generic_encoding {
 
 #[cfg(any(test, feature = "test-utils"))]
 pub mod tests {
+    use std::{collections::HashSet, fmt::Debug, hash::Hash};
+
     use cosmian_crypto_core::{
         CsRng,
         reexport::rand_core::{RngCore, SeedableRng},
     };
 
-    use crate::Op;
-
-    use std::{collections::HashSet, fmt::Debug, hash::Hash};
-
     use super::{Decoder, Encoder};
+    use crate::Op;
 
     /// Uses fuzzing to attempt asserting that: encode ∘ decode = identity.
     ///
