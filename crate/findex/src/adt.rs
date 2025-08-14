@@ -1,28 +1,10 @@
 //! We define here the main Abstract Data Types (ADTs) used in this crate, namely:
-//! - the vector ADT;
 //! - the index ADT;
-//! - the batched index ADT;
+//! - the vector ADT;
 //!
 //! Each of them strive for simplicity and consistency with the classical CS notions.
 
 use std::{collections::HashSet, future::Future, hash::Hash};
-
-pub trait VectorADT: Send {
-    /// Vectors are homogeneous.
-    type Value: Send;
-
-    /// Vector error.
-    type Error: Send + std::error::Error;
-
-    /// Pushes the given values at the end of this vector.
-    fn push(
-        &mut self,
-        values: Vec<Self::Value>,
-    ) -> impl Send + Future<Output = Result<(), Self::Error>>;
-
-    /// Reads all values stored in this vector.
-    fn read(&self) -> impl Send + Future<Output = Result<Vec<Self::Value>, Self::Error>>;
-}
 
 /// An index stores *values*, that associate a keyword with a value. All values
 /// bound to the same keyword are said to be *indexed under* this keyword.
@@ -48,6 +30,23 @@ pub trait IndexADT<Keyword: Send + Hash, Value: Send + Hash> {
         keyword: Keyword,
         values: impl Send + IntoIterator<Item = Value>,
     ) -> impl Send + Future<Output = Result<(), Self::Error>>;
+}
+
+pub trait VectorADT: Send {
+    /// Vectors are homogeneous.
+    type Value: Send;
+
+    /// Vector error.
+    type Error: Send + std::error::Error;
+
+    /// Pushes the given values at the end of this vector.
+    fn push(
+        &mut self,
+        values: Vec<Self::Value>,
+    ) -> impl Send + Future<Output = Result<(), Self::Error>>;
+
+    /// Reads all values stored in this vector.
+    fn read(&self) -> impl Send + Future<Output = Result<Vec<Self::Value>, Self::Error>>;
 }
 
 /// This trait  extends the functionality of the standard `IndexADT` by providing methods that operate
