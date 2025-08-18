@@ -49,8 +49,10 @@ impl<Address: Send + Hash + Eq + Debug, Value: Send + Clone + Eq + Debug> Memory
     for InMemory<Address, Value>
 {
     type Address = Address;
-    type Error = MemoryError;
+
     type Word = Value;
+
+    type Error = MemoryError;
 
     async fn batch_read(&self, addresses: Vec<Address>) -> Result<Vec<Option<Value>>, Self::Error> {
         let store = self.inner.lock().expect("poisoned lock");
@@ -77,8 +79,9 @@ impl<Address: Send + Hash + Eq + Debug, Value: Send + Clone + Eq + Debug> Memory
 impl<Address: Hash + Eq + Debug + Clone, Value: Clone + Eq + Debug> IntoIterator
     for InMemory<Address, Value>
 {
-    type IntoIter = <HashMap<Address, Value> as IntoIterator>::IntoIter;
     type Item = (Address, Value);
+
+    type IntoIter = <HashMap<Address, Value> as IntoIterator>::IntoIter;
 
     fn into_iter(self) -> Self::IntoIter {
         self.inner
@@ -92,13 +95,12 @@ impl<Address: Hash + Eq + Debug + Clone, Value: Clone + Eq + Debug> IntoIterator
 #[cfg(test)]
 mod tests {
 
-    use smol_macros::{Executor, test};
-
     use super::InMemory;
     use crate::test_utils::{
         gen_seed, test_guarded_write_concurrent, test_rw_same_address, test_single_write_and_read,
         test_wrong_guard,
     };
+    use smol_macros::{Executor, test};
 
     const TEST_ADDRESS_LENGTH: usize = 16;
     const TEST_WORD_LENGTH: usize = 16;

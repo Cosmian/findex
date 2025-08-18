@@ -3,13 +3,16 @@ mod databases;
 mod in_memory;
 
 pub use address::Address;
-#[cfg(feature = "postgres-mem")]
-pub use databases::postgresql_mem::{PostgresMemory, PostgresMemoryError};
+pub use in_memory::InMemory;
+
 #[cfg(feature = "redis-mem")]
 pub use databases::redis_mem::{RedisMemory, RedisMemoryError};
+
 #[cfg(feature = "sqlite-mem")]
 pub use databases::sqlite_mem::{SqliteMemory, SqliteMemoryError};
-pub use in_memory::InMemory;
+
+#[cfg(feature = "postgres-mem")]
+pub use databases::postgresql_mem::{PostgresMemory, PostgresMemoryError};
 
 pub mod reexport {
     #[cfg(feature = "sqlite-mem")]

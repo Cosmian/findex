@@ -1,16 +1,14 @@
 //! This module provides a comprehensive benchmarking suite for testing the
 //! performance of Findex memory implementations. These benchmarks are designed
-//! to be generic and work with any memory back end that implements the
-//! MemoryADT trait.
+//! to be generic and work with any memory back end that implements the MemoryADT
+//! trait.
 
-use std::{collections::HashSet, fmt::Debug, sync::Arc};
-
+use crate::{Findex, IndexADT, MemoryEncryptionLayer, WORD_LENGTH, dummy_decode, dummy_encode};
 use agnostic_lite::{JoinHandle, RuntimeLite};
 use cosmian_crypto_core::{Secret, reexport::rand_core::CryptoRngCore};
 use cosmian_sse_memories::{ADDRESS_LENGTH, Address, MemoryADT};
 use criterion::{BenchmarkId, Criterion};
-
-use crate::{Findex, IndexADT, MemoryEncryptionLayer, WORD_LENGTH, dummy_decode, dummy_encode};
+use std::{collections::HashSet, fmt::Debug, sync::Arc};
 
 const MAX_VAL: usize = 1_000;
 

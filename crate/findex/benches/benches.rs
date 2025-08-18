@@ -57,7 +57,8 @@ async fn connect_and_init_table(
     db_url: String,
     table_name: String,
 ) -> Result<PostgresMemory<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>, PostgresMemoryError> {
-    use cosmian_sse_memories::reexport::{deadpool_postgres::Config, tokio_postgres::NoTls};
+    use cosmian_sse_memories::reexport::deadpool_postgres::Config;
+    use cosmian_sse_memories::reexport::tokio_postgres::NoTls;
 
     let mut pg_config = Config::new();
     pg_config.url = Some(db_url.to_string());
@@ -317,13 +318,12 @@ fn bench_contention(c: &mut Criterion) {
 }
 
 mod delayed_memory {
-    use std::time::Duration;
-
     use cosmian_sse_memories::{
         Address, MemoryADT, PostgresMemory, PostgresMemoryError, RedisMemory, RedisMemoryError,
     };
     use rand::Rng;
     use rand_distr::StandardNormal;
+    use std::time::Duration;
 
     #[derive(Clone, Debug)]
     pub struct DelayedMemory<Memory> {
@@ -333,8 +333,8 @@ mod delayed_memory {
     }
 
     impl<Memory> DelayedMemory<Memory> {
-        /// Wrap the given memory into a new delayed memory with an average
-        /// network delay of s milliseconds.
+        /// Wrap the given memory into a new delayed memory with an average network
+        /// delay of s milliseconds.
         pub fn new(m: Memory, mean: usize, variance: usize) -> Self {
             Self { m, mean, variance }
         }
@@ -349,8 +349,10 @@ mod delayed_memory {
 
     impl<Memory: Send + Sync + MemoryADT> MemoryADT for DelayedMemory<Memory> {
         type Address = Memory::Address;
-        type Error = Memory::Error;
+
         type Word = Memory::Word;
+
+        type Error = Memory::Error;
 
         async fn batch_read(
             &self,

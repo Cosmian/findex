@@ -86,11 +86,9 @@ impl<
         a
     }
 
-    /// Pushes the given bindings to the vectors associated to the bound
-    /// keyword.
+    /// Pushes the given bindings to the vectors associated to the bound keyword.
     ///
-    /// All vector push operations are performed in parallel (via async calls),
-    /// not batched.
+    /// All vector push operations are performed in parallel (via async calls), not batched.
     async fn push<Keyword: Send + Sync + Hash + Eq>(
         &self,
         op: Op,
@@ -140,13 +138,11 @@ impl<
 
 #[cfg(test)]
 mod tests {
-    use std::{collections::HashSet, sync::Arc};
-
+    use crate::{Findex, IndexADT, MemoryEncryptionLayer, dummy_decode, dummy_encode};
     use cosmian_crypto_core::{CsRng, Secret, define_byte_type, reexport::rand_core::SeedableRng};
     use cosmian_sse_memories::{ADDRESS_LENGTH, Address, InMemory};
     use smol_macros::Executor;
-
-    use crate::{Findex, IndexADT, MemoryEncryptionLayer, dummy_decode, dummy_encode};
+    use std::{collections::HashSet, sync::Arc};
 
     // Define a byte type, and use `Value` as an alias for 8-bytes values of
     // that type.
@@ -156,7 +152,6 @@ mod tests {
 
     impl<const LENGTH: usize> TryFrom<usize> for Bytes<LENGTH> {
         type Error = String;
-
         fn try_from(value: usize) -> Result<Self, Self::Error> {
             Self::try_from(value.to_be_bytes().as_slice()).map_err(|e| e.to_string())
         }
@@ -211,8 +206,8 @@ mod tests {
         assert_eq!(HashSet::new(), dog_res);
     }
 
-    // The next test uses the `smol` executor to run the async code, forcasting that
-    // findex can be used in a different async runtime.
+    // The next test uses the `smol` executor to run the async code, forcasting that findex
+    // can be used in a different async runtime.
     smol_macros::test! {
         async fn test_insert_search_delete_search_smol(executor: &Executor<'_>) {
             let mut rng = CsRng::from_entropy();

@@ -1,6 +1,5 @@
-use std::{fmt, marker::PhantomData};
-
 use redis::aio::ConnectionManager;
+use std::{fmt, marker::PhantomData};
 
 use crate::{MemoryADT, address::Address};
 
@@ -100,8 +99,8 @@ impl<const ADDRESS_LENGTH: usize, const WORD_LENGTH: usize> MemoryADT
     for RedisMemory<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>
 {
     type Address = Address<ADDRESS_LENGTH>;
-    type Error = RedisMemoryError;
     type Word = [u8; WORD_LENGTH];
+    type Error = RedisMemoryError;
 
     async fn batch_read(
         &self,
@@ -144,11 +143,12 @@ impl<const ADDRESS_LENGTH: usize, const WORD_LENGTH: usize> MemoryADT
 #[cfg(test)]
 mod tests {
 
-    use super::*;
     use crate::test_utils::{
         gen_seed, test_guarded_write_concurrent, test_rw_same_address, test_single_write_and_read,
         test_wrong_guard,
     };
+
+    use super::*;
 
     fn get_redis_url() -> String {
         std::env::var("REDIS_HOST").map_or_else(

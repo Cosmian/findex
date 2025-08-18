@@ -1,9 +1,7 @@
-use std::marker::PhantomData;
-
-use deadpool_postgres::Pool;
-
 use super::PostgresMemoryError;
 use crate::{Address, MemoryADT};
+use deadpool_postgres::Pool;
+use std::marker::PhantomData;
 
 #[derive(Clone, Debug)]
 pub struct PostgresMemory<Address, Word> {
@@ -92,8 +90,8 @@ impl<const ADDRESS_LENGTH: usize, const WORD_LENGTH: usize> MemoryADT
     for PostgresMemory<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>
 {
     type Address = Address<ADDRESS_LENGTH>;
-    type Error = PostgresMemoryError;
     type Word = [u8; WORD_LENGTH];
+    type Error = PostgresMemoryError;
 
     async fn batch_read(
         &self,
@@ -205,10 +203,6 @@ impl<const ADDRESS_LENGTH: usize, const WORD_LENGTH: usize> MemoryADT
 
 #[cfg(test)]
 mod tests {
-    use deadpool_postgres::Config;
-    use tokio_postgres::NoTls;
-
-    use super::*;
     use crate::{
         ADDRESS_LENGTH,
         test_utils::{
@@ -216,6 +210,10 @@ mod tests {
             test_single_write_and_read, test_wrong_guard,
         },
     };
+
+    use super::*;
+    use deadpool_postgres::Config;
+    use tokio_postgres::NoTls;
 
     const DB_URL: &str = "postgres://cosmian:cosmian@localhost/cosmian";
 
