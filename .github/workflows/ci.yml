@@ -5,7 +5,7 @@ on: push
 
 jobs:
   cargo-lint:
-    uses: Cosmian/reusable_workflows/.github/workflows/cargo-nursery.yml@develop
+    uses: Cosmian/reusable_workflows/.github/workflows/cargo-nursery.yml@feat/format_nightly_only
     with:
       toolchain: 1.87.0
       workspace: true
@@ -14,5 +14,5 @@ jobs:
   cleanup:
     needs:
       - cargo-lint
-    uses: Cosmian/reusable_workflows/.github/workflows/cleanup_cache.yml@develop
+    uses: Cosmian/reusable_workflows/.github/workflows/cleanup_cache.yml@feat/format_nightly_only
     secrets: inherit
