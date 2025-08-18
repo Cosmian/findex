@@ -5,14 +5,43 @@ on: push
 
 jobs:
   cargo-lint:
-    uses: Cosmian/reusable_workflows/.github/workflows/cargo-nursery.yml@develop
+    uses: Cosmian/reusable_workflows/.github/workflows/cargo-lint.yml@develop
     with:
       toolchain: 1.87.0
-      workspace: true
+  cargo-fmt:
+    uses: Cosmian/reusable_workflows/.github/workflows/cargo-fmt.yml@develop
+    with:
+      toolchain: nightly-2025-03-31
+  cargo-audit:
+    uses: Cosmian/reusable_workflows/.github/workflows/cargo-audit.yml@develop
+    with:
+      toolchain: 1.87.0
+  cargo-machete:
+    uses: Cosmian/reusable_workflows/.github/workflows/cargo-machete.yml@develop
+    with:
+      toolchain: 1.87.0
+  cargo-doc:
+    uses: Cosmian/reusable_workflows/.github/workflows/cargo-doc.yml@develop
+    with:
+      toolchain: 1.87.0
+  cargo-semver:
+    uses: Cosmian/reusable_workflows/.github/workflows/cargo-semver.yml@develop
+    with:
+      toolchain: 1.87.0
+  cargo-publish-workspace:
+    uses: Cosmian/reusable_workflows/.github/workflows/cargo-publish-workspace.yml@develop
+    with:
+      toolchain: 1.87.0
     secrets:
       token: ${{ secrets.CRATES_IO }}
   cleanup:
     needs:
       - cargo-lint
+      - cargo-fmt
+      - cargo-audit
+      - cargo-machete
+      - cargo-doc
+      - cargo-semver
+      - cargo-publish-workspace
     uses: Cosmian/reusable_workflows/.github/workflows/cleanup_cache.yml@develop
     secrets: inherit
