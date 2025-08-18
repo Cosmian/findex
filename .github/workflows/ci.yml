@@ -1,13 +1,18 @@
 ---
 name: CI checks
 
-on: push
+on:
+  workflow_call:
+    inputs:
+      toolchain:
+        required: true
+        type: string
 
 jobs:
   cargo-lint:
     uses: Cosmian/reusable_workflows/.github/workflows/cargo-lint.yml@develop
     with:
-      toolchain: 1.87.0
+      toolchain: ${{ inputs.toolchain }}
   cargo-fmt:
     uses: Cosmian/reusable_workflows/.github/workflows/cargo-fmt.yml@develop
     with:
@@ -15,33 +20,22 @@ jobs:
   cargo-audit:
     uses: Cosmian/reusable_workflows/.github/workflows/cargo-audit.yml@develop
     with:
-      toolchain: 1.87.0
+      toolchain: ${{ inputs.toolchain }}
   cargo-machete:
     uses: Cosmian/reusable_workflows/.github/workflows/cargo-machete.yml@develop
     with:
-      toolchain: 1.87.0
+      toolchain: ${{ inputs.toolchain }}
   cargo-doc:
     uses: Cosmian/reusable_workflows/.github/workflows/cargo-doc.yml@develop
     with:
-      toolchain: 1.87.0
+      toolchain: ${{ inputs.toolchain }}
   cargo-semver:
     uses: Cosmian/reusable_workflows/.github/workflows/cargo-semver.yml@develop
     with:
-      toolchain: 1.87.0
+      toolchain: ${{ inputs.toolchain }}
   cargo-publish-workspace:
     uses: Cosmian/reusable_workflows/.github/workflows/cargo-publish-workspace.yml@develop
     with:
-      toolchain: 1.87.0
+      toolchain: ${{ inputs.toolchain }}
     secrets:
       token: ${{ secrets.CRATES_IO }}
-  cleanup:
-    needs:
-      - cargo-lint
-      - cargo-fmt
-      - cargo-audit
-      - cargo-machete
-      - cargo-doc
-      - cargo-semver
-      - cargo-publish-workspace
-    uses: Cosmian/reusable_workflows/.github/workflows/cleanup_cache.yml@develop
-    secrets: inherit

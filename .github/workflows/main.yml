@@ -1,0 +1,13 @@
+---
+on: push
+
+jobs:
+  cargo-lint:
+    uses: ./.github/workflows/ci.yml
+    with:
+      toolchain: 1.87.0
+  cleanup:
+    needs:
+      - cargo-lint
+    uses: Cosmian/reusable_workflows/.github/workflows/cleanup_cache.yml@develop
+    secrets: inherit
