@@ -25,7 +25,7 @@ impl<
         + Sync
         + Clone
         + BatchingMemoryADT<Address = Address<ADDRESS_LENGTH>, Word = [u8; WORD_LENGTH]>,
-    EncodingError: Send + Debug + std::error::Error,
+    EncodingError: Send + Debug,
 > FindexBatcher<WORD_LENGTH, Value, EncodingError, BatcherMemory>
 {
     pub fn new(
@@ -91,7 +91,7 @@ impl<
     const WORD_LENGTH: usize,
     Keyword: Send + Sync + Hash + Eq,
     Value: Send + Hash + Eq,
-    EncodingError: Send + Debug + std::error::Error,
+    EncodingError: Send + Debug,
     BatcherMemory: Debug
         + Send
         + Sync
@@ -120,19 +120,16 @@ impl<
         keywords: Vec<&Keyword>,
     ) -> Result<Vec<HashSet<Value>>, Self::Error> {
         let mut futures = Vec::new();
-        let n = keywords.len();
-
         let buffered_memory = Arc::new(MemoryBatcher::new_reader(
-            // TODO: kill this
             self.memory.clone(),
-            AtomicUsize::new(n),
+            AtomicUsize::new(keywords.len()),
         ));
 
         for keyword in keywords {
-            let buffered_memory_clone = buffered_memory.clone();
+            let buffered_memory = buffered_memory.clone();
             // Create a temporary Findex instance using the shared batching layer.
             let findex = Findex::<WORD_LENGTH, Value, EncodingError, _>::new(
-                buffered_memory_clone,
+                buffered_memory,
                 *self.encode,
                 *self.decode,
             );
@@ -140,15 +137,11 @@ impl<
             let future = async move { findex.search(keyword).await };
             futures.push(future);
         }
+
         // Execute all futures concurrently and collect results.
-        let results = futures::future::join_all(futures).await;
-
-        let mut output = Vec::with_capacity(results.len());
-        for result in results {
-            output.push(result?);
-        }
-
-        Ok(output)
+        futures::future::try_join_all(futures)
+            .await
+            .map_err(|e| BatchFindexError::Findex(e))
     }
 }
 
@@ -181,16 +174,8 @@ mod tests {
 
         let batcher_findex = FindexBatcher::<WORD_LENGTH, Value, _, _>::new(
             trivial_memory.clone(),
-            |op, values| {
-                dummy_encode::<WORD_LENGTH, Value>(op, values).map_err(BatchFindexError::<
-                    InMemory<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>,
-                >::Encoding)
-            },
-            |words| {
-                dummy_decode(words).map_err(BatchFindexError::<
-                    InMemory<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>,
-                >::Encoding)
-            },
+            dummy_encode,
+            dummy_decode,
         );
 
         let cat_bindings = vec![
@@ -262,16 +247,8 @@ mod tests {
         // Create BatcherFindex for deletion operations.
         let batcher_findex = FindexBatcher::<WORD_LENGTH, Value, _, _>::new(
             trivial_memory.clone(),
-            |op, values| {
-                dummy_encode::<WORD_LENGTH, Value>(op, values).map_err(BatchFindexError::<
-                    InMemory<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>,
-                >::Encoding)
-            },
-            |words| {
-                dummy_decode(words).map_err(BatchFindexError::<
-                    InMemory<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>,
-                >::Encoding)
-            },
+            dummy_encode,
+            dummy_decode,
         );
 
         let delete_entries = vec![
@@ -330,18 +307,9 @@ mod tests {
             .unwrap();
 
         let batcher_findex = FindexBatcher::<WORD_LENGTH, Value, _, _>::new(
-            trivial_memory,
-            |op, values| {
-                dummy_encode::<WORD_LENGTH, Value>(op, values)
-                    .map_err(BatchFindexError::<
-                        InMemory<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>,
-                    >::Encoding)
-            },
-            |words| {
-                dummy_decode(words).map_err(BatchFindexError::<
-                    InMemory<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>,
-                >::Encoding)
-            },
+            trivial_memory.clone(),
+            dummy_encode,
+            dummy_decode,
         );
 
         let key1 = "cat".to_string();

@@ -4,7 +4,6 @@
 
 use futures::channel::oneshot;
 use std::fmt::Debug;
-use std::ops::Deref;
 use std::sync::{
     Arc, Mutex,
     atomic::{AtomicUsize, Ordering},

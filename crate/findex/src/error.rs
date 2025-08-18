@@ -29,7 +29,6 @@ pub mod batch_findex_error {
     pub enum BatchFindexError<M: MemoryADT> {
         BatchingLayer(BatchingLayerError<M>),
         Findex(Error<M::Address>),
-        Encoding(String),
     }
 
     impl<M: MemoryADT + Debug> Display for BatchFindexError<M>
@@ -40,7 +39,6 @@ pub mod batch_findex_error {
             match self {
                 Self::BatchingLayer(e) => write!(f, "Batching layer error: {e}"),
                 Self::Findex(error) => write!(f, "Findex error: {error:?}"),
-                Self::Encoding(msg) => write!(f, "Encoding error: {msg}"),
             }
         }
     }
