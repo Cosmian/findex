@@ -7,6 +7,8 @@ use std::{
     sync::{Arc, Mutex},
 };
 
+#[cfg(feature = "batch")]
+use crate::BatchingMemoryADT;
 use crate::MemoryADT;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -71,6 +73,30 @@ impl<Address: Send + Hash + Eq + Debug, Value: Send + Clone + Eq + Debug> Memory
             }
         }
         Ok(cur)
+    }
+}
+
+#[cfg(feature = "batch")]
+impl<Address: Send + Hash + Eq + Debug, Value: Send + Clone + Eq + Debug> BatchingMemoryADT
+    for InMemory<Address, Value>
+{
+    async fn batch_guarded_write(
+        &self,
+        operations: Vec<((Address, Option<Value>), Vec<(Address, Value)>)>,
+    ) -> Result<Vec<Option<Value>>, Self::Error> {
+        let store = &mut *self.inner.lock().expect("poisoned lock");
+        let mut res = Vec::with_capacity(operations.len());
+        for (guard, bindings) in operations {
+            let (a, old) = guard;
+            let cur = store.get(&a).cloned();
+            if old == cur {
+                for (k, v) in bindings {
+                    store.insert(k, v);
+                }
+            }
+            res.push(cur);
+        }
+        Ok(res)
     }
 }
 
