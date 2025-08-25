@@ -15,14 +15,19 @@ name = "cosmian_findex"
 path = "src/lib.rs"
 
 [features]
+# I would like the batcher to live somewhere else than Findex.
+batch = ["cosmian_sse_memories/batch"]
 test-utils = ["agnostic-lite", "criterion"]
 
 [dependencies]
 aes = "0.8"
 cosmian_crypto_core.workspace = true
-cosmian_sse_memories = { path = "../memories", version = "8.0" }
+# Removed the comment as it is normal to make the crates evolve in sync.
+cosmian_sse_memories = { path = "../memories", version = "8.0.2" }
 xts-mode = "0.5"
-
+# In any case, I am not sure you need to make a dependency a workspace
+# dependency if only one crate uses it.
+futures.workspace = true
 # Optional dependencies for testing and benchmarking.
 agnostic-lite = { workspace = true, optional = true, features = [
     "tokio",
@@ -33,7 +38,7 @@ criterion = { workspace = true, optional = true }
 
 [dev-dependencies]
 agnostic-lite = { workspace = true, features = ["tokio"] }
-cosmian_sse_memories = { path = "../memories", version = "8.0", features = [
+cosmian_sse_memories = { path = "../memories", version = "8.0.2", features = [
     "redis-mem",
     "sqlite-mem",
     "postgres-mem",

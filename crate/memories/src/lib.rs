@@ -54,3 +54,23 @@ pub trait MemoryADT {
         bindings: Vec<(Self::Address, Self::Word)>,
     ) -> impl Send + std::future::Future<Output = Result<Option<Self::Word>, Self::Error>>;
 }
+
+#[cfg(feature = "batch")]
+mod batching_layer;
+
+#[cfg(feature = "batch")]
+pub use batching_layer::{MemoryBatcher, MemoryBatcherError};
+
+// TBZ: Either this is a doc, either this should be removed.
+// Super trait for MemoryADT that allows doing write operations in batches.
+#[cfg(feature = "batch")]
+pub trait BatchingMemoryADT: MemoryADT {
+    #[allow(clippy::type_complexity)]
+    fn batch_guarded_write(
+        &self,
+        write_operations: Vec<(
+            (Self::Address, Option<Self::Word>),
+            Vec<(Self::Address, Self::Word)>,
+        )>,
+    ) -> impl Send + std::future::Future<Output = Result<Vec<Option<Self::Word>>, Self::Error>>;
+}

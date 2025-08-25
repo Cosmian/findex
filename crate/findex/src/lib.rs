@@ -30,6 +30,14 @@ pub use encryption_layer::{KEY_LENGTH, MemoryEncryptionLayer};
 pub use error::Error;
 pub use findex::{Findex, Op};
 
+#[cfg(feature = "batch")]
+// You still got it backwards...
+mod batcher_findex;
+#[cfg(feature = "batch")]
+pub use adt::IndexBatcher;
+#[cfg(feature = "batch")]
+pub use batcher_findex::FindexBatcher;
+
 #[cfg(feature = "test-utils")]
 pub mod reexport {
     // Re-exporting the most commonly used runtime interfaces for convenience.
