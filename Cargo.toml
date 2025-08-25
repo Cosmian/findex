@@ -30,4 +30,4 @@ cosmian_crypto_core = { version = "10.2", default-features = false, features = [
 criterion = { version = "0.6" }
 smol-macros = { version = "0.1" }
 tokio = { version = "1.46" }
-futures = "0.3.31" # Todo: this is a temporary approach
+futures = "0.3.31"

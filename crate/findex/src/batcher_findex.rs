@@ -1,9 +1,8 @@
-use crate::adt::IndexBatcher;
-use crate::error::BatchFindexError;
-use crate::{Decoder, Encoder, Findex, IndexADT};
-use cosmian_sse_memories::{ADDRESS_LENGTH, Address, BatchingMemoryADT, MemoryBatcher};
-use std::sync::atomic::AtomicUsize;
 use std::{collections::HashSet, fmt::Debug, hash::Hash, sync::Arc};
+
+use cosmian_sse_memories::{ADDRESS_LENGTH, Address, BatchingMemoryADT, MemoryBatcher};
+
+use crate::{Decoder, Encoder, Findex, IndexADT, adt::IndexBatcher, error::BatchFindexError};
 
 #[derive(Debug)]
 pub struct FindexBatcher<
@@ -13,8 +12,8 @@ pub struct FindexBatcher<
     BatcherMemory: Clone + Send + BatchingMemoryADT<Address = Address<ADDRESS_LENGTH>, Word = [u8; WORD_LENGTH]>,
 > {
     memory: BatcherMemory,
-    encode: Arc<Encoder<Value, BatcherMemory::Word, EncodingError>>,
-    decode: Arc<Decoder<Value, BatcherMemory::Word, EncodingError>>,
+    encode: Encoder<Value, BatcherMemory::Word, EncodingError>,
+    decode: Decoder<Value, BatcherMemory::Word, EncodingError>,
 }
 
 impl<
@@ -35,12 +34,13 @@ impl<
     ) -> Self {
         Self {
             memory,
-            encode: Arc::new(encode),
-            decode: Arc::new(decode),
+            encode,
+            decode,
         }
     }
 
-    // Insert or delete are both an unbounded number of calls to `guarded_write` on the memory layer.
+    // Both insert and delete operations make an unbounded number of calls to
+    // `guarded_write` on the memory layer.
     async fn batch_insert_or_delete<Keyword>(
         &self,
         entries: Vec<(Keyword, impl Send + IntoIterator<Item = Value>)>,
@@ -50,20 +50,15 @@ impl<
         Keyword: Send + Sync + Hash + Eq,
     {
         let mut futures = Vec::new();
-        let buffered_memory = Arc::new(MemoryBatcher::new_writer(
-            self.memory.clone(),
-            AtomicUsize::new(entries.len()),
-        ));
+        let memory = Arc::new(MemoryBatcher::new(self.memory.clone(), entries.len()));
 
         for (guard_keyword, bindings) in entries {
-            let memory_arc = buffered_memory.clone(); // TODO
-            // Create a temporary Findex instance using the shared batching layer
+            let memory = memory.clone();
+            // Create a temporary Findex instance using the shared batching layer.
             let findex = Findex::<WORD_LENGTH, Value, EncodingError, _>::new(
-                // This (cheap) Arc clone is necessary because `decrement_capacity` is called
-                // below and needs to be able to access the Arc.
-                memory_arc.clone(),
-                *self.encode,
-                *self.decode,
+                memory.clone(),
+                self.encode,
+                self.decode,
             );
 
             let future = async move {
@@ -73,7 +68,7 @@ impl<
                     findex.delete(guard_keyword, bindings).await
                 }?;
                 // Once one of the operations succeeds, we should make the buffer smaller.
-                memory_arc.decrement_capacity().await?;
+                memory.unsubscribe().await?;
                 Ok::<_, BatchFindexError<_>>(())
             };
 
@@ -120,47 +115,46 @@ impl<
         keywords: Vec<&Keyword>,
     ) -> Result<Vec<HashSet<Value>>, Self::Error> {
         let mut futures = Vec::new();
-        let buffered_memory = Arc::new(MemoryBatcher::new_reader(
-            self.memory.clone(),
-            AtomicUsize::new(keywords.len()),
-        ));
+        let memory = Arc::new(MemoryBatcher::new(self.memory.clone(), keywords.len()));
 
         for keyword in keywords {
-            let buffered_memory = buffered_memory.clone();
-            // Create a temporary Findex instance using the shared batching layer.
+            let memory = memory.clone();
             let findex = Findex::<WORD_LENGTH, Value, EncodingError, _>::new(
-                buffered_memory,
-                *self.encode,
-                *self.decode,
+                memory,
+                self.encode,
+                self.decode,
             );
 
             let future = async move { findex.search(keyword).await };
             futures.push(future);
         }
 
-        // Execute all futures concurrently and collect results.
         futures::future::try_join_all(futures)
             .await
             .map_err(|e| BatchFindexError::Findex(e))
     }
 }
 
-// The underlying tests assume the existence of a `Findex` implementation that is correct
-// The testing strategy for each function is to use the `Findex` implementation to perform the same operations
-// and compare the results with the `BatcherFindex` implementation.
+// The underlying tests assume the existence of a `Findex` implementation that
+// is correct The testing strategy for each function is to use the `Findex`
+// implementation to perform the same operations and compare the results with
+// the `BatcherFindex` implementation.
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::{Findex, IndexADT, dummy_decode, dummy_encode};
+    use std::collections::HashSet;
+
     use cosmian_crypto_core::define_byte_type;
     use cosmian_sse_memories::{ADDRESS_LENGTH, InMemory};
-    use std::collections::HashSet;
+
+    use super::*;
+    use crate::{Findex, IndexADT, dummy_decode, dummy_encode};
 
     type Value = Bytes<8>;
     define_byte_type!(Bytes);
 
     impl<const LENGTH: usize> TryFrom<usize> for Bytes<LENGTH> {
         type Error = String;
+
         fn try_from(value: usize) -> Result<Self, Self::Error> {
             Self::try_from(value.to_be_bytes().as_slice()).map_err(|e| e.to_string())
         }
@@ -169,71 +163,28 @@ mod tests {
     const WORD_LENGTH: usize = 16;
 
     #[tokio::test]
-    async fn test_batch_insert() {
+    async fn test_batch_insert_and_delete() {
         let trivial_memory = InMemory::<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>::default();
 
-        let batcher_findex = FindexBatcher::<WORD_LENGTH, Value, _, _>::new(
-            trivial_memory.clone(),
-            dummy_encode,
-            dummy_decode,
-        );
-
+        // Initial data for insertion
         let cat_bindings = vec![
             Value::try_from(1).unwrap(),
             Value::try_from(2).unwrap(),
             Value::try_from(3).unwrap(),
-        ];
-        let dog_bindings = vec![
-            Value::try_from(4).unwrap(),
-            Value::try_from(5).unwrap(),
-            Value::try_from(6).unwrap(),
-        ];
-
-        // Batch insert multiple entries.
-        let entries = vec![
-            ("cat".to_string(), cat_bindings.clone()),
-            ("dog".to_string(), dog_bindings.clone()),
-        ];
-
-        batcher_findex.batch_insert(entries).await.unwrap();
-
-        // instantiate a (non batched) Findex to verify the results.
-        let findex = Findex::new(
-            trivial_memory.clone(),
-            dummy_encode::<WORD_LENGTH, Value>,
-            dummy_decode,
-        );
-
-        let cat_result = findex.search(&"cat".to_string()).await.unwrap();
-        assert_eq!(cat_result, cat_bindings.into_iter().collect::<HashSet<_>>());
-
-        let dog_result = findex.search(&"dog".to_string()).await.unwrap();
-        assert_eq!(dog_result, dog_bindings.into_iter().collect::<HashSet<_>>());
-    }
-
-    #[tokio::test]
-    async fn test_batch_delete() {
-        let trivial_memory = InMemory::<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>::default();
-
-        // First, populate the memory with initial data using regular Findex.
-        let findex = Findex::new(
-            trivial_memory.clone(),
-            dummy_encode::<WORD_LENGTH, Value>,
-            dummy_decode,
-        );
-
-        let cat_bindings = vec![
-            Value::try_from(1).unwrap(),
-            Value::try_from(3).unwrap(),
-            Value::try_from(5).unwrap(),
             Value::try_from(7).unwrap(),
         ];
         let dog_bindings = vec![
-            Value::try_from(0).unwrap(),
-            Value::try_from(2).unwrap(),
             Value::try_from(4).unwrap(),
+            Value::try_from(5).unwrap(),
             Value::try_from(6).unwrap(),
         ];
+
+        // Insert using normal findex
+        let findex = Findex::new(
+            trivial_memory.clone(),
+            dummy_encode::<WORD_LENGTH, Value>,
+            dummy_decode,
+        );
 
         findex
             .insert("cat".to_string(), cat_bindings.clone())
@@ -244,38 +195,55 @@ mod tests {
             .await
             .unwrap();
 
-        // Create BatcherFindex for deletion operations.
-        let batcher_findex = FindexBatcher::<WORD_LENGTH, Value, _, _>::new(
+        // Create a `findex_batcher` instance
+        let findex_batcher = FindexBatcher::<WORD_LENGTH, Value, _, _>::new(
             trivial_memory.clone(),
             dummy_encode,
             dummy_decode,
         );
 
-        let delete_entries = vec![
+        // Test batch delete
+        let deletion_entries = vec![
             (
                 "cat".to_string(),
-                vec![Value::try_from(1).unwrap(), Value::try_from(5).unwrap()],
+                vec![Value::try_from(1).unwrap(), Value::try_from(3).unwrap()], // Partial deletion
             ),
-            ("dog".to_string(), dog_bindings), // Remove all dog bindings.
+            ("dog".to_string(), dog_bindings), // Complete deletion
         ];
 
-        // Perform batch delete.
-        batcher_findex.batch_delete(delete_entries).await.unwrap();
+        findex_batcher.batch_delete(deletion_entries).await.unwrap();
 
-        // Verify deletions were performed using a regular findex instance.
-        let cat_result = findex.search(&"cat".to_string()).await.unwrap();
-        let dog_result = findex.search(&"dog".to_string()).await.unwrap();
+        // Verify deletions using normal findex
+        let cat_result_after_delete = findex.search(&"cat".to_string()).await.unwrap();
+        let dog_result_after_delete = findex.search(&"dog".to_string()).await.unwrap();
 
         let expected_cat = vec![
-            Value::try_from(3).unwrap(), // 1 and 5 removed, 3 and 7 remain.
+            Value::try_from(2).unwrap(), // 1 and 3 removed, 2 and 7 remain
             Value::try_from(7).unwrap(),
         ]
         .into_iter()
         .collect::<HashSet<_>>();
-        let expected_dog = HashSet::new(); // all of the dog bindings are removed.
+        let expected_dog = HashSet::new(); // All dog bindings removed
 
-        assert_eq!(cat_result, expected_cat);
-        assert_eq!(dog_result, expected_dog);
+        assert_eq!(cat_result_after_delete, expected_cat);
+        assert_eq!(dog_result_after_delete, expected_dog);
+
+        // Test batch insert
+        let insert_entries = vec![(
+            "dog".to_string(),
+            vec![Value::try_from(8).unwrap(), Value::try_from(9).unwrap()],
+        )];
+
+        findex_batcher.batch_insert(insert_entries).await.unwrap();
+
+        // Verify insertions using normal findex
+        let new_dog_results = findex.search(&"dog".to_string()).await.unwrap();
+
+        let expected_dog = vec![Value::try_from(8).unwrap(), Value::try_from(9).unwrap()]
+            .into_iter()
+            .collect::<HashSet<_>>();
+
+        assert_eq!(new_dog_results, expected_dog);
     }
 
     #[tokio::test]
@@ -306,7 +274,7 @@ mod tests {
             .await
             .unwrap();
 
-        let batcher_findex = FindexBatcher::<WORD_LENGTH, Value, _, _>::new(
+        let findex_batcher = FindexBatcher::<WORD_LENGTH, Value, _, _>::new(
             trivial_memory.clone(),
             dummy_encode,
             dummy_decode,
@@ -315,7 +283,7 @@ mod tests {
         let key1 = "cat".to_string();
         let key2 = "dog".to_string();
         // Perform batch search
-        let batch_search_results = batcher_findex
+        let batch_search_results = findex_batcher
             .batch_search(vec![&key1, &key2])
             .await
             .unwrap();

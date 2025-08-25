@@ -218,8 +218,8 @@ mod tests {
     use cosmian_sse_memories::{ADDRESS_LENGTH, Address, InMemory};
 
     use crate::{
+        MemoryEncryptionLayer,
         adt::tests::{test_vector_concurrent, test_vector_sequential},
-        encryption_layer::MemoryEncryptionLayer,
         ovec::IVec,
     };
 

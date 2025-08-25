@@ -59,7 +59,7 @@ pub trait MemoryADT {
 mod batching_layer;
 
 #[cfg(feature = "batch")]
-pub use batching_layer::{BatchingLayerError, MemoryBatcher};
+pub use batching_layer::{MemoryBatcher, MemoryBatcherError};
 
 // Super trait for MemoryADT that allows doing write operations in batches.
 #[cfg(feature = "batch")]

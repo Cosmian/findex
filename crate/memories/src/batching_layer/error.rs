@@ -1,36 +1,54 @@
-use futures::channel::oneshot::Canceled;
 use std::fmt::{Debug, Display};
 
-use crate::MemoryADT;
+use futures::channel::oneshot::Canceled;
+
+use crate::{
+    MemoryADT,
+    batching_layer::{buffer::BufferError, operation::MemoryOutput},
+};
 
 #[derive(Debug)]
-pub enum BatchingLayerError<M: MemoryADT> {
-    Memory(M::Error), // the from<M::Error> will not be implemented due to conflicting implementations with Rust's `core` library.  Use `map_err` instead of `?`.
-    Mutex(String),
+pub enum MemoryBatcherError<M: MemoryADT>
+where
+    M::Word: std::fmt::Debug,
+{
+    Memory(M::Error), /* the from<M::Error> will not be implemented due to conflicting
+                       * implementations with Rust's `core` library.  Use `map_err` instead of
+                       * `?`. */
     Channel(String),
-    BufferOverflow(String),
-    WrongOperation(String),
+    InternalBuffering(BufferError),
+    WrongResultType(MemoryOutput<M>),
 }
 
-impl<M: MemoryADT> Display for BatchingLayerError<M> {
+impl<M: MemoryADT> Display for MemoryBatcherError<M>
+where
+    M::Word: std::fmt::Debug,
+{
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Memory(err) => write!(f, "Memory error: {:?}", err),
-            Self::Mutex(msg) => write!(f, "Mutex error: {}", msg),
             Self::Channel(msg) => {
                 write!(f, "Channel closed unexpectedly: {}", msg)
             }
-            Self::BufferOverflow(msg) => {
-                write!(f, "Buffer overflow: {}", msg)
-            }
-            Self::WrongOperation(msg) => {
-                write!(f, "Wrong operation: {}", msg)
+            Self::InternalBuffering(err) => write!(f, "Internal buffering error: {:?}", err),
+            Self::WrongResultType(out) => {
+                write!(
+                    f,
+                    "Wrong result type, expected {:?}",
+                    match out {
+                        MemoryOutput::Read(_) => "Read, got Write.",
+                        MemoryOutput::Write(_) => "Write, got Read.",
+                    }
+                )
             }
         }
     }
 }
 
-impl<M: MemoryADT> From<Canceled> for BatchingLayerError<M> {
+impl<M: MemoryADT> From<Canceled> for MemoryBatcherError<M>
+where
+    M::Word: std::fmt::Debug,
+{
     fn from(_: Canceled) -> Self {
         Self::Channel(
             "The sender was dropped before sending its results with the `send` function."
@@ -39,10 +57,14 @@ impl<M: MemoryADT> From<Canceled> for BatchingLayerError<M> {
     }
 }
 
-impl<M: MemoryADT, T> From<std::sync::PoisonError<T>> for BatchingLayerError<M> {
-    fn from(e: std::sync::PoisonError<T>) -> Self {
-        Self::Mutex(format!("Mutex lock poisoned: {e}"))
+impl<M: MemoryADT> From<BufferError> for MemoryBatcherError<M>
+where
+    M::Word: std::fmt::Debug,
+{
+    fn from(e: BufferError) -> Self {
+        Self::InternalBuffering(e)
     }
 }
 
-impl<M: MemoryADT + Debug> std::error::Error for BatchingLayerError<M> {}
+impl<M: MemoryADT + Debug> std::error::Error for MemoryBatcherError<M> where M::Word: std::fmt::Debug
+{}

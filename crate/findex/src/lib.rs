@@ -17,12 +17,6 @@ mod benches;
 pub use adt::IndexADT;
 #[cfg(feature = "test-utils")]
 pub use benches::*;
-
-#[cfg(feature = "batch")]
-mod batcher_findex;
-#[cfg(feature = "batch")]
-pub use batcher_findex::FindexBatcher;
-
 pub use encoding::{
     Decoder, Encoder,
     generic_encoding::{generic_decode, generic_encode},
@@ -35,6 +29,13 @@ pub use encoding::{
 pub use encryption_layer::{KEY_LENGTH, MemoryEncryptionLayer};
 pub use error::Error;
 pub use findex::{Findex, Op};
+
+#[cfg(feature = "batch")]
+mod batcher_findex;
+#[cfg(feature = "batch")]
+pub use adt::IndexBatcher;
+#[cfg(feature = "batch")]
+pub use batcher_findex::FindexBatcher;
 
 #[cfg(feature = "test-utils")]
 pub mod reexport {

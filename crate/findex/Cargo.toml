@@ -21,7 +21,7 @@ test-utils = ["agnostic-lite", "criterion"]
 [dependencies]
 aes = "0.8"
 cosmian_crypto_core.workspace = true
-cosmian_sse_memories = { path = "../memories", version = "8.1" }
+cosmian_sse_memories = { path = "../memories", version = "8.0.2" } # Should be above 8.0.2 to have batching features.
 xts-mode = "0.5"
 futures.workspace = true
 # Optional dependencies for testing and benchmarking.
@@ -34,7 +34,7 @@ criterion = { workspace = true, optional = true }
 
 [dev-dependencies]
 agnostic-lite = { workspace = true, features = ["tokio"] }
-cosmian_sse_memories = { path = "../memories", version = "8.1", features = [
+cosmian_sse_memories = { path = "../memories", version = "8.0.2", features = [
     "redis-mem",
     "sqlite-mem",
     "postgres-mem",
