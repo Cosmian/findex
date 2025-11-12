@@ -14,24 +14,21 @@ pub trait IndexADT<Keyword: Send + Hash, Value: Send + Hash> {
     type Error: Send + std::error::Error;
 
     /// Search the index for the values bound to the given keywords.
-    fn search(
-        &self,
-        keyword: &Keyword,
-    ) -> impl Future<Output = Result<HashSet<Value>, Self::Error>>;
+    async fn search(&self, keyword: &Keyword) -> Result<HashSet<Value>, Self::Error>;
 
     /// Adds the given values to the index.
-    fn insert(
+    async fn insert(
         &self,
         keyword: Keyword,
         values: impl Send + IntoIterator<Item = Value>,
-    ) -> impl Send + Future<Output = Result<(), Self::Error>>;
+    ) -> Result<(), Self::Error>;
 
     /// Removes the given values from the index.
-    fn delete(
+    async fn delete(
         &self,
         keyword: Keyword,
         values: impl Send + IntoIterator<Item = Value>,
-    ) -> impl Send + Future<Output = Result<(), Self::Error>>;
+    ) -> Result<(), Self::Error>;
 }
 
 pub trait VectorADT: Send {
@@ -42,13 +39,10 @@ pub trait VectorADT: Send {
     type Error: Send + std::error::Error;
 
     /// Pushes the given values at the end of this vector.
-    fn push(
-        &mut self,
-        values: Vec<Self::Value>,
-    ) -> impl Send + Future<Output = Result<(), Self::Error>>;
+    async fn push(&mut self, values: Vec<Self::Value>) -> Result<(), Self::Error>;
 
     /// Reads all values stored in this vector.
-    fn read(&self) -> impl Send + Future<Output = Result<Vec<Self::Value>, Self::Error>>;
+    async fn read(&self) -> Result<Vec<Self::Value>, Self::Error>;
 }
 
 #[cfg(test)]
