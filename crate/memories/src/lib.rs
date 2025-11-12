@@ -63,15 +63,15 @@ mod batching_layer;
 #[cfg(feature = "batch")]
 pub use batching_layer::{MemoryBatcher, MemoryBatcherError};
 
+#[cfg(feature = "batch")]
+pub use crate::batching_layer::{BatchReadInput, GuardedWriteInput};
+
 // Super trait for MemoryADT that allows doing write operations in batches.
 #[cfg(feature = "batch")]
 pub trait BatchingMemoryADT: MemoryADT {
     #[allow(clippy::type_complexity)] // Refactoring this type will make the code unnecessarily more difficult to read without any actual benefit.
     fn batch_guarded_write(
         &self,
-        write_operations: Vec<(
-            (Self::Address, Option<Self::Word>),
-            Vec<(Self::Address, Self::Word)>,
-        )>,
+        write_operations: Vec<GuardedWriteInput<Self>>,
     ) -> impl Send + Future<Output = Result<Vec<Option<Self::Word>>, Self::Error>>;
 }

@@ -15,8 +15,8 @@ where
     Memory(M::Error), /* the from<M::Error> will not be implemented due to conflicting
                        * implementations with Rust's `core` library.  Use `map_err` instead of
                        * `?`. */
-    Channel(String),
-    InternalBuffering(BufferError),
+    ClosedChannel,
+    Buffering(BufferError),
     WrongResultType(MemoryOutput<M>),
 }
 
@@ -27,10 +27,11 @@ where
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Memory(err) => write!(f, "Memory error: {:?}", err),
-            Self::Channel(msg) => {
-                write!(f, "Channel closed unexpectedly: {}", msg)
-            }
-            Self::InternalBuffering(err) => write!(f, "Internal buffering error: {:?}", err),
+            Self::ClosedChannel => write!(
+                f,
+                "Channel closed unexpectedly, the sender was dropped before sending its results with the `send` function.."
+            ),
+            Self::Buffering(err) => write!(f, "Internal buffering error: {:?}", err),
             Self::WrongResultType(out) => {
                 write!(
                     f,
@@ -50,10 +51,7 @@ where
     M::Word: std::fmt::Debug,
 {
     fn from(_: Canceled) -> Self {
-        Self::Channel(
-            "The sender was dropped before sending its results with the `send` function."
-                .to_string(),
-        )
+        Self::ClosedChannel
     }
 }
 
@@ -62,7 +60,7 @@ where
     M::Word: std::fmt::Debug,
 {
     fn from(e: BufferError) -> Self {
-        Self::InternalBuffering(e)
+        Self::Buffering(e)
     }
 }
 

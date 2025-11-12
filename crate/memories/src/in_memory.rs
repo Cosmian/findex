@@ -85,18 +85,19 @@ impl<Address: Send + Hash + Eq + Debug, Value: Send + Clone + Eq + Debug> Batchi
         operations: Vec<((Address, Option<Value>), Vec<(Address, Value)>)>,
     ) -> Result<Vec<Option<Value>>, Self::Error> {
         let store = &mut *self.inner.lock().expect("poisoned lock");
-        let mut res = Vec::with_capacity(operations.len());
-        for (guard, bindings) in operations {
-            let (a, old) = guard;
-            let cur = store.get(&a).cloned();
-            if old == cur {
-                for (k, v) in bindings {
-                    store.insert(k, v);
+        Ok(operations
+            .into_iter()
+            .map(|(guard, bindings)| {
+                let (a, old) = guard;
+                let cur = store.get(&a).cloned();
+                if old == cur {
+                    for (k, v) in bindings {
+                        store.insert(k, v);
+                    }
                 }
-            }
-            res.push(cur);
-        }
-        Ok(res)
+                cur
+            })
+            .collect())
     }
 }
 

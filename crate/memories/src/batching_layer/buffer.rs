@@ -1,3 +1,8 @@
+//! Thread-safe buffer for batching memory operations.
+//!
+//! Operations are accumulated until capacity is reached, then flushed in one call to the inner memory.
+//! All operations are synchronized via `Mutex` to ensure thread-safe concurrent access.
+
 use std::{
     mem,
     num::{NonZero, NonZeroUsize},
@@ -54,14 +59,6 @@ where
         item: Operation<M>,
     ) -> Result<Option<PendingOperations<M>>, BufferError> {
         let mut buffer = self.0.lock().expect("poisoned lock");
-        // Check if the new item is compatible with the last item, since the buffer is
-        // thread-safe, this ensures by transitivity that all items in the
-        // buffer are of the same type.
-        if let Some(last_item) = buffer.data.last() {
-            if mem::discriminant(last_item) != mem::discriminant(&item) {
-                return Err(BufferError::TypeMismatch);
-            }
-        }
         buffer.data.push(item);
         Ok(buffer.flush_if_not_empty())
     }
@@ -69,7 +66,7 @@ where
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum BufferError {
-    TypeMismatch, // when the type of the new item does not match the type of the last item
+    TypeMismatch,
     Overflow,
     Underflow,
 }

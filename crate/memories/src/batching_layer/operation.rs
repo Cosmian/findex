@@ -11,8 +11,8 @@ use futures::channel::oneshot;
 
 use crate::{BatchingMemoryADT, MemoryADT};
 
-pub(crate) type BatchReadInput<M> = Vec<<M as MemoryADT>::Address>;
-pub(crate) type GuardedWriteInput<M> = (
+pub type BatchReadInput<M> = Vec<<M as MemoryADT>::Address>;
+pub type GuardedWriteInput<M> = (
     (<M as MemoryADT>::Address, Option<<M as MemoryADT>::Word>),
     Vec<(<M as MemoryADT>::Address, <M as MemoryADT>::Word)>,
 );

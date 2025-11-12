@@ -14,8 +14,17 @@ use crate::{
 };
 
 pub struct MemoryBatcher<M: BatchingMemoryADT> {
-    pub inner: M,                     // The actual memory that does the R/W operations.
+    pub inner: Arc<M>,                // The actual memory that does the R/W operations.
     buffer: Arc<ThreadSafeBuffer<M>>, // The buffer that holds the operations to be batched.
+}
+
+impl<M: BatchingMemoryADT> Clone for MemoryBatcher<M> {
+    fn clone(&self) -> Self {
+        Self {
+            inner: Arc::clone(&self.inner),
+            buffer: Arc::clone(&self.buffer),
+        }
+    }
 }
 
 impl<M: BatchingMemoryADT + Send + Sync + Debug> MemoryADT for MemoryBatcher<M>
@@ -55,32 +64,6 @@ where
     }
 }
 
-// Forward the BR/GW calls on Arcs to their actual implementations.
-impl<M: BatchingMemoryADT + Sync + Send + Debug> MemoryADT for Arc<MemoryBatcher<M>>
-where
-    M::Address: Send + Clone,
-    M::Word: Send + std::fmt::Debug,
-{
-    type Address = M::Address;
-    type Error = MemoryBatcherError<M>;
-    type Word = M::Word;
-
-    async fn batch_read(
-        &self,
-        addresses: Vec<Self::Address>,
-    ) -> Result<Vec<Option<Self::Word>>, Self::Error> {
-        (**self).batch_read(addresses).await
-    }
-
-    async fn guarded_write(
-        &self,
-        guard: (Self::Address, Option<Self::Word>),
-        bindings: Vec<(Self::Address, Self::Word)>,
-    ) -> Result<Option<Self::Word>, Self::Error> {
-        (**self).guarded_write(guard, bindings).await
-    }
-}
-
 impl<M: BatchingMemoryADT + Send + Debug> MemoryBatcher<M>
 where
     M::Address: Clone + Send,
@@ -88,7 +71,7 @@ where
 {
     pub fn new(inner: M, capacity: NonZeroUsize) -> Self {
         Self {
-            inner,
+            inner: Arc::new(inner),
             buffer: Arc::new(ThreadSafeBuffer::new(capacity)),
         }
     }
@@ -143,16 +126,18 @@ where
                 // batch.
                 let all_addresses: Vec<_> = ops
                     .iter()
-                    .flat_map(|op| match op {
-                        Operation::Read((addresses, _)) => addresses.clone(),
-                        _ => unreachable!(
-                            "Expected all operations to be reads, reaching this statement means \
-                             the buffer has implementation flaws at the push level."
-                        ),
+                    .map(|op| match op {
+                        Operation::Read((addresses, _)) => Ok(addresses.clone()),
+                        _ => Err(MemoryBatcherError::Buffering(
+                            crate::batching_layer::buffer::BufferError::TypeMismatch,
+                        )),
                     })
+                    .collect::<Result<Vec<_>, _>>()? // Short-circuit on first error.
+                    .into_iter()
+                    .flatten()
                     .collect();
 
-                let mut aggregated_reads_results = self
+                let mut words = self
                     .inner
                     .batch_read(all_addresses)
                     .await
@@ -162,34 +147,32 @@ where
                 for (input_addresses, sender) in ops
                     .into_iter()
                     .map(|op| match op {
-                        Operation::Read((addresses, sender)) => (addresses, sender),
-                        _ => unreachable!(
-                            "Expected all operations to be reads, reaching this statement means \
-                             the buffer has implementation flaws at the push level."
-                        ),
+                        Operation::Read((addresses, sender)) => Ok((addresses, sender)),
+                        _ => Err(MemoryBatcherError::Buffering(
+                            crate::batching_layer::buffer::BufferError::TypeMismatch,
+                        )),
                     })
+                    .collect::<Result<Vec<_>, _>>()?
+                    .into_iter()
                     .rev()
                 {
-                    let split_point = aggregated_reads_results.len() - input_addresses.len(); // This is the point where the last batch's results start.
-                    let batch_results = aggregated_reads_results.split_off(split_point); // After this call, all_results will be left containing the elements [0, split_point).
-                    sender.send(Ok(batch_results)).map_err(|_| {
-                        // Upon failure, the vector we tried to send is returned in the Err variant,
-                        // but it's explicitly ignored here to not extract information.
-                        MemoryBatcherError::<M>::Channel(
-                            "The receiver end of this read operation was dropped before the \
-                             `send` function could be called."
-                                .to_owned(),
-                        )
-                    })?;
+                    let batch_results = words.split_off(words.len() - input_addresses.len()); // After this call, all_results will be left containing the elements [0, split_point).
+                    sender
+                        .send(Ok(batch_results))
+                        .map_err(|_| MemoryBatcherError::<M>::ClosedChannel)?;
                 }
             }
             Operation::Write(_) => {
                 let (bindings, senders): (Vec<_>, Vec<_>) = ops
                     .into_iter()
                     .map(|op| match op {
-                        Operation::Write((bindings, sender)) => (bindings, sender),
-                        _ => unreachable!(),
+                        Operation::Write((bindings, sender)) => Ok((bindings, sender)),
+                        _ => Err(MemoryBatcherError::Buffering(
+                            crate::batching_layer::buffer::BufferError::TypeMismatch,
+                        )),
                     })
+                    .collect::<Result<Vec<_>, _>>()?
+                    .into_iter()
                     .unzip();
 
                 let aggregated_writes_results = self
@@ -199,13 +182,9 @@ where
                     .map_err(MemoryBatcherError::Memory)?;
 
                 for (res, sender) in aggregated_writes_results.into_iter().zip(senders) {
-                    sender.send(Ok(res)).map_err(|_| {
-                        MemoryBatcherError::<M>::Channel(
-                            "The receiver end of this write operation was dropped before the \
-                             `send` function could be called."
-                                .to_owned(),
-                        )
-                    })?;
+                    sender
+                        .send(Ok(res))
+                        .map_err(|_| MemoryBatcherError::<M>::ClosedChannel)?;
                 }
             }
         };
