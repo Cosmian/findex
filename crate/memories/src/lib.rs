@@ -2,6 +2,8 @@ mod address;
 mod databases;
 mod in_memory;
 
+use std::future::Future;
+
 pub use address::Address;
 #[cfg(feature = "postgres-mem")]
 pub use databases::postgresql_mem::{PostgresMemory, PostgresMemoryError};
@@ -44,7 +46,7 @@ pub trait MemoryADT {
     fn batch_read(
         &self,
         addresses: Vec<Self::Address>,
-    ) -> impl Send + std::future::Future<Output = Result<Vec<Option<Self::Word>>, Self::Error>>;
+    ) -> impl Send + Future<Output = Result<Vec<Option<Self::Word>>, Self::Error>>;
 
     /// Write the given bindings if the word currently stored at the guard
     /// address is the guard word, and returns this word.
@@ -52,5 +54,24 @@ pub trait MemoryADT {
         &self,
         guard: (Self::Address, Option<Self::Word>),
         bindings: Vec<(Self::Address, Self::Word)>,
-    ) -> impl Send + std::future::Future<Output = Result<Option<Self::Word>, Self::Error>>;
+    ) -> impl Send + Future<Output = Result<Option<Self::Word>, Self::Error>>;
+}
+
+#[cfg(feature = "batch")]
+mod batching_layer;
+
+#[cfg(feature = "batch")]
+pub use batching_layer::{MemoryBatcher, MemoryBatcherError};
+
+#[cfg(feature = "batch")]
+pub use crate::batching_layer::{BatchReadInput, GuardedWriteInput};
+
+// Super trait for MemoryADT that allows doing write operations in batches.
+#[cfg(feature = "batch")]
+pub trait BatchingMemoryADT: MemoryADT {
+    #[allow(clippy::type_complexity)] // Refactoring this type will make the code unnecessarily more difficult to read without any actual benefit.
+    fn batch_guarded_write(
+        &self,
+        write_operations: Vec<GuardedWriteInput<Self>>,
+    ) -> impl Send + Future<Output = Result<Vec<Option<Self::Word>>, Self::Error>>;
 }

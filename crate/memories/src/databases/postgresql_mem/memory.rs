@@ -205,6 +205,8 @@ impl<const ADDRESS_LENGTH: usize, const WORD_LENGTH: usize> MemoryADT
 
 #[cfg(test)]
 mod tests {
+    use std::future::Future;
+
     use deadpool_postgres::Config;
     use tokio_postgres::NoTls;
 
@@ -235,7 +237,7 @@ mod tests {
     ) -> Result<(), PostgresMemoryError>
     where
         F: FnOnce(PostgresMemory<Address<ADDRESS_LENGTH>, [u8; 129]>) -> Fut + Send,
-        Fut: std::future::Future<Output = ()> + Send,
+        Fut: Future<Output = ()> + Send,
     {
         let test_pool = create_testing_pool(DB_URL).await.unwrap();
         let m = PostgresMemory::new_with_pool(test_pool.clone(), table_name.to_string()).await;
