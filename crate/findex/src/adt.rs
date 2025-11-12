@@ -51,9 +51,7 @@ pub trait VectorADT: Send {
     fn read(&self) -> impl Send + Future<Output = Result<Vec<Self::Value>, Self::Error>>;
 }
 
-/// This trait  extends the functionality of the standard `IndexADT` by
-/// providing methods that operate on multiple keywords or entries
-/// simultaneously.
+/// This trait provides methods that let an index operate on multiple keywords or entries simultaneously.
 #[cfg(feature = "batch")]
 pub trait IndexBatcher<Keyword, Value> {
     type Error: std::error::Error;
@@ -65,16 +63,25 @@ pub trait IndexBatcher<Keyword, Value> {
     ) -> impl Future<Output = Result<Vec<HashSet<Value>>, Self::Error>>;
 
     /// Binds each value to their associated keyword in this index.
-    fn batch_insert(
+    fn batch_insert<Values, Entries>(
         &self,
-        entries: Vec<(Keyword, impl Sync + Send + IntoIterator<Item = Value>)>,
-    ) -> impl Send + Future<Output = Result<(), Self::Error>>;
+        entries: Entries,
+    ) -> impl Send + Future<Output = Result<(), Self::Error>>
+    where
+        Values: Sync + Send + IntoIterator<Item = Value>,
+        Entries: Send + IntoIterator<Item = (Keyword, Values)>,
+        Entries::IntoIter: ExactSizeIterator,
+        <Entries as IntoIterator>::IntoIter: Send;
 
     /// Removes the given values from the index.
-    fn batch_delete(
+    fn batch_delete<Values, Entries>(
         &self,
-        entries: Vec<(Keyword, impl Sync + Send + IntoIterator<Item = Value>)>,
-    ) -> impl Send + Future<Output = Result<(), Self::Error>>;
+        entries: Entries,
+    ) -> impl Send + Future<Output = Result<(), Self::Error>>
+    where
+        Values: Sync + Send + IntoIterator<Item = Value>,
+        Entries: Send + IntoIterator<Item = (Keyword, Values)>,
+        Entries::IntoIter: ExactSizeIterator + Send;
 }
 
 #[cfg(test)]

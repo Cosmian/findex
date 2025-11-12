@@ -41,15 +41,20 @@ impl<
 
     // Both insert and delete operations make an unbounded number of calls to
     // `guarded_write` on the memory layer.
-    async fn batch_insert_or_delete<Keyword>(
+    async fn batch_insert_or_delete<Keyword, Bindings, Entries>(
         &self,
-        entries: Vec<(Keyword, impl Send + IntoIterator<Item = Value>)>,
+        entries: Entries,
         is_insert: bool,
     ) -> Result<(), BatchFindexError<BatcherMemory>>
     where
         Keyword: Send + Sync + Hash + Eq,
+        Bindings: Send + IntoIterator<Item = Value>,
+        Entries: IntoIterator<Item = (Keyword, Bindings)> + Send,
+        Entries::IntoIter: ExactSizeIterator,
     {
         let mut futures = Vec::new();
+
+        let entries = entries.into_iter();
         let memory = Arc::new(MemoryBatcher::new(self.memory.clone(), entries.len()));
 
         for (guard_keyword, bindings) in entries {
@@ -96,17 +101,21 @@ impl<
 {
     type Error = BatchFindexError<BatcherMemory>;
 
-    async fn batch_insert(
-        &self,
-        entries: Vec<(Keyword, impl Sync + Send + IntoIterator<Item = Value>)>,
-    ) -> Result<(), Self::Error> {
+    async fn batch_insert<Bindings, Entries>(&self, entries: Entries) -> Result<(), Self::Error>
+    where
+        Bindings: Sync + Send + IntoIterator<Item = Value>,
+        Entries: Send + IntoIterator<Item = (Keyword, Bindings)>,
+        Entries::IntoIter: ExactSizeIterator,
+    {
         self.batch_insert_or_delete(entries, true).await
     }
 
-    async fn batch_delete(
-        &self,
-        entries: Vec<(Keyword, impl Sync + Send + IntoIterator<Item = Value>)>,
-    ) -> Result<(), Self::Error> {
+    async fn batch_delete<Bindings, Entries>(&self, entries: Entries) -> Result<(), Self::Error>
+    where
+        Bindings: Sync + Send + IntoIterator<Item = Value>,
+        Entries: Send + IntoIterator<Item = (Keyword, Bindings)>,
+        Entries::IntoIter: ExactSizeIterator,
+    {
         self.batch_insert_or_delete(entries, false).await
     }
 
