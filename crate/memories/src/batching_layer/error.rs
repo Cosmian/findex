@@ -29,7 +29,8 @@ where
             Self::Memory(err) => write!(f, "Memory error: {:?}", err),
             Self::ClosedChannel => write!(
                 f,
-                "Channel closed unexpectedly, the sender was dropped before sending its results with the `send` function.."
+                "Channel closed unexpectedly, the sender was dropped before sending its results \
+                 with the `send` function.."
             ),
             Self::Buffering(err) => write!(f, "Internal buffering error: {:?}", err),
             Self::WrongResultType(out) => {

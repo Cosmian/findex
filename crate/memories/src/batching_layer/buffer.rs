@@ -1,7 +1,8 @@
 //! Thread-safe buffer for batching memory operations.
 //!
-//! Operations are accumulated until capacity is reached, then flushed in one call to the inner memory.
-//! All operations are synchronized via `Mutex` to ensure thread-safe concurrent access.
+//! Operations are accumulated until capacity is reached, then flushed in one
+//! call to the inner memory. All operations are synchronized via `Mutex` to
+//! ensure thread-safe concurrent access.
 
 use std::{
     mem,

@@ -74,8 +74,9 @@ impl<
                 } else {
                     findex.delete(guard_keyword, bindings).await
                 }?;
-                // Within findex, insert/delete operations may perform a variable number of memory
-                // writes. This requires explicit `unsubscribe()` calls to adjust the expected buffer size once one of the operations succeeds.
+                // Within findex, insert/delete operations may perform a variable number of
+                // memory writes. This requires explicit `unsubscribe()` calls
+                // to adjust the expected buffer size once one of the operations succeeds.
                 memory.unsubscribe().await?;
                 Ok::<_, BatchFindexError<_>>(())
             };
@@ -142,10 +143,11 @@ impl<
                 self.encode,
                 self.decode,
             );
-            // Search operations do not require calling `unsubscribe()` on the memory batcher.
-            // This is because all Findex search operations perform the same deterministic
-            // number of memory read operations. Specifically, each (safe) Findex search
-            // completes after performing exactly two reads.
+            // Search operations do not require calling `unsubscribe()` on the memory
+            // batcher. This is because all Findex search operations perform the
+            // same deterministic number of memory read operations.
+            // Specifically, each (safe) Findex search completes after
+            // performing exactly two reads.
             let future = async move { findex.search(keyword).await };
             futures.push(future);
         }

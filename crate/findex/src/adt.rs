@@ -51,7 +51,8 @@ pub trait VectorADT: Send {
     fn read(&self) -> impl Send + Future<Output = Result<Vec<Self::Value>, Self::Error>>;
 }
 
-/// This trait provides methods that let an index operate on multiple keywords or entries simultaneously.
+/// This trait provides methods that let an index operate on multiple keywords
+/// or entries simultaneously.
 #[cfg(feature = "batch")]
 pub trait IndexBatcher<Keyword, Value> {
     type Error: std::error::Error;
