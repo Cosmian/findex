@@ -1,4 +1,8 @@
-use std::{mem, sync::Mutex};
+use std::{
+    mem,
+    num::{NonZero, NonZeroUsize},
+    sync::Mutex,
+};
 
 use crate::{
     BatchingMemoryADT,
@@ -6,7 +10,7 @@ use crate::{
 };
 
 struct Buffer<M: BatchingMemoryADT> {
-    capacity: usize, // the size at which the buffer should be flushed
+    capacity: NonZeroUsize,
     data: PendingOperations<M>,
 }
 
@@ -28,19 +32,20 @@ impl<M> ThreadSafeBuffer<M>
 where
     M: BatchingMemoryADT,
 {
-    pub(crate) fn new(capacity: usize) -> Self {
+    pub(crate) fn new(capacity: NonZeroUsize) -> Self {
         Self(Mutex::new(Buffer::<M> {
             capacity,
-            data: Vec::with_capacity(capacity),
+            data: Vec::with_capacity(capacity.into()),
         }))
     }
 
     pub(crate) fn shrink_capacity(&self) -> Result<Option<PendingOperations<M>>, BufferError> {
-        let mut buffer = self.0.lock()?;
-        if buffer.capacity == 0 {
-            return Err(BufferError::Underflow);
+        let mut buffer = self.0.lock().expect("poisoned lock");
+        if buffer.capacity == NonZero::new(1).unwrap() {
+            return Ok(buffer.flush_if_not_empty());
         }
-        buffer.capacity -= 1;
+        buffer.capacity =
+            NonZero::new(buffer.capacity.get() - 1).expect("buffer capacity should not reach zero");
         Ok(buffer.flush_if_not_empty())
     }
 
@@ -48,7 +53,7 @@ where
         &self,
         item: Operation<M>,
     ) -> Result<Option<PendingOperations<M>>, BufferError> {
-        let mut buffer = self.0.lock()?;
+        let mut buffer = self.0.lock().expect("poisoned lock");
         // Check if the new item is compatible with the last item, since the buffer is
         // thread-safe, this ensures by transitivity that all items in the
         // buffer are of the same type.
@@ -67,15 +72,6 @@ pub enum BufferError {
     TypeMismatch, // when the type of the new item does not match the type of the last item
     Overflow,
     Underflow,
-    Mutex(String),
-}
-
-impl<M: BatchingMemoryADT> From<std::sync::PoisonError<std::sync::MutexGuard<'_, Buffer<M>>>>
-    for BufferError
-{
-    fn from(e: std::sync::PoisonError<std::sync::MutexGuard<'_, Buffer<M>>>) -> Self {
-        Self::Mutex(format!("Mutex poisoned: {}", e))
-    }
 }
 
 impl std::fmt::Display for BufferError {
@@ -87,7 +83,6 @@ impl std::fmt::Display for BufferError {
             ),
             Self::Overflow => write!(f, "Buffer overflow: cannot push below capacity."),
             Self::Underflow => write!(f, "Buffer underflow: cannot shrink capacity below zero."),
-            Self::Mutex(msg) => write!(f, "Mutex error: {}", msg),
         }
     }
 }

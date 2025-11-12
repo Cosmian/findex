@@ -68,7 +68,7 @@ pub trait IndexBatcher<Keyword, Value> {
         entries: Entries,
     ) -> impl Send + Future<Output = Result<(), Self::Error>>
     where
-        Values: Sync + Send + IntoIterator<Item = Value>,
+        Values: Send + IntoIterator<Item = Value>,
         Entries: Send + IntoIterator<Item = (Keyword, Values)>,
         Entries::IntoIter: ExactSizeIterator,
         <Entries as IntoIterator>::IntoIter: Send;
@@ -79,7 +79,7 @@ pub trait IndexBatcher<Keyword, Value> {
         entries: Entries,
     ) -> impl Send + Future<Output = Result<(), Self::Error>>
     where
-        Values: Sync + Send + IntoIterator<Item = Value>,
+        Values: Send + IntoIterator<Item = Value>,
         Entries: Send + IntoIterator<Item = (Keyword, Values)>,
         Entries::IntoIter: ExactSizeIterator + Send;
 }

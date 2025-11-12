@@ -33,6 +33,7 @@ pub mod batch_findex_error {
     {
         BatchingLayer(MemoryBatcherError<M>),
         Findex(Error<M::Address>),
+        Other(String),
     }
 
     impl<M: MemoryADT + Debug> Display for BatchFindexError<M>
@@ -44,6 +45,7 @@ pub mod batch_findex_error {
             match self {
                 Self::BatchingLayer(e) => write!(f, "Batching layer error: {e}"),
                 Self::Findex(error) => write!(f, "Findex error: {error:?}"),
+                Self::Other(msg) => write!(f, "{msg}"),
             }
         }
     }

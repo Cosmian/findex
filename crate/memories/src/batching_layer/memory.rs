@@ -1,4 +1,4 @@
-use std::{fmt::Debug, sync::Arc};
+use std::{fmt::Debug, num::NonZeroUsize, sync::Arc};
 
 use futures::channel::oneshot;
 
@@ -86,13 +86,10 @@ where
     M::Address: Clone + Send,
     M::Word: Send + std::fmt::Debug,
 {
-    pub fn new(inner: M, n: usize) -> Self {
-        if n == 0 {
-            panic!("Buffer capacity must be greater than zero.");
-        };
+    pub fn new(inner: M, capacity: NonZeroUsize) -> Self {
         Self {
             inner,
-            buffer: Arc::new(ThreadSafeBuffer::new(n)),
+            buffer: Arc::new(ThreadSafeBuffer::new(capacity)),
         }
     }
 

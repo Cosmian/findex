@@ -31,11 +31,11 @@ pub use error::Error;
 pub use findex::{Findex, Op};
 
 #[cfg(feature = "batch")]
-mod batcher_findex;
+mod findex_batcher;
 #[cfg(feature = "batch")]
 pub use adt::IndexBatcher;
 #[cfg(feature = "batch")]
-pub use batcher_findex::FindexBatcher;
+pub use findex_batcher::FindexBatcher;
 
 #[cfg(feature = "test-utils")]
 pub mod reexport {

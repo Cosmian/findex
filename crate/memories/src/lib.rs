@@ -2,6 +2,8 @@ mod address;
 mod databases;
 mod in_memory;
 
+use std::future::Future;
+
 pub use address::Address;
 #[cfg(feature = "postgres-mem")]
 pub use databases::postgresql_mem::{PostgresMemory, PostgresMemoryError};
@@ -44,7 +46,7 @@ pub trait MemoryADT {
     fn batch_read(
         &self,
         addresses: Vec<Self::Address>,
-    ) -> impl Send + std::future::Future<Output = Result<Vec<Option<Self::Word>>, Self::Error>>;
+    ) -> impl Send + Future<Output = Result<Vec<Option<Self::Word>>, Self::Error>>;
 
     /// Write the given bindings if the word currently stored at the guard
     /// address is the guard word, and returns this word.
@@ -52,7 +54,7 @@ pub trait MemoryADT {
         &self,
         guard: (Self::Address, Option<Self::Word>),
         bindings: Vec<(Self::Address, Self::Word)>,
-    ) -> impl Send + std::future::Future<Output = Result<Option<Self::Word>, Self::Error>>;
+    ) -> impl Send + Future<Output = Result<Option<Self::Word>, Self::Error>>;
 }
 
 #[cfg(feature = "batch")]
@@ -71,5 +73,5 @@ pub trait BatchingMemoryADT: MemoryADT {
             (Self::Address, Option<Self::Word>),
             Vec<(Self::Address, Self::Word)>,
         )>,
-    ) -> impl Send + std::future::Future<Output = Result<Vec<Option<Self::Word>>, Self::Error>>;
+    ) -> impl Send + Future<Output = Result<Vec<Option<Self::Word>>, Self::Error>>;
 }
