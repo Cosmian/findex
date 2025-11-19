@@ -1,0 +1,40 @@
+[package]
+name = "cosmian-semantic-search"
+version.workspace = true
+authors.workspace = true
+categories.workspace = true
+edition.workspace = true
+keywords.workspace = true
+license.workspace = true
+repository.workspace = true
+description.workspace = true
+readme = "README.md"
+
+[lib]
+name = "cosmian_semantic_search"
+path = "src/lib.rs"
+
+[[bench]]
+name = "benches"
+harness = false
+required-features = ["test-utils"]
+
+[[test]]
+name = "integration_tests"
+required-features = ["test-utils"]
+
+[features]
+default = []
+test-utils = ["cosmian_sse_memories/redis-mem"]
+
+[dependencies]
+cosmian_sse_memories = { path = "../memories", version = "8.0" }
+cosmian_findex       = { path = "../findex", version = "8.0" }
+rand = "0.9.2"
+rand_distr = "0.5.1"
+cosmian_crypto_core.workspace = true
+tokio.workspace = true
+
+[dev-dependencies]
+criterion.workspace = true
+futures = "0.3.31"

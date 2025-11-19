@@ -1,5 +1,5 @@
 [workspace]
-members = ["crate/findex", "crate/memories"]
+members = ["crates/findex", "crates/memories", "crates/semantic-search"]
 resolver = "2"
 
 [workspace.package]
@@ -29,4 +29,4 @@ cosmian_crypto_core = { version = "10.2", default-features = false, features = [
 ] }
 criterion = { version = "0.6" }
 smol-macros = { version = "0.1" }
-tokio = { version = "1.46" }
+tokio = { version = "1.46", features = ["rt"] }
