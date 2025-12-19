@@ -31,7 +31,7 @@ fn test_cleartext_vector_db() {
     }
 
     for vi in &vs {
-        let candidates = block_on(vdb.search(10, vi)).unwrap();
+        let candidates = block_on(vdb.query(10, vi)).unwrap();
         assert!(!candidates.is_empty());
         assert_eq!(vi, &candidates[0].0);
     }
@@ -107,7 +107,7 @@ fn test_findex_vector_db() {
     }
 
     for vi in &vs {
-        let candidates = block_on(vdb.search(10, vi)).unwrap();
+        let candidates = block_on(vdb.query(10, vi)).unwrap();
         assert!(!candidates.is_empty());
         assert_eq!(vi, &candidates[0].0);
     }

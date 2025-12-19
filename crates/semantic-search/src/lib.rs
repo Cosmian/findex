@@ -1,35 +1,49 @@
-#![allow(async_fn_in_trait)]
-#![allow(non_snake_case)]
-
+mod encoding;
 mod error;
+mod fuzzy_database;
 mod simple_lsh;
 mod vector_db;
 mod vectors;
 
+#[cfg(feature = "python")]
+mod pyo3;
+
+#[cfg(feature = "python")]
+pub use pyo3::SecureSemanticDB;
+
+pub use encoding::Encoding;
 pub use error::Error;
-use rand::Rng;
+pub use fuzzy_database::FuzzyDB;
 pub use simple_lsh::{Parameters as SimpleLshParameters, SimpleLsh};
 pub use vector_db::LshVectorDB;
-pub use vectors::F32Vector;
+pub use vectors::{F32Vector, F64Vector};
 
-pub trait VectorDB<Vector>: Sized {
+use rand::Rng;
+
+pub trait VectorDB: Send + Sync + Sized {
+    /// Parameters used to instantiate a vector database.
     type Parameters;
+
+    /// Type of vector manage by this database.
     type Vector;
+
     type Score;
+
     type Error: std::error::Error;
 
+    /// Returns a fresh instance of this vector database.
     fn init(params: Self::Parameters) -> Result<Self, Self::Error>;
 
     /// Retrieves from the index the (approximate) k vectors that are closest to
     /// the given query.
-    async fn search(
+    fn query(
         &self,
         k: usize,
         query: &Self::Vector,
-    ) -> Result<Vec<(Self::Vector, Self::Score)>, Error>;
+    ) -> impl std::future::Future<Output = Result<Vec<(Self::Vector, Self::Score)>, Error>>;
 
     /// Inserts the given point to the index.
-    async fn insert(&self, point: Self::Vector) -> Result<(), Error>;
+    fn insert(&self, point: Self::Vector) -> impl std::future::Future<Output = Result<(), Error>>;
 }
 
 pub trait LocalitySensitiveHash {

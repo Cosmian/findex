@@ -1,5 +1,7 @@
 use std::fmt::{Debug, Display};
 
+use cosmian_crypto_core::CryptoCoreError;
+
 #[derive(Debug)]
 pub enum Error<Address> {
     Parsing(String),
@@ -7,6 +9,7 @@ pub enum Error<Address> {
     Conversion(String),
     MissingValue(Address, usize),
     CorruptedMemoryCache,
+    Other(String),
 }
 
 impl<Address: Debug> Display for Error<Address> {
@@ -16,3 +19,9 @@ impl<Address: Debug> Display for Error<Address> {
 }
 
 impl<Address: Debug> std::error::Error for Error<Address> {}
+
+impl<Address> From<CryptoCoreError> for Error<Address> {
+    fn from(value: CryptoCoreError) -> Self {
+        Self::Other(value.to_string())
+    }
+}

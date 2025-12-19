@@ -1,6 +1,7 @@
 use std::marker::PhantomData;
 
-use deadpool_postgres::Pool;
+use deadpool_postgres::{Config, Pool};
+use tokio_postgres::NoTls;
 
 use super::PostgresMemoryError;
 use crate::{Address, MemoryADT};
@@ -15,6 +16,18 @@ pub struct PostgresMemory<Address, Word> {
 impl<const ADDRESS_LENGTH: usize, const WORD_LENGTH: usize>
     PostgresMemory<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>
 {
+    pub async fn new(url: String, table_name: String) -> Result<Self, PostgresMemoryError> {
+        let mut pg_config = Config::new();
+        pg_config.url = Some(url);
+        let pool = pg_config.builder(NoTls)?.build()?;
+        Ok(
+            PostgresMemory::<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>::new_with_pool(
+                pool, table_name,
+            )
+            .await,
+        )
+    }
+
     /// Returns a new memory instance from the given connection pool to a
     /// PostgreSQL database.
     pub async fn new_with_pool(pool: Pool, table_name: String) -> Self {

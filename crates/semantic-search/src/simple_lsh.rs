@@ -1,3 +1,5 @@
+#![allow(non_snake_case)]
+
 use crate::{LocalitySensitiveHash, vectors::F32Vector};
 use rand::Rng;
 

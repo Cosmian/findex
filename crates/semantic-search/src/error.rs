@@ -1,5 +1,7 @@
 use std::fmt::Display;
 
+use cosmian_crypto_core::CryptoCoreError;
+
 #[derive(Debug)]
 pub struct Error(pub String);
 
@@ -10,3 +12,21 @@ impl Display for Error {
 }
 
 impl std::error::Error for Error {}
+
+impl From<CryptoCoreError> for Error {
+    fn from(error: CryptoCoreError) -> Self {
+        Self(error.to_string())
+    }
+}
+
+#[cfg(feature = "python")]
+mod bindings {
+    use super::*;
+    use cosmian_sse_memories::PostgresMemoryError;
+
+    impl From<PostgresMemoryError> for Error {
+        fn from(error: PostgresMemoryError) -> Self {
+            Self(error.to_string())
+        }
+    }
+}

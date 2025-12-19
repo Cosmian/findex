@@ -10,14 +10,14 @@ use std::{collections::HashSet, future::Future, hash::Hash};
 
 /// An index stores *values*, that associate a keyword with a value. All values
 /// bound to the same keyword are said to be *indexed under* this keyword.
-pub trait IndexADT<Keyword: Send + Hash, Value: Send + Hash> {
+pub trait IndexADT<Keyword: Send + Hash, Value: Send + Hash>: Send + Sync {
     type Error: Send + std::error::Error;
 
     /// Search the index for the values bound to the given keywords.
     fn search(
         &self,
         keyword: &Keyword,
-    ) -> impl Future<Output = Result<HashSet<Value>, Self::Error>>;
+    ) -> impl Send + Future<Output = Result<HashSet<Value>, Self::Error>>;
 
     /// Adds the given values to the index.
     fn insert(

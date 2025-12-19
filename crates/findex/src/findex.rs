@@ -7,6 +7,7 @@ use std::{
     sync::Arc,
 };
 
+use cosmian_crypto_core::bytes_ser_de::{Deserializer, Serializable, Serializer};
 use cosmian_sse_memories::{ADDRESS_LENGTH, Address, MemoryADT};
 
 use crate::{
@@ -17,10 +18,36 @@ use crate::{
     ovec::IVec,
 };
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Op {
     Insert,
     Delete,
+}
+
+impl Serializable for Op {
+    type Error = Error<Address<ADDRESS_LENGTH>>;
+
+    fn length(&self) -> usize {
+        1
+    }
+
+    fn write(&self, ser: &mut Serializer) -> Result<usize, Self::Error> {
+        match self {
+            Self::Delete => ser.write(&0usize),
+            Self::Insert => ser.write(&1usize),
+        }
+        .map_err(Self::Error::from)
+    }
+
+    fn read(de: &mut Deserializer) -> Result<Self, Self::Error> {
+        match de.read::<usize>()? {
+            0 => Ok(Self::Insert),
+            1 => Ok(Self::Delete),
+            _ => Err(Self::Error::Other(
+                "invalid operation representation".to_string(),
+            )),
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -72,6 +99,22 @@ impl<
     }
 
     fn hash_keyword<Keyword: Hash>(kw: &Keyword) -> Address<ADDRESS_LENGTH> {
+        // TODO: the number of hashes can be divided by two since we can reuse
+        // the state across calls to finish:
+        //
+        // ```
+        // let mut hasher = DefaultHasher::default();
+        // kw.hash(&mut hasher);
+        // let h1 = hasher.finish();
+        // kw.hash(&mut hasher);
+        // let h2 = hasher.finish();
+        // ```
+        //
+        // 1. This makes means we are relying on an internal implementation
+        // detail of the standard hasher.
+        //
+        // 2. This is a breaking change.
+
         let h = |n: u8| {
             let mut hasher = DefaultHasher::default();
             kw.hash(&mut hasher);

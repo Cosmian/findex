@@ -20,11 +20,11 @@ where
     index: Index,
 }
 
-impl<const D: usize, Lsh, Index> VectorDB<Lsh::Input> for LshVectorDB<D, Lsh, Index>
+impl<const D: usize, Lsh, Index> VectorDB for LshVectorDB<D, Lsh, Index>
 where
-    Lsh: LocalitySensitiveHash<Input = F32Vector<D>>,
+    Lsh: Send + Sync + LocalitySensitiveHash<Input = F32Vector<D>>,
     Lsh::Output: Send + Sync + Clone + Eq + Hash,
-    Index: IndexADT<Lsh::Output, Lsh::Input>,
+    Index: Send + Sync + IndexADT<Lsh::Output, Lsh::Input>,
 {
     type Parameters = (Lsh, Index);
     type Vector = Lsh::Input;
@@ -38,7 +38,7 @@ where
         })
     }
 
-    async fn search(
+    async fn query(
         &self,
         k: usize,
         query: &Self::Vector,
