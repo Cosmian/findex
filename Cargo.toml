@@ -1,5 +1,5 @@
 [workspace]
-members = ["crate/findex", "crate/memories"]
+members = ["crate/findex", "crate/memories", "crate/batcher"]
 resolver = "2"
 
 [workspace.package]
@@ -28,6 +28,7 @@ cosmian_crypto_core = { version = "10.2", default-features = false, features = [
     "sha3",
 ] }
 criterion = { version = "0.6" }
+deadpool-postgres = { version = "0.14" }
+futures = "0.3"
 smol-macros = { version = "0.1" }
 tokio = { version = "1.46" }
-futures = "0.3.31"

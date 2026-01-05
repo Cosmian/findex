@@ -1,3 +1,5 @@
+#![warn(clippy::all, clippy::nursery, clippy::cargo)]
+
 mod address;
 mod databases;
 mod in_memory;

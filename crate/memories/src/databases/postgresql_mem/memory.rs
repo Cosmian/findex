@@ -17,12 +17,20 @@ impl<const ADDRESS_LENGTH: usize, const WORD_LENGTH: usize>
 {
     /// Returns a new memory instance from the given connection pool to a
     /// PostgreSQL database.
-    pub async fn new_with_pool(pool: Pool, table_name: String) -> Self {
+    pub fn new_with_pool(pool: Pool, table_name: String) -> Self {
         Self {
             pool,
             table_name,
             _marker: PhantomData,
         }
+    }
+
+    pub fn get_pool(&self) -> &Pool {
+        &self.pool
+    }
+
+    pub fn get_table_name(&self) -> &str {
+        &self.table_name
     }
 
     /// Connects to a PostgreSQL database and creates a table if it doesn't
@@ -143,7 +151,7 @@ impl<const ADDRESS_LENGTH: usize, const WORD_LENGTH: usize> MemoryADT
             bindings.into_iter().map(|(a, w)| (*a, w)).unzip();
 
         // Since a guarded write operation is lock-free, this loop is guaranteed
-        // to terminate.
+        // to terminate given a fixed amount of concurrent modifications.
         loop {
             // Do not lock a resource for a potentially long loop, instead
             // request a new one at each iteration.
@@ -222,7 +230,7 @@ mod tests {
     const DB_URL: &str = "postgres://cosmian:cosmian@localhost/cosmian";
 
     // Template function for pool creation
-    pub async fn create_testing_pool(db_url: &str) -> Result<Pool, PostgresMemoryError> {
+    pub fn create_testing_pool(db_url: &str) -> Result<Pool, PostgresMemoryError> {
         let mut pg_config = Config::new();
         pg_config.url = Some(db_url.to_string());
         let pool = pg_config.builder(NoTls)?.build()?;
@@ -239,8 +247,8 @@ mod tests {
         F: FnOnce(PostgresMemory<Address<ADDRESS_LENGTH>, [u8; 129]>) -> Fut + Send,
         Fut: Future<Output = ()> + Send,
     {
-        let test_pool = create_testing_pool(DB_URL).await.unwrap();
-        let m = PostgresMemory::new_with_pool(test_pool.clone(), table_name.to_string()).await;
+        let test_pool = create_testing_pool(DB_URL).unwrap();
+        let m = PostgresMemory::new_with_pool(test_pool.clone(), table_name.to_string());
 
         m.initialize().await?;
 
@@ -259,12 +267,11 @@ mod tests {
     #[tokio::test]
     async fn test_initialization() -> Result<(), PostgresMemoryError> {
         let table_name: &str = "test_initialization";
-        let test_pool = create_testing_pool(DB_URL).await.unwrap();
+        let test_pool = create_testing_pool(DB_URL).unwrap();
         let m = PostgresMemory::<Address<ADDRESS_LENGTH>, [u8; 785]>::new_with_pool(
             test_pool.clone(),
             table_name.to_string(),
-        )
-        .await;
+        );
 
         m.initialize().await?;
 

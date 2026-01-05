@@ -1,0 +1,38 @@
+[package]
+name = "cosmian_sse_batcher"
+version.workspace = true
+authors.workspace = true
+categories.workspace = true
+edition.workspace = true
+keywords.workspace = true
+license.workspace = true
+repository.workspace = true
+description.workspace = true
+readme = "README.md"
+
+[lib]
+name = "cosmian_sse_batcher"
+path = "src/lib.rs"
+
+[features]
+postgres = ["cosmian_sse_memories/postgres-mem", "deadpool-postgres"]
+
+[dependencies]
+cosmian_crypto_core.workspace = true
+cosmian_sse_memories = { path = "../memories", version = "8.1.0" }
+cosmian_findex = { path = "../findex", version = "8.1.0" }
+futures.workspace = true
+deadpool-postgres = { workspace = true, optional = true }
+
+[dev-dependencies]
+agnostic-lite = { workspace = true, features = ["tokio"] }
+cosmian_sse_memories = { path = "../memories", version = "8.1.0", features = [
+    "redis-mem",
+    "sqlite-mem",
+    "postgres-mem",
+    "test-utils",
+] }
+rand = "0.9"
+rand_distr = "0.5"
+smol-macros = { workspace = true }
+tokio = { version = "1.44", features = ["macros", "rt-multi-thread"] }
