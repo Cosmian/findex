@@ -178,11 +178,6 @@ mod tests {
     #[tokio::test]
     async fn test_rw_ccr() {
         let m = RedisMemory::new_with_url(&get_redis_url()).await.unwrap();
-        test_guarded_write_concurrent::<129, _, agnostic_lite::tokio::TokioSpawner>(
-            &m,
-            gen_seed(),
-            None,
-        )
-        .await
+        test_guarded_write_concurrent::<129, _>(&m, gen_seed(), None).await
     }
 }

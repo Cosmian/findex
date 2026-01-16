@@ -29,9 +29,3 @@ pub use encoding::{
 pub use encryption_layer::{KEY_LENGTH, MemoryEncryptionLayer};
 pub use error::Error;
 pub use findex::{Findex, Op};
-
-#[cfg(feature = "test-utils")]
-pub mod reexport {
-    // Re-exporting the most commonly used runtime interfaces for convenience.
-    pub use agnostic_lite::{smol, tokio, wasm};
-}

@@ -9,7 +9,7 @@ use cosmian_crypto_core::{
 use cosmian_findex::{
     WORD_LENGTH, bench_memory_contention, bench_memory_insert_multiple_bindings,
     bench_memory_one_to_many, bench_memory_search_multiple_bindings,
-    bench_memory_search_multiple_keywords, reexport::tokio::TokioRuntime,
+    bench_memory_search_multiple_keywords,
 };
 use cosmian_sse_memories::InMemory;
 use criterion::{Criterion, criterion_group, criterion_main};
@@ -82,18 +82,20 @@ fn bench_search_multiple_bindings(c: &mut Criterion) {
     let rt = Builder::new_multi_thread().enable_all().build().unwrap();
     let _guard = rt.enter();
 
-    bench_memory_search_multiple_bindings::<_, TokioRuntime>(
+    bench_memory_search_multiple_bindings(
         "in-memory",
         N_PTS,
+        &rt,
         async || InMemory::default(),
         c,
         &mut rng,
     );
 
     if redis_enabled {
-        bench_memory_search_multiple_bindings::<_, TokioRuntime>(
+        bench_memory_search_multiple_bindings(
             "Redis",
             N_PTS,
+            &rt,
             async || RedisMemory::new_with_url(&get_redis_url()).await.unwrap(),
             c,
             &mut rng,
@@ -101,9 +103,10 @@ fn bench_search_multiple_bindings(c: &mut Criterion) {
     }
 
     if sqlite_enabled {
-        bench_memory_search_multiple_bindings::<_, TokioRuntime>(
+        bench_memory_search_multiple_bindings(
             "SQLite",
             N_PTS,
+            &rt,
             async || {
                 let m = SqliteMemory::new_with_path(SQLITE_PATH, "bench_memory_smd".to_string())
                     .await
@@ -117,9 +120,10 @@ fn bench_search_multiple_bindings(c: &mut Criterion) {
     }
 
     if postgres_enabled {
-        bench_memory_search_multiple_bindings::<_, TokioRuntime>(
+        bench_memory_search_multiple_bindings(
             "Postgres",
             N_PTS,
+            &rt,
             async || {
                 let m =
                     connect_and_init_table(get_postgresql_url(), "bench_memory_smd".to_string())
@@ -139,18 +143,20 @@ fn bench_search_multiple_keywords(c: &mut Criterion) {
     let rt = Builder::new_multi_thread().enable_all().build().unwrap();
     let _guard = rt.enter();
 
-    bench_memory_search_multiple_keywords::<_, TokioRuntime>(
+    bench_memory_search_multiple_keywords(
         "in-memory",
         N_PTS,
+        &rt,
         async || InMemory::default(),
         c,
         &mut rng,
     );
 
     if redis_enabled {
-        bench_memory_search_multiple_keywords::<_, TokioRuntime>(
+        bench_memory_search_multiple_keywords(
             "Redis",
             N_PTS,
+            &rt,
             async || RedisMemory::new_with_url(&get_redis_url()).await.unwrap(),
             c,
             &mut rng,
@@ -158,9 +164,10 @@ fn bench_search_multiple_keywords(c: &mut Criterion) {
     }
 
     if sqlite_enabled {
-        bench_memory_search_multiple_keywords::<_, TokioRuntime>(
+        bench_memory_search_multiple_keywords(
             "SQLite",
             N_PTS,
+            &rt,
             async || {
                 let m = SqliteMemory::new_with_path(SQLITE_PATH, "bench_memory_smk".to_string())
                     .await
@@ -174,9 +181,10 @@ fn bench_search_multiple_keywords(c: &mut Criterion) {
     }
 
     if postgres_enabled {
-        bench_memory_search_multiple_keywords::<_, TokioRuntime>(
+        bench_memory_search_multiple_keywords(
             "Postgres",
             N_PTS,
+            &rt,
             async || {
                 connect_and_init_table(get_postgresql_url(), "bench_memory_smk".to_string())
                     .await
@@ -193,9 +201,10 @@ fn bench_insert_multiple_bindings(c: &mut Criterion) {
     let rt = Builder::new_multi_thread().enable_all().build().unwrap();
     let _guard = rt.enter();
 
-    bench_memory_insert_multiple_bindings::<_, _, TokioRuntime>(
+    bench_memory_insert_multiple_bindings(
         "in-memory",
         N_PTS,
+        &rt,
         async || InMemory::default(),
         c,
         async |m: &InMemory<_, _>| -> Result<(), String> {
@@ -206,9 +215,10 @@ fn bench_insert_multiple_bindings(c: &mut Criterion) {
     );
 
     if redis_enabled {
-        bench_memory_insert_multiple_bindings::<_, _, TokioRuntime>(
+        bench_memory_insert_multiple_bindings(
             "Redis",
             N_PTS,
+            &rt,
             async || RedisMemory::new_with_url(&get_redis_url()).await.unwrap(),
             c,
             RedisMemory::clear,
@@ -217,9 +227,10 @@ fn bench_insert_multiple_bindings(c: &mut Criterion) {
     }
 
     if sqlite_enabled {
-        bench_memory_insert_multiple_bindings::<_, _, TokioRuntime>(
+        bench_memory_insert_multiple_bindings(
             "SQLite",
             N_PTS,
+            &rt,
             async || {
                 let m = SqliteMemory::new_with_path(SQLITE_PATH, "bench_memory_imd".to_string())
                     .await
@@ -234,9 +245,10 @@ fn bench_insert_multiple_bindings(c: &mut Criterion) {
     }
 
     if postgres_enabled {
-        bench_memory_insert_multiple_bindings::<_, _, TokioRuntime>(
+        bench_memory_insert_multiple_bindings(
             "Postgres",
             N_PTS,
+            &rt,
             async || {
                 connect_and_init_table(get_postgresql_url(), "bench_memory_imd".to_string())
                     .await
@@ -257,9 +269,10 @@ fn bench_contention(c: &mut Criterion) {
     let rt = Builder::new_multi_thread().enable_all().build().unwrap();
     let _guard = rt.enter();
 
-    bench_memory_contention::<_, _, TokioRuntime>(
+    bench_memory_contention(
         "in-memory",
         N_PTS,
+        &rt,
         async || InMemory::default(),
         c,
         async |m: &InMemory<_, _>| -> Result<(), String> {
@@ -270,9 +283,10 @@ fn bench_contention(c: &mut Criterion) {
     );
 
     if redis_enabled {
-        bench_memory_contention::<_, _, TokioRuntime>(
+        bench_memory_contention(
             "Redis",
             N_PTS,
+            &rt,
             async || RedisMemory::new_with_url(&get_redis_url()).await.unwrap(),
             c,
             RedisMemory::clear,
@@ -281,9 +295,10 @@ fn bench_contention(c: &mut Criterion) {
     }
 
     if sqlite_enabled {
-        bench_memory_contention::<_, _, TokioRuntime>(
+        bench_memory_contention(
             "SQLite",
             N_PTS,
+            &rt,
             async || {
                 let m =
                     SqliteMemory::new_with_path(SQLITE_PATH, "bench_memory_contention".to_string())
@@ -299,9 +314,10 @@ fn bench_contention(c: &mut Criterion) {
     }
 
     if postgres_enabled {
-        bench_memory_contention::<_, _, TokioRuntime>(
+        bench_memory_contention(
             "Postgres",
             N_PTS,
+            &rt,
             async || {
                 connect_and_init_table(get_postgresql_url(), "bench_memory_contention".to_string())
                     .await
@@ -405,9 +421,10 @@ fn bench_one_to_many(c: &mut Criterion) {
 
     if redis_enabled {
         for (mean, variance) in &delay_params {
-            bench_memory_one_to_many::<_, _, TokioRuntime>(
+            bench_memory_one_to_many(
                 "Redis",
                 N_PTS,
+                &rt,
                 async || {
                     DelayedMemory::new(
                         RedisMemory::new_with_url(&get_redis_url()).await.unwrap(),
@@ -424,9 +441,10 @@ fn bench_one_to_many(c: &mut Criterion) {
 
     if postgres_enabled {
         for (mean, variance) in &delay_params {
-            bench_memory_one_to_many::<_, _, TokioRuntime>(
+            bench_memory_one_to_many(
                 "Postgres",
                 N_PTS,
+                &rt,
                 async || {
                     let m = connect_and_init_table(
                         get_postgresql_url(),

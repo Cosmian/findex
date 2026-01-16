@@ -17,7 +17,7 @@ jobs:
   bench:
     uses: Cosmian/reusable_workflows/.github/workflows/cargo-bench.yml@develop
     with:
-      toolchain: 1.87.0
+      toolchain: 1.90.0
       features: test-utils
       force: true
       redis-host: "redis"
