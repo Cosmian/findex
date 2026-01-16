@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [8.0.1] - 2026-01-16
+
+### 🐛 Bug Fixes
+
+- *(RUSTSEC-2024-0436)* Remove agnostic-lite and simplify deps ([#157](https://github.com/Cosmian/findex/pull/157))
+
 ## [8.0.0] - 2025-08-06
 
 ### 🚀 Features
@@ -61,7 +67,7 @@ In order to ease the reading, fix some vocabulary first:
 - Encrypted Multi-Map Scheme (MM-Enc): a scheme managing an EMM;
 - Encrypted Graph Scheme (GX-Enc): a scheme managing an EGX;
 - tag: bytes (may be a meaningful piece of information) used to point to a value in an map (H(w) in the Entry Table)
-- token: _non-meaningful_ bytes used to index a value in a map (it corresponds to the UIDs)
+- token: *non-meaningful* bytes used to index a value in a map (it corresponds to the UIDs)
 
 Findex (as the product) is now composed of three algorithms:
 
