@@ -5,7 +5,7 @@ jobs:
   cargo-lint:
     uses: ./.github/workflows/ci.yml
     with:
-      toolchain: 1.87.0
+      toolchain: 1.90.0
   cleanup:
     needs:
       - cargo-lint

@@ -21,7 +21,6 @@ postgres-mem = ["deadpool-postgres", "tokio", "tokio-postgres"]
 test-utils = ["tokio"]
 
 [dependencies]
-agnostic-lite = { workspace = true }
 async-sqlite = { version = "0.5", optional = true }
 cosmian_crypto_core.workspace = true
 deadpool-postgres = { version = "0.14", optional = true }
@@ -35,7 +34,5 @@ tokio-postgres = { version = "0.7", optional = true, features = [
 ] }
 
 [dev-dependencies]
-agnostic-lite = { workspace = true, features = ["tokio", "smol"] }
 cosmian_crypto_core.workspace = true
-smol-macros = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }

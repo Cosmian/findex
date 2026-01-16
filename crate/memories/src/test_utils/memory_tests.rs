@@ -10,11 +10,11 @@
 
 use std::fmt::Debug;
 
-use agnostic_lite::AsyncSpawner;
 use cosmian_crypto_core::{
     CsRng,
     reexport::rand_core::{RngCore, SeedableRng},
 };
+use tokio::task::JoinHandle;
 
 use crate::{ADDRESS_LENGTH, MemoryADT};
 
@@ -236,7 +236,7 @@ pub async fn test_rw_same_address<const WORD_LENGTH: usize, Memory>(
 /// * `memory` - The Memory ADT implementation to test.
 /// * `seed` - The seed used to initialize the random number generator.
 /// * `n_threads` - The number of threads to spawn. If None, defaults to 100.
-pub async fn test_guarded_write_concurrent<const WORD_LENGTH: usize, Memory, Spawner>(
+pub async fn test_guarded_write_concurrent<const WORD_LENGTH: usize, Memory>(
     memory: &Memory,
     seed: [u8; SEED_LENGTH],
     n_threads: Option<usize>,
@@ -246,7 +246,6 @@ pub async fn test_guarded_write_concurrent<const WORD_LENGTH: usize, Memory, Spa
     Memory::Word:
         Send + Debug + PartialEq + From<[u8; WORD_LENGTH]> + Into<[u8; WORD_LENGTH]> + Clone,
     Memory::Error: Send + std::error::Error,
-    Spawner: AsyncSpawner,
 {
     // A worker increment N times the counter m[a].
     async fn worker<const WORD_LENGTH: usize, Memory>(
@@ -294,15 +293,15 @@ pub async fn test_guarded_write_concurrent<const WORD_LENGTH: usize, Memory, Spa
     let mut rng = CsRng::from_seed(seed);
     let a = gen_bytes(&mut rng);
 
-    let handles = (0..n)
+    let handles: Vec<JoinHandle<Result<(), Memory::Error>>> = (0..n)
         .map(|_| {
             let m = memory.clone();
-            Spawner::spawn(worker(m, a))
+            tokio::spawn(worker::<WORD_LENGTH, Memory>(m, a))
         })
-        .collect::<Vec<_>>();
+        .collect();
 
     for handle in handles {
-        handle.await.unwrap().unwrap();
+        handle.await.expect("task join failed").unwrap();
     }
 
     let final_count = memory.batch_read(vec![a.into()]).await.unwrap()[0]

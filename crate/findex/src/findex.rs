@@ -144,7 +144,6 @@ mod tests {
 
     use cosmian_crypto_core::{CsRng, Secret, define_byte_type, reexport::rand_core::SeedableRng};
     use cosmian_sse_memories::{ADDRESS_LENGTH, Address, InMemory};
-    use smol_macros::Executor;
 
     use crate::{Findex, IndexADT, MemoryEncryptionLayer, dummy_decode, dummy_encode};
 
@@ -211,62 +210,44 @@ mod tests {
         assert_eq!(HashSet::new(), dog_res);
     }
 
-    // The next test uses the `smol` executor to run the async code, forcasting that
-    // findex can be used in a different async runtime.
-    smol_macros::test! {
-        async fn test_insert_search_delete_search_smol(executor: &Executor<'_>) {
-            let mut rng = CsRng::from_entropy();
-            let seed = Secret::random(&mut rng);
-            let memory = MemoryEncryptionLayer::new(
-                &seed,
-                InMemory::<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>::default(),
-            );
+    #[tokio::test]
+    async fn test_insert_search_delete_search_concurrent_tokio() {
+        let mut rng = CsRng::from_entropy();
+        let seed = Secret::random(&mut rng);
+        let memory = MemoryEncryptionLayer::new(
+            &seed,
+            InMemory::<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>::default(),
+        );
 
-            let findex = Findex::new(memory, dummy_encode::<WORD_LENGTH, Value>, dummy_decode);
+        let findex = Findex::new(memory, dummy_encode::<WORD_LENGTH, Value>, dummy_decode);
 
-            // Test concurrent inserts to the same keyword
-            let values1 = Arc::new([
-                Value::try_from(1).unwrap(),
-                Value::try_from(2).unwrap(),
-            ]);
-            let values2 = Arc::new([
-                Value::try_from(3).unwrap(),
-                Value::try_from(4).unwrap(),
-            ]);
-            let values3 = Arc::new([
-                Value::try_from(5).unwrap(),
-                Value::try_from(6).unwrap(),
-            ]);
+        // Test concurrent inserts to the same keyword
+        let values1 = Arc::new([Value::try_from(1).unwrap(), Value::try_from(2).unwrap()]);
+        let values2 = Arc::new([Value::try_from(3).unwrap(), Value::try_from(4).unwrap()]);
+        let values3 = Arc::new([Value::try_from(5).unwrap(), Value::try_from(6).unwrap()]);
 
-            // Spawn concurrent insert operations
-            let findex1 = findex.clone();
-            let findex2 = findex.clone();
-            let findex3 = findex.clone();
+        let expected: HashSet<Value> = values1
+            .iter()
+            .chain(values2.iter())
+            .chain(values3.iter())
+            .cloned()
+            .collect();
 
-            let expected: HashSet<Value> = values1.iter()
-                .chain(values2.iter())
-                .chain(values3.iter())
-                .cloned()
-                .collect();
+        let findex1 = findex.clone();
+        let findex2 = findex.clone();
+        let findex3 = findex.clone();
 
-            let task1 =  executor.spawn(async move {
-                findex1.insert("spider".to_string(), (*values1).clone()).await
-            });
-            let task2 =  executor.spawn(async move {
-                findex2.insert("spider".to_string(), (*values2).clone()).await
-            });
-            let task3 =  executor.spawn(async move {
-                findex3.insert("spider".to_string(), (*values3).clone()).await
-            });
+        let (r1, r2, r3) = tokio::join!(
+            findex1.insert("spider".to_string(), (*values1).clone()),
+            findex2.insert("spider".to_string(), (*values2).clone()),
+            findex3.insert("spider".to_string(), (*values3).clone()),
+        );
 
-            // Wait for all inserts to complete
-            task1.await.unwrap();
-            task2.await.unwrap();
-            task3.await.unwrap();
+        r1.unwrap();
+        r2.unwrap();
+        r3.unwrap();
 
-             // Search and verify all values are present
-            let result = findex.search(&"spider".to_string()).await.unwrap();
-            assert_eq!(expected, result);
-        }
+        let result = findex.search(&"spider".to_string()).await.unwrap();
+        assert_eq!(expected, result);
     }
 }

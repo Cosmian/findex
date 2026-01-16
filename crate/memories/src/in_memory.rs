@@ -92,8 +92,6 @@ impl<Address: Hash + Eq + Debug + Clone, Value: Clone + Eq + Debug> IntoIterator
 #[cfg(test)]
 mod tests {
 
-    use smol_macros::{Executor, test};
-
     use super::InMemory;
     use crate::test_utils::{
         gen_seed, test_guarded_write_concurrent, test_rw_same_address, test_single_write_and_read,
@@ -126,26 +124,6 @@ mod tests {
     #[tokio::test]
     async fn test_concurrent_read_write_tokio() {
         let memory = InMemory::<[u8; TEST_ADDRESS_LENGTH], [u8; TEST_WORD_LENGTH]>::default();
-        test_guarded_write_concurrent::<TEST_WORD_LENGTH, _, agnostic_lite::tokio::TokioSpawner>(
-            &memory,
-            gen_seed(),
-            None,
-        )
-        .await;
-    }
-
-    test! {
-        async fn test_concurrent_read_write_smol(executor: &Executor<'_>) {
-            executor.spawn(async {
-                let memory = InMemory::<[u8; TEST_ADDRESS_LENGTH], [u8; TEST_WORD_LENGTH]>::default();
-                test_guarded_write_concurrent::<TEST_WORD_LENGTH, _, agnostic_lite::smol::SmolSpawner>(
-                    &memory,
-                    gen_seed(),
-                    None,
-                )
-                .await;
-            })
-            .await;
-        }
+        test_guarded_write_concurrent::<TEST_WORD_LENGTH, _>(&memory, gen_seed(), None).await;
     }
 }

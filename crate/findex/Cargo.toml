@@ -15,7 +15,7 @@ name = "cosmian_findex"
 path = "src/lib.rs"
 
 [features]
-test-utils = ["agnostic-lite", "criterion"]
+test-utils = ["tokio", "criterion"]
 
 [dependencies]
 aes = "0.8"
@@ -24,15 +24,10 @@ cosmian_sse_memories = { path = "../memories", version = "8.0" }
 xts-mode = "0.5"
 
 # Optional dependencies for testing and benchmarking.
-agnostic-lite = { workspace = true, optional = true, features = [
-    "tokio",
-    "smol",
-    "wasm",
-] }
 criterion = { workspace = true, optional = true }
+tokio = { workspace = true, optional = true, features = ["rt-multi-thread"] }
 
 [dev-dependencies]
-agnostic-lite = { workspace = true, features = ["tokio"] }
 cosmian_sse_memories = { path = "../memories", version = "8.0", features = [
     "redis-mem",
     "sqlite-mem",
@@ -41,8 +36,7 @@ cosmian_sse_memories = { path = "../memories", version = "8.0", features = [
 ] }
 rand = "0.9"
 rand_distr = "0.5"
-smol-macros = { workspace = true }
-tokio = { version = "1.44", features = ["macros", "rt-multi-thread"] }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
 
 [[example]]
 name = "in_memory"
