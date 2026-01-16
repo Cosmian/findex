@@ -8,13 +8,15 @@
 //!
 //! Both addresses and words are 16-byte long.
 
-use crate::{ADDRESS_LENGTH, MemoryADT};
-use agnostic_lite::AsyncSpawner;
+use std::fmt::Debug;
+
 use cosmian_crypto_core::{
     CsRng,
     reexport::rand_core::{RngCore, SeedableRng},
 };
-use std::fmt::Debug;
+use tokio::task::JoinHandle;
+
+use crate::{ADDRESS_LENGTH, MemoryADT};
 
 pub const SEED_LENGTH: usize = 32;
 
@@ -147,8 +149,10 @@ pub async fn test_wrong_guard<const WORD_LENGTH: usize, Memory>(
 
 /// Tests operations on repeated addresses in memory implementations.
 ///
-/// This test verifies the behavior when the same address is used multiple times:
-/// 1. Writes a value to an address and then confirms it can be read back multiple times consistently
+/// This test verifies the behavior when the same address is used multiple
+/// times:
+/// 1. Writes a value to an address and then confirms it can be read back
+///    multiple times consistently
 /// 2. Performs multiple writes to the same address with a correct guard
 /// 3. Verifies that one of the written values is properly stored
 pub async fn test_rw_same_address<const WORD_LENGTH: usize, Memory>(
@@ -186,7 +190,8 @@ pub async fn test_rw_same_address<const WORD_LENGTH: usize, Memory>(
         seed
     );
 
-    // try to write multiple values to the same address with a guard that should pass
+    // try to write multiple values to the same address with a guard that should
+    // pass
     let values = (0..REPETITION)
         .map(|_| Memory::Word::from(gen_bytes(&mut rng)))
         .collect::<Vec<_>>();
@@ -231,7 +236,7 @@ pub async fn test_rw_same_address<const WORD_LENGTH: usize, Memory>(
 /// * `memory` - The Memory ADT implementation to test.
 /// * `seed` - The seed used to initialize the random number generator.
 /// * `n_threads` - The number of threads to spawn. If None, defaults to 100.
-pub async fn test_guarded_write_concurrent<const WORD_LENGTH: usize, Memory, Spawner>(
+pub async fn test_guarded_write_concurrent<const WORD_LENGTH: usize, Memory>(
     memory: &Memory,
     seed: [u8; SEED_LENGTH],
     n_threads: Option<usize>,
@@ -241,7 +246,6 @@ pub async fn test_guarded_write_concurrent<const WORD_LENGTH: usize, Memory, Spa
     Memory::Word:
         Send + Debug + PartialEq + From<[u8; WORD_LENGTH]> + Into<[u8; WORD_LENGTH]> + Clone,
     Memory::Error: Send + std::error::Error,
-    Spawner: AsyncSpawner,
 {
     // A worker increment N times the counter m[a].
     async fn worker<const WORD_LENGTH: usize, Memory>(
@@ -289,15 +293,15 @@ pub async fn test_guarded_write_concurrent<const WORD_LENGTH: usize, Memory, Spa
     let mut rng = CsRng::from_seed(seed);
     let a = gen_bytes(&mut rng);
 
-    let handles = (0..n)
+    let handles: Vec<JoinHandle<Result<(), Memory::Error>>> = (0..n)
         .map(|_| {
             let m = memory.clone();
-            Spawner::spawn(worker(m, a))
+            tokio::spawn(worker::<WORD_LENGTH, Memory>(m, a))
         })
-        .collect::<Vec<_>>();
+        .collect();
 
     for handle in handles {
-        handle.await.unwrap().unwrap();
+        handle.await.expect("task join failed").unwrap();
     }
 
     let final_count = memory.batch_read(vec![a.into()]).await.unwrap()[0]
@@ -308,7 +312,7 @@ pub async fn test_guarded_write_concurrent<const WORD_LENGTH: usize, Memory, Spa
         word_to_array(final_count.clone().into()).unwrap(),
         (n * M) as u128,
         "test_guarded_write_concurrent failed. Expected the counter to be at {:?}, found \
-             {:?}.\nDebug seed : {:?}.",
+         {:?}.\nDebug seed : {:?}.",
         (n * M) as u128,
         word_to_array(final_count.into()).unwrap(),
         seed

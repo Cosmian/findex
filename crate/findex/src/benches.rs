@@ -1,14 +1,16 @@
 //! This module provides a comprehensive benchmarking suite for testing the
 //! performance of Findex memory implementations. These benchmarks are designed
-//! to be generic and work with any memory back end that implements the MemoryADT
-//! trait.
+//! to be generic and work with any memory back end that implements the
+//! MemoryADT trait.
 
-use crate::{Findex, IndexADT, MemoryEncryptionLayer, WORD_LENGTH, dummy_decode, dummy_encode};
-use agnostic_lite::{JoinHandle, RuntimeLite};
+use std::{collections::HashSet, fmt::Debug, sync::Arc};
+
 use cosmian_crypto_core::{Secret, reexport::rand_core::CryptoRngCore};
 use cosmian_sse_memories::{ADDRESS_LENGTH, Address, MemoryADT};
 use criterion::{BenchmarkId, Criterion};
-use std::{collections::HashSet, fmt::Debug, sync::Arc};
+use tokio::runtime::Runtime;
+
+use crate::{Findex, IndexADT, MemoryEncryptionLayer, WORD_LENGTH, dummy_decode, dummy_encode};
 
 const MAX_VAL: usize = 1_000;
 
@@ -52,16 +54,16 @@ fn build_benchmarking_keywords_index(
 /// of values indexed under this keyword.
 pub fn bench_memory_search_multiple_bindings<
     Memory: Clone + Send + Sync + MemoryADT<Address = Address<ADDRESS_LENGTH>, Word = [u8; WORD_LENGTH]>,
-    BenchesRuntime: 'static + RuntimeLite,
 >(
     memory_name: &str,
     n: usize,
+    rt: &Runtime,
     m: impl AsyncFn() -> Memory,
     c: &mut Criterion,
     rng: &mut impl CryptoRngCore,
 ) {
     let findex = Findex::new(
-        MemoryEncryptionLayer::new(&Secret::random(rng), BenchesRuntime::block_on(m())),
+        MemoryEncryptionLayer::new(&Secret::random(rng), rt.block_on(m())),
         dummy_encode::<WORD_LENGTH, _>,
         dummy_decode,
     );
@@ -71,12 +73,12 @@ pub fn bench_memory_search_multiple_bindings<
     index
         .clone()
         .into_iter()
-        .for_each(|(kw, vs)| BenchesRuntime::block_on(findex.insert(kw, vs)).unwrap());
+        .for_each(|(kw, vs)| rt.block_on(findex.insert(kw, vs)).unwrap());
 
     let mut group = c.benchmark_group(format!("multiple-binding search ({})", memory_name));
     for (kw, vals) in index.iter() {
         group.bench_with_input(BenchmarkId::from_parameter(vals.len()), &(), |b, ()| {
-            b.iter(|| BenchesRuntime::block_on(findex.search(kw)).expect("search failed"));
+            b.iter(|| rt.block_on(findex.search(kw)).expect("search failed"));
         });
     }
 }
@@ -89,16 +91,16 @@ pub fn bench_memory_search_multiple_keywords<
         + Send
         + Sync
         + MemoryADT<Address = Address<ADDRESS_LENGTH>, Word = [u8; WORD_LENGTH]>,
-    BenchesRuntime: 'static + RuntimeLite,
 >(
     memory_name: &str,
     n: usize,
+    rt: &Runtime,
     m: impl AsyncFn() -> Memory,
     c: &mut Criterion,
     rng: &mut impl CryptoRngCore,
 ) {
     let findex = Arc::new(Findex::new(
-        MemoryEncryptionLayer::new(&Secret::random(rng), BenchesRuntime::block_on(m())),
+        MemoryEncryptionLayer::new(&Secret::random(rng), rt.block_on(m())),
         dummy_encode::<WORD_LENGTH, _>,
         dummy_decode,
     ));
@@ -108,7 +110,7 @@ pub fn bench_memory_search_multiple_keywords<
     index
         .clone()
         .into_iter()
-        .for_each(|(kw, vs)| BenchesRuntime::block_on(findex.insert(kw, vs)).unwrap());
+        .for_each(|(kw, vs)| rt.block_on(findex.insert(kw, vs)).unwrap());
 
     let mut group = c.benchmark_group(format!("multiple-keyword search ({memory_name})"));
     for i in make_scale(1, MAX_VAL, n) {
@@ -127,13 +129,11 @@ pub fn bench_memory_search_multiple_keywords<
                     )
                 },
                 |(kws, findex)| {
-                    BenchesRuntime::block_on(async {
+                    rt.block_on(async {
                         let mut handles = Vec::with_capacity(n);
                         for kw in kws {
                             let findex = findex.clone();
-                            handles.push(BenchesRuntime::spawn(
-                                async move { findex.search(&kw).await },
-                            ))
+                            handles.push(tokio::spawn(async move { findex.search(&kw).await }))
                         }
                         for res in handles {
                             res.await.expect("Search task failed").unwrap();
@@ -155,16 +155,16 @@ pub fn bench_memory_insert_multiple_bindings<
         + Send
         + Sync
         + MemoryADT<Address = Address<ADDRESS_LENGTH>, Word = [u8; WORD_LENGTH]>,
-    BenchesRuntime: 'static + RuntimeLite,
 >(
     memory_name: &str,
     n: usize,
+    rt: &Runtime,
     m: impl AsyncFn() -> Memory,
     c: &mut Criterion,
     clear: impl AsyncFn(&Memory) -> Result<(), E>,
     rng: &mut impl CryptoRngCore,
 ) {
-    let mut m = BenchesRuntime::block_on(m());
+    let mut m = rt.block_on(m());
 
     let findex = Arc::new(Findex::new(
         MemoryEncryptionLayer::new(&Secret::random(rng), m.clone()),
@@ -177,17 +177,17 @@ pub fn bench_memory_insert_multiple_bindings<
     index
         .clone()
         .into_iter()
-        .for_each(|(kw, vs)| BenchesRuntime::block_on(findex.insert(kw, vs)).unwrap());
+        .for_each(|(kw, vs)| rt.block_on(findex.insert(kw, vs)).unwrap());
 
     let mut group = c.benchmark_group(format!("multiple-binding insert ({memory_name})"));
     for (kw, vs) in index.into_iter() {
         group.bench_function(BenchmarkId::from_parameter(vs.len()), |b| {
             b.iter_batched(
                 || {
-                    BenchesRuntime::block_on(clear(&mut m)).unwrap();
+                    rt.block_on(clear(&mut m)).unwrap();
                     (kw, vs.clone())
                 },
-                |(kw, vs)| BenchesRuntime::block_on(findex.insert(kw, vs)).expect("search failed"),
+                |(kw, vs)| rt.block_on(findex.insert(kw, vs)).expect("search failed"),
                 criterion::BatchSize::SmallInput,
             );
         });
@@ -204,10 +204,10 @@ pub fn bench_memory_contention<
         + Send
         + Sync
         + MemoryADT<Address = Address<ADDRESS_LENGTH>, Word = [u8; WORD_LENGTH]>,
-    BenchesRuntime: 'static + RuntimeLite,
 >(
     memory_name: &str,
     n: usize,
+    rt: &Runtime,
     m: impl AsyncFn() -> Memory,
     c: &mut Criterion,
     clear: impl AsyncFn(&Memory) -> Result<(), E>,
@@ -215,7 +215,7 @@ pub fn bench_memory_contention<
 ) {
     const N_CLIENTS: usize = 10;
 
-    let m = BenchesRuntime::block_on(m());
+    let m = rt.block_on(m());
 
     let findex = Arc::new(Findex::new(
         MemoryEncryptionLayer::new(&Secret::random(rng), m.clone()),
@@ -239,16 +239,14 @@ pub fn bench_memory_contention<
             group.bench_function(BenchmarkId::from_parameter(n_clients), |b| {
                 b.iter_batched(
                     || {
-                        BenchesRuntime::block_on(clear(&m)).unwrap();
+                        rt.block_on(clear(&m)).unwrap();
                         (0..n_clients).map(|_| findex.clone()).zip(bindings.clone())
                     },
                     |iterator| {
-                        BenchesRuntime::block_on(async {
+                        rt.block_on(async {
                             let handles = iterator
                                 .map(|(findex, (kw, vs))| {
-                                    BenchesRuntime::spawn(
-                                        async move { findex.insert(kw, vs).await },
-                                    )
+                                    tokio::spawn(async move { findex.insert(kw, vs).await })
                                 })
                                 .collect::<Vec<_>>();
                             for h in handles {
@@ -279,19 +277,16 @@ pub fn bench_memory_contention<
             group.bench_function(BenchmarkId::from_parameter(n_clients), |b| {
                 b.iter_batched(
                     || {
-                        BenchesRuntime::block_on(clear(&m)).unwrap();
+                        rt.block_on(clear(&m)).unwrap();
                         (
                             Vec::with_capacity(n_clients),
                             (0..n_clients).map(|_| findex.clone()).zip(bindings.clone()),
                         )
                     },
                     |(mut handles, iterator)| {
-                        BenchesRuntime::block_on(async {
+                        rt.block_on(async {
                             for (findex, (kw, vs)) in iterator {
-                                let h =
-                                    BenchesRuntime::spawn(
-                                        async move { findex.insert(kw, vs).await },
-                                    );
+                                let h = tokio::spawn(async move { findex.insert(kw, vs).await });
                                 handles.push(h);
                             }
                             for h in handles {
@@ -315,10 +310,10 @@ pub fn bench_memory_one_to_many<
         + Send
         + Sync
         + MemoryADT<Address = Address<ADDRESS_LENGTH>, Word = [u8; WORD_LENGTH]>,
-    BenchesRuntime: 'static + RuntimeLite,
 >(
     memory_name: &str,
     n: usize,
+    rt: &Runtime,
     m: impl AsyncFn() -> Memory,
     c: &mut Criterion,
     clear: impl AsyncFn(&Memory) -> Result<(), E>,
@@ -326,7 +321,7 @@ pub fn bench_memory_one_to_many<
 ) {
     const MAX_VAL: usize = 100;
 
-    let m = BenchesRuntime::block_on(m());
+    let m = rt.block_on(m());
 
     let findex = Arc::new(Findex::new(
         MemoryEncryptionLayer::new(&Secret::random(rng), m.clone()),
@@ -346,16 +341,16 @@ pub fn bench_memory_one_to_many<
             group.bench_function(BenchmarkId::from_parameter(n_clients), |b| {
                 b.iter_batched(
                     || {
-                        BenchesRuntime::block_on(clear(&m)).unwrap();
+                        rt.block_on(clear(&m)).unwrap();
                         (
                             Vec::with_capacity(n_clients),
                             (0..n_clients).map(|_| (findex.clone(), vs.clone())),
                         )
                     },
                     |(mut handles, iterator)| {
-                        BenchesRuntime::block_on(async {
+                        rt.block_on(async {
                             for (findex, vs) in iterator {
-                                handles.push(BenchesRuntime::spawn(async move {
+                                handles.push(tokio::spawn(async move {
                                     loop {
                                         findex.insert(kw, vs.clone()).await.unwrap();
                                     }
@@ -363,7 +358,7 @@ pub fn bench_memory_one_to_many<
                             }
 
                             let findex = findex.clone();
-                            BenchesRuntime::spawn(async move {
+                            tokio::spawn(async move {
                                 let kw = kw;
                                 findex.search(&kw).await.unwrap();
                             })
@@ -394,15 +389,15 @@ pub fn bench_memory_one_to_many<
             group.bench_function(BenchmarkId::from_parameter(n_clients), |b| {
                 b.iter_batched(
                     || {
-                        BenchesRuntime::block_on(clear(&m)).unwrap();
+                        rt.block_on(clear(&m)).unwrap();
                     },
                     |_| {
-                        BenchesRuntime::block_on(async {
+                        rt.block_on(async {
                             let mut handles = Vec::new();
                             for _ in 0..n_clients {
                                 let findex = findex.clone();
                                 let vs = vs.clone();
-                                handles.push(BenchesRuntime::spawn(async move {
+                                handles.push(tokio::spawn(async move {
                                     loop {
                                         findex.insert(kw, vs.clone()).await.unwrap();
                                     }
@@ -411,7 +406,7 @@ pub fn bench_memory_one_to_many<
 
                             let findex = findex.clone();
                             let vs = vs.clone();
-                            BenchesRuntime::spawn(async move {
+                            tokio::spawn(async move {
                                 let kw = kw;
                                 findex.insert(&kw, vs).await.unwrap();
                             })

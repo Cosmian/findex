@@ -1,6 +1,9 @@
 # Specifies which edition is used by the parser.
 # Default value: "2015"
-edition = "2021"
+edition = "2024"
+
+# The default formatting produced by Rustfmt is governed by the rules in the Rust Style Guide.
+style_edition = "2024"
 
 # How imports should be grouped into use statements. Imports will be merged or split to the configured level of granularity.
 # Default value: Preserve
@@ -37,7 +40,3 @@ use_field_init_shorthand = true
 # Break comments to fit on the line
 # Default value: false
 wrap_comments = true
-
-# Which version of the formatting rules to use. Version::One is backwards-compatible with Rustfmt 1.0. Other versions are only backwards compatible within a major version number.
-# Default value: "One"
-version = "Two"

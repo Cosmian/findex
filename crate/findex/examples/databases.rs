@@ -1,6 +1,9 @@
-//! This example show-cases the use of Findex to securely store a hash-map with different back ends.
+//! This example show-cases the use of Findex to securely store a hash-map with
+//! different back ends.
 #[path = "shared_utils.rs"]
 mod shared_utils;
+
+use std::collections::HashMap;
 
 use cosmian_crypto_core::{CsRng, Secret, reexport::rand_core::SeedableRng};
 use cosmian_findex::{Findex, IndexADT, MemoryEncryptionLayer};
@@ -12,7 +15,6 @@ use cosmian_sse_memories::{
     },
 };
 use shared_utils::{WORD_LENGTH, decoder, encoder, gen_index};
-use std::collections::HashMap;
 
 const REDIS_URL: &str = "redis://localhost:6379";
 const SQLITE_DB_PATH: &str = "./target/debug/sqlite-test.db";
@@ -54,8 +56,8 @@ async fn main() {
     .await
     .unwrap();
 
-    // Or else, the Postgres-based implementation of `MemoryADT`. Refer to README.md for details on how to setup
-    // the database to use this example.
+    // Or else, the Postgres-based implementation of `MemoryADT`. Refer to README.md
+    // for details on how to setup the database to use this example.
     let pool = create_pool(PGSQL_URL).await.unwrap();
     let _postgres_memory =
         PostgresMemory::<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>::new_with_pool(

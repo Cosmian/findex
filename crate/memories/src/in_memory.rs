@@ -49,10 +49,8 @@ impl<Address: Send + Hash + Eq + Debug, Value: Send + Clone + Eq + Debug> Memory
     for InMemory<Address, Value>
 {
     type Address = Address;
-
-    type Word = Value;
-
     type Error = MemoryError;
+    type Word = Value;
 
     async fn batch_read(&self, addresses: Vec<Address>) -> Result<Vec<Option<Value>>, Self::Error> {
         let store = self.inner.lock().expect("poisoned lock");
@@ -79,9 +77,8 @@ impl<Address: Send + Hash + Eq + Debug, Value: Send + Clone + Eq + Debug> Memory
 impl<Address: Hash + Eq + Debug + Clone, Value: Clone + Eq + Debug> IntoIterator
     for InMemory<Address, Value>
 {
-    type Item = (Address, Value);
-
     type IntoIter = <HashMap<Address, Value> as IntoIterator>::IntoIter;
+    type Item = (Address, Value);
 
     fn into_iter(self) -> Self::IntoIter {
         self.inner
@@ -100,7 +97,6 @@ mod tests {
         gen_seed, test_guarded_write_concurrent, test_rw_same_address, test_single_write_and_read,
         test_wrong_guard,
     };
-    use smol_macros::{Executor, test};
 
     const TEST_ADDRESS_LENGTH: usize = 16;
     const TEST_WORD_LENGTH: usize = 16;
@@ -128,26 +124,6 @@ mod tests {
     #[tokio::test]
     async fn test_concurrent_read_write_tokio() {
         let memory = InMemory::<[u8; TEST_ADDRESS_LENGTH], [u8; TEST_WORD_LENGTH]>::default();
-        test_guarded_write_concurrent::<TEST_WORD_LENGTH, _, agnostic_lite::tokio::TokioSpawner>(
-            &memory,
-            gen_seed(),
-            None,
-        )
-        .await;
-    }
-
-    test! {
-        async fn test_concurrent_read_write_smol(executor: &Executor<'_>) {
-            executor.spawn(async {
-                let memory = InMemory::<[u8; TEST_ADDRESS_LENGTH], [u8; TEST_WORD_LENGTH]>::default();
-                test_guarded_write_concurrent::<TEST_WORD_LENGTH, _, agnostic_lite::smol::SmolSpawner>(
-                    &memory,
-                    gen_seed(),
-                    None,
-                )
-                .await;
-            })
-            .await;
-        }
+        test_guarded_write_concurrent::<TEST_WORD_LENGTH, _>(&memory, gen_seed(), None).await;
     }
 }
