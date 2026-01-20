@@ -15,7 +15,7 @@ name = "cosmian_findex"
 path = "src/lib.rs"
 
 [features]
-test-utils = ["tokio", "criterion"]
+test-utils = ["tokio/rt", "criterion"]
 
 [dependencies]
 aes = "0.8"
