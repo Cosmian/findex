@@ -22,7 +22,7 @@ readme = "README.md"
 
 
 [workspace.dependencies]
-cosmian_crypto_core = { git = "https://github.com/Cosmian/crypto_core.git", branch = "tbz/revert-breaking-changes", default-features = false, features = [
+cosmian_crypto_core = { git = "https://github.com/Cosmian/crypto_core.git", branch = "tbz/implement-openssl-provider", default-features = false, features = [
     "macro",
     "sha3",
 ] }
