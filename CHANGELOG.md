@@ -2,6 +2,20 @@
 
 All notable changes to this project will be documented in this file.
 
+## [8.0.2] - 2026-02-13
+
+### 🐛 Bug Fixes
+
+- Update `cosmian_crypto_core` to 11.0.0
+
+### 🧪 Testing
+
+- Narrow `test-utils` Tokio dependency to the runtime feature (`tokio/rt`)
+
+### ⚙️ Miscellaneous Tasks
+
+- Bump workspace crate version to `8.0.2` and update docs accordingly
+
 ## [8.0.1] - 2026-01-16
 
 ### 🐛 Bug Fixes

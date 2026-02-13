@@ -3,7 +3,7 @@ members = ["crate/findex", "crate/memories"]
 resolver = "2"
 
 [workspace.package]
-version = "8.0.1"
+version = "8.0.2"
 authors = [
     "Bruno Grieder <bruno.grieder@cosmian.com>",
     "Célia Corsin <celia.corsin@cosmian.com>",
@@ -22,7 +22,7 @@ readme = "README.md"
 
 
 [workspace.dependencies]
-cosmian_crypto_core = { version = "10.2", default-features = false, features = [
+cosmian_crypto_core = { version = "11.0.0", default-features = false, features = [
     "macro",
     "sha3",
 ] }
