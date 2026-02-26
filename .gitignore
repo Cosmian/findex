@@ -6,3 +6,5 @@ perf*
 flamegraph.svg
 **/*.tgz
 *.sqlite.db*
+*.pyc
+.DS_Store

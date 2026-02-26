@@ -25,7 +25,7 @@ name = "integration_tests"
 required-features = ["test-utils"]
 
 [features]
-default = []
+default = ["test-utils"]
 python = ["pyo3", "cosmian_sse_memories/postgres-mem", "zstd"]
 test-utils = ["cosmian_sse_memories/redis-mem", "cosmian_findex/test-utils"]
 
@@ -38,6 +38,10 @@ pyo3 = { version = "0.27", optional = true }
 cosmian_crypto_core.workspace = true
 tokio.workspace = true
 zstd = { version = "0.13.3", optional = true }
+clap = { version = "4.0.32", features = ["derive"] }
+anyhow = "1.0.71"
+serde_json = "1.0.102"
+futures = "0.3.31"
 
 [dev-dependencies]
 criterion.workspace = true
