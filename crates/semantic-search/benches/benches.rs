@@ -1,7 +1,8 @@
 use cosmian_crypto_core::{CsRng, Secret, reexport::rand_core::SeedableRng};
 use cosmian_findex::{Findex, MemoryEncryptionLayer, Op};
 use cosmian_semantic_search::{
-    cleartext_index::CleartextIndex, Error, F32Vector, F64Vector, LocalitySensitiveHash, LshVectorDB, SimpleLsh, SimpleLshParameters, VectorDB
+    Error, F32Vector, F64Vector, LocalitySensitiveHash, LshVectorDB, SimpleLsh,
+    SimpleLshParameters, VectorDB, cleartext_index::CleartextIndex,
 };
 use cosmian_sse_memories::{
     ADDRESS_LENGTH, Address, InMemory, MemoryADT, PostgresMemory, RedisMemory,

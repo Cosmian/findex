@@ -1,21 +1,18 @@
 use clap::{Parser, Subcommand};
-// use rand::rngs::ThreadRng;
-// use rand::{SeedableRng, rngs::StdRng};
-use rand::{SeedableRng, rngs::ThreadRng};
-use std::convert::TryFrom;
+use rand::SeedableRng;
 use std::collections::HashSet;
+use std::convert::TryFrom;
 use std::fs;
 
-use cosmian_crypto_core::{CsRng, Secret, SecretCBytes, bytes_ser_de::Serializable, reexport::rand_core::SeedableRng};
+use cosmian_crypto_core::{CsRng, Secret};
 
 use cosmian_findex::{Findex, MemoryEncryptionLayer, Op};
 
-use cosmian_sse_memories::{PostgresMemory, ADDRESS_LENGTH, Address};
+use cosmian_sse_memories::{ADDRESS_LENGTH, Address, PostgresMemory};
 
 use cosmian_semantic_search::{
-    Error, SimpleLsh, SimpleLshParameters, F32Vector, LshVectorDB, FuzzyDB,
-    cleartext_index::CleartextIndex,
-    LocalitySensitiveHash, VectorDB
+    Error, F32Vector, LocalitySensitiveHash, LshVectorDB, SimpleLsh, SimpleLshParameters,
+    VectorDB
 };
 
 #[derive(Parser)]
@@ -64,11 +61,13 @@ async fn main() -> anyhow::Result<()> {
     // let key = Secret::<{ cosmian_findex::KEY_LENGTH }>::random(&mut CsRng::from_entropy());
 
     let seed = [
-            1, 0, 52, 0, 0, 0, 0, 0, 1, 0, 10, 0, 22, 32, 0, 0,
-            2, 0, 55, 49, 0, 11, 0, 0, 3, 0, 0, 0, 0, 0, 2, 92,
-        ];
+        1, 0, 52, 0, 0, 0, 0, 0, 1, 0, 10, 0, 22, 32, 0, 0, 2, 0, 55, 49, 0, 11, 0, 0, 3, 0, 0, 0,
+        0, 0, 2, 92,
+    ];
 
-    let key = Secret::<{ cosmian_findex::KEY_LENGTH }>::random(&mut CsRng::from_seed(seed));
+    let key = Secret::<{ cosmian_findex::KEY_LENGTH }>::random(
+        &mut <CsRng as cosmian_crypto_core::reexport::rand_core::SeedableRng>::from_seed(seed),
+    );
 
     let findex = {
         const F32_LENGTH: usize = 4;
@@ -111,7 +110,11 @@ async fn main() -> anyhow::Result<()> {
         let db_url = "postgres://cosmian:cosmian@localhost/cosmian";
         let table_name = "lsh_table";
 
-        let mem = PostgresMemory::<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>::new(db_url.to_owned(), table_name.to_owned()).await?;
+        let mem = PostgresMemory::<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>::new(
+            db_url.to_owned(),
+            table_name.to_owned(),
+        )
+        .await?;
 
         mem.initialize().await?;
 
@@ -132,17 +135,19 @@ async fn main() -> anyhow::Result<()> {
     let vdb = LshVectorDB::<D, _, _>::init((lsh, findex))
         .map_err(|e| anyhow::anyhow!(format!("init error: {}", e)))?;
 
-    //TODO use FuzzyDB to retrieve docs
-    // let index_for_docs = CleartextIndex::<F32Vector<D>, String>::default();
-    // let fuzzy = FuzzyDB::new(vdb, index_for_docs);
-
     match cli.command {
-        Commands::Insert { data, vector, vector_file } => {
+        Commands::Insert {
+            data,
+            vector,
+            vector_file,
+        } => {
             let v: Vec<f32> = if let Some(file) = vector_file {
                 let s = fs::read_to_string(file)?;
-                serde_json::from_str(&s).map_err(|e| anyhow::anyhow!(format!("vector parse error: {}", e)))?
+                serde_json::from_str(&s)
+                    .map_err(|e| anyhow::anyhow!(format!("vector parse error: {}", e)))?
             } else if let Some(s) = vector {
-                serde_json::from_str(&s).map_err(|e| anyhow::anyhow!(format!("vector parse error: {}", e)))?
+                serde_json::from_str(&s)
+                    .map_err(|e| anyhow::anyhow!(format!("vector parse error: {}", e)))?
             } else {
                 return Err(anyhow::anyhow!("missing --vector or --vector-file"));
             };
@@ -152,17 +157,22 @@ async fn main() -> anyhow::Result<()> {
             let fv = F32Vector::<D>::try_from(v.as_slice())?;
 
             vdb.insert(fv).await?;
-            // fuzzy.insert(fv, data.clone()).await.map_err(|e| anyhow::anyhow!(format!("insert error: {}", e)))?;
 
             println!("Success.");
         }
 
-        Commands::Query { vector, vector_file, k } => {
+        Commands::Query {
+            vector,
+            vector_file,
+            k,
+        } => {
             let v: Vec<f32> = if let Some(file) = vector_file {
                 let s = fs::read_to_string(file)?;
-                serde_json::from_str(&s).map_err(|e| anyhow::anyhow!(format!("vector parse error: {}", e)))?
+                serde_json::from_str(&s)
+                    .map_err(|e| anyhow::anyhow!(format!("vector parse error: {}", e)))?
             } else if let Some(s) = vector {
-                serde_json::from_str(&s).map_err(|e| anyhow::anyhow!(format!("vector parse error: {}", e)))?
+                serde_json::from_str(&s)
+                    .map_err(|e| anyhow::anyhow!(format!("vector parse error: {}", e)))?
             } else {
                 return Err(anyhow::anyhow!("missing --vector or --vector-file"));
             };
@@ -171,19 +181,11 @@ async fn main() -> anyhow::Result<()> {
             }
             let fv = F32Vector::<D>::try_from(v.as_slice())?;
 
-            let results = vdb.query(k,&fv).await?;
-            // let results = fuzzy.query(k, &fv).await.map_err(|e| anyhow::anyhow!(format!("query error: {}", e)))?;
-            // let mut out = Vec::new();
-            // for (doc_id, score) in results {
-            //     out.push(serde_json::json!({"data": doc_id, "score": score}));
-            // }
+            let results = vdb.query(k, &fv).await?;
 
-            // println!("{}", serde_json::to_string_pretty(&out)?);
-            println!("{:?}",results);
+            println!("{:?}", results);
         }
     }
-
-    // cli command to drop table
 
     Ok(())
 }

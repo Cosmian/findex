@@ -1,10 +1,10 @@
 mod encoding;
 mod error;
 mod fuzzy_database;
+mod pyo3;
 mod simple_lsh;
 mod vector_db;
 mod vectors;
-mod pyo3;
 pub use pyo3::SecureSemanticDB;
 
 pub use encoding::Encoding;
