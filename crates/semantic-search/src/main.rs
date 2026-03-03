@@ -1,16 +1,22 @@
 use clap::{Parser, Subcommand};
-use futures::executor::block_on;
-use rand::rngs::ThreadRng;
+// use rand::rngs::ThreadRng;
+// use rand::{SeedableRng, rngs::StdRng};
+use rand::{SeedableRng, rngs::ThreadRng};
 use std::convert::TryFrom;
-use std::collections::HashMap;
+use std::collections::HashSet;
 use std::fs;
-use std::path::Path;
+
+use cosmian_crypto_core::{CsRng, Secret, SecretCBytes, bytes_ser_de::Serializable, reexport::rand_core::SeedableRng};
+
+use cosmian_findex::{Findex, MemoryEncryptionLayer, Op};
+
+use cosmian_sse_memories::{PostgresMemory, ADDRESS_LENGTH, Address};
 
 use cosmian_semantic_search::{
-    SimpleLsh, SimpleLshParameters, F32Vector, LshVectorDB, FuzzyDB,
+    Error, SimpleLsh, SimpleLshParameters, F32Vector, LshVectorDB, FuzzyDB,
     cleartext_index::CleartextIndex,
+    LocalitySensitiveHash, VectorDB
 };
-use cosmian_semantic_search::{LocalitySensitiveHash, VectorDB};
 
 #[derive(Parser)]
 struct Cli {
@@ -46,41 +52,89 @@ enum Commands {
     },
 }
 
-const STORE_FILE: &str = "store.json";
-
 const D: usize = 384;
 const K: usize = 20;
 const L: usize = 20;
 
-fn main() -> anyhow::Result<()> {
+#[tokio::main(flavor = "current_thread")]
+async fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
 
-    // load persisted data -> vector store (JSON)
-    let mut store: HashMap<String, Vec<f32>> = if Path::new(STORE_FILE).exists() {
-        let s = fs::read_to_string(STORE_FILE)?;
-        serde_json::from_str(&s)?
-    } else {
-        HashMap::new()
+    // Fixed key to retrieve values with query
+    // let key = Secret::<{ cosmian_findex::KEY_LENGTH }>::random(&mut CsRng::from_entropy());
+
+    let seed = [
+            1, 0, 52, 0, 0, 0, 0, 0, 1, 0, 10, 0, 22, 32, 0, 0,
+            2, 0, 55, 49, 0, 11, 0, 0, 3, 0, 0, 0, 0, 0, 2, 92,
+        ];
+
+    let key = Secret::<{ cosmian_findex::KEY_LENGTH }>::random(&mut CsRng::from_seed(seed));
+
+    let findex = {
+        const F32_LENGTH: usize = 4;
+        const WORD_LENGTH: usize = 1 + F32_LENGTH * 384;
+
+        fn vector_encode<const D: usize>(
+            op: Op,
+            values: HashSet<F32Vector<D>>,
+        ) -> Result<Vec<[u8; WORD_LENGTH]>, Error> {
+            Ok(values
+                .into_iter()
+                .map(|v| {
+                    let mut res = [0; WORD_LENGTH];
+                    res[0] = if op == Op::Insert { 0 } else { 1 };
+                    for (i, e) in v.into_iter().enumerate() {
+                        res[1 + F32_LENGTH * i..1 + F32_LENGTH * (i + 1)]
+                            .copy_from_slice(&e.to_be_bytes());
+                    }
+                    res
+                })
+                .collect())
+        }
+
+        fn vector_decode<const D: usize>(
+            ws: Vec<[u8; WORD_LENGTH]>,
+        ) -> Result<HashSet<F32Vector<D>>, Error> {
+            ws.into_iter()
+                .map(|w| {
+                    F32Vector::<D>::init(|i| {
+                        <[u8; F32_LENGTH]>::try_from(
+                            &w[1 + F32_LENGTH * i..1 + F32_LENGTH * (i + 1)],
+                        )
+                        .map_err(|e| Error(e.to_string()))
+                        .map(f32::from_be_bytes)
+                    })
+                })
+                .collect()
+        }
+
+        let db_url = "postgres://cosmian:cosmian@localhost/cosmian";
+        let table_name = "lsh_table";
+
+        let mem = PostgresMemory::<Address<ADDRESS_LENGTH>, [u8; WORD_LENGTH]>::new(db_url.to_owned(), table_name.to_owned()).await?;
+
+        mem.initialize().await?;
+
+        Findex::<WORD_LENGTH, F32Vector<D>, _, _>::new(
+            MemoryEncryptionLayer::new(&key, mem),
+            vector_encode,
+            vector_decode,
+        )
     };
 
-    // build LSH + CleartextIndex (for vdb) and CleartextIndex (for embedding->data)
-    let mut rng = ThreadRng::default();
+    // Fixed lsh tables to retrieve values with query
+    // let mut rng = ThreadRng::default();
+    let seed: u64 = 42;
+    let mut rng = rand::rngs::StdRng::seed_from_u64(seed);
+
     let lsh = SimpleLsh::<D>::init(&SimpleLshParameters { K, L }, &mut rng);
-    let index_for_vdb = CleartextIndex::<(u64, u64), F32Vector<D>>::default();
-    let vdb = LshVectorDB::<D, _, _>::init((lsh, index_for_vdb))
+
+    let vdb = LshVectorDB::<D, _, _>::init((lsh, findex))
         .map_err(|e| anyhow::anyhow!(format!("init error: {}", e)))?;
 
-    let index_for_docs = CleartextIndex::<F32Vector<D>, String>::default();
-    let fuzzy = FuzzyDB::new(vdb, index_for_docs);
-
-    // rebuild index from persisted store via FuzzyDB
-    for (data, vec) in store.clone() {
-        if vec.len() != D {
-            continue;
-        }
-        let fv = F32Vector::<D>::try_from(vec.as_slice())?;
-        block_on(fuzzy.insert(fv, data)).map_err(|e| anyhow::anyhow!(format!("insert error: {}", e)))?;
-    }
+    //TODO use FuzzyDB to retrieve docs
+    // let index_for_docs = CleartextIndex::<F32Vector<D>, String>::default();
+    // let fuzzy = FuzzyDB::new(vdb, index_for_docs);
 
     match cli.command {
         Commands::Insert { data, vector, vector_file } => {
@@ -96,11 +150,11 @@ fn main() -> anyhow::Result<()> {
                 return Err(anyhow::anyhow!(format!("vector length must be {}", D)));
             }
             let fv = F32Vector::<D>::try_from(v.as_slice())?;
-            block_on(fuzzy.insert(fv, data.clone())).map_err(|e| anyhow::anyhow!(format!("insert error: {}", e)))?;
-            // persist mapping data -> vector (JSON for Python interop)
-            store.insert(data.clone(), v);
-            fs::write(STORE_FILE, serde_json::to_string_pretty(&store)?)?;
-            println!("Inserted data '{}'.", data);
+
+            vdb.insert(fv).await?;
+            // fuzzy.insert(fv, data.clone()).await.map_err(|e| anyhow::anyhow!(format!("insert error: {}", e)))?;
+
+            println!("Success.");
         }
 
         Commands::Query { vector, vector_file, k } => {
@@ -116,15 +170,20 @@ fn main() -> anyhow::Result<()> {
                 return Err(anyhow::anyhow!(format!("vector length must be {}", D)));
             }
             let fv = F32Vector::<D>::try_from(v.as_slice())?;
-            let results = block_on(fuzzy.query(k, &fv)).map_err(|e| anyhow::anyhow!(format!("query error: {}", e)))?;
-            let mut out = Vec::new();
-            for (doc_id, score) in results {
-                out.push(serde_json::json!({"data": doc_id, "score": score}));
-            }
 
-            println!("{}", serde_json::to_string_pretty(&out)?);
+            let results = vdb.query(k,&fv).await?;
+            // let results = fuzzy.query(k, &fv).await.map_err(|e| anyhow::anyhow!(format!("query error: {}", e)))?;
+            // let mut out = Vec::new();
+            // for (doc_id, score) in results {
+            //     out.push(serde_json::json!({"data": doc_id, "score": score}));
+            // }
+
+            // println!("{}", serde_json::to_string_pretty(&out)?);
+            println!("{:?}",results);
         }
     }
+
+    // cli command to drop table
 
     Ok(())
 }

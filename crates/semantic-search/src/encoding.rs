@@ -1,7 +1,4 @@
-#[cfg(feature = "python")]
 mod string;
-
-#[cfg(feature = "python")]
 pub use string::StringEncoder;
 
 use cosmian_findex::Op;

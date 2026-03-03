@@ -3,41 +3,19 @@ import subprocess
 import json
 from typing import List, Any, Optional
 
-# Python wrapper for the Rust CLI in this crate. Calls `cargo run` by default.
-
 CRATE_DIR = Path(__file__).resolve().parent
-MANIFEST_PATH = str(CRATE_DIR / "Cargo.toml")
 
-
-def _cargo_run(args: List[str], release: bool = False, bin: Optional[str] = "cosmian-semantic-search") -> subprocess.CompletedProcess:
-    """Run a cargo binary from this crate.
-
-    Parameters
-    - args: list of arguments passed to the binary (after `--`).
-    - release: build/run in `--release` mode if True.
-    - bin: name of the cargo binary to run (default: "cosmian-semantic-search").
-
-    Returns a subprocess.CompletedProcess. Raises CalledProcessError if the
-    cargo invocation fails.
-    """
-    # Run the specified cargo binary (default: `cosmian-semantic-search`).
-    cmd = ["cargo", "run", "--manifest-path", MANIFEST_PATH]
-    if bin:
-        cmd += ["--bin", bin]
-    if release:
-        cmd.append("--release")
-    cmd += ["--"] + args
+def semantic_search_run(args: List[str]) -> subprocess.CompletedProcess:
+    cmd = ["./target/debug/cosmian-semantic-search"]
+    cmd += args
     return subprocess.run(cmd, check=True, capture_output=True, text=True)
 
-
-def insert(data: str, vector: List[float], release: bool = False, bin: Optional[str] = "cosmian-semantic-search") -> str:
+def insert(data: str, vector: List[float]) -> str:
     """Insert a vector under `data` by calling the Rust CLI.
 
     Parameters
     - data: identifier to store the vector under.
     - vector: list of floats (length D=384 by default).
-    - release: whether to run the cargo binary in release mode.
-    - bin: optional cargo binary name to invoke (default: "cosmian-semantic-search").
 
     Returns the stdout emitted by the Rust CLI.
     """
@@ -48,7 +26,7 @@ def insert(data: str, vector: List[float], release: bool = False, bin: Optional[
         json.dump(vector, f)
         fname = f.name
 
-    proc = _cargo_run(["insert", "--data", data, "--vector-file", fname], release=release, bin=bin)
+    proc = semantic_search_run(["insert", "--data", data, "--vector-file", fname])
     try:
         return proc.stdout.strip()
     finally:
@@ -59,14 +37,12 @@ def insert(data: str, vector: List[float], release: bool = False, bin: Optional[
     return proc.stdout.strip()
 
 
-def query(vector: List[float], k: int = 10, release: bool = False, bin: Optional[str] = "cosmian-semantic-search") -> Any:
+def query(vector: List[float], k: int = 10) -> Any:
     """Query the Rust CLI and return parsed JSON results.
 
     Parameters
     - vector: list of floats representing the query embedding.
     - k: number of results to request.
-    - release: whether to run the cargo binary in release mode.
-    - bin: optional cargo binary name to invoke (default: "cosmian-semantic-search").
 
     Each returned result is typically an object like
     {"data": <data or null>, "score": <float>, "vector": [...]}.
@@ -77,7 +53,7 @@ def query(vector: List[float], k: int = 10, release: bool = False, bin: Optional
         json.dump(vector, f)
         fname = f.name
 
-    proc = _cargo_run(["query", "--vector-file", fname, "--k", str(k)], release=release, bin=bin)
+    proc = semantic_search_run(["query", "--vector-file", fname, "--k", str(k)])
     try:
         out = proc.stdout.strip()
     finally:
@@ -118,7 +94,7 @@ if __name__ == "__main__":
     if len(sys.argv) > 1 and sys.argv[1] == "demo":
         # optional second arg: N (number of vectors)
         N = int(sys.argv[2]) if len(sys.argv) > 2 else 100
-        print(f"Running cleartext-style demo with N={N} vectors...")
+        print(f"Running demo with N={N} vectors...")
         # generate N random unit vectors (normal distribution) and insert
         import math
         import random
@@ -165,4 +141,4 @@ if __name__ == "__main__":
 
         print(f"Validation: {success}/{N} exact matches at top")
     else:
-        print("Usage: python python_client.py demo [N]")
+        print("Usage: python3 crates/semantic-search/python_client.py demo [N]")

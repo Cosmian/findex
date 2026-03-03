@@ -26,23 +26,24 @@ required-features = ["test-utils"]
 
 [features]
 default = ["test-utils"]
-python = ["pyo3", "cosmian_sse_memories/postgres-mem", "zstd"]
 test-utils = ["cosmian_sse_memories/redis-mem", "cosmian_findex/test-utils"]
 
 [dependencies]
-cosmian_sse_memories = { path = "../memories", version = "8.0" }
+cosmian_sse_memories = { path = "../memories", version = "8.0", features = ["postgres-mem"]}
 cosmian_findex       = { path = "../findex", version = "8.0" }
 rand = "0.9.2"
 rand_distr = "0.5.1"
-pyo3 = { version = "0.27", optional = true }
+pyo3 = {version = "0.27"}
 cosmian_crypto_core.workspace = true
 tokio.workspace = true
-zstd = { version = "0.13.3", optional = true }
+zstd = { version = "0.13.3"}
 clap = { version = "4.0.32", features = ["derive"] }
 anyhow = "1.0.71"
 serde_json = "1.0.102"
-futures = "0.3.31"
+# futures = "0.3.31"
 
 [dev-dependencies]
 criterion.workspace = true
 futures = "0.3.31"
+# tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
+

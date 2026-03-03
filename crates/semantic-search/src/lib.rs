@@ -4,11 +4,7 @@ mod fuzzy_database;
 mod simple_lsh;
 mod vector_db;
 mod vectors;
-
-#[cfg(feature = "python")]
 mod pyo3;
-
-#[cfg(feature = "python")]
 pub use pyo3::SecureSemanticDB;
 
 pub use encoding::Encoding;

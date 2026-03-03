@@ -19,7 +19,6 @@ impl From<CryptoCoreError> for Error {
     }
 }
 
-#[cfg(feature = "python")]
 mod bindings {
     use super::*;
     use cosmian_sse_memories::PostgresMemoryError;
