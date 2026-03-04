@@ -8,7 +8,8 @@ CRATE_DIR = Path(__file__).resolve().parent
 def semantic_search_run(args: List[str]) -> subprocess.CompletedProcess:
     cmd = ["./target/debug/cosmian-semantic-search"]
     cmd += args
-    return subprocess.run(cmd, check=True, capture_output=True, text=True)
+    return subprocess.run(cmd, capture_output=True)
+    # return subprocess.run(cmd, check=True, capture_output=True, text=True)
 
 def insert(data: str, vector: List[float]) -> str:
     """Insert a vector under `data` by calling the Rust CLI.
@@ -54,6 +55,7 @@ def query(vector: List[float], k: int = 10) -> Any:
         fname = f.name
 
     proc = semantic_search_run(["query", "--vector-file", fname, "--k", str(k)])
+
     try:
         out = proc.stdout.strip()
     finally:
@@ -71,21 +73,6 @@ def query(vector: List[float], k: int = 10) -> Any:
         if m:
             return json.loads(m.group(1))
         raise
-
-
-def read_store() -> dict:
-    """Read and return the `store.json` from the crate directory as a Python dict.
-
-    Returns an empty dict if the file does not exist. This helper is useful
-    when the Rust CLI returns only `data` and the caller needs the stored
-    vector for verification.
-    """
-    p = CRATE_DIR / "store.json"
-    if not p.exists():
-        return {}
-    with p.open("r") as f:
-        return json.load(f)
-
 
 if __name__ == "__main__":
     # Quick demo when executed directly
@@ -118,27 +105,20 @@ if __name__ == "__main__":
                 print(f"Vector {i}: no candidates")
                 continue
             top = res[0]
-            cand_vec = top.get("vector")
+            cand_vec = top[0]
             if not cand_vec:
-                # try to recover the vector from the persistent store using the returned data
-                doc_id = top.get("data")
-                if doc_id is None:
-                    print(f"Vector {i}: no vector or data returned")
-                    continue
-                store = read_store()
-                cand_vec = store.get(doc_id)
-                if cand_vec is None:
-                    print(f"Vector {i}: data {doc_id} not found in store")
-                    continue
-            # compare numerically (L2) with tolerance because of f32/f64 conversions
+                print(f"Vector {i}: no vector or data returned")
+                continue
+
             import math
 
             diff = math.sqrt(sum((a - b) ** 2 for a, b in zip(cand_vec, vec)))
             if diff < 1e-5:
                 success += 1
             else:
-                print(f"Vector {i}: top mismatch (data={top.get('data')}) diff={diff}")
+                print(f"Vector {i}: no exact match found in results")
 
-        print(f"Validation: {success}/{N} exact matches at top")
+        print(f"Demo completed. Exact match found for {success}/{N} vectors.")
+
     else:
         print("Usage: python3 crates/semantic-search/python_client.py demo [N]")

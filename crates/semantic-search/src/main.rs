@@ -3,6 +3,7 @@ use rand::SeedableRng;
 use std::collections::HashSet;
 use std::convert::TryFrom;
 use std::fs;
+use serde_json;
 
 use cosmian_crypto_core::{CsRng, Secret};
 
@@ -180,10 +181,15 @@ async fn main() -> anyhow::Result<()> {
                 return Err(anyhow::anyhow!(format!("vector length must be {}", D)));
             }
             let fv = F32Vector::<D>::try_from(v.as_slice())?;
-
             let results = vdb.query(k, &fv).await?;
 
-            println!("{:?}", results);
+            let results = results.into_iter().map(|(v,score)|{
+                let vec = v.into_iter().collect::<Vec<f32>>();
+                let score = score;
+                (vec, score)
+             }).collect::<Vec<(Vec<f32>, f32)>>();
+
+            println!("{}", serde_json::to_string_pretty(&results)?);
         }
     }
 
