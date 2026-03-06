@@ -12,8 +12,7 @@ use cosmian_findex::{Findex, MemoryEncryptionLayer, Op};
 use cosmian_sse_memories::{ADDRESS_LENGTH, Address, PostgresMemory};
 
 use cosmian_semantic_search::{
-    Error, F32Vector, LocalitySensitiveHash, LshVectorDB, SimpleLsh, SimpleLshParameters,
-    VectorDB
+    Error, F32Vector, FuzzyDB, LocalitySensitiveHash, LshVectorDB, SimpleLsh, SimpleLshParameters, VectorDB
 };
 
 #[derive(Parser)]
@@ -158,6 +157,8 @@ async fn main() -> anyhow::Result<()> {
             let fv = F32Vector::<D>::try_from(v.as_slice())?;
 
             vdb.insert(fv).await?;
+
+
 
             println!("Success.");
         }

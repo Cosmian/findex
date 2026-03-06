@@ -78,7 +78,11 @@ type ChunkSSE = Findex<
 >;
 
 #[pyclass]
-pub struct SecureSemanticDB(FuzzyDB<D, LshVectorDB<D, SimpleLsh<D>, VectorSSE>, ChunkSSE>);
+pub struct SecureSemanticDB(FuzzyDB<
+    D,
+    LshVectorDB<D, SimpleLsh<D>, VectorSSE, String>, // Data = String
+    ChunkSSE
+>);
 
 impl SecureSemanticDB {
     // This following helper method exists for the purpose of separating
@@ -97,7 +101,7 @@ impl SecureSemanticDB {
             let mem = MemoryEncryptionLayer::new(&key, mem);
             let idx = Findex::new(mem, vector_encode, vector_decode);
             let lsh = SimpleLsh::init(&SimpleLshParameters { K: 20, L: 20 }, &mut rng);
-            LshVectorDB::init((lsh, idx))?
+            LshVectorDB::<D, _, _, String>::init((lsh, idx))?
         };
         let idx = {
             let key = Secret::<KEY_LENGTH>::derive(&seed, b"2")?;

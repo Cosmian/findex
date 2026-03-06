@@ -1,7 +1,10 @@
 from pathlib import Path
 import subprocess
 import json
-from typing import List, Any, Optional
+from typing import List, Any
+import numpy as np
+import torch
+from sentence_transformers import SentenceTransformer
 
 CRATE_DIR = Path(__file__).resolve().parent
 
@@ -35,7 +38,6 @@ def insert(data: str, vector: List[float]) -> str:
             Path(fname).unlink()
         except Exception:
             pass
-    return proc.stdout.strip()
 
 
 def query(vector: List[float], k: int = 10) -> Any:
@@ -74,9 +76,19 @@ def query(vector: List[float], k: int = 10) -> Any:
             return json.loads(m.group(1))
         raise
 
+def embed(text: str) -> List[float]:
+    """Get embedding for a text."""
+    device = torch.device("mps" if torch.backends.mps.is_available() else "cpu")
+    model = SentenceTransformer("all-MiniLM-L6-v2", device=device)
+
+    emb_text = model.encode(text, convert_to_numpy=True)
+    emb_text = emb_text / np.linalg.norm(emb_text)
+
+    return emb_text.tolist()
+
 if __name__ == "__main__":
-    # Quick demo when executed directly
     import sys
+
     demo_vec = [0.0] * 384
     if len(sys.argv) > 1 and sys.argv[1] == "demo":
         # optional second arg: N (number of vectors)
@@ -110,8 +122,6 @@ if __name__ == "__main__":
                 print(f"Vector {i}: no vector or data returned")
                 continue
 
-            import math
-
             diff = math.sqrt(sum((a - b) ** 2 for a, b in zip(cand_vec, vec)))
             if diff < 1e-5:
                 success += 1
@@ -119,6 +129,34 @@ if __name__ == "__main__":
                 print(f"Vector {i}: no exact match found in results")
 
         print(f"Demo completed. Exact match found for {success}/{N} vectors.")
+
+    elif len(sys.argv) > 1 and sys.argv[1] == "demo2":
+        import requests
+
+        device = torch.device("mps" if torch.backends.mps.is_available() else "cpu")
+        model = SentenceTransformer("all-MiniLM-L6-v2", device=device)
+
+        url = "https://huggingface.co/ngxson/demo_simple_rag_py/resolve/main/cat-facts.txt"
+
+        response = requests.get(url)
+        response.encoding = 'utf-8'
+        facts = [line.strip() for line in response.text.splitlines() if line.strip()]
+        emb_facts = [embed(fact) for fact in facts]
+
+        # print("Inserting fact embeddings...")
+        # for i, vec in enumerate(emb_facts):
+        #     insert(f"py_vec_{i}", vec)
+
+        # optional second arg: query_fact (string to search for)
+        query_fact = sys.argv[2] if len(sys.argv) > 2 else facts[0] # "On average, cats spend 2/3 of every day sleeping. That means a nine-year-old cat has been awake for only three years of its life."
+        print(f"Searching for: '{query_fact}'")
+
+        results = query(embed(query_fact), k=10)
+        print("Results:")
+        for res in results:
+            data = res[0]
+            score = res[1]
+            print(f"Score: {score:.4f} - Fact: {data[:5]}...")  # print first 5 chars of data for brevity
 
     else:
         print("Usage: python3 crates/semantic-search/python_client.py demo [N]")

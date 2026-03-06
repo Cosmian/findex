@@ -92,16 +92,20 @@ impl<const D: usize> F32Vector<D> {
         acc
     }
 
-    pub fn mips(&self, k: usize, vs: impl IntoIterator<Item = Self>) -> Vec<(Self, f32)> {
+    pub fn mips_with_optional_data<Data: Clone>(
+        &self,
+        k: usize,
+        vs: impl IntoIterator<Item = (Self, Option<Data>)>,
+    ) -> Vec<(Self, Option<Data>, f32)> {
         let mut tmp = vs
             .into_iter()
-            .map(|v| {
+            .map(|(v, data)| {
                 let ip = self.inner_product(&v);
-                (v, ip)
+                (v, data, ip)
             })
             .collect::<Vec<_>>();
 
-        tmp.sort_unstable_by(|(_v1, ip1), (_v2, ip2)| {
+        tmp.sort_unstable_by(|(_v1, _d1, ip1), (_v2, _d2, ip2)| {
             // Invert order as we want the highest inner-products to come first.
             if ip1 <= ip2 {
                 Ordering::Greater

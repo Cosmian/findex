@@ -20,6 +20,7 @@ impl<
 > FuzzyDB<D, Vdb, Idx>
 where
     Vdb::Score: Clone,
+    Error: From<<Vdb as VectorDB>::Error>
 {
     pub fn new(vdb: Vdb, idx: Idx) -> Self {
         Self { vdb, idx }
@@ -30,9 +31,10 @@ where
         k: usize,
         embedding: &F32Vector<D>,
     ) -> Result<Vec<(String, Vdb::Score)>, Error> {
+        //TODO: add the support of data in the vector database
         let candidates = self.vdb.query(k, embedding).await?;
         let mut results = Vec::with_capacity(candidates.len());
-        for (kw, score) in candidates {
+        for (kw, _data, score) in candidates {
             let vs = self
                 .idx
                 .search(&kw)
@@ -46,10 +48,11 @@ where
         Ok(results)
     }
 
-    pub async fn insert(&self, embedding: F32Vector<D>, document: String) -> Result<(), Error> {
-        self.vdb.insert(embedding.clone()).await?;
+    pub async fn insert(&self, embedding: F32Vector<D>, data: String, document: String) -> Result<(), Error> {
+        //TODO: add the support of data in the vector database
+        self.vdb.insert(embedding.clone(), Some(data)).await?;
         self.idx
-            .insert(embedding, [document])
+            .insert(embedding, std::iter::once(document))
             .await
             .map_err(|e| Error(e.to_string()))
     }

@@ -1,6 +1,6 @@
 use crate::{Error, F32Vector, LocalitySensitiveHash, VectorDB};
 use cosmian_findex::IndexADT;
-use std::{collections::HashSet, hash::Hash};
+use std::{collections::HashSet, hash::Hash, pin::Pin, future::Future, marker::PhantomData};
 
 /// Implementation of a vector DB based on an LSH scheme and an index.
 ///
@@ -10,60 +10,66 @@ use std::{collections::HashSet, hash::Hash};
 ///
 /// If the underlying LSH scheme returns multiple probes, those probes are used
 /// in a symmetric way for both inserting to and searching from the DB.
-pub struct LshVectorDB<const D: usize, Lsh, Index>
-where
-    Lsh: LocalitySensitiveHash<Input = F32Vector<D>>,
-    Lsh::Output: Send + Sync + Clone + Eq + Hash,
-    Index: IndexADT<Lsh::Output, Lsh::Input>,
-{
-    lsh: Lsh,
-    index: Index,
-}
-
-impl<const D: usize, Lsh, Index> VectorDB for LshVectorDB<D, Lsh, Index>
-where
-    Lsh: Send + Sync + LocalitySensitiveHash<Input = F32Vector<D>>,
-    Lsh::Output: Send + Sync + Clone + Eq + Hash,
-    Index: Send + Sync + IndexADT<Lsh::Output, Lsh::Input>,
-{
-    type Parameters = (Lsh, Index);
-    type Vector = Lsh::Input;
-    type Score = f32;
-    type Error = Error;
-
-    fn init(params: Self::Parameters) -> Result<Self, Self::Error> {
-        Ok(Self {
-            lsh: params.0,
-            index: params.1,
-        })
+pub struct LshVectorDB<const D: usize, Lsh, Index, Data>
+    where
+        Lsh: LocalitySensitiveHash<Input = F32Vector<D>>,
+        Lsh::Output: Send + Sync + Clone + Eq + Hash,
+        Index: IndexADT<Lsh::Output, (Lsh::Input, Option<Data>)>,
+        Data: Clone + Send + Sync + Eq + Hash,
+    {
+        lsh: Lsh,
+        index: Index,
+        _marker: PhantomData<Data>,
     }
 
-    async fn query(
-        &self,
-        k: usize,
-        query: &Self::Vector,
-    ) -> Result<Vec<(Self::Vector, Self::Score)>, Error> {
-        let mut candidates = HashSet::new();
-        for probe in self.lsh.hash(query) {
-            let new_candidates = self
-                .index
-                .search(&probe)
-                .await
-                .map_err(|e| Error(format!("index error: {e}")))?;
-            for c in new_candidates {
-                candidates.insert(c);
-            }
+    impl<const D: usize, Lsh, Index, Data> VectorDB for LshVectorDB<D, Lsh, Index, Data>
+    where
+        Lsh: Send + Sync + LocalitySensitiveHash<Input = F32Vector<D>>,
+        Lsh::Output: Send + Sync + Clone + Eq + Hash,
+        Index: Send + Sync + IndexADT<Lsh::Output, (Lsh::Input, Option<Data>)>,
+        Data: Clone + Send + Sync + Eq + Hash,
+    {
+        type Parameters = (Lsh, Index);
+        type Vector = Lsh::Input;
+        type Data = Data;
+        type Score = f32;
+        type Error = Error;
+
+        fn init(params: Self::Parameters) -> Result<Self, Self::Error> {
+            Ok(Self {
+                lsh: params.0,
+                index: params.1,
+            })
         }
-        Ok(query.mips(k, candidates))
-    }
 
-    async fn insert(&self, point: Self::Vector) -> Result<(), Error> {
-        for probe in self.lsh.hash(&point) {
-            self.index
-                .insert(probe, [point.clone()])
-                .await
-                .map_err(|e| Error(format!("index error: {e}")))?;
+        fn query<'a>(
+            &'a self,
+            k: usize,
+            query: &'a Self::Vector,
+        ) -> Pin<Box<dyn Future<Output = Result<Vec<(Self::Vector, Option<Self::Data>, Self::Score)>, Self::Error>> + Send + 'a>> {
+            Box::pin(async move {
+                let mut candidates = HashSet::new();
+                for probe in self.lsh.hash(query) {
+                    let new_candidates = self.index.search(&probe).await.map_err(|e| Error(format!("index error: {e}")))?;
+                    for c in new_candidates {
+                        candidates.insert(c);
+                    }
+                }
+                Ok(query.mips_with_optional_data(k, candidates))
+            })
         }
-        Ok(())
+
+        fn insert<'a>(
+            &'a self,
+            point: Self::Vector,
+            data: Option<Self::Data>,
+        ) -> Pin<Box<dyn Future<Output = Result<(), Self::Error>> + Send + 'a>> {
+            Box::pin(async move {
+                for probe in self.lsh.hash(&point) {
+                    let values = std::iter::once((point.clone(), data.clone())).collect::<HashSet<_>>();
+                    self.index.insert(probe, values).await.map_err(|e| Error(format!("index error: {e}")))?;
+                }
+                Ok(())
+            })
+        }
     }
-}
