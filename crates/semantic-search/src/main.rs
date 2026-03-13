@@ -1,18 +1,19 @@
 use clap::{Parser, Subcommand};
+use core::hash::Hash;
 use rand::SeedableRng;
+use serde_json::{self};
 use std::collections::HashSet;
 use std::convert::TryFrom;
 use std::fs;
-use serde_json;
 
-use cosmian_crypto_core::{CsRng, Secret};
+use cosmian_crypto_core::{CsRng, Secret, bytes_ser_de::Serializable};
 
-use cosmian_findex::{Findex, MemoryEncryptionLayer, Op};
+use cosmian_findex::{Findex, MemoryEncryptionLayer, Op, generic_decode, generic_encode};
 
 use cosmian_sse_memories::{ADDRESS_LENGTH, Address, PostgresMemory};
 
 use cosmian_semantic_search::{
-    Error, F32Vector, FuzzyDB, LocalitySensitiveHash, LshVectorDB, SimpleLsh, SimpleLshParameters, VectorDB
+    Error, F32Vector, LocalitySensitiveHash, LshVectorDB, SimpleLsh, SimpleLshParameters, VectorDB,
 };
 
 #[derive(Parser)]
@@ -23,6 +24,12 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Commands {
+    /// Initialize the database (e.g. create tables). Should be run before any other command.
+    Init,
+
+    /// Drop the database (e.g. drop tables). Use with caution.
+    Drop,
+
     /// Insert a vector (JSON array) with an identifier
     Insert {
         #[arg(long)]
@@ -50,8 +57,8 @@ enum Commands {
 }
 
 const D: usize = 384;
-const K: usize = 20;
-const L: usize = 20;
+const K: usize = 6;
+const L: usize = 6;
 
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> anyhow::Result<()> {
@@ -61,7 +68,7 @@ async fn main() -> anyhow::Result<()> {
     // let key = Secret::<{ cosmian_findex::KEY_LENGTH }>::random(&mut CsRng::from_entropy());
 
     let seed = [
-        1, 0, 52, 0, 0, 0, 0, 0, 1, 0, 10, 0, 22, 32, 0, 0, 2, 0, 55, 49, 0, 11, 0, 0, 3, 0, 0, 0,
+        0, 0, 52, 0, 0, 0, 0, 0, 1, 0, 10, 0, 22, 32, 0, 0, 2, 0, 55, 49, 0, 11, 0, 0, 3, 0, 0, 0,
         0, 0, 2, 92,
     ];
 
@@ -71,40 +78,38 @@ async fn main() -> anyhow::Result<()> {
 
     let findex = {
         const F32_LENGTH: usize = 4;
-        const WORD_LENGTH: usize = 1 + F32_LENGTH * 384;
+        const WORD_LENGTH: usize = 1 + F32_LENGTH * 384 + 513;
 
-        fn vector_encode<const D: usize>(
+        fn encode<const D: usize, T: Hash + Eq + Serializable>(
             op: Op,
-            values: HashSet<F32Vector<D>>,
+            values: HashSet<(F32Vector<D>, T)>,
         ) -> Result<Vec<[u8; WORD_LENGTH]>, Error> {
-            Ok(values
-                .into_iter()
-                .map(|v| {
-                    let mut res = [0; WORD_LENGTH];
-                    res[0] = if op == Op::Insert { 0 } else { 1 };
-                    for (i, e) in v.into_iter().enumerate() {
-                        res[1 + F32_LENGTH * i..1 + F32_LENGTH * (i + 1)]
-                            .copy_from_slice(&e.to_be_bytes());
-                    }
-                    res
-                })
-                .collect())
+            let bytes = values
+                .serialize()
+                .map_err(|e| Error(e.to_string()))?
+                .to_vec();
+
+            generic_encode::<WORD_LENGTH, _>(op, HashSet::from_iter([bytes]))
+                .map_err(|e| Error(e.to_string()))
         }
 
-        fn vector_decode<const D: usize>(
+        fn decode<const D: usize, T: Hash + Eq + Serializable>(
             ws: Vec<[u8; WORD_LENGTH]>,
-        ) -> Result<HashSet<F32Vector<D>>, Error> {
-            ws.into_iter()
-                .map(|w| {
-                    F32Vector::<D>::init(|i| {
-                        <[u8; F32_LENGTH]>::try_from(
-                            &w[1 + F32_LENGTH * i..1 + F32_LENGTH * (i + 1)],
-                        )
-                        .map_err(|e| Error(e.to_string()))
-                        .map(f32::from_be_bytes)
+        ) -> Result<HashSet<(F32Vector<D>, T)>, Error> {
+            let bytes = generic_decode::<WORD_LENGTH, _, Vec<u8>>(ws).map_err(|e| Error(e))?;
+            bytes
+                .into_iter()
+                .map(|bytes| <HashSet<(F32Vector<D>, T)>>::deserialize(&bytes))
+                .try_fold(HashSet::new(), |mut a, e| {
+                    e.map(|set| {
+                        set.into_iter().for_each(|b| {
+                            a.insert(b);
+                            ()
+                        });
+                        a
                     })
+                    .map_err(|e| Error(e.to_string()))
                 })
-                .collect()
         }
 
         let db_url = "postgres://cosmian:cosmian@localhost/cosmian";
@@ -118,11 +123,7 @@ async fn main() -> anyhow::Result<()> {
 
         mem.initialize().await?;
 
-        Findex::<WORD_LENGTH, F32Vector<D>, _, _>::new(
-            MemoryEncryptionLayer::new(&key, mem),
-            vector_encode,
-            vector_decode,
-        )
+        Findex::<WORD_LENGTH, _, _, _>::new(MemoryEncryptionLayer::new(&key, mem), encode, decode)
     };
 
     // Fixed lsh tables to retrieve values with query
@@ -136,6 +137,12 @@ async fn main() -> anyhow::Result<()> {
         .map_err(|e| anyhow::anyhow!(format!("init error: {}", e)))?;
 
     match cli.command {
+        Commands::Init => {
+            //TODO: implement init command to initialize the database
+        }
+        Commands::Drop => {
+            //TODO: implement drop command to clear the database
+        }
         Commands::Insert {
             data,
             vector,
@@ -155,12 +162,8 @@ async fn main() -> anyhow::Result<()> {
                 return Err(anyhow::anyhow!(format!("vector length must be {}", D)));
             }
             let fv = F32Vector::<D>::try_from(v.as_slice())?;
-
-            vdb.insert(fv).await?;
-
-
-
-            println!("Success.");
+            //TODO: use the FuzzDB to insert an entire source
+            vdb.insert(fv, data).await?;
         }
 
         Commands::Query {
@@ -182,13 +185,17 @@ async fn main() -> anyhow::Result<()> {
                 return Err(anyhow::anyhow!(format!("vector length must be {}", D)));
             }
             let fv = F32Vector::<D>::try_from(v.as_slice())?;
+
             let results = vdb.query(k, &fv).await?;
 
-            let results = results.into_iter().map(|(v,score)|{
-                let vec = v.into_iter().collect::<Vec<f32>>();
-                let score = score;
-                (vec, score)
-             }).collect::<Vec<(Vec<f32>, f32)>>();
+            let results = results
+                .into_iter()
+                .map(|((vec, data), score)| {
+                    let vec = vec.into_iter().collect::<Vec<f32>>();
+                    let score = score;
+                    (vec, data, score)
+                })
+                .collect::<Vec<(Vec<f32>, String, f32)>>();
 
             println!("{}", serde_json::to_string_pretty(&results)?);
         }

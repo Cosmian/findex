@@ -1,3 +1,4 @@
+use cosmian_crypto_core::{CryptoCoreError, bytes_ser_de::Serializable};
 use rand::Rng;
 use rand_distr::StandardNormal;
 use std::{array::TryFromSliceError, cmp::Ordering, hash::Hash};
@@ -92,20 +93,21 @@ impl<const D: usize> F32Vector<D> {
         acc
     }
 
-    pub fn mips_with_optional_data<Data: Clone>(
+    pub fn mips_with<T>(
         &self,
+        f: fn(&T) -> &Self,
         k: usize,
-        vs: impl IntoIterator<Item = (Self, Option<Data>)>,
-    ) -> Vec<(Self, Option<Data>, f32)> {
+        vs: impl IntoIterator<Item = T>,
+    ) -> Vec<(T, f32)> {
         let mut tmp = vs
             .into_iter()
-            .map(|(v, data)| {
-                let ip = self.inner_product(&v);
-                (v, data, ip)
+            .map(|v| {
+                let ip = self.inner_product(f(&v));
+                (v, ip)
             })
             .collect::<Vec<_>>();
 
-        tmp.sort_unstable_by(|(_v1, _d1, ip1), (_v2, _d2, ip2)| {
+        tmp.sort_unstable_by(|(_v1, ip1), (_v2, ip2)| {
             // Invert order as we want the highest inner-products to come first.
             if ip1 <= ip2 {
                 Ordering::Greater
@@ -134,6 +136,22 @@ impl<const D: usize> TryFrom<&[f32]> for F32Vector<D> {
     fn try_from(value: &[f32]) -> Result<Self, Self::Error> {
         let value = <[f32; D]>::try_from(value)?;
         Ok(Self(value))
+    }
+}
+
+impl<const D: usize> Serializable for F32Vector<D> {
+    type Error = CryptoCoreError;
+
+    fn length(&self) -> usize {
+        self.0.length()
+    }
+
+    fn write(&self, ser: &mut cosmian_crypto_core::bytes_ser_de::Serializer) -> Result<usize, Self::Error> {
+        self.0.write(ser)
+    }
+
+    fn read(de: &mut cosmian_crypto_core::bytes_ser_de::Deserializer) -> Result<Self, Self::Error> {
+        de.read().map(Self)
     }
 }
 

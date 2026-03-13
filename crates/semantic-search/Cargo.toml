@@ -33,7 +33,6 @@ cosmian_sse_memories = { path = "../memories", version = "8.0", features = ["pos
 cosmian_findex       = { path = "../findex", version = "8.0" }
 rand = "0.9.2"
 rand_distr = "0.5.1"
-pyo3 = {version = "0.27"}
 cosmian_crypto_core.workspace = true
 tokio.workspace = true
 zstd = { version = "0.13.3"}
@@ -41,7 +40,7 @@ clap = { version = "4.0.32", features = ["derive"] }
 anyhow = "1.0.71"
 serde_json = "1.0.102"
 serde = "1.0.228"
-# futures = "0.3.31"
+futures = "0.3.31"
 
 [dev-dependencies]
 criterion.workspace = true

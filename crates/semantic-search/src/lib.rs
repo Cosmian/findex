@@ -1,12 +1,10 @@
 mod encoding;
 mod error;
 mod fuzzy_database;
-mod pyo3;
 mod simple_lsh;
 mod vector_db;
 mod vectors;
 
-pub use pyo3::SecureSemanticDB;
 pub use encoding::Encoding;
 pub use error::Error;
 pub use fuzzy_database::FuzzyDB;
@@ -15,13 +13,11 @@ pub use vector_db::LshVectorDB;
 pub use vectors::{F32Vector, F64Vector};
 
 use rand::Rng;
-use std::pin::Pin;
-use std::future::Future;
 
 pub trait VectorDB: Send + Sync + Sized {
     type Parameters;
     type Vector;
-    type Data;
+    type MetaData;
     type Score;
     type Error: std::error::Error;
 
@@ -30,18 +26,20 @@ pub trait VectorDB: Send + Sync + Sized {
 
     /// Retrieves from the index the (approximate) k vectors that are closest to
     /// the given query.
-    fn query<'a>(
-        &'a self,
+    fn query(
+        &self,
         k: usize,
         query: &Self::Vector,
-    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<Vec<(Self::Vector, Option<Self::Data>, Self::Score)>, Self::Error>> + Send + 'a>>;
+    ) -> impl std::future::Future<
+        Output = Result<Vec<((Self::Vector, Self::MetaData), Self::Score)>, Error>,
+    >;
 
     /// Inserts the given point to the index.
-    fn insert<'a>(
-        &'a self,
+    fn insert(
+        &self,
         point: Self::Vector,
-        data: Option<Self::Data>
-    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<(), Self::Error>> + Send + 'a>>;
+        data: Self::MetaData,
+    ) -> impl std::future::Future<Output = Result<(), Error>>;
 }
 
 pub trait LocalitySensitiveHash {

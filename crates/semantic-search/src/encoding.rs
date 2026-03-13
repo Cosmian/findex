@@ -1,5 +1,4 @@
 mod string;
-pub use string::StringEncoder;
 
 use cosmian_findex::Op;
 use std::{collections::HashSet, hash::Hash};

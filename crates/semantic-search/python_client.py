@@ -31,6 +31,7 @@ def insert(data: str, vector: List[float]) -> str:
         fname = f.name
 
     proc = semantic_search_run(["insert", "--data", data, "--vector-file", fname])
+
     try:
         return proc.stdout.strip()
     finally:
@@ -60,6 +61,7 @@ def query(vector: List[float], k: int = 10) -> Any:
 
     try:
         out = proc.stdout.strip()
+
     finally:
         try:
             Path(fname).unlink()
@@ -116,6 +118,7 @@ if __name__ == "__main__":
             if not res:
                 print(f"Vector {i}: no candidates")
                 continue
+
             top = res[0]
             cand_vec = top[0]
             if not cand_vec:
@@ -141,11 +144,10 @@ if __name__ == "__main__":
         response = requests.get(url)
         response.encoding = 'utf-8'
         facts = [line.strip() for line in response.text.splitlines() if line.strip()]
-        emb_facts = [embed(fact) for fact in facts]
 
-        # print("Inserting fact embeddings...")
-        # for i, vec in enumerate(emb_facts):
-        #     insert(f"py_vec_{i}", vec)
+        print("Inserting fact embeddings...")
+        for fact in facts:
+            insert(fact, embed(fact))
 
         # optional second arg: query_fact (string to search for)
         query_fact = sys.argv[2] if len(sys.argv) > 2 else facts[0] # "On average, cats spend 2/3 of every day sleeping. That means a nine-year-old cat has been awake for only three years of its life."
@@ -154,9 +156,9 @@ if __name__ == "__main__":
         results = query(embed(query_fact), k=10)
         print("Results:")
         for res in results:
-            data = res[0]
-            score = res[1]
-            print(f"Score: {score:.4f} - Fact: {data[:5]}...")  # print first 5 chars of data for brevity
+            data = res[1]
+            score = res[2]
+            print(f"Score: {score} - Fact: {data}")
 
     else:
         print("Usage: python3 crates/semantic-search/python_client.py demo [N]")
