@@ -1,6 +1,6 @@
 #![allow(non_snake_case)]
 
-use std::cmp::{self, Ordering};
+use std::cmp::Ordering;
 
 use crate::{LocalitySensitiveHash, vectors::F32Vector};
 use rand::Rng;
@@ -57,6 +57,7 @@ impl<const D: usize> LocalitySensitiveHash for FalconLsh<D> {
                         (ip1, ip2)
                     })
                     .unzip();
+
                 ip_family1.sort_by(|ip1, ip2| {
                     if ip1 > ip2 {
                         Ordering::Less
@@ -64,6 +65,7 @@ impl<const D: usize> LocalitySensitiveHash for FalconLsh<D> {
                         Ordering::Greater
                     }
                 });
+
                 ip_family2.sort_by(|ip1, ip2| {
                     if ip1 > ip2 {
                         Ordering::Less
@@ -71,12 +73,21 @@ impl<const D: usize> LocalitySensitiveHash for FalconLsh<D> {
                         Ordering::Greater
                     }
                 });
-                ip_family1.into_iter().take(nprob).flat_map(|ip1| {
-                    ip_family2
-                        .iter()
-                        .take(nprob)
-                        .map(|&ip2| ((ip1, ip2), ip1.min(ip2)))
-                })
+
+                ip_family1
+                    .into_iter()
+                    .take(nprob)
+                    .map({
+                        |ip1| {
+                            ip_family2.iter().take(nprob).map({
+                                let ip1 = ip1.clone();
+                                move |&ip2| ((ip1, ip2), ip1.min(ip2))
+                            })
+                        }
+                    })
+                    .flatten()
+                    .collect::<Vec<_>>()
+                    .into_iter()
             })
             .collect::<Vec<_>>()
         //TODO: filter the probes according to the iProbes parameter
