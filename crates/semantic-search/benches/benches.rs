@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 use cosmian_crypto_core::{CsRng, Secret, reexport::rand_core::SeedableRng};
 use cosmian_findex::{Findex, MemoryEncryptionLayer, Op};
 use cosmian_semantic_search::{
@@ -9,7 +11,6 @@ use cosmian_sse_memories::{
 };
 use criterion::{Criterion, criterion_group, criterion_main};
 use rand::rngs::ThreadRng;
-use std::collections::HashSet;
 use tokio::runtime::Builder;
 
 fn bench_ip(c: &mut Criterion) {

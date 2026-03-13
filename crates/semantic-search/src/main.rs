@@ -1,20 +1,16 @@
-use clap::{Parser, Subcommand};
 use core::hash::Hash;
+use std::{collections::HashSet, convert::TryFrom, fs};
+
+use clap::{Parser, Subcommand};
+use cosmian_crypto_core::{CsRng, Secret, bytes_ser_de::Serializable};
+use cosmian_findex::{Findex, MemoryEncryptionLayer, Op, generic_decode, generic_encode};
+use cosmian_semantic_search::{
+    Error, F32Vector, FalconLsh, FalconLshParameters, LocalitySensitiveHash, LshVectorDB,
+    SimpleLsh, SimpleLshParameters, VDBParameters, VectorDB,
+};
+use cosmian_sse_memories::{ADDRESS_LENGTH, Address, PostgresMemory};
 use rand::SeedableRng;
 use serde_json::{self};
-use std::collections::HashSet;
-use std::convert::TryFrom;
-use std::fs;
-
-use cosmian_crypto_core::{CsRng, Secret, bytes_ser_de::Serializable};
-
-use cosmian_findex::{Findex, MemoryEncryptionLayer, Op, generic_decode, generic_encode};
-
-use cosmian_sse_memories::{ADDRESS_LENGTH, Address, PostgresMemory};
-
-use cosmian_semantic_search::{
-    Error, F32Vector, LocalitySensitiveHash, LshVectorDB, SimpleLsh, SimpleLshParameters, VectorDB,
-};
 
 #[derive(Parser)]
 struct Cli {
@@ -24,7 +20,8 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Commands {
-    /// Initialize the database (e.g. create tables). Should be run before any other command.
+    /// Initialize the database (e.g. create tables). Should be run before any
+    /// other command.
     Init,
 
     /// Drop the database (e.g. drop tables). Use with caution.
@@ -59,13 +56,16 @@ enum Commands {
 const D: usize = 384;
 const K: usize = 6;
 const L: usize = 6;
+const IPROBE: Option<usize> = Some(3);
+const QPROBE: Option<usize> = Some(5);
 
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
 
     // Fixed key to retrieve values with query
-    // let key = Secret::<{ cosmian_findex::KEY_LENGTH }>::random(&mut CsRng::from_entropy());
+    // let key = Secret::<{ cosmian_findex::KEY_LENGTH }>::random(&mut
+    // CsRng::from_entropy());
 
     let seed = [
         0, 0, 52, 0, 0, 0, 0, 0, 1, 0, 10, 0, 22, 32, 0, 0, 2, 0, 55, 49, 0, 11, 0, 0, 3, 0, 0, 0,
@@ -131,10 +131,16 @@ async fn main() -> anyhow::Result<()> {
     let seed: u64 = 42;
     let mut rng = rand::rngs::StdRng::seed_from_u64(seed);
 
-    let lsh = SimpleLsh::<D>::init(&SimpleLshParameters { K, L }, &mut rng);
+    // let lsh = SimpleLsh::<D>::init(&SimpleLshParameters { K, L }, &mut rng);
+    let lsh = FalconLsh::<D>::init(&FalconLshParameters { K, L }, &mut rng);
 
-    let vdb = LshVectorDB::<D, _, _>::init((lsh, findex))
-        .map_err(|e| anyhow::anyhow!(format!("init error: {}", e)))?;
+    let vdb = LshVectorDB::<D, _, _>::init(VDBParameters {
+        lsh,
+        findex,
+        iprobe,
+        qprobe,
+    })
+    .map_err(|e| anyhow::anyhow!(format!("init error: {}", e)))?;
 
     match cli.command {
         Commands::Init => {

@@ -13,20 +13,29 @@ use std::{collections::HashSet, hash::Hash};
 pub struct LshVectorDB<const D: usize, Lsh, Index>
 where
     Lsh: LocalitySensitiveHash<Input = F32Vector<D>>,
-    Lsh::Output: Send + Sync + Clone + Eq + Hash,
-    Index: IndexADT<Lsh::Output, (Lsh::Input, String)>,
+    Lsh::Probe: Send + Sync + Clone + Eq + Hash,
+    Index: IndexADT<Lsh::Probe, (Lsh::Input, String)>,
 {
     lsh: Lsh,
     index: Index,
+    iprobe: Option<usize>,
+    qprobe: Option<usize>,
+}
+
+pub struct VDBParameters<Lsh, Index> {
+    pub lsh: Lsh,
+    pub index: Index,
+    pub iprobe: Option<usize>,
+    pub qprobe: Option<usize>,
 }
 
 impl<const D: usize, Lsh, Index> VectorDB for LshVectorDB<D, Lsh, Index>
 where
     Lsh: Send + Sync + LocalitySensitiveHash<Input = F32Vector<D>>,
-    Lsh::Output: Send + Sync + Clone + Eq + Hash,
-    Index: Send + Sync + IndexADT<Lsh::Output, (Lsh::Input, String)>,
+    Lsh::Probe: Send + Sync + Clone + Eq + Hash,
+    Index: Send + Sync + IndexADT<Lsh::Probe, (Lsh::Input, String)>,
 {
-    type Parameters = (Lsh, Index);
+    type Parameters = VDBParameters<Lsh, Index>;
     type Vector = Lsh::Input;
     type MetaData = String;
     type Score = f32;
@@ -34,8 +43,10 @@ where
 
     fn init(params: Self::Parameters) -> Result<Self, Error> {
         Ok(Self {
-            lsh: params.0,
-            index: params.1,
+            lsh: params.lsh,
+            index: params.index,
+            iprobe: params.iprobe,
+            qprobe: params.qprobe,
         })
     }
 
@@ -45,14 +56,16 @@ where
         query: &Self::Vector,
     ) -> Result<Vec<((Self::Vector, Self::MetaData), Self::Score)>, Error> {
         let mut candidates = HashSet::new();
-        for probe in self.lsh.hash(query) {
-            let new_candidates = self
-                .index
-                .search(&probe)
-                .await
-                .map_err(|e| Error(format!("index error: {e}")))?;
-            for c in new_candidates {
-                candidates.insert(c);
+        for probes in self.lsh.hash(query, self.qprobe) {
+            for (probe, _score) in probes {
+                let new_candidates = self
+                    .index
+                    .search(&probe)
+                    .await
+                    .map_err(|e| Error(format!("index error: {e}")))?;
+                for c in new_candidates {
+                    candidates.insert(c);
+                }
             }
         }
         let results = query.mips_with(|(c, _)| c, k, candidates);
@@ -60,11 +73,13 @@ where
     }
 
     async fn insert(&self, point: Self::Vector, data: Self::MetaData) -> Result<(), Error> {
-        for probe in self.lsh.hash(&point) {
-            self.index
-                .insert(probe, [(point.clone(), data.clone())])
-                .await
-                .map_err(|e| Error(format!("index error: {e}")))?;
+        for probes in self.lsh.hash(&point, self.iprobe) {
+            for (probe, _score) in probes {
+                self.index
+                    .insert(probe, [(point.clone(), data.clone())])
+                    .await
+                    .map_err(|e| Error(format!("index error: {e}")))?;
+            }
         }
         Ok(())
     }

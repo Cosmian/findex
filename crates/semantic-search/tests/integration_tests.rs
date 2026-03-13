@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 use cosmian_crypto_core::{CsRng, Secret, reexport::rand_core::SeedableRng};
 use cosmian_findex::{Findex, MemoryEncryptionLayer, Op};
 use cosmian_semantic_search::{
@@ -6,7 +8,6 @@ use cosmian_semantic_search::{
 };
 use cosmian_sse_memories::{ADDRESS_LENGTH, Address, InMemory};
 use futures::executor::block_on;
-use std::collections::HashSet;
 
 #[test]
 fn test_cleartext_vector_db() {

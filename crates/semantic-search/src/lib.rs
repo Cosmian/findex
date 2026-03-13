@@ -1,5 +1,6 @@
 mod encoding;
 mod error;
+mod falcon_lsh;
 mod fuzzy_database;
 mod simple_lsh;
 mod vector_db;
@@ -7,6 +8,7 @@ mod vectors;
 
 pub use encoding::Encoding;
 pub use error::Error;
+pub use falcon_lsh::{FalconLsh, Parameters as FalconLshParameters};
 pub use fuzzy_database::FuzzyDB;
 pub use simple_lsh::{Parameters as SimpleLshParameters, SimpleLsh};
 pub use vector_db::LshVectorDB;
@@ -52,14 +54,20 @@ pub trait LocalitySensitiveHash {
     /// LSH output.
     ///
     /// Must be hashable to accommodate hash-table-based structures.
-    type Output;
+    type Probe;
+
+    type Score;
 
     /// Returns a new instance of the locality-sensitive hasher.
     fn init(params: &Self::Parameters, rng: &mut impl Rng) -> Self;
 
     /// Returns the hash of the given point. This hash implements `IntoIterator`
     /// as some schemes use a multi-probing strategy.
-    fn hash(&self, point: &Self::Input) -> impl IntoIterator<Item = Self::Output>;
+    fn hash(
+        &self,
+        point: &Self::Input,
+        nprobe: Option<usize>,
+    ) -> Vec<impl IntoIterator<Item = (Self::Probe, Self::Score)>>;
 }
 
 #[cfg(feature = "test-utils")]

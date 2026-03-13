@@ -10,14 +10,16 @@ pub struct Parameters {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct SimpleLsh<const D: usize>(Vec<(u64, Vec<F32Vector<D>>)>);
+pub struct SimpleLsh<const D: usize>(Vec<Vec<F32Vector<D>>>);
 
 impl<const D: usize> LocalitySensitiveHash for SimpleLsh<D> {
     type Parameters = Parameters;
 
     type Input = F32Vector<D>;
 
-    type Output = (u64, u64);
+    type Probe = u64;
+
+    type Score = f64;
 
     fn init(params: &Self::Parameters, rng: &mut impl Rng) -> Self {
         assert!(
@@ -27,25 +29,32 @@ impl<const D: usize> LocalitySensitiveHash for SimpleLsh<D> {
         );
         Self(
             (0..params.K)
-                .map(|id| {
-                    (
-                        id as u64,
-                        (0..params.L)
-                            .map(|_| F32Vector::random_unit_vector(rng))
-                            .collect(),
-                    )
+                .map(|_| {
+                    (0..params.L)
+                        .map(|_| F32Vector::random_unit_vector(rng))
+                        .collect()
                 })
                 .collect(),
         )
     }
 
-    fn hash(&self, point: &Self::Input) -> impl IntoIterator<Item = Self::Output> {
-        self.0.iter().map(|(id, family)| {
-            let probe = family
-                .iter()
-                .map(|v| 0. < point.inner_product(v))
-                .fold(0, |n, b| (n << 1) + b as u64);
-            (*id, probe)
-        })
+    fn hash(
+        &self,
+        point: &Self::Input,
+        nprobe: Option<usize>,
+    ) -> Vec<impl IntoIterator<Item = (Self::Probe, Self::Score)>> {
+        self.0
+            .iter()
+            .map(|family| {
+                let (probe, score) = family.iter().map(|v| 0. < point.inner_product(v)).fold(
+                    (0u64, 0u64),
+                    |(n, s), b| {
+                        let b = b as u64;
+                        ((n << 1) + b, s + b)
+                    },
+                );
+                std::iter::once((probe, score as f64 / family.len() as f64))
+            })
+            .collect()
     }
 }
