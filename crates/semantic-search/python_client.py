@@ -12,7 +12,6 @@ def semantic_search_run(args: List[str]) -> subprocess.CompletedProcess:
     cmd = ["./target/debug/cosmian-semantic-search"]
     cmd += args
     return subprocess.run(cmd, capture_output=True)
-    # return subprocess.run(cmd, check=True, capture_output=True, text=True)
 
 def insert(data: str, vector: List[float]) -> str:
     """Insert a vector under `data` by calling the Rust CLI.
@@ -154,11 +153,21 @@ if __name__ == "__main__":
         print(f"Searching for: '{query_fact}'")
 
         results = query(embed(query_fact), k=10)
-        print("Results:")
-        for res in results:
+        print(f"Results:")
+
+        res_falcon,res_simplelsh = results
+
+        print(f"Falcon:")
+        for res in res_falcon:
             data = res[1]
             score = res[2]
-            print(f"Score: {score} - Fact: {data}")
+            print(f"  Score: {score}\tFact: {data[:60]}...")
+
+        print(f"SimpleLSH:")
+        for res in res_simplelsh:
+            data = res[1]
+            score = res[2]
+            print(f"  Score: {score}\tFact: {data[:60]}...")
 
     else:
-        print("Usage: python3 crates/semantic-search/python_client.py demo [N]")
+        print("Usage: python3 crates/semantic-search/python_client.py demo [N] \n   or: python3 crates/semantic-search/python_client.py demo2 [Question about cats]")

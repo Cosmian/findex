@@ -146,7 +146,10 @@ impl<const D: usize> Serializable for F32Vector<D> {
         self.0.length()
     }
 
-    fn write(&self, ser: &mut cosmian_crypto_core::bytes_ser_de::Serializer) -> Result<usize, Self::Error> {
+    fn write(
+        &self,
+        ser: &mut cosmian_crypto_core::bytes_ser_de::Serializer,
+    ) -> Result<usize, Self::Error> {
         self.0.write(ser)
     }
 

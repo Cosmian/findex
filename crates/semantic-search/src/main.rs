@@ -5,8 +5,8 @@ use clap::{Parser, Subcommand};
 use cosmian_crypto_core::{CsRng, Secret, bytes_ser_de::Serializable};
 use cosmian_findex::{Findex, MemoryEncryptionLayer, Op, generic_decode, generic_encode};
 use cosmian_semantic_search::{
-    Error, F32Vector, FalconLsh, FalconLshParameters, LocalitySensitiveHash, LshVectorDB,
-    SimpleLsh, SimpleLshParameters, VDBParameters, VectorDB,
+    Error, F32Vector, FalconLsh, FalconLshParameters, LocalitySensitiveHash, SimpleLsh,
+    SimpleLshParameters, VDBParameters, Vdb, VectorDB,
 };
 use cosmian_sse_memories::{ADDRESS_LENGTH, Address, PostgresMemory};
 use rand::SeedableRng;
@@ -54,8 +54,8 @@ enum Commands {
 }
 
 const D: usize = 384;
-const K: usize = 6;
-const L: usize = 6;
+const K: usize = 5;
+const L: usize = 5;
 const IPROBE: Option<usize> = Some(3);
 const QPROBE: Option<usize> = Some(5);
 
@@ -123,7 +123,11 @@ async fn main() -> anyhow::Result<()> {
 
         mem.initialize().await?;
 
-        Findex::<WORD_LENGTH, _, _, _>::new(MemoryEncryptionLayer::new(&key, mem), encode, decode)
+        Findex::<WORD_LENGTH, _, _, _>::new(
+            MemoryEncryptionLayer::new(&key, mem),
+            encode::<D, String>,
+            decode,
+        )
     };
 
     // Fixed lsh tables to retrieve values with query
@@ -131,14 +135,23 @@ async fn main() -> anyhow::Result<()> {
     let seed: u64 = 42;
     let mut rng = rand::rngs::StdRng::seed_from_u64(seed);
 
-    // let lsh = SimpleLsh::<D>::init(&SimpleLshParameters { K, L }, &mut rng);
     let lsh = FalconLsh::<D>::init(&FalconLshParameters { K, L }, &mut rng);
 
-    let vdb = LshVectorDB::<D, _, _>::init(VDBParameters {
+    let vdb_falcon = Vdb::<D, _, _>::init(VDBParameters {
         lsh,
-        findex,
-        iprobe,
-        qprobe,
+        index: findex.clone(),
+        iprobe: IPROBE,
+        qprobe: QPROBE,
+    })
+    .map_err(|e| anyhow::anyhow!(format!("init error: {}", e)))?;
+
+    let lsh = SimpleLsh::<D>::init(&SimpleLshParameters { K, L }, &mut rng);
+
+    let vdb_simplelsh = Vdb::<D, _, _>::init(VDBParameters {
+        lsh,
+        index: findex,
+        iprobe: None,
+        qprobe: None,
     })
     .map_err(|e| anyhow::anyhow!(format!("init error: {}", e)))?;
 
@@ -169,7 +182,8 @@ async fn main() -> anyhow::Result<()> {
             }
             let fv = F32Vector::<D>::try_from(v.as_slice())?;
             //TODO: use the FuzzDB to insert an entire source
-            vdb.insert(fv, data).await?;
+            vdb_falcon.insert(fv.clone(), data.clone()).await?;
+            vdb_simplelsh.insert(fv.clone(), data.clone()).await?;
         }
 
         Commands::Query {
@@ -192,7 +206,7 @@ async fn main() -> anyhow::Result<()> {
             }
             let fv = F32Vector::<D>::try_from(v.as_slice())?;
 
-            let results = vdb.query(k, &fv).await?;
+            let results = vdb_falcon.query(k, &fv).await?;
 
             let results = results
                 .into_iter()
@@ -202,6 +216,19 @@ async fn main() -> anyhow::Result<()> {
                     (vec, data, score)
                 })
                 .collect::<Vec<(Vec<f32>, String, f32)>>();
+
+            let results2 = vdb_simplelsh.query(k, &fv).await?;
+
+            let results2 = results2
+                .into_iter()
+                .map(|((vec, data), score)| {
+                    let vec = vec.into_iter().collect::<Vec<f32>>();
+                    let score = score;
+                    (vec, data, score)
+                })
+                .collect::<Vec<(Vec<f32>, String, f32)>>();
+
+            let results = vec![results, results2];
 
             println!("{}", serde_json::to_string_pretty(&results)?);
         }

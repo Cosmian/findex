@@ -4,6 +4,7 @@ use std::cmp::Ordering;
 
 use crate::{LocalitySensitiveHash, vectors::F32Vector};
 use rand::Rng;
+use std::hash::{Hash, Hasher};
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Parameters {
@@ -11,7 +12,25 @@ pub struct Parameters {
     pub L: usize,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialOrd)]
+pub struct Probe(usize, usize);
+
+impl Eq for Probe {}
+
+impl PartialEq for Probe {
+    fn eq(&self, other: &Self) -> bool {
+        self.0 == other.0 && self.1 == other.1
+    }
+}
+
+impl Hash for Probe {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.0.hash(state);
+        self.1.hash(state);
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub struct FalconLsh<const D: usize>(Vec<Vec<(F32Vector<D>, F32Vector<D>)>>);
 
 impl<const D: usize> LocalitySensitiveHash for FalconLsh<D> {
@@ -19,7 +38,7 @@ impl<const D: usize> LocalitySensitiveHash for FalconLsh<D> {
 
     type Input = F32Vector<D>;
 
-    type Probe = (f32, f32);
+    type Probe = Probe;
 
     type Score = f32;
 
@@ -44,22 +63,26 @@ impl<const D: usize> LocalitySensitiveHash for FalconLsh<D> {
         &self,
         point: &Self::Input,
         nprob: Option<usize>,
-    ) -> Vec<impl IntoIterator<Item = (Self::Probe, Self::Score)>> {
-        let nprob = nprob.unwrap();
-        self.0
+    ) -> Result<Vec<impl IntoIterator<Item = (Self::Probe, Self::Score)>>, String> {
+        let Some(nprob) = nprob else {
+            return Err("nprob must be given".to_owned());
+        };
+        Ok(self
+            .0
             .iter()
             .map(|families| {
                 let (mut ip_family1, mut ip_family2): (Vec<_>, Vec<_>) = families
                     .iter()
-                    .map(|(v1, v2)| {
+                    .enumerate()
+                    .map(|(i, (v1, v2))| {
                         let ip1 = point.inner_product(v1);
                         let ip2 = point.inner_product(v2);
-                        (ip1, ip2)
+                        ((i, ip1), (i, ip2))
                     })
                     .unzip();
 
                 ip_family1.sort_by(|ip1, ip2| {
-                    if ip1 > ip2 {
+                    if ip1.1 > ip2.1 {
                         Ordering::Less
                     } else {
                         Ordering::Greater
@@ -67,7 +90,7 @@ impl<const D: usize> LocalitySensitiveHash for FalconLsh<D> {
                 });
 
                 ip_family2.sort_by(|ip1, ip2| {
-                    if ip1 > ip2 {
+                    if ip1.1 > ip2.1 {
                         Ordering::Less
                     } else {
                         Ordering::Greater
@@ -81,7 +104,7 @@ impl<const D: usize> LocalitySensitiveHash for FalconLsh<D> {
                         |ip1| {
                             ip_family2.iter().take(nprob).map({
                                 let ip1 = ip1.clone();
-                                move |&ip2| ((ip1, ip2), ip1.min(ip2))
+                                move |&ip2| (Probe(ip1.0, ip2.0), ip1.1.min(ip2.1))
                             })
                         }
                     })
@@ -89,7 +112,6 @@ impl<const D: usize> LocalitySensitiveHash for FalconLsh<D> {
                     .collect::<Vec<_>>()
                     .into_iter()
             })
-            .collect::<Vec<_>>()
-        //TODO: filter the probes according to the iProbes parameter
+            .collect::<Vec<_>>())
     }
 }

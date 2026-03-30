@@ -42,8 +42,12 @@ impl<const D: usize> LocalitySensitiveHash for SimpleLsh<D> {
         &self,
         point: &Self::Input,
         nprobe: Option<usize>,
-    ) -> Vec<impl IntoIterator<Item = (Self::Probe, Self::Score)>> {
-        self.0
+    ) -> Result<Vec<impl IntoIterator<Item = (Self::Probe, Self::Score)>>, String> {
+        if nprobe.is_some() {
+            return Err("no nprobe for SimpleLSH".to_owned());
+        }
+        Ok(self
+            .0
             .iter()
             .map(|family| {
                 let (probe, score) = family.iter().map(|v| 0. < point.inner_product(v)).fold(
@@ -55,6 +59,6 @@ impl<const D: usize> LocalitySensitiveHash for SimpleLsh<D> {
                 );
                 std::iter::once((probe, score as f64 / family.len() as f64))
             })
-            .collect()
+            .collect())
     }
 }

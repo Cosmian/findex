@@ -10,7 +10,7 @@ use std::{collections::HashSet, hash::Hash};
 ///
 /// If the underlying LSH scheme returns multiple probes, those probes are used
 /// in a symmetric way for both inserting to and searching from the DB.
-pub struct LshVectorDB<const D: usize, Lsh, Index>
+pub struct Vdb<const D: usize, Lsh, Index>
 where
     Lsh: LocalitySensitiveHash<Input = F32Vector<D>>,
     Lsh::Probe: Send + Sync + Clone + Eq + Hash,
@@ -29,7 +29,7 @@ pub struct VDBParameters<Lsh, Index> {
     pub qprobe: Option<usize>,
 }
 
-impl<const D: usize, Lsh, Index> VectorDB for LshVectorDB<D, Lsh, Index>
+impl<const D: usize, Lsh, Index> VectorDB for Vdb<D, Lsh, Index>
 where
     Lsh: Send + Sync + LocalitySensitiveHash<Input = F32Vector<D>>,
     Lsh::Probe: Send + Sync + Clone + Eq + Hash,
@@ -56,7 +56,11 @@ where
         query: &Self::Vector,
     ) -> Result<Vec<((Self::Vector, Self::MetaData), Self::Score)>, Error> {
         let mut candidates = HashSet::new();
-        for probes in self.lsh.hash(query, self.qprobe) {
+        for probes in self
+            .lsh
+            .hash(query, self.qprobe)
+            .map_err(|e| Error(e.to_string()))?
+        {
             for (probe, _score) in probes {
                 let new_candidates = self
                     .index
@@ -73,7 +77,11 @@ where
     }
 
     async fn insert(&self, point: Self::Vector, data: Self::MetaData) -> Result<(), Error> {
-        for probes in self.lsh.hash(&point, self.iprobe) {
+        for probes in self
+            .lsh
+            .hash(&point, self.iprobe)
+            .map_err(|e| Error(e.to_string()))?
+        {
             for (probe, _score) in probes {
                 self.index
                     .insert(probe, [(point.clone(), data.clone())])

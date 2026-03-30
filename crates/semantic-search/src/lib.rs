@@ -11,7 +11,7 @@ pub use error::Error;
 pub use falcon_lsh::{FalconLsh, Parameters as FalconLshParameters};
 pub use fuzzy_database::FuzzyDB;
 pub use simple_lsh::{Parameters as SimpleLshParameters, SimpleLsh};
-pub use vector_db::LshVectorDB;
+pub use vector_db::{VDBParameters, Vdb};
 pub use vectors::{F32Vector, F64Vector};
 
 use rand::Rng;
@@ -63,11 +63,12 @@ pub trait LocalitySensitiveHash {
 
     /// Returns the hash of the given point. This hash implements `IntoIterator`
     /// as some schemes use a multi-probing strategy.
+    //TODO: flatten
     fn hash(
         &self,
         point: &Self::Input,
         nprobe: Option<usize>,
-    ) -> Vec<impl IntoIterator<Item = (Self::Probe, Self::Score)>>;
+    ) -> Result<Vec<impl IntoIterator<Item = (Self::Probe, Self::Score)>>, String>;
 }
 
 #[cfg(feature = "test-utils")]
